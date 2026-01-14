@@ -19,13 +19,12 @@ pxfm = "0.1"
 
 [dev-dependencies]
 criterion = "0.5"
-moxcms = { path = "/home/lilith/moxcms-pr" }
 wide = "1.1"
 
 [features]
 default = []
-# Use faster but slightly less accurate pow approximation for extended range
-fast-math = []
+# Include alternative/experimental implementations for benchmarking
+alt = []
 
 [[bench]]
 name = "benchmarks"

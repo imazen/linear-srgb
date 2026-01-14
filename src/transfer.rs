@@ -132,7 +132,6 @@ pub fn srgb_to_linear_extended(gamma: f32) -> f32 {
 /// Convert linear light value to sRGB gamma-encoded without clamping (f32).
 ///
 /// For extended range HDR workflows where values may exceed [0, 1].
-#[cfg(not(feature = "fast-math"))]
 #[inline]
 pub fn linear_to_srgb_extended(linear: f32) -> f32 {
     if linear < LINEAR_THRESHOLD_F32 {
@@ -140,59 +139,6 @@ pub fn linear_to_srgb_extended(linear: f32) -> f32 {
     } else {
         fmla(SRGB_A_PLUS_1_F32, linear.powf(INV_GAMMA_F32), -SRGB_A_F32)
     }
-}
-
-/// Convert linear light value to sRGB gamma-encoded without clamping (f32).
-///
-/// Uses faster but slightly less accurate pow approximation when `fast-math` feature is enabled.
-#[cfg(feature = "fast-math")]
-#[inline]
-pub fn linear_to_srgb_extended(linear: f32) -> f32 {
-    if linear < LINEAR_THRESHOLD_F32 {
-        linear * 12.92
-    } else {
-        fmla(
-            SRGB_A_PLUS_1_F32,
-            fast_powf(linear, INV_GAMMA_F32),
-            -SRGB_A_F32,
-        )
-    }
-}
-
-/// Fast approximate power function for positive bases.
-///
-/// Uses the identity: x^y = exp(y * ln(x)) with fast approximations.
-/// Only enabled with `fast-math` feature. Accuracy: ~0.1% for typical sRGB values.
-#[cfg(feature = "fast-math")]
-#[inline]
-fn fast_powf(x: f32, y: f32) -> f32 {
-    // Fast exp2(y * log2(x)) approximation using bit manipulation
-    // Based on the famous "fast inverse square root" style tricks
-    let log2_x = fast_log2(x);
-    fast_exp2(y * log2_x)
-}
-
-#[cfg(feature = "fast-math")]
-#[inline]
-fn fast_log2(x: f32) -> f32 {
-    // IEEE 754: x = 2^e * m where m in [1, 2)
-    // log2(x) = e + log2(m) ≈ e + (m - 1) for m near 1
-    let bits = x.to_bits() as i32;
-    let e = ((bits >> 23) & 0xff) - 127;
-    let m = f32::from_bits((bits & 0x007fffff) | 0x3f800000);
-    e as f32 + (m - 1.0) * 1.4426950408889634 // 1/ln(2)
-}
-
-#[cfg(feature = "fast-math")]
-#[inline]
-fn fast_exp2(x: f32) -> f32 {
-    // 2^x = 2^floor(x) * 2^frac(x)
-    let floor_x = x.floor();
-    let frac_x = x - floor_x;
-    // 2^frac_x ≈ 1 + frac_x * ln(2) for small frac_x
-    let exp_frac = 1.0 + frac_x * 0.6931471805599453; // ln(2)
-    let exp_int = f32::from_bits(((floor_x as i32 + 127) << 23) as u32);
-    exp_int * exp_frac
 }
 
 /// Convert 8-bit sRGB to linear (using direct computation).

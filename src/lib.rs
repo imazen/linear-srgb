@@ -62,18 +62,18 @@
 //! simd::srgb_to_linear_slice(&mut values);
 //! ```
 
-pub mod fast_math;
 pub mod lut;
 mod mlaf;
 pub mod simd;
 mod targets;
 pub mod transfer;
 
-// Internal modules - not part of public API
-#[doc(hidden)]
-pub mod accuracy;
-#[doc(hidden)]
-pub mod imageflow;
+// Internal fast math for SIMD (not public API)
+pub(crate) mod fast_math;
+
+// Alternative/experimental implementations (for benchmarking)
+#[cfg(feature = "alt")]
+pub mod alt;
 
 // Re-export main types and functions
 pub use lut::{

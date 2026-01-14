@@ -3,7 +3,8 @@
 //! Tests all combinations of input/output types (u8, u16, f32) across implementations.
 
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
-use linear_srgb::imageflow;
+#[cfg(feature = "alt")]
+use linear_srgb::alt::imageflow;
 use linear_srgb::lut::{
     EncodeTable12, EncodeTable16, LinearTable8, LinearTable16, SrgbConverter,
     lut_interp_linear_float,
@@ -70,6 +71,7 @@ fn bench_srgb_to_linear(c: &mut Criterion) {
     // Shared resources
     let lut8 = LinearTable8::new();
     let lut16 = LinearTable16::new();
+    #[cfg(feature = "alt")]
     let imageflow_lut = imageflow::SrgbToLinearLut::new();
     let f32_data = create_f32_srgb();
     let u8_data = create_u8_srgb();
@@ -79,9 +81,9 @@ fn bench_srgb_to_linear(c: &mut Criterion) {
     // === f32 → f32 ===
 
     group.bench_function("f32_f32/simd_dirty_pow", |b| {
-        let mut output = f32x8_data.clone();
+        let mut output = f32_data.clone();
         b.iter(|| {
-            simd::srgb_to_linear_x8_slice(&mut output);
+            simd::srgb_to_linear_slice(&mut output);
             black_box(&output);
         })
     });
@@ -107,31 +109,12 @@ fn bench_srgb_to_linear(c: &mut Criterion) {
         })
     });
 
+    #[cfg(feature = "alt")]
     group.bench_function("f32_f32/imageflow_powf", |b| {
         let mut output = f32_data.clone();
         b.iter(|| {
             for v in output.iter_mut() {
                 *v = imageflow::srgb_to_linear(*v);
-            }
-            black_box(&output);
-        })
-    });
-
-    group.bench_function("f32_f32/simd_imageflow_pow", |b| {
-        let mut output = f32x8_data.clone();
-        b.iter(|| {
-            for v in output.iter_mut() {
-                *v = simd::srgb_to_linear_imageflow_x8(*v);
-            }
-            black_box(&output);
-        })
-    });
-
-    group.bench_function("f32_f32/simd_fastpow", |b| {
-        let mut output = f32x8_data.clone();
-        b.iter(|| {
-            for v in output.iter_mut() {
-                *v = simd::srgb_to_linear_fastpow_x8(*v);
             }
             black_box(&output);
         })
@@ -149,14 +132,15 @@ fn bench_srgb_to_linear(c: &mut Criterion) {
         })
     });
 
-    group.bench_function("u8_f32/simd_lut8_batch", |b| {
+    group.bench_function("u8_f32/simd_lut8_slice", |b| {
         let mut output = vec![0.0f32; BATCH_SIZE];
         b.iter(|| {
-            simd::srgb_u8_to_linear_batch(&lut8, black_box(&u8_data), &mut output);
+            simd::srgb_u8_to_linear_slice(black_box(&u8_data), &mut output);
             black_box(&output);
         })
     });
 
+    #[cfg(feature = "alt")]
     group.bench_function("u8_f32/imageflow_lut8", |b| {
         let mut output = vec![0.0f32; BATCH_SIZE];
         b.iter(|| {
@@ -236,9 +220,9 @@ fn bench_linear_to_srgb(c: &mut Criterion) {
     // === f32 → f32 ===
 
     group.bench_function("f32_f32/simd_dirty_pow", |b| {
-        let mut output = f32x8_linear.clone();
+        let mut output = f32_linear.clone();
         b.iter(|| {
-            simd::linear_to_srgb_x8_slice(&mut output);
+            simd::linear_to_srgb_slice(&mut output);
             black_box(&output);
         })
     });
@@ -273,6 +257,7 @@ fn bench_linear_to_srgb(c: &mut Criterion) {
         })
     });
 
+    #[cfg(feature = "alt")]
     group.bench_function("f32_f32/imageflow_fastpow", |b| {
         let mut output = f32_linear.clone();
         b.iter(|| {
@@ -283,32 +268,12 @@ fn bench_linear_to_srgb(c: &mut Criterion) {
         })
     });
 
-    group.bench_function("f32_f32/simd_imageflow_pow", |b| {
-        let mut output = f32x8_linear.clone();
-        b.iter(|| {
-            for v in output.iter_mut() {
-                *v = simd::linear_to_srgb_imageflow_x8(*v);
-            }
-            black_box(&output);
-        })
-    });
-
-    group.bench_function("f32_f32/simd_fastpow", |b| {
-        let mut output = f32x8_linear.clone();
-        b.iter(|| {
-            for v in output.iter_mut() {
-                *v = simd::linear_to_srgb_fastpow_x8(*v);
-            }
-            black_box(&output);
-        })
-    });
-
     // === f32 → u8 ===
 
     group.bench_function("f32_u8/simd_dirty_pow", |b| {
         let mut output = vec![0u8; BATCH_SIZE];
         b.iter(|| {
-            simd::linear_to_srgb_u8_batch(black_box(&linear_from_u8), &mut output);
+            simd::linear_to_srgb_u8_slice(black_box(&linear_from_u8), &mut output);
             black_box(&output);
         })
     });
@@ -341,6 +306,7 @@ fn bench_linear_to_srgb(c: &mut Criterion) {
         })
     });
 
+    #[cfg(feature = "alt")]
     group.bench_function("f32_u8/imageflow_fastpow", |b| {
         let mut output = vec![0u8; BATCH_SIZE];
         b.iter(|| {
@@ -351,6 +317,7 @@ fn bench_linear_to_srgb(c: &mut Criterion) {
         })
     });
 
+    #[cfg(feature = "alt")]
     group.bench_function("f32_u8/imageflow_lut16k", |b| {
         let mut output = vec![0u8; BATCH_SIZE];
         b.iter(|| {
@@ -421,14 +388,14 @@ fn bench_roundtrip(c: &mut Criterion) {
 
     // === u8 → f32 → u8 ===
 
-    group.bench_function("u8_f32_u8/lut8_simd", |b| {
+    group.bench_function("u8_f32_u8/simd_lut_dirty_pow", |b| {
         let mut linear = vec![0.0f32; BATCH_SIZE];
         let mut output = vec![0u8; BATCH_SIZE];
         b.iter(|| {
             // u8 → f32
-            simd::srgb_u8_to_linear_batch(&lut8, &u8_data, &mut linear);
+            simd::srgb_u8_to_linear_slice(&u8_data, &mut linear);
             // f32 → u8
-            simd::linear_to_srgb_u8_batch(&linear, &mut output);
+            simd::linear_to_srgb_u8_slice(&linear, &mut output);
             black_box(&output);
         })
     });
@@ -455,6 +422,7 @@ fn bench_roundtrip(c: &mut Criterion) {
         })
     });
 
+    #[cfg(feature = "alt")]
     group.bench_function("u8_f32_u8/imageflow_lut_fastpow", |b| {
         let iflow_lut = imageflow::SrgbToLinearLut::new();
         let mut output = vec![0u8; BATCH_SIZE];
@@ -467,6 +435,7 @@ fn bench_roundtrip(c: &mut Criterion) {
         })
     });
 
+    #[cfg(feature = "alt")]
     group.bench_function("u8_f32_u8/imageflow_lut_lut16k", |b| {
         let iflow_lut = imageflow::SrgbToLinearLut::new();
         let mut output = vec![0u8; BATCH_SIZE];
@@ -528,28 +497,16 @@ fn bench_scaling(c: &mut Criterion) {
 
     for size in sizes {
         let f32_data: Vec<f32> = (0..size).map(|i| i as f32 / size as f32).collect();
-        let f32x8_data: Vec<f32x8> = f32_data
-            .chunks(8)
-            .map(|chunk| {
-                let mut arr = [0.0f32; 8];
-                arr[..chunk.len()].copy_from_slice(chunk);
-                f32x8::from(arr)
-            })
-            .collect();
 
         group.throughput(Throughput::Elements(size as u64));
 
-        group.bench_with_input(
-            BenchmarkId::new("simd_s2l", size),
-            &f32x8_data,
-            |b, data| {
-                let mut output = data.clone();
-                b.iter(|| {
-                    simd::srgb_to_linear_x8_slice(&mut output);
-                    black_box(&output);
-                })
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("simd_s2l", size), &f32_data, |b, data| {
+            let mut output = data.clone();
+            b.iter(|| {
+                simd::srgb_to_linear_slice(&mut output);
+                black_box(&output);
+            })
+        });
 
         group.bench_with_input(
             BenchmarkId::new("scalar_s2l", size),
