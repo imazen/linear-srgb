@@ -117,6 +117,26 @@ fn bench_srgb_to_linear(c: &mut Criterion) {
         })
     });
 
+    group.bench_function("f32_f32/simd_imageflow_pow", |b| {
+        let mut output = f32x8_data.clone();
+        b.iter(|| {
+            for v in output.iter_mut() {
+                *v = simd::srgb_to_linear_imageflow_x8(*v);
+            }
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("f32_f32/simd_fastpow", |b| {
+        let mut output = f32x8_data.clone();
+        b.iter(|| {
+            for v in output.iter_mut() {
+                *v = simd::srgb_to_linear_fastpow_x8(*v);
+            }
+            black_box(&output);
+        })
+    });
+
     // === u8 → f32 ===
 
     group.bench_function("u8_f32/lut8_direct", |b| {
@@ -258,6 +278,26 @@ fn bench_linear_to_srgb(c: &mut Criterion) {
         b.iter(|| {
             for v in output.iter_mut() {
                 *v = imageflow::linear_to_srgb(*v);
+            }
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("f32_f32/simd_imageflow_pow", |b| {
+        let mut output = f32x8_linear.clone();
+        b.iter(|| {
+            for v in output.iter_mut() {
+                *v = simd::linear_to_srgb_imageflow_x8(*v);
+            }
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("f32_f32/simd_fastpow", |b| {
+        let mut output = f32x8_linear.clone();
+        b.iter(|| {
+            for v in output.iter_mut() {
+                *v = simd::linear_to_srgb_fastpow_x8(*v);
             }
             black_box(&output);
         })

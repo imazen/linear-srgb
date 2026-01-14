@@ -5,7 +5,7 @@
 
 use bytemuck::cast;
 use multiversed::multiversed;
-use wide::{f32x8, i32x8, u32x8};
+use wide::{f32x8, i32x8, u32x8, CmpLt};
 
 use crate::mlaf::mlaf;
 
@@ -179,6 +179,202 @@ pub fn dirty_pow_const_x8(x: f32x8, n: f32) -> f32x8 {
     dirty_pow_x8(x, f32x8::splat(n))
 }
 
+// ============================================================================
+// Imageflow-style fast math (no LUT, uses division-based polynomial)
+// ============================================================================
+
+// Imageflow constants for fastlog2/fastpow2
+const IF_MANTISSA_MASK: u32 = 0x007FFFFF; // 23 mantissa bits
+const IF_HALF_BIAS: u32 = 0x3F000000; // exponent for 0.5
+
+/// Imageflow-style fast log2 for 8 f32 values.
+///
+/// Uses bit manipulation to extract exponent and polynomial approximation.
+/// Simpler than dirty_log2f_x8 but slightly less accurate.
+#[multiversed]
+#[inline]
+pub fn imageflow_log2_x8(x: f32x8) -> f32x8 {
+    // Extract bits
+    let vx = f32x8_to_bits(x);
+
+    // Create mantissa float in [0.5, 1) range by setting exponent to -1
+    let mx_bits = (vx & u32x8::splat(IF_MANTISSA_MASK)) | u32x8::splat(IF_HALF_BIAS);
+    let mx = f32x8_from_bits(mx_bits);
+
+    // Convert raw bits to float and scale by 2^-23
+    // This extracts: exponent + mantissa_fraction
+    let vx_i32: i32x8 = cast(vx);
+    let y = f32x8::from_i32x8(vx_i32) * f32x8::splat(1.192_092_9e-7);
+
+    // Polynomial approximation:
+    // log2(x) ≈ y - 124.22552 - 1.4980303 * mx - 1.72588 / (0.35208872 + mx)
+    y - f32x8::splat(124.225_52)
+        - f32x8::splat(1.498_030_3) * mx
+        - f32x8::splat(1.725_88) / (f32x8::splat(0.352_088_72) + mx)
+}
+
+/// Imageflow-style fast pow2 (2^x) for 8 f32 values.
+///
+/// Directly constructs IEEE 754 bits without LUT lookup.
+/// For sRGB range inputs, this is faster than LUT-based dirty_exp2f_x8.
+#[multiversed]
+#[inline]
+pub fn imageflow_pow2_x8(p: f32x8) -> f32x8 {
+    // Handle offset for negative values
+    let zero = f32x8::splat(0.0);
+    let one = f32x8::splat(1.0);
+
+    // offset = 1.0 if p < 0, else 0.0
+    // Using simd_lt from CmpLt trait, then blend
+    let is_negative = p.simd_lt(zero);
+    let offset = is_negative.blend(one, zero);
+
+    // Clamp to prevent overflow (min exponent is -126)
+    let min_val = f32x8::splat(-126.0);
+    let clipp = p.max(min_val);
+
+    // Extract integer and fractional parts
+    // w = trunc(clipp), z = frac(clipp) + offset
+    // Use trunc_int and convert back to float
+    let w_i32 = clipp.trunc_int();
+    let w_f32 = f32x8::from_i32x8(w_i32);
+    let z = clipp - w_f32 + offset;
+
+    // Construct IEEE 754 bits using polynomial:
+    // bits = 2^23 * (clipp + 121.274055 + 27.728024 / (4.8425255 - z) - 1.4901291 * z)
+    let scale = f32x8::splat((1_i32 << 23) as f32);
+    let inner = clipp + f32x8::splat(121.274_055)
+        + f32x8::splat(27.728_024) / (f32x8::splat(4.842_525_5) - z)
+        - f32x8::splat(1.490_129_1) * z;
+
+    let bits_f32 = scale * inner;
+
+    // Convert to integer bits and reinterpret as float
+    // Use trunc_int for the conversion
+    let bits_i32 = bits_f32.trunc_int();
+    let bits_u32: u32x8 = cast(bits_i32);
+    f32x8_from_bits(bits_u32)
+}
+
+/// Imageflow-style fast pow(x, n) for 8 f32 values.
+///
+/// Uses imageflow's simpler polynomial approximation without LUT.
+/// Faster than dirty_pow_x8 for sRGB-range inputs but slightly less accurate.
+#[multiversed]
+#[inline]
+pub fn imageflow_pow_x8(x: f32x8, n: f32x8) -> f32x8 {
+    let lg = imageflow_log2_x8(x);
+    imageflow_pow2_x8(n * lg)
+}
+
+/// Imageflow-style fast pow(x, n) where n is a constant.
+#[multiversed]
+#[inline]
+pub fn imageflow_pow_const_x8(x: f32x8, n: f32) -> f32x8 {
+    imageflow_pow_x8(x, f32x8::splat(n))
+}
+
+// ============================================================================
+// Optimized fastpow: imageflow algorithm with RCPPS + Newton-Raphson
+// ============================================================================
+
+/// Fast reciprocal approximation with one Newton-Raphson refinement.
+///
+/// Uses RCPPS for ~12-bit approximation, then refines to ~23-bit accuracy.
+/// Much faster than VDIVPS for computing 1/x or c/x.
+#[inline(always)]
+fn fast_recip_x8(x: f32x8) -> f32x8 {
+    // Initial approximation (RCPPS gives ~12 bits of precision)
+    let approx = x.recip();
+
+    // One Newton-Raphson iteration: y' = y * (2 - x * y)
+    // This gives ~23 bits of precision
+    let two = f32x8::splat(2.0);
+    approx * (two - x * approx)
+}
+
+/// Fast division c / x using reciprocal approximation.
+#[inline(always)]
+fn fast_div_x8(c: f32x8, x: f32x8) -> f32x8 {
+    c * fast_recip_x8(x)
+}
+
+/// Optimized fast log2 using reciprocal approximation instead of division.
+#[multiversed]
+#[inline]
+pub fn fastpow_log2_x8(x: f32x8) -> f32x8 {
+    // Extract bits
+    let vx = f32x8_to_bits(x);
+
+    // Create mantissa float in [0.5, 1) range
+    let mx_bits = (vx & u32x8::splat(IF_MANTISSA_MASK)) | u32x8::splat(IF_HALF_BIAS);
+    let mx = f32x8_from_bits(mx_bits);
+
+    // Convert raw bits to float and scale by 2^-23
+    let vx_i32: i32x8 = cast(vx);
+    let y = f32x8::from_i32x8(vx_i32) * f32x8::splat(1.192_092_9e-7);
+
+    // Use fast reciprocal instead of division
+    // log2(x) ≈ y - 124.22552 - 1.4980303 * mx - 1.72588 / (0.35208872 + mx)
+    let denom = f32x8::splat(0.352_088_72) + mx;
+    let div_term = fast_div_x8(f32x8::splat(1.725_88), denom);
+
+    y - f32x8::splat(124.225_52) - f32x8::splat(1.498_030_3) * mx - div_term
+}
+
+/// Optimized fast pow2 using reciprocal approximation instead of division.
+#[multiversed]
+#[inline]
+pub fn fastpow_pow2_x8(p: f32x8) -> f32x8 {
+    let zero = f32x8::splat(0.0);
+    let one = f32x8::splat(1.0);
+
+    // offset = 1.0 if p < 0, else 0.0
+    let is_negative = p.simd_lt(zero);
+    let offset = is_negative.blend(one, zero);
+
+    // Clamp to prevent overflow
+    let min_val = f32x8::splat(-126.0);
+    let clipp = p.max(min_val);
+
+    // Extract integer and fractional parts
+    let w_i32 = clipp.trunc_int();
+    let w_f32 = f32x8::from_i32x8(w_i32);
+    let z = clipp - w_f32 + offset;
+
+    // Use fast reciprocal instead of division
+    // bits = 2^23 * (clipp + 121.274055 + 27.728024 / (4.8425255 - z) - 1.4901291 * z)
+    let denom = f32x8::splat(4.842_525_5) - z;
+    let div_term = fast_div_x8(f32x8::splat(27.728_024), denom);
+
+    let scale = f32x8::splat((1_i32 << 23) as f32);
+    let inner =
+        clipp + f32x8::splat(121.274_055) + div_term - f32x8::splat(1.490_129_1) * z;
+
+    let bits_f32 = scale * inner;
+    let bits_i32 = bits_f32.trunc_int();
+    let bits_u32: u32x8 = cast(bits_i32);
+    f32x8_from_bits(bits_u32)
+}
+
+/// Optimized fast pow using reciprocal approximation.
+///
+/// This is the fastest SIMD pow approximation - uses RCPPS + Newton-Raphson
+/// instead of VDIVPS for divisions.
+#[multiversed]
+#[inline]
+pub fn fastpow_x8(x: f32x8, n: f32x8) -> f32x8 {
+    let lg = fastpow_log2_x8(x);
+    fastpow_pow2_x8(n * lg)
+}
+
+/// Optimized fast pow with constant exponent.
+#[multiversed]
+#[inline]
+pub fn fastpow_const_x8(x: f32x8, n: f32) -> f32x8 {
+    fastpow_x8(x, f32x8::splat(n))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -275,6 +471,148 @@ mod tests {
             assert!(
                 (r - expected).abs() < 1e-4,
                 "pow(x, 1/2.4) mismatch at {}: got {}, expected {}",
+                i,
+                r,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_imageflow_log2_x8() {
+        let input = f32x8::from([0.5, 1.0, 2.0, 4.0, 0.25, 8.0, 0.125, 16.0]);
+        let result = imageflow_log2_x8(input);
+        let result_arr: [f32; 8] = result.into();
+
+        let expected = [-1.0, 0.0, 1.0, 2.0, -2.0, 3.0, -3.0, 4.0];
+        for (i, (&r, &e)) in result_arr.iter().zip(expected.iter()).enumerate() {
+            // Imageflow's approximation is less accurate (~1%)
+            assert!(
+                (r - e).abs() < 0.05,
+                "imageflow log2 mismatch at {}: got {}, expected {}",
+                i,
+                r,
+                e
+            );
+        }
+    }
+
+    #[test]
+    fn test_imageflow_pow2_x8() {
+        let input = f32x8::from([-3.0, -2.0, -1.0, -0.5, 0.5, 1.0, 2.0, 3.0]);
+        let result = imageflow_pow2_x8(input);
+        let result_arr: [f32; 8] = result.into();
+        let input_arr: [f32; 8] = input.into();
+
+        for (i, (&r, &inp)) in result_arr.iter().zip(input_arr.iter()).enumerate() {
+            let expected = inp.exp2();
+            // Imageflow's approximation allows ~5% error
+            assert!(
+                (r - expected).abs() / expected.abs().max(1e-10) < 0.05,
+                "imageflow pow2 mismatch at {}: got {}, expected {}",
+                i,
+                r,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_imageflow_pow_srgb_gamma() {
+        // Test with sRGB gamma values
+        let x = f32x8::from([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]);
+
+        // Test x^(1/2.4) which is used in linear→sRGB
+        let inv_gamma = f32x8::splat(1.0 / 2.4);
+        let result = imageflow_pow_x8(x, inv_gamma);
+        let result_arr: [f32; 8] = result.into();
+        let x_arr: [f32; 8] = x.into();
+
+        for (i, (&r, &inp)) in result_arr.iter().zip(x_arr.iter()).enumerate() {
+            let expected = inp.powf(1.0 / 2.4);
+            // Imageflow's approximation allows ~5% relative error
+            assert!(
+                (r - expected).abs() / expected.max(1e-10) < 0.05,
+                "imageflow pow(x, 1/2.4) mismatch at {}: got {}, expected {}",
+                i,
+                r,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_fastpow_log2_x8() {
+        let input = f32x8::from([0.5, 1.0, 2.0, 4.0, 0.25, 8.0, 0.125, 16.0]);
+        let result = fastpow_log2_x8(input);
+        let result_arr: [f32; 8] = result.into();
+
+        let expected = [-1.0, 0.0, 1.0, 2.0, -2.0, 3.0, -3.0, 4.0];
+        for (i, (&r, &e)) in result_arr.iter().zip(expected.iter()).enumerate() {
+            // Same tolerance as imageflow (should be similar accuracy)
+            assert!(
+                (r - e).abs() < 0.05,
+                "fastpow log2 mismatch at {}: got {}, expected {}",
+                i,
+                r,
+                e
+            );
+        }
+    }
+
+    #[test]
+    fn test_fastpow_pow2_x8() {
+        let input = f32x8::from([-3.0, -2.0, -1.0, -0.5, 0.5, 1.0, 2.0, 3.0]);
+        let result = fastpow_pow2_x8(input);
+        let result_arr: [f32; 8] = result.into();
+        let input_arr: [f32; 8] = input.into();
+
+        for (i, (&r, &inp)) in result_arr.iter().zip(input_arr.iter()).enumerate() {
+            let expected = inp.exp2();
+            // Same tolerance as imageflow
+            assert!(
+                (r - expected).abs() / expected.abs().max(1e-10) < 0.05,
+                "fastpow pow2 mismatch at {}: got {}, expected {}",
+                i,
+                r,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_fastpow_srgb_gamma() {
+        // Test with sRGB gamma values
+        let x = f32x8::from([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]);
+
+        // Test x^(1/2.4) which is used in linear→sRGB
+        let inv_gamma = f32x8::splat(1.0 / 2.4);
+        let result = fastpow_x8(x, inv_gamma);
+        let result_arr: [f32; 8] = result.into();
+        let x_arr: [f32; 8] = x.into();
+
+        for (i, (&r, &inp)) in result_arr.iter().zip(x_arr.iter()).enumerate() {
+            let expected = inp.powf(1.0 / 2.4);
+            // Same tolerance as imageflow
+            assert!(
+                (r - expected).abs() / expected.max(1e-10) < 0.05,
+                "fastpow pow(x, 1/2.4) mismatch at {}: got {}, expected {}",
+                i,
+                r,
+                expected
+            );
+        }
+
+        // Test x^2.4 which is used in sRGB→linear
+        let gamma = f32x8::splat(2.4);
+        let result = fastpow_x8(x, gamma);
+        let result_arr: [f32; 8] = result.into();
+
+        for (i, (&r, &inp)) in result_arr.iter().zip(x_arr.iter()).enumerate() {
+            let expected = inp.powf(2.4);
+            assert!(
+                (r - expected).abs() / expected.max(1e-10) < 0.05,
+                "fastpow pow(x, 2.4) mismatch at {}: got {}, expected {}",
                 i,
                 r,
                 expected

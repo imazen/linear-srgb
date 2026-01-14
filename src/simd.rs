@@ -6,8 +6,8 @@
 use multiversed::multiversed;
 use wide::{CmpLt, f32x8};
 
-use crate::fast_math::dirty_pow_const_x8;
-use crate::lut::{LinearTable8, LinearTable16};
+use crate::fast_math::{dirty_pow_const_x8, fastpow_const_x8, imageflow_pow_const_x8};
+use crate::lut::{LinearTable16, LinearTable8};
 
 // Constants for u8 conversion
 const U8_MAX_F32: f32x8 = f32x8::splat(255.0);
@@ -60,6 +60,88 @@ pub fn linear_to_srgb_x8(linear: f32x8) -> f32x8 {
     // Power segment: 1.055 * linear^(1/2.4) - 0.055
     // Use fast pow approximation instead of slow pow_f32x8
     let power_result = SRGB_A_PLUS_1 * dirty_pow_const_x8(linear, 1.0 / 2.4) - SRGB_A;
+
+    // Select based on threshold
+    let mask = linear.simd_lt(LINEAR_THRESHOLD);
+    mask.blend(linear_result, power_result)
+}
+
+/// Convert 8 sRGB values to linear using imageflow-style SIMD pow.
+///
+/// Uses a simpler polynomial approximation without LUT lookup.
+/// Slightly less accurate but potentially faster than dirty_pow.
+#[multiversed]
+#[inline]
+pub fn srgb_to_linear_imageflow_x8(gamma: f32x8) -> f32x8 {
+    // Clamp input
+    let gamma = gamma.max(ZERO).min(ONE);
+
+    // Linear segment: gamma * (1/12.92)
+    let linear_result = gamma * LINEAR_SCALE;
+
+    // Power segment: ((gamma + 0.055) / 1.055) ^ 2.4
+    let power_result = imageflow_pow_const_x8((gamma + SRGB_A) / SRGB_A_PLUS_1, 2.4);
+
+    // Select based on threshold
+    let mask = gamma.simd_lt(SRGB_LINEAR_THRESHOLD);
+    mask.blend(linear_result, power_result)
+}
+
+/// Convert 8 linear values to sRGB using imageflow-style SIMD pow.
+///
+/// Uses a simpler polynomial approximation without LUT lookup.
+/// Slightly less accurate but potentially faster than dirty_pow.
+#[multiversed]
+#[inline]
+pub fn linear_to_srgb_imageflow_x8(linear: f32x8) -> f32x8 {
+    // Clamp input
+    let linear = linear.max(ZERO).min(ONE);
+
+    // Linear segment: linear * 12.92
+    let linear_result = linear * TWELVE_92;
+
+    // Power segment: 1.055 * linear^(1/2.4) - 0.055
+    let power_result = SRGB_A_PLUS_1 * imageflow_pow_const_x8(linear, 1.0 / 2.4) - SRGB_A;
+
+    // Select based on threshold
+    let mask = linear.simd_lt(LINEAR_THRESHOLD);
+    mask.blend(linear_result, power_result)
+}
+
+/// Convert 8 sRGB values to linear using optimized fastpow (RCPPS).
+///
+/// Uses reciprocal approximation instead of division for best SIMD performance.
+#[multiversed]
+#[inline]
+pub fn srgb_to_linear_fastpow_x8(gamma: f32x8) -> f32x8 {
+    // Clamp input
+    let gamma = gamma.max(ZERO).min(ONE);
+
+    // Linear segment: gamma * (1/12.92)
+    let linear_result = gamma * LINEAR_SCALE;
+
+    // Power segment: ((gamma + 0.055) / 1.055) ^ 2.4
+    let power_result = fastpow_const_x8((gamma + SRGB_A) / SRGB_A_PLUS_1, 2.4);
+
+    // Select based on threshold
+    let mask = gamma.simd_lt(SRGB_LINEAR_THRESHOLD);
+    mask.blend(linear_result, power_result)
+}
+
+/// Convert 8 linear values to sRGB using optimized fastpow (RCPPS).
+///
+/// Uses reciprocal approximation instead of division for best SIMD performance.
+#[multiversed]
+#[inline]
+pub fn linear_to_srgb_fastpow_x8(linear: f32x8) -> f32x8 {
+    // Clamp input
+    let linear = linear.max(ZERO).min(ONE);
+
+    // Linear segment: linear * 12.92
+    let linear_result = linear * TWELVE_92;
+
+    // Power segment: 1.055 * linear^(1/2.4) - 0.055
+    let power_result = SRGB_A_PLUS_1 * fastpow_const_x8(linear, 1.0 / 2.4) - SRGB_A;
 
     // Select based on threshold
     let mask = linear.simd_lt(LINEAR_THRESHOLD);
