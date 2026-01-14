@@ -51,6 +51,7 @@ impl ErrorStats {
         }
     }
 
+    #[allow(dead_code)]
     fn avg_abs_error(&self) -> f64 {
         if self.count == 0 { 0.0 } else { self.sum_abs_error / self.count as f64 }
     }
@@ -62,20 +63,19 @@ impl ErrorStats {
 
 fn print_table_header() {
     println!(
-        "{:<40} {:>10} {:>10} {:>12} {:>12}",
-        "Implementation", "Max ULP", "Avg ULP", "Max Abs Err", "Avg Abs Err"
+        "{:<55} {:>10} {:>10} {:>12}",
+        "Implementation", "Max ULP", "Avg ULP", "Max Abs Err"
     );
-    println!("{}", "-".repeat(86));
+    println!("{}", "-".repeat(89));
 }
 
 fn print_stats(stats: &ErrorStats) {
     println!(
-        "{:<40} {:>10} {:>10.2} {:>12.2e} {:>12.2e}",
+        "{:<55} {:>10} {:>10.2} {:>12.2e}",
         stats.name,
         stats.max_ulp,
         stats.avg_ulp(),
         stats.max_abs_error,
-        stats.avg_abs_error()
     );
 }
 
@@ -94,7 +94,9 @@ fn main() {
     compare_u8_roundtrip();
 }
 
-fn create_moxcms_srgb_to_linear_transform() -> std::sync::Arc<moxcms::TransformF32Executor> {
+fn create_moxcms_srgb_to_linear_transform(
+    intent: RenderingIntent,
+) -> std::sync::Arc<moxcms::TransformF32Executor> {
     let srgb = ColorProfile::new_srgb();
     let linear_srgb = ColorProfile::new_from_cicp(CicpProfile {
         color_primaries: CicpColorPrimaries::Bt709,
@@ -103,14 +105,16 @@ fn create_moxcms_srgb_to_linear_transform() -> std::sync::Arc<moxcms::TransformF
         full_range: true,
     });
     let options = TransformOptions {
-        rendering_intent: RenderingIntent::Perceptual,
+        rendering_intent: intent,
         ..Default::default()
     };
     srgb.create_transform_f32(Layout::Rgb, &linear_srgb, Layout::Rgb, options)
         .expect("Failed to create moxcms sRGB→linear transform")
 }
 
-fn create_moxcms_linear_to_srgb_transform() -> std::sync::Arc<moxcms::TransformF32Executor> {
+fn create_moxcms_linear_to_srgb_transform(
+    intent: RenderingIntent,
+) -> std::sync::Arc<moxcms::TransformF32Executor> {
     let linear_srgb = ColorProfile::new_from_cicp(CicpProfile {
         color_primaries: CicpColorPrimaries::Bt709,
         transfer_characteristics: TransferCharacteristics::Linear,
@@ -119,7 +123,7 @@ fn create_moxcms_linear_to_srgb_transform() -> std::sync::Arc<moxcms::TransformF
     });
     let srgb = ColorProfile::new_srgb();
     let options = TransformOptions {
-        rendering_intent: RenderingIntent::Perceptual,
+        rendering_intent: intent,
         ..Default::default()
     };
     linear_srgb
@@ -128,19 +132,24 @@ fn create_moxcms_linear_to_srgb_transform() -> std::sync::Arc<moxcms::TransformF
 }
 
 fn compare_srgb_to_linear_f32() {
-    println!("--- sRGB → Linear (f32 → f32) ---\n");
+    println!("--- sRGB → Linear (f32 input → f32 output) ---\n");
+    println!("(Testing range 0.01-1.0 to exclude near-zero ULP explosion)\n");
 
-    // Exclude very small values (< 0.01) where near-zero clipping causes ULP explosion
     let test_values: Vec<f64> = (100..=10000).map(|i| i as f64 / 10000.0).collect();
 
-    let mut stats_scalar = ErrorStats::new("Scalar f32 (optimized constants)");
-    let mut stats_simd = ErrorStats::new("SIMD f32x8 (dirty pow)");
-    let mut stats_naive = ErrorStats::new("Naive f32 (textbook powf)");
-    let mut stats_lut12 = ErrorStats::new("LUT 12-bit interpolated");
-    let mut stats_moxcms = ErrorStats::new("moxcms");
+    let mut stats: Vec<ErrorStats> = vec![
+        ErrorStats::new("f32→f32: Scalar powf (optimized constants)"),
+        ErrorStats::new("f32→f32: SIMD dirty_pow approx"),
+        ErrorStats::new("f32→f32: LUT 12-bit interp"),
+        ErrorStats::new("f32→f32: moxcms Perceptual"),
+        ErrorStats::new("f32→f32: moxcms RelativeColorimetric"),
+        ErrorStats::new("f32→f32: Naive powf (textbook constants)"),
+    ];
 
     let lut12 = linear_srgb::lut::LinearTable12::new();
-    let moxcms_transform = create_moxcms_srgb_to_linear_transform();
+    let moxcms_perceptual = create_moxcms_srgb_to_linear_transform(RenderingIntent::Perceptual);
+    let moxcms_relative =
+        create_moxcms_srgb_to_linear_transform(RenderingIntent::RelativeColorimetric);
 
     for &input in &test_values {
         let reference = srgb_to_linear_f64(input);
@@ -148,53 +157,57 @@ fn compare_srgb_to_linear_f32() {
 
         // Scalar f32
         let scalar_result = srgb_to_linear(input_f32) as f64;
-        stats_scalar.update(reference, scalar_result);
+        stats[0].update(reference, scalar_result);
 
         // SIMD f32x8
         let v = f32x8::splat(input_f32);
         let simd_result: [f32; 8] = simd::srgb_to_linear_x8(v).into();
-        stats_simd.update(reference, simd_result[0] as f64);
-
-        // Naive f32
-        let naive_result = naive_srgb_to_linear_f64(input);
-        stats_naive.update(reference, naive_result);
+        stats[1].update(reference, simd_result[0] as f64);
 
         // LUT 12-bit interpolated
         let lut_result = lut_interp_linear_float(input_f32, lut12.as_slice()) as f64;
-        stats_lut12.update(reference, lut_result);
+        stats[2].update(reference, lut_result);
 
-        // moxcms (process as RGB triple)
+        // moxcms Perceptual
         let rgb_in = [input_f32, input_f32, input_f32];
         let mut rgb_out = [0.0f32; 3];
-        let _ = moxcms_transform.transform(&rgb_in, &mut rgb_out);
-        stats_moxcms.update(reference, rgb_out[0] as f64);
+        let _ = moxcms_perceptual.transform(&rgb_in, &mut rgb_out);
+        stats[3].update(reference, rgb_out[0] as f64);
+
+        // moxcms RelativeColorimetric
+        let mut rgb_out2 = [0.0f32; 3];
+        let _ = moxcms_relative.transform(&rgb_in, &mut rgb_out2);
+        stats[4].update(reference, rgb_out2[0] as f64);
+
+        // Naive f32
+        let naive_result = naive_srgb_to_linear_f64(input);
+        stats[5].update(reference, naive_result);
     }
 
-    println!("(Testing range 0.01-1.0 to exclude near-zero ULP explosion)\n");
     print_table_header();
-    print_stats(&stats_scalar);
-    print_stats(&stats_simd);
-    print_stats(&stats_lut12);
-    print_stats(&stats_moxcms);
-    print_stats(&stats_naive);
-
-    println!("\nNote: moxcms clips near-zero values, causing huge ULP at very small inputs.");
+    for s in &stats {
+        print_stats(s);
+    }
 }
 
 fn compare_linear_to_srgb_f32() {
-    println!("--- Linear → sRGB (f32 → f32) ---\n");
+    println!("--- Linear → sRGB (f32 input → f32 output) ---\n");
 
-    // Full range test
     let test_values: Vec<f64> = (0..=10000).map(|i| i as f64 / 10000.0).collect();
 
-    let mut stats_scalar = ErrorStats::new("Scalar f32 (optimized constants)");
-    let mut stats_simd = ErrorStats::new("SIMD f32x8 (dirty pow)");
-    let mut stats_naive = ErrorStats::new("Naive f32 (textbook powf)");
-    let mut stats_lut12 = ErrorStats::new("LUT 12-bit interpolated");
-    let mut stats_moxcms = ErrorStats::new("moxcms");
+    let mut stats: Vec<ErrorStats> = vec![
+        ErrorStats::new("f32→f32: Scalar powf (optimized constants)"),
+        ErrorStats::new("f32→f32: SIMD dirty_pow approx"),
+        ErrorStats::new("f32→f32: LUT 12-bit interp"),
+        ErrorStats::new("f32→f32: moxcms Perceptual"),
+        ErrorStats::new("f32→f32: moxcms RelativeColorimetric"),
+        ErrorStats::new("f32→f32: Naive powf (textbook constants)"),
+    ];
 
     let encode_table = EncodeTable12::new();
-    let moxcms_transform = create_moxcms_linear_to_srgb_transform();
+    let moxcms_perceptual = create_moxcms_linear_to_srgb_transform(RenderingIntent::Perceptual);
+    let moxcms_relative =
+        create_moxcms_linear_to_srgb_transform(RenderingIntent::RelativeColorimetric);
 
     for &input in &test_values {
         let reference = linear_to_srgb_f64(input);
@@ -202,34 +215,37 @@ fn compare_linear_to_srgb_f32() {
 
         // Scalar f32
         let scalar_result = linear_to_srgb(input_f32) as f64;
-        stats_scalar.update(reference, scalar_result);
+        stats[0].update(reference, scalar_result);
 
         // SIMD f32x8
         let v = f32x8::splat(input_f32);
         let simd_result: [f32; 8] = simd::linear_to_srgb_x8(v).into();
-        stats_simd.update(reference, simd_result[0] as f64);
-
-        // Naive f32
-        let naive_result = naive_linear_to_srgb_f64(input);
-        stats_naive.update(reference, naive_result);
+        stats[1].update(reference, simd_result[0] as f64);
 
         // LUT 12-bit
         let lut_result = lut_interp_linear_float(input_f32, encode_table.as_slice()) as f64;
-        stats_lut12.update(reference, lut_result);
+        stats[2].update(reference, lut_result);
 
-        // moxcms
+        // moxcms Perceptual
         let rgb_in = [input_f32, input_f32, input_f32];
         let mut rgb_out = [0.0f32; 3];
-        let _ = moxcms_transform.transform(&rgb_in, &mut rgb_out);
-        stats_moxcms.update(reference, rgb_out[0] as f64);
+        let _ = moxcms_perceptual.transform(&rgb_in, &mut rgb_out);
+        stats[3].update(reference, rgb_out[0] as f64);
+
+        // moxcms RelativeColorimetric
+        let mut rgb_out2 = [0.0f32; 3];
+        let _ = moxcms_relative.transform(&rgb_in, &mut rgb_out2);
+        stats[4].update(reference, rgb_out2[0] as f64);
+
+        // Naive f32
+        let naive_result = naive_linear_to_srgb_f64(input);
+        stats[5].update(reference, naive_result);
     }
 
     print_table_header();
-    print_stats(&stats_scalar);
-    print_stats(&stats_simd);
-    print_stats(&stats_lut12);
-    print_stats(&stats_moxcms);
-    print_stats(&stats_naive);
+    for s in &stats {
+        print_stats(s);
+    }
 }
 
 fn compare_u8_to_linear() {
@@ -238,41 +254,41 @@ fn compare_u8_to_linear() {
     let lut8 = LinearTable8::new();
     let converter = SrgbConverter::new();
 
-    let mut stats_lut8 = ErrorStats::new("LUT 8-bit (direct lookup)");
-    let mut stats_simd_batch = ErrorStats::new("SIMD batch (LUT-based)");
-    let mut stats_converter = ErrorStats::new("SrgbConverter (LUT-based)");
-    let mut stats_f32_clamp = ErrorStats::new("f32 scalar (from u8/255)");
+    let mut stats: Vec<ErrorStats> = vec![
+        ErrorStats::new("u8→f32: LUT 8-bit direct lookup"),
+        ErrorStats::new("u8→f32: SIMD batch (8x LUT lookup)"),
+        ErrorStats::new("u8→f32: SrgbConverter (LUT lookup)"),
+        ErrorStats::new("u8→f32: u8/255→f32, then scalar powf"),
+    ];
 
-    // Test all 256 u8 values
     for i in 0..=255u8 {
         let input_normalized = i as f64 / 255.0;
         let reference = srgb_to_linear_f64(input_normalized);
 
         // LUT 8-bit direct
         let lut_result = lut8.lookup(i as usize) as f64;
-        stats_lut8.update(reference, lut_result);
+        stats[0].update(reference, lut_result);
 
-        // SIMD batch (same as LUT for u8 input)
+        // SIMD batch
         let input_arr: [u8; 8] = [i; 8];
         let simd_result = simd::srgb_u8_to_linear_x8(&lut8, input_arr);
         let simd_arr: [f32; 8] = simd_result.into();
-        stats_simd_batch.update(reference, simd_arr[0] as f64);
+        stats[1].update(reference, simd_arr[0] as f64);
 
         // SrgbConverter
         let conv_result = converter.srgb_u8_to_linear(i) as f64;
-        stats_converter.update(reference, conv_result);
+        stats[2].update(reference, conv_result);
 
-        // f32 scalar with clamped input (simulating u8 precision)
+        // f32 scalar (u8/255 then powf)
         let f32_input = i as f32 / 255.0;
         let f32_result = srgb_to_linear(f32_input) as f64;
-        stats_f32_clamp.update(reference, f32_result);
+        stats[3].update(reference, f32_result);
     }
 
     print_table_header();
-    print_stats(&stats_lut8);
-    print_stats(&stats_simd_batch);
-    print_stats(&stats_converter);
-    print_stats(&stats_f32_clamp);
+    for s in &stats {
+        print_stats(s);
+    }
 }
 
 fn compare_linear_to_u8() {
@@ -281,126 +297,112 @@ fn compare_linear_to_u8() {
     let converter = SrgbConverter::new();
 
     println!(
-        "{:<40} {:>10} {:>10} {:>12}",
+        "{:<55} {:>10} {:>10} {:>12}",
         "Implementation", "Max Diff", "Avg Diff", "Exact Match"
     );
-    println!("{}", "-".repeat(74));
+    println!("{}", "-".repeat(89));
 
-    let mut simd_exact = 0;
-    let mut conv_exact = 0;
-    let mut scalar_exact = 0;
-    let mut simd_max = 0i32;
-    let mut conv_max = 0i32;
-    let mut scalar_max = 0i32;
-    let mut simd_sum = 0i32;
-    let mut conv_sum = 0i32;
-    let mut scalar_sum = 0i32;
+    struct U8Stats {
+        name: String,
+        exact: i32,
+        max_diff: i32,
+        sum_diff: i32,
+    }
+
+    let mut stats = vec![
+        U8Stats { name: "f32→u8: SIMD dirty_pow, then *255+0.5→u8".into(), exact: 0, max_diff: 0, sum_diff: 0 },
+        U8Stats { name: "f32→u8: LUT 12-bit interp, then *255+0.5→u8".into(), exact: 0, max_diff: 0, sum_diff: 0 },
+        U8Stats { name: "f32→u8: Scalar powf, then *255+0.5→u8".into(), exact: 0, max_diff: 0, sum_diff: 0 },
+    ];
 
     for i in 0..=255u8 {
         let srgb_normalized = i as f64 / 255.0;
         let linear_input = srgb_to_linear_f64(srgb_normalized);
         let linear_f32 = linear_input as f32;
 
+        // SIMD dirty pow + round
         let v = f32x8::splat(linear_f32);
         let simd_result = simd::linear_to_srgb_u8_x8(v)[0];
+
+        // LUT interp + round
         let conv_result = converter.linear_to_srgb_u8(linear_f32);
+
+        // Scalar powf + round
         let scalar_srgb = linear_to_srgb(linear_f32);
         let scalar_result = (scalar_srgb * 255.0 + 0.5) as u8;
 
-        let simd_diff = (simd_result as i32 - i as i32).abs();
-        let conv_diff = (conv_result as i32 - i as i32).abs();
-        let scalar_diff = (scalar_result as i32 - i as i32).abs();
-
-        if simd_diff == 0 { simd_exact += 1; }
-        if conv_diff == 0 { conv_exact += 1; }
-        if scalar_diff == 0 { scalar_exact += 1; }
-
-        simd_max = simd_max.max(simd_diff);
-        conv_max = conv_max.max(conv_diff);
-        scalar_max = scalar_max.max(scalar_diff);
-
-        simd_sum += simd_diff;
-        conv_sum += conv_diff;
-        scalar_sum += scalar_diff;
+        let results = [simd_result, conv_result, scalar_result];
+        for (idx, &result) in results.iter().enumerate() {
+            let diff = (result as i32 - i as i32).abs();
+            if diff == 0 { stats[idx].exact += 1; }
+            stats[idx].max_diff = stats[idx].max_diff.max(diff);
+            stats[idx].sum_diff += diff;
+        }
     }
 
-    println!(
-        "{:<40} {:>10} {:>10.2} {:>8}/256",
-        "SIMD batch (dirty pow)", simd_max, simd_sum as f64 / 256.0, simd_exact
-    );
-    println!(
-        "{:<40} {:>10} {:>10.2} {:>8}/256",
-        "SrgbConverter (LUT interp)", conv_max, conv_sum as f64 / 256.0, conv_exact
-    );
-    println!(
-        "{:<40} {:>10} {:>10.2} {:>8}/256",
-        "Scalar f32 + round", scalar_max, scalar_sum as f64 / 256.0, scalar_exact
-    );
+    for s in &stats {
+        println!(
+            "{:<55} {:>10} {:>10.2} {:>8}/256",
+            s.name, s.max_diff, s.sum_diff as f64 / 256.0, s.exact
+        );
+    }
 }
 
 fn compare_u8_roundtrip() {
-    println!("\n--- u8 Roundtrip: sRGB → Linear → sRGB ---\n");
+    println!("\n--- u8 Roundtrip: sRGB u8 → f32 Linear → sRGB u8 ---\n");
 
     let lut = LinearTable8::new();
     let converter = SrgbConverter::new();
 
     println!(
-        "{:<40} {:>10} {:>10} {:>12}",
+        "{:<55} {:>10} {:>10} {:>12}",
         "Implementation", "Max Diff", "Exact", "Off-by-1"
     );
-    println!("{}", "-".repeat(74));
+    println!("{}", "-".repeat(89));
 
-    let mut simd_exact = 0;
-    let mut simd_off1 = 0;
-    let mut simd_max = 0;
-
-    let mut scalar_exact = 0;
-    let mut scalar_off1 = 0;
-    let mut scalar_max = 0;
-
-    let mut lut_exact = 0;
-    let mut lut_off1 = 0;
-    let mut lut_max = 0;
-
-    for i in 0..=255u8 {
-        // SIMD: LUT lookup -> SIMD transfer -> u8
-        let linear = lut.lookup(i as usize);
-        let v = f32x8::splat(linear);
-        let simd_back = simd::linear_to_srgb_u8_x8(v)[0];
-        let simd_diff = (i as i32 - simd_back as i32).abs();
-        simd_max = simd_max.max(simd_diff);
-        if simd_diff == 0 { simd_exact += 1; }
-        else if simd_diff == 1 { simd_off1 += 1; }
-
-        // Scalar: LUT lookup -> scalar transfer -> u8
-        let scalar_srgb = linear_to_srgb(linear);
-        let scalar_back = (scalar_srgb * 255.0 + 0.5) as u8;
-        let scalar_diff = (i as i32 - scalar_back as i32).abs();
-        scalar_max = scalar_max.max(scalar_diff);
-        if scalar_diff == 0 { scalar_exact += 1; }
-        else if scalar_diff == 1 { scalar_off1 += 1; }
-
-        // LUT: converter roundtrip
-        let lut_linear = converter.srgb_u8_to_linear(i);
-        let lut_back = converter.linear_to_srgb_u8(lut_linear);
-        let lut_diff = (i as i32 - lut_back as i32).abs();
-        lut_max = lut_max.max(lut_diff);
-        if lut_diff == 0 { lut_exact += 1; }
-        else if lut_diff == 1 { lut_off1 += 1; }
+    struct RoundtripStats {
+        name: String,
+        exact: i32,
+        off1: i32,
+        max_diff: i32,
     }
 
-    println!(
-        "{:<40} {:>10} {:>6}/256 {:>8}/256",
-        "SIMD (LUT → dirty pow → u8)", simd_max, simd_exact, simd_off1
-    );
-    println!(
-        "{:<40} {:>10} {:>6}/256 {:>8}/256",
-        "Scalar (LUT → f32 pow → u8)", scalar_max, scalar_exact, scalar_off1
-    );
-    println!(
-        "{:<40} {:>10} {:>6}/256 {:>8}/256",
-        "SrgbConverter (LUT → LUT interp)", lut_max, lut_exact, lut_off1
-    );
+    let mut stats = vec![
+        RoundtripStats { name: "u8→LUT→f32→SIMD dirty_pow→*255+0.5→u8".into(), exact: 0, off1: 0, max_diff: 0 },
+        RoundtripStats { name: "u8→LUT→f32→scalar powf→*255+0.5→u8".into(), exact: 0, off1: 0, max_diff: 0 },
+        RoundtripStats { name: "u8→LUT→f32→LUT interp→*255+0.5→u8".into(), exact: 0, off1: 0, max_diff: 0 },
+    ];
+
+    for i in 0..=255u8 {
+        let linear = lut.lookup(i as usize);
+
+        // SIMD path
+        let v = f32x8::splat(linear);
+        let simd_back = simd::linear_to_srgb_u8_x8(v)[0];
+
+        // Scalar path
+        let scalar_srgb = linear_to_srgb(linear);
+        let scalar_back = (scalar_srgb * 255.0 + 0.5) as u8;
+
+        // LUT path
+        let lut_linear = converter.srgb_u8_to_linear(i);
+        let lut_back = converter.linear_to_srgb_u8(lut_linear);
+
+        let results = [simd_back, scalar_back, lut_back];
+        for (idx, &result) in results.iter().enumerate() {
+            let diff = (i as i32 - result as i32).abs();
+            stats[idx].max_diff = stats[idx].max_diff.max(diff);
+            if diff == 0 { stats[idx].exact += 1; }
+            else if diff == 1 { stats[idx].off1 += 1; }
+        }
+    }
+
+    for s in &stats {
+        println!(
+            "{:<55} {:>10} {:>6}/256 {:>8}/256",
+            s.name, s.max_diff, s.exact, s.off1
+        );
+    }
 
     println!("\nNote: Off-by-1 errors are acceptable for u8 precision.");
 }
