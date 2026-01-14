@@ -7,22 +7,23 @@ license = "MIT OR Apache-2.0"
 description = "Fast linear↔sRGB color space conversion with FMA acceleration and LUT support"
 repository = "https://github.com/imazen/linear-srgb"
 keywords = ["color", "srgb", "linear", "gamma", "conversion"]
-categories = ["graphics", "multimedia::images"]
+categories = ["graphics", "multimedia::images", "no-std"]
 
 [dependencies]
-num-traits = "0.2"
+num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 wide = "1.1"
 bytemuck = "1.21"
-multiversion = "0.8"
-multiversed = { path = "/home/lilith/work/multiversed", default-features = false, features = ["x86-64-v3"] }
-pxfm = "0.1"
+multiversion = { version = "0.8", default-features = false }
+multiversed = { version = "0.1", default-features = false, features = ["x86-64-v3"] }
+libm = "0.2"
 
 [dev-dependencies]
 criterion = "0.5"
-wide = "1.1"
 
 [features]
-default = []
+default = ["std"]
+# Enable std library (required for runtime SIMD dispatch)
+std = ["num-traits/std", "multiversion/std"]
 # Include alternative/experimental implementations for benchmarking
 alt = []
 

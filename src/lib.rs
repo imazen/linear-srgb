@@ -1,5 +1,8 @@
 //! Fast linear↔sRGB color space conversion.
 //!
+//! This crate is `no_std` compatible by default. Enable the `std` feature
+//! if you need std library support.
+//!
 //! This crate provides efficient conversion between linear light values and
 //! sRGB gamma-encoded values following the IEC 61966-2-1:1999 standard.
 //!
@@ -61,6 +64,14 @@
 //! let mut values = vec![0.5f32; 10000];
 //! simd::srgb_to_linear_slice(&mut values);
 //! ```
+
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+
+#[cfg(all(test, not(feature = "std")))]
+extern crate std;
 
 pub mod lut;
 mod mlaf;

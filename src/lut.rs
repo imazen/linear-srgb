@@ -6,6 +6,9 @@
 //! - 12-bit: 4096 entries (16KB for f32)
 //! - 16-bit: 65536 entries (256KB for f32)
 
+#[cfg(not(feature = "std"))]
+use alloc::{boxed::Box, vec};
+
 use crate::mlaf::{mlaf, neg_mlaf};
 use crate::transfer::{linear_to_srgb_f64, srgb_to_linear_f64};
 

@@ -39,7 +39,7 @@ pub fn mlaf<T: MulAdd<T, Output = T>>(acc: T, a: T, b: T) -> T {
     all(target_arch = "aarch64", target_feature = "neon")
 )))]
 #[inline(always)]
-pub fn mlaf<T: std::ops::Add<Output = T> + std::ops::Mul<Output = T>>(acc: T, a: T, b: T) -> T {
+pub fn mlaf<T: core::ops::Add<Output = T> + core::ops::Mul<Output = T>>(acc: T, a: T, b: T) -> T {
     acc + a * b
 }
 
@@ -52,7 +52,7 @@ pub fn mlaf<T: std::ops::Add<Output = T> + std::ops::Mul<Output = T>>(acc: T, a:
     all(target_arch = "aarch64", target_feature = "neon")
 ))]
 #[inline(always)]
-pub fn neg_mlaf<T: MulAdd<T, Output = T> + std::ops::Neg<Output = T>>(acc: T, a: T, b: T) -> T {
+pub fn neg_mlaf<T: MulAdd<T, Output = T> + core::ops::Neg<Output = T>>(acc: T, a: T, b: T) -> T {
     mlaf(acc, a, -b)
 }
 
@@ -66,7 +66,7 @@ pub fn neg_mlaf<T: MulAdd<T, Output = T> + std::ops::Neg<Output = T>>(acc: T, a:
 )))]
 #[inline(always)]
 pub fn neg_mlaf<
-    T: std::ops::Add<Output = T> + std::ops::Mul<Output = T> + std::ops::Neg<Output = T>,
+    T: core::ops::Add<Output = T> + core::ops::Mul<Output = T> + core::ops::Neg<Output = T>,
 >(
     acc: T,
     a: T,
