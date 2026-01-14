@@ -1,0 +1,25 @@
+[package]
+name = "linear-srgb"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+description = "Fast linear↔sRGB color space conversion with FMA acceleration and LUT support"
+repository = "https://github.com/imazen/linear-srgb"
+keywords = ["color", "srgb", "linear", "gamma", "conversion"]
+categories = ["graphics", "multimedia::images"]
+
+[dependencies]
+num-traits = "0.2"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[features]
+default = []
+# Use faster but slightly less accurate pow approximation for extended range
+fast-math = []
+
+[[bench]]
+name = "benchmarks"
+harness = false
