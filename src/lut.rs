@@ -1,10 +1,24 @@
 //! Lookup table (LUT) based sRGB conversions.
 //!
-//! Pre-computed tables trade memory for speed. Table sizes:
-//! - 8-bit: 256 entries (1KB for f32)
-//! - 10-bit: 1024 entries (4KB for f32)
-//! - 12-bit: 4096 entries (16KB for f32)
-//! - 16-bit: 65536 entries (256KB for f32)
+//! This module provides two types of lookup tables:
+//!
+//! ## Build-time Tables (Recommended)
+//!
+//! [`SrgbConverter`] uses pre-computed const tables embedded in the binary:
+//! - **Zero initialization cost** - tables exist at compile time
+//! - **8-bit linearization** (256 entries, 1KB): Direct lookup for sRGB u8 → linear f32
+//! - **12-bit encoding** (4096 entries, 16KB): Interpolated lookup for linear f32 → sRGB f32
+//!
+//! ## Runtime Tables (For Custom Bit Depths)
+//!
+//! [`LinearizationTable`] and [`EncodingTable`] generate tables at runtime:
+//! - Use when you need non-standard bit depths (10-bit, 16-bit, etc.)
+//! - Incur one-time allocation and computation cost
+//! - Table sizes:
+//!   - 8-bit: 256 entries (1KB for f32)
+//!   - 10-bit: 1024 entries (4KB for f32)
+//!   - 12-bit: 4096 entries (16KB for f32)
+//!   - 16-bit: 65536 entries (256KB for f32)
 
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, vec};
@@ -165,7 +179,26 @@ pub type EncodeTable16 = EncodingTable<65536>;
 
 /// Converter using pre-computed const LUTs for fast batch conversion.
 ///
-/// This is a zero-sized type - the tables are embedded in the binary.
+/// This is a **zero-sized type** - the tables are embedded in the binary at
+/// compile time with no runtime initialization cost. This is the recommended
+/// approach for standard 8-bit sRGB workflows.
+///
+/// # Example
+///
+/// ```rust
+/// use linear_srgb::SrgbConverter;
+///
+/// let conv = SrgbConverter::new();  // No allocation, just a marker type
+///
+/// // Fast 8-bit lookups
+/// let linear = conv.srgb_u8_to_linear(128);
+/// let srgb = conv.linear_to_srgb_u8(linear);
+/// ```
+///
+/// # Implementation Details
+///
+/// - Uses a 256-entry const table for sRGB u8 → linear f32 (direct lookup)
+/// - Uses a 4096-entry const table for linear f32 → sRGB f32 (linear interpolation)
 pub struct SrgbConverter;
 
 impl SrgbConverter {
