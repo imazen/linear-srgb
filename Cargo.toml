@@ -13,6 +13,7 @@ categories = ["graphics", "multimedia::images"]
 num-traits = "0.2"
 wide = "1.1"
 multiversion = "0.8"
+pxfm = "0.1"
 
 [dev-dependencies]
 criterion = "0.5"

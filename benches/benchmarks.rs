@@ -1,5 +1,6 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use linear_srgb::accuracy::{naive_linear_to_srgb_f32, naive_srgb_to_linear_f32};
+use linear_srgb::lut::{EncodeTable12, LinearTable12, lut_interp_linear_float};
 use linear_srgb::{simd, srgb_to_linear};
 use moxcms::{
     CicpColorPrimaries, CicpProfile, ColorProfile, Layout, MatrixCoefficients, RenderingIntent,
@@ -93,6 +94,18 @@ fn bench_srgb_to_linear_10k(c: &mut Criterion) {
         })
     });
 
+    // LUT-based (12-bit table with interpolation)
+    group.bench_function("lut_12bit", |b| {
+        let table = LinearTable12::new();
+        let mut values = f32_data.clone();
+        b.iter(|| {
+            for v in values.iter_mut() {
+                *v = lut_interp_linear_float(*v, table.as_slice());
+            }
+            black_box(&values);
+        })
+    });
+
     // moxcms transform API (sRGB → Linear)
     group.bench_function("moxcms_transform", |b| {
         let srgb = ColorProfile::new_srgb();
@@ -172,6 +185,18 @@ fn bench_linear_to_srgb_10k(c: &mut Criterion) {
             values.copy_from_slice(&linear_f32);
             for v in values.iter_mut() {
                 *v = naive_linear_to_srgb_f32(*v);
+            }
+            black_box(&values);
+        })
+    });
+
+    // LUT-based (12-bit table with interpolation)
+    group.bench_function("lut_12bit", |b| {
+        let table = EncodeTable12::new();
+        let mut values = linear_f32.clone();
+        b.iter(|| {
+            for v in values.iter_mut() {
+                *v = lut_interp_linear_float(*v, table.as_slice());
             }
             black_box(&values);
         })
