@@ -76,7 +76,7 @@ fn bench_srgb_to_linear(c: &mut Criterion) {
     let f32_data = create_f32_srgb();
     let u8_data = create_u8_srgb();
     let u16_data = create_u16_srgb();
-    let f32x8_data = create_f32x8_srgb();
+    let _f32x8_data = create_f32x8_srgb();
 
     // === f32 → f32 ===
 
@@ -211,7 +211,7 @@ fn bench_linear_to_srgb(c: &mut Criterion) {
     let lut8 = LinearTable8::new();
 
     let f32_linear = create_f32_linear();
-    let f32x8_linear = create_f32x8_linear();
+    let _f32x8_linear = create_f32x8_linear();
 
     // Create u8-derived linear values for fair u8 output comparison
     let u8_srgb = create_u8_srgb();

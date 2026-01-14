@@ -40,10 +40,10 @@ fn get_lut() -> &'static [f32; 256] {
     use std::sync::LazyLock;
     static LUT: LazyLock<[f32; 256]> = LazyLock::new(|| {
         let mut lut = [0.0f32; 256];
-        for i in 0..256 {
+        for (i, entry) in lut.iter_mut().enumerate() {
             let s = i as f32 / 255.0;
             // Use the same formula as crate::srgb_to_linear
-            lut[i] = crate::srgb_to_linear(s);
+            *entry = crate::srgb_to_linear(s);
         }
         lut
     });
@@ -410,13 +410,13 @@ mod tests {
 
         srgb_u8_to_linear_slice(&input, &mut output);
 
-        for i in 0..256 {
+        for (i, &out) in output.iter().enumerate() {
             let expected = crate::srgb_u8_to_linear(i as u8);
             assert!(
-                (output[i] - expected).abs() < 1e-6,
+                (out - expected).abs() < 1e-6,
                 "srgb_u8_to_linear_slice mismatch at {}: got {}, expected {}",
                 i,
-                output[i],
+                out,
                 expected
             );
         }
