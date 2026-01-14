@@ -121,7 +121,7 @@ mod tests {
     use super::*;
 
     #[cfg(not(feature = "std"))]
-    use alloc::{vec, vec::Vec};
+    use alloc::vec::Vec;
 
     #[test]
     fn test_api_consistency() {
