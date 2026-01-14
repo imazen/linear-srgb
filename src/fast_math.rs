@@ -3,10 +3,10 @@
 //! These are "dirty" approximations optimized for speed over precision.
 //! Suitable for sRGB transfer functions where ~1e-5 error is acceptable.
 
+use multiversed::multiversed;
 use wide::{f32x8, u32x8};
 
 use crate::mlaf::mlaf;
-use crate::simd_multiversion;
 
 // Constants for dirty_log2f_x8
 const SQRT2_OVER_2_BITS: u32 = 0x3f3504f3; // sqrt(2)/2 ~ 0.7071
@@ -80,120 +80,118 @@ fn f32x8_fma(a: f32x8, b: f32x8, c: f32x8) -> f32x8 {
     mlaf(c, a, b)
 }
 
-simd_multiversion! {
-    /// Fast approximate log2 for 8 f32 values.
-    ///
-    /// Accuracy: ~1e-5 relative error for inputs in [0.001, 1000].
-    /// Not suitable for values near 0 or negative values.
-    #[inline]
-    pub fn dirty_log2f_x8(d: f32x8) -> f32x8 {
-        // Extract bits
-        let bits = f32x8_to_bits(d);
+/// Fast approximate log2 for 8 f32 values.
+///
+/// Accuracy: ~1e-5 relative error for inputs in [0.001, 1000].
+/// Not suitable for values near 0 or negative values.
+#[multiversed]
+#[inline]
+pub fn dirty_log2f_x8(d: f32x8) -> f32x8 {
+    // Extract bits
+    let bits = f32x8_to_bits(d);
 
-        // Normalize: add offset to handle exponent extraction
-        // ix = ix + (0x3f800000 - 0x3f3504f3) to reduce x into [sqrt(2)/2, sqrt(2)]
-        let offset = u32x8::splat(ONE_BITS - SQRT2_OVER_2_BITS);
-        let adjusted = bits + offset;
+    // Normalize: add offset to handle exponent extraction
+    // ix = ix + (0x3f800000 - 0x3f3504f3) to reduce x into [sqrt(2)/2, sqrt(2)]
+    let offset = u32x8::splat(ONE_BITS - SQRT2_OVER_2_BITS);
+    let adjusted = bits + offset;
 
-        // Extract exponent: n = (ix >> 23) - 127
-        let exponent_raw: u32x8 = adjusted >> 23;
-        let exp_arr: [u32; 8] = exponent_raw.into();
-        let n = f32x8::from([
-            (exp_arr[0] as i32 - 0x7f) as f32,
-            (exp_arr[1] as i32 - 0x7f) as f32,
-            (exp_arr[2] as i32 - 0x7f) as f32,
-            (exp_arr[3] as i32 - 0x7f) as f32,
-            (exp_arr[4] as i32 - 0x7f) as f32,
-            (exp_arr[5] as i32 - 0x7f) as f32,
-            (exp_arr[6] as i32 - 0x7f) as f32,
-            (exp_arr[7] as i32 - 0x7f) as f32,
-        ]);
+    // Extract exponent: n = (ix >> 23) - 127
+    let exponent_raw: u32x8 = adjusted >> 23;
+    let exp_arr: [u32; 8] = exponent_raw.into();
+    let n = f32x8::from([
+        (exp_arr[0] as i32 - 0x7f) as f32,
+        (exp_arr[1] as i32 - 0x7f) as f32,
+        (exp_arr[2] as i32 - 0x7f) as f32,
+        (exp_arr[3] as i32 - 0x7f) as f32,
+        (exp_arr[4] as i32 - 0x7f) as f32,
+        (exp_arr[5] as i32 - 0x7f) as f32,
+        (exp_arr[6] as i32 - 0x7f) as f32,
+        (exp_arr[7] as i32 - 0x7f) as f32,
+    ]);
 
-        // Reconstruct mantissa with exponent = 0 (biased 127)
-        // ix = (ix & 0x007fffff) + 0x3f3504f3
-        let mantissa_mask = u32x8::splat(0x007fffff);
-        let mantissa_bits = (adjusted & mantissa_mask) + u32x8::splat(SQRT2_OVER_2_BITS);
-        let a = f32x8_from_bits(mantissa_bits);
+    // Reconstruct mantissa with exponent = 0 (biased 127)
+    // ix = (ix & 0x007fffff) + 0x3f3504f3
+    let mantissa_mask = u32x8::splat(0x007fffff);
+    let mantissa_bits = (adjusted & mantissa_mask) + u32x8::splat(SQRT2_OVER_2_BITS);
+    let a = f32x8_from_bits(mantissa_bits);
 
-        // x = (a - 1) / (a + 1), range [-0.17, 0.17]
-        let one = f32x8::splat(1.0);
-        let x = (a - one) / (a + one);
+    // x = (a - 1) / (a + 1), range [-0.17, 0.17]
+    let one = f32x8::splat(1.0);
+    let x = (a - one) / (a + one);
 
-        let x2 = x * x;
+    let x2 = x * x;
 
-        // Polynomial: log2((1+x)/(1-x)) ≈ 2x * P(x²)
-        // P(x²) = c2 + c1*x² + c0*x⁴
-        let mut u = f32x8::splat(LOG2_C0);
-        u = f32x8_fma(u, x2, f32x8::splat(LOG2_C1));
-        u = f32x8_fma(u, x2, f32x8::splat(LOG2_C2));
+    // Polynomial: log2((1+x)/(1-x)) ≈ 2x * P(x²)
+    // P(x²) = c2 + c1*x² + c0*x⁴
+    let mut u = f32x8::splat(LOG2_C0);
+    u = f32x8_fma(u, x2, f32x8::splat(LOG2_C1));
+    u = f32x8_fma(u, x2, f32x8::splat(LOG2_C2));
 
-        // Result: n + 2*x*P(x²)/ln(2) = n + x*u*scale
-        f32x8_fma(x2 * x, u, f32x8_fma(x, f32x8::splat(LOG2_SCALE), n))
-    }
+    // Result: n + 2*x*P(x²)/ln(2) = n + x*u*scale
+    f32x8_fma(x2 * x, u, f32x8_fma(x, f32x8::splat(LOG2_SCALE), n))
 }
 
-simd_multiversion! {
-    /// Fast approximate exp2 (2^x) for 8 f32 values.
-    ///
-    /// Accuracy: ~1e-5 relative error for inputs in [-10, 10].
-    /// Uses 64-entry LUT with polynomial refinement.
-    #[inline]
-    pub fn dirty_exp2f_x8(d: f32x8) -> f32x8 {
-        // Redux constant for extracting integer part
-        // redux = 0x4b400000 / 64 = 12582912 / 64
-        let redux = f32x8::splat(f32::from_bits(0x4b400000) / TBLSIZE as f32);
+/// Fast approximate exp2 (2^x) for 8 f32 values.
+///
+/// Accuracy: ~1e-5 relative error for inputs in [-10, 10].
+/// Uses 64-entry LUT with polynomial refinement.
+#[multiversed]
+#[inline]
+pub fn dirty_exp2f_x8(d: f32x8) -> f32x8 {
+    // Redux constant for extracting integer part
+    // redux = 0x4b400000 / 64 = 12582912 / 64
+    let redux = f32x8::splat(f32::from_bits(0x4b400000) / TBLSIZE as f32);
 
-        // Add redux to get the integer index bits
-        let sum = d + redux;
-        let ui = f32x8_to_bits(sum);
+    // Add redux to get the integer index bits
+    let sum = d + redux;
+    let ui = f32x8_to_bits(sum);
 
-        // Extract table index: (ui + 32) & 63
-        let i0 = (ui + u32x8::splat(TBLSIZE as u32 / 2)) & u32x8::splat(TBLSIZE as u32 - 1);
+    // Extract table index: (ui + 32) & 63
+    let i0 = (ui + u32x8::splat(TBLSIZE as u32 / 2)) & u32x8::splat(TBLSIZE as u32 - 1);
 
-        // Extract k for 2^k scaling: k = (ui + 32) / 64
-        let k: u32x8 = (ui + u32x8::splat(TBLSIZE as u32 / 2)) >> 6;
+    // Extract k for 2^k scaling: k = (ui + 32) / 64
+    let k: u32x8 = (ui + u32x8::splat(TBLSIZE as u32 / 2)) >> 6;
 
-        // Fractional part: f = d - floor(d)
-        let uf = sum - redux;
-        let f = d - uf;
+    // Fractional part: f = d - floor(d)
+    let uf = sum - redux;
+    let f = d - uf;
 
-        // LUT lookup - scalar gather (SIMD gather not universally available)
-        let i0_arr: [u32; 8] = i0.into();
-        let z0 = f32x8::from([
-            f32::from_bits(EXP2_TABLE[i0_arr[0] as usize]),
-            f32::from_bits(EXP2_TABLE[i0_arr[1] as usize]),
-            f32::from_bits(EXP2_TABLE[i0_arr[2] as usize]),
-            f32::from_bits(EXP2_TABLE[i0_arr[3] as usize]),
-            f32::from_bits(EXP2_TABLE[i0_arr[4] as usize]),
-            f32::from_bits(EXP2_TABLE[i0_arr[5] as usize]),
-            f32::from_bits(EXP2_TABLE[i0_arr[6] as usize]),
-            f32::from_bits(EXP2_TABLE[i0_arr[7] as usize]),
-        ]);
+    // LUT lookup - scalar gather (SIMD gather not universally available)
+    let i0_arr: [u32; 8] = i0.into();
+    let z0 = f32x8::from([
+        f32::from_bits(EXP2_TABLE[i0_arr[0] as usize]),
+        f32::from_bits(EXP2_TABLE[i0_arr[1] as usize]),
+        f32::from_bits(EXP2_TABLE[i0_arr[2] as usize]),
+        f32::from_bits(EXP2_TABLE[i0_arr[3] as usize]),
+        f32::from_bits(EXP2_TABLE[i0_arr[4] as usize]),
+        f32::from_bits(EXP2_TABLE[i0_arr[5] as usize]),
+        f32::from_bits(EXP2_TABLE[i0_arr[6] as usize]),
+        f32::from_bits(EXP2_TABLE[i0_arr[7] as usize]),
+    ]);
 
-        // Polynomial refinement: u = c0 + c1*f, then u *= f
-        let mut u = f32x8::splat(EXP2_C0);
-        u = f32x8_fma(u, f, f32x8::splat(EXP2_C1));
-        u *= f;
+    // Polynomial refinement: u = c0 + c1*f, then u *= f
+    let mut u = f32x8::splat(EXP2_C0);
+    u = f32x8_fma(u, f, f32x8::splat(EXP2_C1));
+    u *= f;
 
-        // Result before scaling: (1 + u) * z0 = z0 + u*z0
-        let result_unscaled = f32x8_fma(u, z0, z0);
+    // Result before scaling: (1 + u) * z0 = z0 + u*z0
+    let result_unscaled = f32x8_fma(u, z0, z0);
 
-        // Scale by 2^k using bit manipulation
-        // pow2i(k) = float from bits ((k + 127) << 23)
-        let k_arr: [u32; 8] = k.into();
-        let scale = f32x8::from([
-            pow2if(k_arr[0] as i32),
-            pow2if(k_arr[1] as i32),
-            pow2if(k_arr[2] as i32),
-            pow2if(k_arr[3] as i32),
-            pow2if(k_arr[4] as i32),
-            pow2if(k_arr[5] as i32),
-            pow2if(k_arr[6] as i32),
-            pow2if(k_arr[7] as i32),
-        ]);
+    // Scale by 2^k using bit manipulation
+    // pow2i(k) = float from bits ((k + 127) << 23)
+    let k_arr: [u32; 8] = k.into();
+    let scale = f32x8::from([
+        pow2if(k_arr[0] as i32),
+        pow2if(k_arr[1] as i32),
+        pow2if(k_arr[2] as i32),
+        pow2if(k_arr[3] as i32),
+        pow2if(k_arr[4] as i32),
+        pow2if(k_arr[5] as i32),
+        pow2if(k_arr[6] as i32),
+        pow2if(k_arr[7] as i32),
+    ]);
 
-        result_unscaled * scale
-    }
+    result_unscaled * scale
 }
 
 /// Compute 2^k for integer k.
@@ -205,26 +203,24 @@ fn pow2if(k: i32) -> f32 {
     f32::from_bits((k.wrapping_add(0x7f) as u32) << 23)
 }
 
-simd_multiversion! {
-    /// Fast approximate pow(x, n) for 8 f32 values.
-    ///
-    /// Computes x^n = exp2(n * log2(x)).
-    /// Accuracy: ~1e-4 relative error for typical sRGB range.
-    ///
-    /// Note: Only handles positive x values. For negative x, behavior is undefined.
-    #[inline]
-    pub fn dirty_pow_x8(x: f32x8, n: f32x8) -> f32x8 {
-        let lg = dirty_log2f_x8(x);
-        dirty_exp2f_x8(n * lg)
-    }
+/// Fast approximate pow(x, n) for 8 f32 values.
+///
+/// Computes x^n = exp2(n * log2(x)).
+/// Accuracy: ~1e-4 relative error for typical sRGB range.
+///
+/// Note: Only handles positive x values. For negative x, behavior is undefined.
+#[multiversed]
+#[inline]
+pub fn dirty_pow_x8(x: f32x8, n: f32x8) -> f32x8 {
+    let lg = dirty_log2f_x8(x);
+    dirty_exp2f_x8(n * lg)
 }
 
-simd_multiversion! {
-    /// Fast approximate pow(x, n) where n is a constant.
-    #[inline]
-    pub fn dirty_pow_const_x8(x: f32x8, n: f32) -> f32x8 {
-        dirty_pow_x8(x, f32x8::splat(n))
-    }
+/// Fast approximate pow(x, n) where n is a constant.
+#[multiversed]
+#[inline]
+pub fn dirty_pow_const_x8(x: f32x8, n: f32) -> f32x8 {
+    dirty_pow_x8(x, f32x8::splat(n))
 }
 
 #[cfg(test)]
