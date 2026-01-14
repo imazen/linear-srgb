@@ -7,10 +7,11 @@ use multiversed::multiversed;
 use wide::{CmpLt, f32x8};
 
 use crate::fast_math::dirty_pow_const_x8;
-use crate::lut::LinearTable8;
+use crate::lut::{LinearTable8, LinearTable16};
 
 // Constants for u8 conversion
 const U8_MAX_F32: f32x8 = f32x8::splat(255.0);
+const U16_MAX_F32: f32x8 = f32x8::splat(65535.0);
 const HALF: f32x8 = f32x8::splat(0.5);
 
 // Constants for SIMD operations
@@ -203,6 +204,50 @@ pub fn linear_to_srgb_u8_x8(linear: f32x8) -> [u8; 8] {
     ]
 }
 
+/// Convert 8 u16 sRGB values to f32 linear using LUT lookups.
+///
+/// This uses scalar lookups but returns a SIMD vector for further processing.
+/// The LUT provides perfect accuracy for u16 input.
+#[inline]
+pub fn srgb_u16_to_linear_x8(lut: &LinearTable16, values: [u16; 8]) -> f32x8 {
+    f32x8::from([
+        lut.lookup(values[0] as usize),
+        lut.lookup(values[1] as usize),
+        lut.lookup(values[2] as usize),
+        lut.lookup(values[3] as usize),
+        lut.lookup(values[4] as usize),
+        lut.lookup(values[5] as usize),
+        lut.lookup(values[6] as usize),
+        lut.lookup(values[7] as usize),
+    ])
+}
+
+/// Convert 8 f32 linear values to u16 sRGB.
+///
+/// Values are clamped to [0, 1] before conversion.
+/// Uses SIMD dirty_pow which provides perfect u16 roundtrip accuracy.
+#[multiversed]
+#[inline]
+pub fn linear_to_srgb_u16_x8(linear: f32x8) -> [u16; 8] {
+    // Apply the transfer function
+    let srgb = linear_to_srgb_x8(linear);
+
+    // Convert to u16: round(srgb * 65535)
+    let scaled = srgb * U16_MAX_F32 + HALF;
+    let arr: [f32; 8] = scaled.into();
+
+    [
+        arr[0] as u16,
+        arr[1] as u16,
+        arr[2] as u16,
+        arr[3] as u16,
+        arr[4] as u16,
+        arr[5] as u16,
+        arr[6] as u16,
+        arr[7] as u16,
+    ]
+}
+
 /// Batch convert u8 sRGB values to f32 linear using SIMD.
 ///
 /// Processes 8 values at a time using LUT lookups, with scalar fallback for remainder.
@@ -242,6 +287,48 @@ pub fn linear_to_srgb_u8_batch(input: &[f32], output: &mut [u8]) {
     for (inp, out) in in_remainder.iter().zip(out_remainder.iter_mut()) {
         let srgb = crate::linear_to_srgb(*inp);
         *out = (srgb * 255.0 + 0.5) as u8;
+    }
+}
+
+/// Batch convert u16 sRGB values to f32 linear using SIMD.
+///
+/// Processes 8 values at a time using LUT lookups, with scalar fallback for remainder.
+#[inline]
+pub fn srgb_u16_to_linear_batch(lut: &LinearTable16, input: &[u16], output: &mut [f32]) {
+    assert_eq!(input.len(), output.len());
+
+    let (in_chunks, in_remainder) = input.as_chunks::<8>();
+    let (out_chunks, out_remainder) = output.as_chunks_mut::<8>();
+
+    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+        let result = srgb_u16_to_linear_x8(lut, *inp);
+        *out = result.into();
+    }
+
+    for (inp, out) in in_remainder.iter().zip(out_remainder.iter_mut()) {
+        *out = lut.lookup(*inp as usize);
+    }
+}
+
+/// Batch convert f32 linear values to u16 sRGB using SIMD.
+///
+/// Processes 8 values at a time, with scalar fallback for remainder.
+#[multiversed]
+#[inline]
+pub fn linear_to_srgb_u16_batch(input: &[f32], output: &mut [u16]) {
+    assert_eq!(input.len(), output.len());
+
+    let (in_chunks, in_remainder) = input.as_chunks::<8>();
+    let (out_chunks, out_remainder) = output.as_chunks_mut::<8>();
+
+    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+        let v = f32x8::from(*inp);
+        *out = linear_to_srgb_u16_x8(v);
+    }
+
+    for (inp, out) in in_remainder.iter().zip(out_remainder.iter_mut()) {
+        let srgb = crate::linear_to_srgb(*inp);
+        *out = (srgb * 65535.0 + 0.5) as u16;
     }
 }
 

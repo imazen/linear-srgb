@@ -12,6 +12,7 @@ categories = ["graphics", "multimedia::images"]
 [dependencies]
 num-traits = "0.2"
 wide = "1.1"
+bytemuck = "1.21"
 multiversion = "0.8"
 multiversed = { path = "/home/lilith/work/multiversed", default-features = false, features = ["x86-64-v3"] }
 pxfm = "0.1"

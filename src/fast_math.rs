@@ -3,8 +3,9 @@
 //! These are "dirty" approximations optimized for speed over precision.
 //! Suitable for sRGB transfer functions where ~1e-5 error is acceptable.
 
+use bytemuck::cast;
 use multiversed::multiversed;
-use wide::{f32x8, u32x8};
+use wide::{f32x8, i32x8, u32x8};
 
 use crate::mlaf::mlaf;
 
@@ -42,36 +43,16 @@ const EXP2_C1: f32 = 0.693_147_2;
 // Table size for exp2
 const TBLSIZE: usize = 64;
 
-/// Helper: reinterpret f32x8 bits as u32x8.
+/// Helper: reinterpret f32x8 bits as u32x8 (zero-cost cast).
 #[inline(always)]
 fn f32x8_to_bits(v: f32x8) -> u32x8 {
-    let arr: [f32; 8] = v.into();
-    u32x8::from([
-        arr[0].to_bits(),
-        arr[1].to_bits(),
-        arr[2].to_bits(),
-        arr[3].to_bits(),
-        arr[4].to_bits(),
-        arr[5].to_bits(),
-        arr[6].to_bits(),
-        arr[7].to_bits(),
-    ])
+    cast(v)
 }
 
-/// Helper: reinterpret u32x8 bits as f32x8.
+/// Helper: reinterpret u32x8 bits as f32x8 (zero-cost cast).
 #[inline(always)]
 fn f32x8_from_bits(v: u32x8) -> f32x8 {
-    let arr: [u32; 8] = v.into();
-    f32x8::from([
-        f32::from_bits(arr[0]),
-        f32::from_bits(arr[1]),
-        f32::from_bits(arr[2]),
-        f32::from_bits(arr[3]),
-        f32::from_bits(arr[4]),
-        f32::from_bits(arr[5]),
-        f32::from_bits(arr[6]),
-        f32::from_bits(arr[7]),
-    ])
+    cast(v)
 }
 
 /// Helper: FMA for f32x8: a * b + c
@@ -97,17 +78,9 @@ pub fn dirty_log2f_x8(d: f32x8) -> f32x8 {
 
     // Extract exponent: n = (ix >> 23) - 127
     let exponent_raw: u32x8 = adjusted >> 23;
-    let exp_arr: [u32; 8] = exponent_raw.into();
-    let n = f32x8::from([
-        (exp_arr[0] as i32 - 0x7f) as f32,
-        (exp_arr[1] as i32 - 0x7f) as f32,
-        (exp_arr[2] as i32 - 0x7f) as f32,
-        (exp_arr[3] as i32 - 0x7f) as f32,
-        (exp_arr[4] as i32 - 0x7f) as f32,
-        (exp_arr[5] as i32 - 0x7f) as f32,
-        (exp_arr[6] as i32 - 0x7f) as f32,
-        (exp_arr[7] as i32 - 0x7f) as f32,
-    ]);
+    // Cast to i32x8, subtract bias, convert to f32x8 (all SIMD)
+    let exponent_i32: i32x8 = cast(exponent_raw);
+    let n = f32x8::from_i32x8(exponent_i32 - i32x8::splat(0x7f));
 
     // Reconstruct mantissa with exponent = 0 (biased 127)
     // ix = (ix & 0x007fffff) + 0x3f3504f3
@@ -177,30 +150,13 @@ pub fn dirty_exp2f_x8(d: f32x8) -> f32x8 {
     // Result before scaling: (1 + u) * z0 = z0 + u*z0
     let result_unscaled = f32x8_fma(u, z0, z0);
 
-    // Scale by 2^k using bit manipulation
+    // Scale by 2^k using bit manipulation (SIMD)
     // pow2i(k) = float from bits ((k + 127) << 23)
-    let k_arr: [u32; 8] = k.into();
-    let scale = f32x8::from([
-        pow2if(k_arr[0] as i32),
-        pow2if(k_arr[1] as i32),
-        pow2if(k_arr[2] as i32),
-        pow2if(k_arr[3] as i32),
-        pow2if(k_arr[4] as i32),
-        pow2if(k_arr[5] as i32),
-        pow2if(k_arr[6] as i32),
-        pow2if(k_arr[7] as i32),
-    ]);
+    let k_i32: i32x8 = cast(k);
+    let scale_bits: u32x8 = cast((k_i32 + i32x8::splat(0x7f)) << 23);
+    let scale: f32x8 = cast(scale_bits);
 
     result_unscaled * scale
-}
-
-/// Compute 2^k for integer k.
-/// Uses wrapping arithmetic - the magic of the redux trick relies on this!
-#[inline(always)]
-fn pow2if(k: i32) -> f32 {
-    // The wrapping_add is essential - it makes the low 8 bits of (k + 0x7f)
-    // encode the correct exponent even for "wrong" k values from the redux trick
-    f32::from_bits((k.wrapping_add(0x7f) as u32) << 23)
 }
 
 /// Fast approximate pow(x, n) for 8 f32 values.
