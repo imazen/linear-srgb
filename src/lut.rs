@@ -163,34 +163,30 @@ pub type EncodeTable12 = EncodingTable<4096>;
 /// Pre-computed 16-bit encoding table (65536 entries).
 pub type EncodeTable16 = EncodingTable<65536>;
 
-/// Converter using pre-computed LUTs for fast batch conversion.
-pub struct SrgbConverter {
-    linearize_table: LinearTable8,
-    encode_table: EncodeTable12,
-}
+/// Converter using pre-computed const LUTs for fast batch conversion.
+///
+/// This is a zero-sized type - the tables are embedded in the binary.
+pub struct SrgbConverter;
 
 impl SrgbConverter {
-    /// Create a new converter with default table sizes.
+    /// Create a new converter.
     ///
-    /// Uses 8-bit (256 entry) table for linearization (direct lookup)
-    /// and 12-bit (4096 entry) table for encoding (with interpolation).
-    pub fn new() -> Self {
-        Self {
-            linearize_table: LinearTable8::new(),
-            encode_table: EncodeTable12::new(),
-        }
+    /// This is a no-op since tables are const and embedded in binary.
+    #[inline]
+    pub const fn new() -> Self {
+        Self
     }
 
     /// Convert 8-bit sRGB to linear using direct table lookup.
     #[inline]
     pub fn srgb_u8_to_linear(&self, value: u8) -> f32 {
-        self.linearize_table.lookup(value as usize)
+        crate::const_luts::LINEAR_TABLE_8[value as usize]
     }
 
     /// Convert linear to sRGB using table interpolation.
     #[inline]
     pub fn linear_to_srgb(&self, linear: f32) -> f32 {
-        lut_interp_linear_float(linear, self.encode_table.as_slice())
+        lut_interp_linear_float(linear, &crate::const_luts::ENCODE_TABLE_12)
     }
 
     /// Convert linear to 8-bit sRGB.

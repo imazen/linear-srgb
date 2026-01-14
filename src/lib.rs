@@ -84,6 +84,9 @@ pub mod transfer;
 // Internal fast math for SIMD (not public API)
 pub(crate) mod fast_math;
 
+// Pre-computed const lookup tables (embedded in binary)
+mod const_luts;
+
 // Alternative/experimental implementations (for benchmarking)
 #[cfg(feature = "alt")]
 pub mod alt;
