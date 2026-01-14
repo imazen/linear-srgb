@@ -15,7 +15,8 @@ wide = "1.1"
 
 [dev-dependencies]
 criterion = "0.5"
-moxcms = { path = "/home/lilith/moxcms-pr", default-features = false }
+moxcms = { path = "/home/lilith/moxcms-pr" }
+wide = "1.1"
 
 [features]
 default = []
