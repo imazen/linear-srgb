@@ -65,6 +65,7 @@
 pub mod lut;
 mod mlaf;
 pub mod simd;
+mod targets;
 pub mod transfer;
 
 #[doc(hidden)]

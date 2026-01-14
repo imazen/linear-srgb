@@ -51,18 +51,25 @@ fn bench_srgb_to_linear_10k(c: &mut Criterion) {
     let vectors = create_test_vectors();
     let f32_data = create_test_f32();
 
-    // SIMD with f32x8 array
-    group.bench_function("simd_f32x8", |b| {
+    // Native f32x8 slice (best case - data already in SIMD format)
+    group.bench_function("native_f32x8", |b| {
         let mut output = vectors.clone();
         b.iter(|| {
-            for (i, v) in vectors.iter().enumerate() {
-                output[i] = simd::srgb_to_linear_x8(*v);
-            }
+            simd::srgb_to_linear_x8_slice(&mut output);
             black_box(&output);
         })
     });
 
-    // Scalar loop
+    // f32 slice with chunks (typical use case)
+    group.bench_function("f32_slice", |b| {
+        let mut values = f32_data.clone();
+        b.iter(|| {
+            simd::srgb_to_linear_slice(&mut values);
+            black_box(&values);
+        })
+    });
+
+    // Scalar loop (baseline)
     group.bench_function("scalar", |b| {
         let mut values = f32_data.clone();
         b.iter(|| {
@@ -74,7 +81,7 @@ fn bench_srgb_to_linear_10k(c: &mut Criterion) {
         })
     });
 
-    // Naive scalar
+    // Naive scalar (textbook implementation)
     group.bench_function("naive", |b| {
         let mut values = f32_data.clone();
         b.iter(|| {
@@ -128,14 +135,21 @@ fn bench_linear_to_srgb_10k(c: &mut Criterion) {
     let f32_data = create_test_f32();
     let linear_f32: Vec<f32> = f32_data.iter().map(|&v| srgb_to_linear(v)).collect();
 
-    // SIMD with f32x8 array
-    group.bench_function("simd_f32x8", |b| {
+    // Native f32x8 slice (best case)
+    group.bench_function("native_f32x8", |b| {
         let mut output = linear_vectors.clone();
         b.iter(|| {
-            for (i, v) in linear_vectors.iter().enumerate() {
-                output[i] = simd::linear_to_srgb_x8(*v);
-            }
+            simd::linear_to_srgb_x8_slice(&mut output);
             black_box(&output);
+        })
+    });
+
+    // f32 slice with chunks
+    group.bench_function("f32_slice", |b| {
+        let mut values = linear_f32.clone();
+        b.iter(|| {
+            simd::linear_to_srgb_slice(&mut values);
+            black_box(&values);
         })
     });
 

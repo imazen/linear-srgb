@@ -1,8 +1,11 @@
 //! SIMD-accelerated sRGB conversions using the `wide` crate.
 //!
 //! Processes 8 f32 values in parallel using AVX2/SSE or equivalent.
+//! Uses runtime dispatch via multiversion for optimal code paths.
 
 use wide::{CmpLt, f32x8};
+
+use crate::simd_multiversion;
 
 // Constants for SIMD operations
 const SRGB_LINEAR_THRESHOLD: f32x8 = f32x8::splat(0.039_293_37); // 12.92 * 0.00304128...
@@ -16,146 +19,147 @@ const TWELVE_92: f32x8 = f32x8::splat(12.92);
 const ZERO: f32x8 = f32x8::splat(0.0);
 const ONE: f32x8 = f32x8::splat(1.0);
 
-/// Convert 8 sRGB values to linear using SIMD.
-///
-/// Values are clamped to [0, 1].
-#[inline]
-pub fn srgb_to_linear_x8(gamma: f32x8) -> f32x8 {
-    // Clamp input
-    let gamma = gamma.max(ZERO).min(ONE);
+simd_multiversion! {
+    /// Convert 8 sRGB values to linear using SIMD.
+    ///
+    /// Values are clamped to [0, 1].
+    #[inline]
+    pub fn srgb_to_linear_x8(gamma: f32x8) -> f32x8 {
+        // Clamp input
+        let gamma = gamma.max(ZERO).min(ONE);
 
-    // Linear segment: gamma * (1/12.92)
-    let linear_result = gamma * LINEAR_SCALE;
+        // Linear segment: gamma * (1/12.92)
+        let linear_result = gamma * LINEAR_SCALE;
 
-    // Power segment: ((gamma + 0.055) / 1.055) ^ 2.4
-    let power_result = ((gamma + SRGB_A) / SRGB_A_PLUS_1).pow_f32x8(GAMMA);
+        // Power segment: ((gamma + 0.055) / 1.055) ^ 2.4
+        let power_result = ((gamma + SRGB_A) / SRGB_A_PLUS_1).pow_f32x8(GAMMA);
 
-    // Select based on threshold: use linear if gamma < threshold
-    let mask = gamma.simd_lt(SRGB_LINEAR_THRESHOLD);
-    mask.blend(linear_result, power_result)
-}
-
-/// Convert 8 linear values to sRGB using SIMD.
-///
-/// Values are clamped to [0, 1].
-#[inline]
-pub fn linear_to_srgb_x8(linear: f32x8) -> f32x8 {
-    // Clamp input
-    let linear = linear.max(ZERO).min(ONE);
-
-    // Linear segment: linear * 12.92
-    let linear_result = linear * TWELVE_92;
-
-    // Power segment: 1.055 * linear^(1/2.4) - 0.055
-    let power_result = SRGB_A_PLUS_1 * linear.pow_f32x8(INV_GAMMA) - SRGB_A;
-
-    // Select based on threshold
-    let mask = linear.simd_lt(LINEAR_THRESHOLD);
-    mask.blend(linear_result, power_result)
-}
-
-/// Helper to load 8 f32s from a slice into f32x8
-#[inline]
-fn load_f32x8(slice: &[f32]) -> f32x8 {
-    debug_assert!(slice.len() >= 8);
-    // wide requires exactly 8 elements, so we need to copy
-    let arr: [f32; 8] = [
-        slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7],
-    ];
-    f32x8::from(arr)
-}
-
-/// Helper to store f32x8 into a slice
-#[inline]
-fn store_f32x8(v: f32x8, slice: &mut [f32]) {
-    debug_assert!(slice.len() >= 8);
-    let arr: [f32; 8] = v.into();
-    slice[..8].copy_from_slice(&arr);
-}
-
-/// Convert a slice of sRGB f32 values to linear in-place using SIMD.
-///
-/// Processes 8 values at a time, with scalar fallback for remainder.
-#[inline]
-pub fn srgb_to_linear_slice(values: &mut [f32]) {
-    let len = values.len();
-    let mut i = 0;
-
-    // Process 8 at a time
-    while i + 8 <= len {
-        let v = load_f32x8(&values[i..]);
-        let result = srgb_to_linear_x8(v);
-        store_f32x8(result, &mut values[i..]);
-        i += 8;
-    }
-
-    // Scalar fallback for remainder
-    while i < len {
-        values[i] = crate::srgb_to_linear(values[i]);
-        i += 1;
+        // Select based on threshold: use linear if gamma < threshold
+        let mask = gamma.simd_lt(SRGB_LINEAR_THRESHOLD);
+        mask.blend(linear_result, power_result)
     }
 }
 
-/// Convert a slice of linear f32 values to sRGB in-place using SIMD.
-///
-/// Processes 8 values at a time, with scalar fallback for remainder.
-#[inline]
-pub fn linear_to_srgb_slice(values: &mut [f32]) {
-    let len = values.len();
-    let mut i = 0;
+simd_multiversion! {
+    /// Convert 8 linear values to sRGB using SIMD.
+    ///
+    /// Values are clamped to [0, 1].
+    #[inline]
+    pub fn linear_to_srgb_x8(linear: f32x8) -> f32x8 {
+        // Clamp input
+        let linear = linear.max(ZERO).min(ONE);
 
-    while i + 8 <= len {
-        let v = load_f32x8(&values[i..]);
-        let result = linear_to_srgb_x8(v);
-        store_f32x8(result, &mut values[i..]);
-        i += 8;
-    }
+        // Linear segment: linear * 12.92
+        let linear_result = linear * TWELVE_92;
 
-    while i < len {
-        values[i] = crate::linear_to_srgb(values[i]);
-        i += 1;
-    }
-}
+        // Power segment: 1.055 * linear^(1/2.4) - 0.055
+        let power_result = SRGB_A_PLUS_1 * linear.pow_f32x8(INV_GAMMA) - SRGB_A;
 
-/// Convert sRGB values to linear, writing to output slice.
-#[inline]
-pub fn srgb_to_linear_batch(input: &[f32], output: &mut [f32]) {
-    assert_eq!(input.len(), output.len());
-
-    let mut i = 0;
-    let len = input.len();
-
-    while i + 8 <= len {
-        let v = load_f32x8(&input[i..]);
-        let result = srgb_to_linear_x8(v);
-        store_f32x8(result, &mut output[i..]);
-        i += 8;
-    }
-
-    while i < len {
-        output[i] = crate::srgb_to_linear(input[i]);
-        i += 1;
+        // Select based on threshold
+        let mask = linear.simd_lt(LINEAR_THRESHOLD);
+        mask.blend(linear_result, power_result)
     }
 }
 
-/// Convert linear values to sRGB, writing to output slice.
-#[inline]
-pub fn linear_to_srgb_batch(input: &[f32], output: &mut [f32]) {
-    assert_eq!(input.len(), output.len());
-
-    let mut i = 0;
-    let len = input.len();
-
-    while i + 8 <= len {
-        let v = load_f32x8(&input[i..]);
-        let result = linear_to_srgb_x8(v);
-        store_f32x8(result, &mut output[i..]);
-        i += 8;
+simd_multiversion! {
+    /// Convert a slice of f32x8 vectors from sRGB to linear in-place.
+    ///
+    /// This is the most efficient API when data is already in f32x8 format.
+    #[inline]
+    pub fn srgb_to_linear_x8_slice(values: &mut [f32x8]) {
+        for v in values.iter_mut() {
+            *v = srgb_to_linear_x8(*v);
+        }
     }
+}
 
-    while i < len {
-        output[i] = crate::linear_to_srgb(input[i]);
-        i += 1;
+simd_multiversion! {
+    /// Convert a slice of f32x8 vectors from linear to sRGB in-place.
+    ///
+    /// This is the most efficient API when data is already in f32x8 format.
+    #[inline]
+    pub fn linear_to_srgb_x8_slice(values: &mut [f32x8]) {
+        for v in values.iter_mut() {
+            *v = linear_to_srgb_x8(*v);
+        }
+    }
+}
+
+simd_multiversion! {
+    /// Convert a slice of sRGB f32 values to linear in-place using SIMD.
+    ///
+    /// Processes 8 values at a time, with scalar fallback for remainder.
+    #[inline]
+    pub fn srgb_to_linear_slice(values: &mut [f32]) {
+        let (chunks, remainder) = values.as_chunks_mut::<8>();
+
+        for chunk in chunks {
+            let result = srgb_to_linear_x8(f32x8::from(*chunk));
+            *chunk = result.into();
+        }
+
+        for v in remainder {
+            *v = crate::srgb_to_linear(*v);
+        }
+    }
+}
+
+simd_multiversion! {
+    /// Convert a slice of linear f32 values to sRGB in-place using SIMD.
+    ///
+    /// Processes 8 values at a time, with scalar fallback for remainder.
+    #[inline]
+    pub fn linear_to_srgb_slice(values: &mut [f32]) {
+        let (chunks, remainder) = values.as_chunks_mut::<8>();
+
+        for chunk in chunks {
+            let result = linear_to_srgb_x8(f32x8::from(*chunk));
+            *chunk = result.into();
+        }
+
+        for v in remainder {
+            *v = crate::linear_to_srgb(*v);
+        }
+    }
+}
+
+simd_multiversion! {
+    /// Convert sRGB values to linear, writing to output slice.
+    #[inline]
+    pub fn srgb_to_linear_batch(input: &[f32], output: &mut [f32]) {
+        assert_eq!(input.len(), output.len());
+
+        let (in_chunks, in_remainder) = input.as_chunks::<8>();
+        let (out_chunks, out_remainder) = output.as_chunks_mut::<8>();
+
+        for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+            let result = srgb_to_linear_x8(f32x8::from(*inp));
+            *out = result.into();
+        }
+
+        for (inp, out) in in_remainder.iter().zip(out_remainder.iter_mut()) {
+            *out = crate::srgb_to_linear(*inp);
+        }
+    }
+}
+
+simd_multiversion! {
+    /// Convert linear values to sRGB, writing to output slice.
+    #[inline]
+    pub fn linear_to_srgb_batch(input: &[f32], output: &mut [f32]) {
+        assert_eq!(input.len(), output.len());
+
+        let (in_chunks, in_remainder) = input.as_chunks::<8>();
+        let (out_chunks, out_remainder) = output.as_chunks_mut::<8>();
+
+        for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+            let result = linear_to_srgb_x8(f32x8::from(*inp));
+            *out = result.into();
+        }
+
+        for (inp, out) in in_remainder.iter().zip(out_remainder.iter_mut()) {
+            *out = crate::linear_to_srgb(*inp);
+        }
     }
 }
 
