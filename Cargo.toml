@@ -25,6 +25,8 @@ default = ["std"]
 std = ["num-traits/std", "multiversion/std"]
 # Include alternative/experimental implementations for benchmarking
 alt = []
+# Use unsafe variants for maximum performance (union-based bit manipulation, unchecked indexing)
+unsafe_simd = []
 
 [[bench]]
 name = "benchmarks"
