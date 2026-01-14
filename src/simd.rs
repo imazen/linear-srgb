@@ -544,6 +544,9 @@ pub fn linear_to_srgb_u8_slice(input: &[f32], output: &mut [u8]) {
 mod tests {
     use super::*;
 
+    #[cfg(not(feature = "std"))]
+    use alloc::{vec, vec::Vec};
+
     // ---- x8 function tests ----
 
     #[test]

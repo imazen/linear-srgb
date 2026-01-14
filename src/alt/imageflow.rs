@@ -47,7 +47,8 @@ mod unsafe_impl {
         };
         let mut y: f32 = unsafe { vx.i } as f32;
         y *= 1.192_092_9e-7_f32;
-        y - 124.225_52_f32 - 1.498_030_3_f32 * unsafe { mx.f }
+        y - 124.225_52_f32
+            - 1.498_030_3_f32 * unsafe { mx.f }
             - 1.725_88_f32 / (0.352_088_72_f32 + unsafe { mx.f })
     }
 }
@@ -82,10 +83,10 @@ mod safe_impl {
 }
 
 // Re-export the appropriate implementation
-#[cfg(feature = "unsafe_simd")]
-use unsafe_impl::{fastlog2, fastpow2};
 #[cfg(not(feature = "unsafe_simd"))]
 use safe_impl::{fastlog2, fastpow2};
+#[cfg(feature = "unsafe_simd")]
+use unsafe_impl::{fastlog2, fastpow2};
 
 /// Fast approximate power function using bit manipulation.
 /// From imageflow_core/src/graphics/math.rs
