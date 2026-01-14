@@ -1,0 +1,332 @@
+//! Fast SIMD math approximations for pow, exp2, and log2.
+//!
+//! These are "dirty" approximations optimized for speed over precision.
+//! Suitable for sRGB transfer functions where ~1e-5 error is acceptable.
+
+use wide::{f32x8, u32x8};
+
+use crate::mlaf::mlaf;
+use crate::simd_multiversion;
+
+// Constants for dirty_log2f_x8
+const SQRT2_OVER_2_BITS: u32 = 0x3f3504f3; // sqrt(2)/2 ~ 0.7071
+const ONE_BITS: u32 = 0x3f800000; // 1.0
+
+// Polynomial coefficients for log2 approximation
+// log2((1+x)/(1-x)) ≈ 2x * (1 + x²/3 + x⁴/5 + ...)
+// Rearranged for (a-1)/(a+1) form
+const LOG2_C0: f32 = 0.412_198_57;
+const LOG2_C1: f32 = 0.577_078_04;
+const LOG2_C2: f32 = 0.961_796_7;
+const LOG2_SCALE: f32 = 2.885_39; // 2/ln(2)
+
+// 64-entry exp2 lookup table (same as pxfm's EXP2FT)
+// Each entry is 2^(k/64) for k in 0..64
+#[rustfmt::skip]
+static EXP2_TABLE: [u32; 64] = [
+    0x3F3504F3, 0x3F36FD92, 0x3F38FBAF, 0x3F3AFF5B, 0x3F3D08A4, 0x3F3F179A, 0x3F412C4D, 0x3F4346CD,
+    0x3F45672A, 0x3F478D75, 0x3F49B9BE, 0x3F4BEC15, 0x3F4E248C, 0x3F506334, 0x3F52A81E, 0x3F54F35B,
+    0x3F5744FD, 0x3F599D16, 0x3F5BFBB8, 0x3F5E60F5, 0x3F60CCDF, 0x3F633F89, 0x3F65B907, 0x3F68396A,
+    0x3F6AC0C7, 0x3F6D4F30, 0x3F6FE4BA, 0x3F728177, 0x3F75257D, 0x3F77D0DF, 0x3F7A83B3, 0x3F7D3E0C,
+    0x3F800000, 0x3F8164D2, 0x3F82CD87, 0x3F843A29, 0x3F85AAC3, 0x3F871F62, 0x3F88980F, 0x3F8A14D5,
+    0x3F8B95C2, 0x3F8D1ADF, 0x3F8EA43A, 0x3F9031DC, 0x3F91C3D3, 0x3F935A2B, 0x3F94F4F0, 0x3F96942D,
+    0x3F9837F0, 0x3F99E046, 0x3F9B8D3A, 0x3F9D3EDA, 0x3F9EF532, 0x3FA0B051, 0x3FA27043, 0x3FA43516,
+    0x3FA5FED7, 0x3FA7CD94, 0x3FA9A15B, 0x3FAB7A3A, 0x3FAD583F, 0x3FAF3B79, 0x3FB123F6, 0x3FB311C4,
+];
+
+// exp2 polynomial coefficients (from pxfm)
+const EXP2_C0: f32 = 0.240_226_5;
+#[allow(clippy::approx_constant)] // This is a polynomial coefficient, not meant to be LN_2
+const EXP2_C1: f32 = 0.693_147_2;
+
+// Table size for exp2
+const TBLSIZE: usize = 64;
+
+/// Helper: reinterpret f32x8 bits as u32x8.
+#[inline(always)]
+fn f32x8_to_bits(v: f32x8) -> u32x8 {
+    let arr: [f32; 8] = v.into();
+    u32x8::from([
+        arr[0].to_bits(),
+        arr[1].to_bits(),
+        arr[2].to_bits(),
+        arr[3].to_bits(),
+        arr[4].to_bits(),
+        arr[5].to_bits(),
+        arr[6].to_bits(),
+        arr[7].to_bits(),
+    ])
+}
+
+/// Helper: reinterpret u32x8 bits as f32x8.
+#[inline(always)]
+fn f32x8_from_bits(v: u32x8) -> f32x8 {
+    let arr: [u32; 8] = v.into();
+    f32x8::from([
+        f32::from_bits(arr[0]),
+        f32::from_bits(arr[1]),
+        f32::from_bits(arr[2]),
+        f32::from_bits(arr[3]),
+        f32::from_bits(arr[4]),
+        f32::from_bits(arr[5]),
+        f32::from_bits(arr[6]),
+        f32::from_bits(arr[7]),
+    ])
+}
+
+/// Helper: FMA for f32x8: a * b + c
+#[inline(always)]
+fn f32x8_fma(a: f32x8, b: f32x8, c: f32x8) -> f32x8 {
+    mlaf(c, a, b)
+}
+
+simd_multiversion! {
+    /// Fast approximate log2 for 8 f32 values.
+    ///
+    /// Accuracy: ~1e-5 relative error for inputs in [0.001, 1000].
+    /// Not suitable for values near 0 or negative values.
+    #[inline]
+    pub fn dirty_log2f_x8(d: f32x8) -> f32x8 {
+        // Extract bits
+        let bits = f32x8_to_bits(d);
+
+        // Normalize: add offset to handle exponent extraction
+        // ix = ix + (0x3f800000 - 0x3f3504f3) to reduce x into [sqrt(2)/2, sqrt(2)]
+        let offset = u32x8::splat(ONE_BITS - SQRT2_OVER_2_BITS);
+        let adjusted = bits + offset;
+
+        // Extract exponent: n = (ix >> 23) - 127
+        let exponent_raw: u32x8 = adjusted >> 23;
+        let exp_arr: [u32; 8] = exponent_raw.into();
+        let n = f32x8::from([
+            (exp_arr[0] as i32 - 0x7f) as f32,
+            (exp_arr[1] as i32 - 0x7f) as f32,
+            (exp_arr[2] as i32 - 0x7f) as f32,
+            (exp_arr[3] as i32 - 0x7f) as f32,
+            (exp_arr[4] as i32 - 0x7f) as f32,
+            (exp_arr[5] as i32 - 0x7f) as f32,
+            (exp_arr[6] as i32 - 0x7f) as f32,
+            (exp_arr[7] as i32 - 0x7f) as f32,
+        ]);
+
+        // Reconstruct mantissa with exponent = 0 (biased 127)
+        // ix = (ix & 0x007fffff) + 0x3f3504f3
+        let mantissa_mask = u32x8::splat(0x007fffff);
+        let mantissa_bits = (adjusted & mantissa_mask) + u32x8::splat(SQRT2_OVER_2_BITS);
+        let a = f32x8_from_bits(mantissa_bits);
+
+        // x = (a - 1) / (a + 1), range [-0.17, 0.17]
+        let one = f32x8::splat(1.0);
+        let x = (a - one) / (a + one);
+
+        let x2 = x * x;
+
+        // Polynomial: log2((1+x)/(1-x)) ≈ 2x * P(x²)
+        // P(x²) = c2 + c1*x² + c0*x⁴
+        let mut u = f32x8::splat(LOG2_C0);
+        u = f32x8_fma(u, x2, f32x8::splat(LOG2_C1));
+        u = f32x8_fma(u, x2, f32x8::splat(LOG2_C2));
+
+        // Result: n + 2*x*P(x²)/ln(2) = n + x*u*scale
+        f32x8_fma(x2 * x, u, f32x8_fma(x, f32x8::splat(LOG2_SCALE), n))
+    }
+}
+
+simd_multiversion! {
+    /// Fast approximate exp2 (2^x) for 8 f32 values.
+    ///
+    /// Accuracy: ~1e-5 relative error for inputs in [-10, 10].
+    /// Uses 64-entry LUT with polynomial refinement.
+    #[inline]
+    pub fn dirty_exp2f_x8(d: f32x8) -> f32x8 {
+        // Redux constant for extracting integer part
+        // redux = 0x4b400000 / 64 = 12582912 / 64
+        let redux = f32x8::splat(f32::from_bits(0x4b400000) / TBLSIZE as f32);
+
+        // Add redux to get the integer index bits
+        let sum = d + redux;
+        let ui = f32x8_to_bits(sum);
+
+        // Extract table index: (ui + 32) & 63
+        let i0 = (ui + u32x8::splat(TBLSIZE as u32 / 2)) & u32x8::splat(TBLSIZE as u32 - 1);
+
+        // Extract k for 2^k scaling: k = (ui + 32) / 64
+        let k: u32x8 = (ui + u32x8::splat(TBLSIZE as u32 / 2)) >> 6;
+
+        // Fractional part: f = d - floor(d)
+        let uf = sum - redux;
+        let f = d - uf;
+
+        // LUT lookup - scalar gather (SIMD gather not universally available)
+        let i0_arr: [u32; 8] = i0.into();
+        let z0 = f32x8::from([
+            f32::from_bits(EXP2_TABLE[i0_arr[0] as usize]),
+            f32::from_bits(EXP2_TABLE[i0_arr[1] as usize]),
+            f32::from_bits(EXP2_TABLE[i0_arr[2] as usize]),
+            f32::from_bits(EXP2_TABLE[i0_arr[3] as usize]),
+            f32::from_bits(EXP2_TABLE[i0_arr[4] as usize]),
+            f32::from_bits(EXP2_TABLE[i0_arr[5] as usize]),
+            f32::from_bits(EXP2_TABLE[i0_arr[6] as usize]),
+            f32::from_bits(EXP2_TABLE[i0_arr[7] as usize]),
+        ]);
+
+        // Polynomial refinement: u = c0 + c1*f, then u *= f
+        let mut u = f32x8::splat(EXP2_C0);
+        u = f32x8_fma(u, f, f32x8::splat(EXP2_C1));
+        u *= f;
+
+        // Result before scaling: (1 + u) * z0 = z0 + u*z0
+        let result_unscaled = f32x8_fma(u, z0, z0);
+
+        // Scale by 2^k using bit manipulation
+        // pow2i(k) = float from bits ((k + 127) << 23)
+        let k_arr: [u32; 8] = k.into();
+        let scale = f32x8::from([
+            pow2if(k_arr[0] as i32),
+            pow2if(k_arr[1] as i32),
+            pow2if(k_arr[2] as i32),
+            pow2if(k_arr[3] as i32),
+            pow2if(k_arr[4] as i32),
+            pow2if(k_arr[5] as i32),
+            pow2if(k_arr[6] as i32),
+            pow2if(k_arr[7] as i32),
+        ]);
+
+        result_unscaled * scale
+    }
+}
+
+/// Compute 2^k for integer k.
+/// Uses wrapping arithmetic - the magic of the redux trick relies on this!
+#[inline(always)]
+fn pow2if(k: i32) -> f32 {
+    // The wrapping_add is essential - it makes the low 8 bits of (k + 0x7f)
+    // encode the correct exponent even for "wrong" k values from the redux trick
+    f32::from_bits((k.wrapping_add(0x7f) as u32) << 23)
+}
+
+simd_multiversion! {
+    /// Fast approximate pow(x, n) for 8 f32 values.
+    ///
+    /// Computes x^n = exp2(n * log2(x)).
+    /// Accuracy: ~1e-4 relative error for typical sRGB range.
+    ///
+    /// Note: Only handles positive x values. For negative x, behavior is undefined.
+    #[inline]
+    pub fn dirty_pow_x8(x: f32x8, n: f32x8) -> f32x8 {
+        let lg = dirty_log2f_x8(x);
+        dirty_exp2f_x8(n * lg)
+    }
+}
+
+simd_multiversion! {
+    /// Fast approximate pow(x, n) where n is a constant.
+    #[inline]
+    pub fn dirty_pow_const_x8(x: f32x8, n: f32) -> f32x8 {
+        dirty_pow_x8(x, f32x8::splat(n))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dirty_log2f_x8() {
+        let input = f32x8::from([0.5, 1.0, 2.0, 4.0, 0.25, 8.0, 0.125, 16.0]);
+        let result = dirty_log2f_x8(input);
+        let result_arr: [f32; 8] = result.into();
+
+        let expected = [-1.0, 0.0, 1.0, 2.0, -2.0, 3.0, -3.0, 4.0];
+        for (i, (&r, &e)) in result_arr.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (r - e).abs() < 1e-4,
+                "log2 mismatch at {}: got {}, expected {}",
+                i,
+                r,
+                e
+            );
+        }
+    }
+
+    #[test]
+    fn test_dirty_exp2f_x8() {
+        // Test values in typical sRGB range (avoiding 0 which is an edge case)
+        let input = f32x8::from([-3.0, -2.0, -1.0, -0.5, 0.5, 1.0, 2.0, 3.0]);
+        let result = dirty_exp2f_x8(input);
+        let result_arr: [f32; 8] = result.into();
+        let input_arr: [f32; 8] = input.into();
+
+        for (i, (&r, &inp)) in result_arr.iter().zip(input_arr.iter()).enumerate() {
+            let expected = inp.exp2();
+            assert!(
+                (r - expected).abs() / expected.abs().max(1e-10) < 1e-4,
+                "exp2 mismatch at {}: got {}, expected {}",
+                i,
+                r,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_dirty_pow_x8() {
+        // Test values relevant to sRGB conversion (avoiding 0)
+        let x = f32x8::from([0.1, 0.2, 0.3, 0.5, 0.7, 0.8, 0.9, 1.0]);
+        let n = f32x8::splat(2.4);
+        let result = dirty_pow_x8(x, n);
+        let result_arr: [f32; 8] = result.into();
+        let x_arr: [f32; 8] = x.into();
+
+        for (i, (&r, &inp)) in result_arr.iter().zip(x_arr.iter()).enumerate() {
+            let expected = inp.powf(2.4);
+            // Allow slightly larger tolerance for pow
+            assert!(
+                (r - expected).abs() / expected.abs().max(1e-10) < 5e-4,
+                "pow mismatch at {}: got {}, expected {}",
+                i,
+                r,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_dirty_pow_srgb_gamma() {
+        // Test with sRGB gamma values (2.4 and 1/2.4)
+        let x = f32x8::from([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]);
+
+        // Test x^2.4 (sRGB decode)
+        let gamma = f32x8::splat(2.4);
+        let result = dirty_pow_x8(x, gamma);
+        let result_arr: [f32; 8] = result.into();
+        let x_arr: [f32; 8] = x.into();
+
+        for (i, (&r, &inp)) in result_arr.iter().zip(x_arr.iter()).enumerate() {
+            let expected = inp.powf(2.4);
+            assert!(
+                (r - expected).abs() < 1e-4,
+                "pow(x, 2.4) mismatch at {}: got {}, expected {}",
+                i,
+                r,
+                expected
+            );
+        }
+
+        // Test x^(1/2.4) (sRGB encode)
+        let inv_gamma = f32x8::splat(1.0 / 2.4);
+        let result = dirty_pow_x8(x, inv_gamma);
+        let result_arr: [f32; 8] = result.into();
+
+        for (i, (&r, &inp)) in result_arr.iter().zip(x_arr.iter()).enumerate() {
+            let expected = inp.powf(1.0 / 2.4);
+            assert!(
+                (r - expected).abs() < 1e-4,
+                "pow(x, 1/2.4) mismatch at {}: got {}, expected {}",
+                i,
+                r,
+                expected
+            );
+        }
+    }
+}

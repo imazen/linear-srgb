@@ -62,6 +62,7 @@
 //! simd::srgb_to_linear_slice(&mut values);
 //! ```
 
+pub mod fast_math;
 pub mod lut;
 mod mlaf;
 pub mod simd;
