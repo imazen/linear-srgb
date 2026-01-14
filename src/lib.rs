@@ -63,6 +63,7 @@
 //! ```
 
 pub mod fast_math;
+pub mod imageflow;
 pub mod lut;
 mod mlaf;
 pub mod simd;
