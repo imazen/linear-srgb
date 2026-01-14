@@ -1,397 +1,540 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use linear_srgb::accuracy::{naive_linear_to_srgb_f32, naive_srgb_to_linear_f32};
+//! Comprehensive benchmarks for sRGB conversion methods.
+//!
+//! Tests all combinations of input/output types (u8, u16, f32) across implementations.
+
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use linear_srgb::imageflow;
 use linear_srgb::lut::{
-    EncodeTable12, LinearTable12, LinearTable8, SrgbConverter, lut_interp_linear_float,
+    EncodeTable12, EncodeTable16, LinearTable8, LinearTable16, SrgbConverter,
+    lut_interp_linear_float,
 };
-use linear_srgb::{simd, srgb_to_linear};
-use moxcms::{
-    CicpColorPrimaries, CicpProfile, ColorProfile, Layout, MatrixCoefficients, RenderingIntent,
-    TransferCharacteristics, TransformOptions,
-};
+use linear_srgb::{linear_to_srgb, simd, srgb_to_linear};
 use wide::f32x8;
 
-// 10000 values = 1250 f32x8 vectors
-const NUM_VECTORS: usize = 1250;
-const BATCH_SIZE: usize = NUM_VECTORS * 8;
+const BATCH_SIZE: usize = 10000;
 
-fn create_test_vectors() -> Vec<f32x8> {
-    (0..NUM_VECTORS)
-        .map(|i| {
-            let base = (i * 8) as f32 / BATCH_SIZE as f32;
-            let step = 1.0 / BATCH_SIZE as f32;
-            f32x8::from([
-                base,
-                base + step,
-                base + 2.0 * step,
-                base + 3.0 * step,
-                base + 4.0 * step,
-                base + 5.0 * step,
-                base + 6.0 * step,
-                base + 7.0 * step,
-            ])
-        })
-        .collect()
-}
+// ============================================================================
+// Test Data Generation
+// ============================================================================
 
-fn create_test_f32() -> Vec<f32> {
+fn create_f32_srgb() -> Vec<f32> {
     (0..BATCH_SIZE)
         .map(|i| i as f32 / BATCH_SIZE as f32)
         .collect()
 }
 
-// For moxcms RGB transform (3 channels)
-fn create_test_rgb() -> Vec<f32> {
+fn create_f32_linear() -> Vec<f32> {
+    create_f32_srgb()
+        .iter()
+        .map(|&v| srgb_to_linear(v))
+        .collect()
+}
+
+fn create_u8_srgb() -> Vec<u8> {
+    (0..BATCH_SIZE).map(|i| (i % 256) as u8).collect()
+}
+
+fn create_u16_srgb() -> Vec<u16> {
     (0..BATCH_SIZE)
-        .flat_map(|i| {
-            let v = i as f32 / BATCH_SIZE as f32;
-            [v, v, v] // RGB with same value
+        .map(|i| ((i * 65535) / BATCH_SIZE) as u16)
+        .collect()
+}
+
+fn create_f32x8_srgb() -> Vec<f32x8> {
+    let f32_data = create_f32_srgb();
+    f32_data
+        .chunks(8)
+        .map(|chunk| {
+            let mut arr = [0.0f32; 8];
+            arr[..chunk.len()].copy_from_slice(chunk);
+            f32x8::from(arr)
         })
         .collect()
 }
 
-// Test u8 data for u8 conversions
-fn create_test_u8() -> Vec<u8> {
-    (0..BATCH_SIZE).map(|i| (i % 256) as u8).collect()
-}
-
-// Linear f32 values derived from u8 sRGB (for reverse conversion)
-fn create_test_linear_from_u8(lut: &LinearTable8) -> Vec<f32> {
-    create_test_u8()
+fn create_f32x8_linear() -> Vec<f32x8> {
+    create_f32x8_srgb()
         .iter()
-        .map(|&v| lut.lookup(v as usize))
+        .map(|&v| simd::srgb_to_linear_x8(v))
         .collect()
 }
 
-fn bench_srgb_to_linear_10k(c: &mut Criterion) {
-    let mut group = c.benchmark_group("srgb_to_linear_10k");
-    let vectors = create_test_vectors();
-    let f32_data = create_test_f32();
+// ============================================================================
+// sRGB → Linear Benchmarks
+// ============================================================================
 
-    // Native f32x8 slice (best case - data already in SIMD format)
-    group.bench_function("native_f32x8", |b| {
-        let mut output = vectors.clone();
+fn bench_srgb_to_linear(c: &mut Criterion) {
+    let mut group = c.benchmark_group("srgb_to_linear");
+    group.throughput(Throughput::Elements(BATCH_SIZE as u64));
+
+    // Shared resources
+    let lut8 = LinearTable8::new();
+    let lut16 = LinearTable16::new();
+    let imageflow_lut = imageflow::SrgbToLinearLut::new();
+    let f32_data = create_f32_srgb();
+    let u8_data = create_u8_srgb();
+    let u16_data = create_u16_srgb();
+    let f32x8_data = create_f32x8_srgb();
+
+    // === f32 → f32 ===
+
+    group.bench_function("f32_f32/simd_dirty_pow", |b| {
+        let mut output = f32x8_data.clone();
         b.iter(|| {
             simd::srgb_to_linear_x8_slice(&mut output);
             black_box(&output);
         })
     });
 
-    // f32 slice with chunks (typical use case)
-    group.bench_function("f32_slice", |b| {
-        let mut values = f32_data.clone();
+    group.bench_function("f32_f32/scalar_powf", |b| {
+        let mut output = f32_data.clone();
         b.iter(|| {
-            simd::srgb_to_linear_slice(&mut values);
-            black_box(&values);
-        })
-    });
-
-    // Scalar loop (baseline)
-    group.bench_function("scalar", |b| {
-        let mut values = f32_data.clone();
-        b.iter(|| {
-            values.copy_from_slice(&f32_data);
-            for v in values.iter_mut() {
+            for v in output.iter_mut() {
                 *v = srgb_to_linear(*v);
             }
-            black_box(&values);
+            black_box(&output);
         })
     });
 
-    // Naive scalar (textbook implementation)
-    group.bench_function("naive", |b| {
-        let mut values = f32_data.clone();
+    group.bench_function("f32_f32/lut12_interp", |b| {
+        let table = linear_srgb::lut::LinearTable12::new();
+        let mut output = f32_data.clone();
         b.iter(|| {
-            values.copy_from_slice(&f32_data);
-            for v in values.iter_mut() {
-                *v = naive_srgb_to_linear_f32(*v);
-            }
-            black_box(&values);
-        })
-    });
-
-    // LUT-based (12-bit table with interpolation)
-    group.bench_function("lut_12bit", |b| {
-        let table = LinearTable12::new();
-        let mut values = f32_data.clone();
-        b.iter(|| {
-            for v in values.iter_mut() {
+            for v in output.iter_mut() {
                 *v = lut_interp_linear_float(*v, table.as_slice());
             }
-            black_box(&values);
+            black_box(&output);
         })
     });
 
-    // moxcms transform API (sRGB → Linear)
-    group.bench_function("moxcms_transform", |b| {
-        let srgb = ColorProfile::new_srgb();
-        let linear_srgb = ColorProfile::new_from_cicp(CicpProfile {
-            color_primaries: CicpColorPrimaries::Bt709,
-            transfer_characteristics: TransferCharacteristics::Linear,
-            matrix_coefficients: MatrixCoefficients::Identity,
-            full_range: true,
-        });
-        let options = TransformOptions {
-            rendering_intent: RenderingIntent::Perceptual,
-            ..Default::default()
-        };
-        let transform = srgb
-            .create_transform_f32(Layout::Rgb, &linear_srgb, Layout::Rgb, options)
-            .expect("Failed to create sRGB→linear transform");
-
-        let rgb_input = create_test_rgb();
-        let mut rgb_output = vec![0.0f32; rgb_input.len()];
-
+    group.bench_function("f32_f32/imageflow_powf", |b| {
+        let mut output = f32_data.clone();
         b.iter(|| {
-            let _ = transform.transform(black_box(&rgb_input), &mut rgb_output);
-            black_box(&rgb_output);
+            for v in output.iter_mut() {
+                *v = imageflow::srgb_to_linear(*v);
+            }
+            black_box(&output);
+        })
+    });
+
+    // === u8 → f32 ===
+
+    group.bench_function("u8_f32/lut8_direct", |b| {
+        let mut output = vec![0.0f32; BATCH_SIZE];
+        b.iter(|| {
+            for (i, o) in u8_data.iter().zip(output.iter_mut()) {
+                *o = lut8.lookup(*i as usize);
+            }
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("u8_f32/simd_lut8_batch", |b| {
+        let mut output = vec![0.0f32; BATCH_SIZE];
+        b.iter(|| {
+            simd::srgb_u8_to_linear_batch(&lut8, black_box(&u8_data), &mut output);
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("u8_f32/imageflow_lut8", |b| {
+        let mut output = vec![0.0f32; BATCH_SIZE];
+        b.iter(|| {
+            for (i, o) in u8_data.iter().zip(output.iter_mut()) {
+                *o = imageflow_lut.lookup(*i);
+            }
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("u8_f32/scalar_powf", |b| {
+        let mut output = vec![0.0f32; BATCH_SIZE];
+        b.iter(|| {
+            for (i, o) in u8_data.iter().zip(output.iter_mut()) {
+                *o = srgb_to_linear(*i as f32 / 255.0);
+            }
+            black_box(&output);
+        })
+    });
+
+    // === u16 → f32 ===
+
+    group.bench_function("u16_f32/lut16_direct", |b| {
+        let mut output = vec![0.0f32; BATCH_SIZE];
+        b.iter(|| {
+            for (i, o) in u16_data.iter().zip(output.iter_mut()) {
+                *o = lut16.lookup(*i as usize);
+            }
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("u16_f32/scalar_powf", |b| {
+        let mut output = vec![0.0f32; BATCH_SIZE];
+        b.iter(|| {
+            for (i, o) in u16_data.iter().zip(output.iter_mut()) {
+                *o = srgb_to_linear(*i as f32 / 65535.0);
+            }
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("u16_f32/lut8_quantized", |b| {
+        let mut output = vec![0.0f32; BATCH_SIZE];
+        b.iter(|| {
+            for (i, o) in u16_data.iter().zip(output.iter_mut()) {
+                *o = lut8.lookup((*i >> 8) as usize);
+            }
+            black_box(&output);
         })
     });
 
     group.finish();
 }
 
-fn bench_linear_to_srgb_10k(c: &mut Criterion) {
-    let mut group = c.benchmark_group("linear_to_srgb_10k");
+// ============================================================================
+// Linear → sRGB Benchmarks
+// ============================================================================
 
-    // Create linear input
-    let srgb_vectors = create_test_vectors();
-    let linear_vectors: Vec<f32x8> = srgb_vectors
-        .iter()
-        .map(|v| simd::srgb_to_linear_x8(*v))
-        .collect();
+fn bench_linear_to_srgb(c: &mut Criterion) {
+    let mut group = c.benchmark_group("linear_to_srgb");
+    group.throughput(Throughput::Elements(BATCH_SIZE as u64));
 
-    let f32_data = create_test_f32();
-    let linear_f32: Vec<f32> = f32_data.iter().map(|&v| srgb_to_linear(v)).collect();
+    // Shared resources
+    let encode12 = EncodeTable12::new();
+    let encode16 = EncodeTable16::new();
+    let converter = SrgbConverter::new();
+    let lut8 = LinearTable8::new();
 
-    // Native f32x8 slice (best case)
-    group.bench_function("native_f32x8", |b| {
-        let mut output = linear_vectors.clone();
+    let f32_linear = create_f32_linear();
+    let f32x8_linear = create_f32x8_linear();
+
+    // Create u8-derived linear values for fair u8 output comparison
+    let u8_srgb = create_u8_srgb();
+    let linear_from_u8: Vec<f32> = u8_srgb.iter().map(|&v| lut8.lookup(v as usize)).collect();
+
+    // === f32 → f32 ===
+
+    group.bench_function("f32_f32/simd_dirty_pow", |b| {
+        let mut output = f32x8_linear.clone();
         b.iter(|| {
             simd::linear_to_srgb_x8_slice(&mut output);
             black_box(&output);
         })
     });
 
-    // f32 slice with chunks
-    group.bench_function("f32_slice", |b| {
-        let mut values = linear_f32.clone();
+    group.bench_function("f32_f32/scalar_powf", |b| {
+        let mut output = f32_linear.clone();
         b.iter(|| {
-            simd::linear_to_srgb_slice(&mut values);
-            black_box(&values);
-        })
-    });
-
-    // Scalar loop
-    group.bench_function("scalar", |b| {
-        let mut values = linear_f32.clone();
-        b.iter(|| {
-            values.copy_from_slice(&linear_f32);
-            for v in values.iter_mut() {
-                *v = linear_srgb::linear_to_srgb(*v);
+            for v in output.iter_mut() {
+                *v = linear_to_srgb(*v);
             }
-            black_box(&values);
+            black_box(&output);
         })
     });
 
-    // Naive scalar
-    group.bench_function("naive", |b| {
-        let mut values = linear_f32.clone();
+    group.bench_function("f32_f32/lut12_interp", |b| {
+        let mut output = f32_linear.clone();
         b.iter(|| {
-            values.copy_from_slice(&linear_f32);
-            for v in values.iter_mut() {
-                *v = naive_linear_to_srgb_f32(*v);
+            for v in output.iter_mut() {
+                *v = lut_interp_linear_float(*v, encode12.as_slice());
             }
-            black_box(&values);
+            black_box(&output);
         })
     });
 
-    // LUT-based (12-bit table with interpolation)
-    group.bench_function("lut_12bit", |b| {
-        let table = EncodeTable12::new();
-        let mut values = linear_f32.clone();
+    group.bench_function("f32_f32/lut16_interp", |b| {
+        let mut output = f32_linear.clone();
         b.iter(|| {
-            for v in values.iter_mut() {
-                *v = lut_interp_linear_float(*v, table.as_slice());
+            for v in output.iter_mut() {
+                *v = lut_interp_linear_float(*v, encode16.as_slice());
             }
-            black_box(&values);
+            black_box(&output);
         })
     });
 
-    // moxcms transform API (Linear → sRGB)
-    group.bench_function("moxcms_transform", |b| {
-        let linear_srgb = ColorProfile::new_from_cicp(CicpProfile {
-            color_primaries: CicpColorPrimaries::Bt709,
-            transfer_characteristics: TransferCharacteristics::Linear,
-            matrix_coefficients: MatrixCoefficients::Identity,
-            full_range: true,
-        });
-        let srgb = ColorProfile::new_srgb();
-        let options = TransformOptions {
-            rendering_intent: RenderingIntent::Perceptual,
-            ..Default::default()
-        };
-        let transform = linear_srgb
-            .create_transform_f32(Layout::Rgb, &srgb, Layout::Rgb, options)
-            .expect("Failed to create linear→sRGB transform");
-
-        // Create linear RGB input
-        let linear_rgb: Vec<f32> = linear_f32.iter().flat_map(|&v| [v, v, v]).collect();
-        let mut rgb_output = vec![0.0f32; linear_rgb.len()];
-
+    group.bench_function("f32_f32/imageflow_fastpow", |b| {
+        let mut output = f32_linear.clone();
         b.iter(|| {
-            let _ = transform.transform(black_box(&linear_rgb), &mut rgb_output);
-            black_box(&rgb_output);
+            for v in output.iter_mut() {
+                *v = imageflow::linear_to_srgb(*v);
+            }
+            black_box(&output);
+        })
+    });
+
+    // === f32 → u8 ===
+
+    group.bench_function("f32_u8/simd_dirty_pow", |b| {
+        let mut output = vec![0u8; BATCH_SIZE];
+        b.iter(|| {
+            simd::linear_to_srgb_u8_batch(black_box(&linear_from_u8), &mut output);
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("f32_u8/scalar_powf", |b| {
+        let mut output = vec![0u8; BATCH_SIZE];
+        b.iter(|| {
+            for (i, o) in linear_from_u8.iter().zip(output.iter_mut()) {
+                *o = (linear_to_srgb(*i) * 255.0 + 0.5) as u8;
+            }
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("f32_u8/lut12_interp", |b| {
+        let mut output = vec![0u8; BATCH_SIZE];
+        b.iter(|| {
+            for (i, o) in linear_from_u8.iter().zip(output.iter_mut()) {
+                *o = (lut_interp_linear_float(*i, encode12.as_slice()) * 255.0 + 0.5) as u8;
+            }
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("f32_u8/converter_lut12", |b| {
+        let mut output = vec![0u8; BATCH_SIZE];
+        b.iter(|| {
+            converter.batch_linear_to_srgb(black_box(&linear_from_u8), &mut output);
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("f32_u8/imageflow_fastpow", |b| {
+        let mut output = vec![0u8; BATCH_SIZE];
+        b.iter(|| {
+            for (i, o) in linear_from_u8.iter().zip(output.iter_mut()) {
+                *o = imageflow::linear_to_srgb_u8_fastpow(*i);
+            }
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("f32_u8/imageflow_lut16k", |b| {
+        let mut output = vec![0u8; BATCH_SIZE];
+        b.iter(|| {
+            for (i, o) in linear_from_u8.iter().zip(output.iter_mut()) {
+                *o = imageflow::linear_to_srgb_lut(*i);
+            }
+            black_box(&output);
+        })
+    });
+
+    // === f32 → u16 ===
+
+    group.bench_function("f32_u16/scalar_powf", |b| {
+        let mut output = vec![0u16; BATCH_SIZE];
+        b.iter(|| {
+            for (i, o) in f32_linear.iter().zip(output.iter_mut()) {
+                *o = (linear_to_srgb(*i) * 65535.0 + 0.5) as u16;
+            }
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("f32_u16/simd_dirty_pow", |b| {
+        let mut output = vec![0u16; BATCH_SIZE];
+        b.iter(|| {
+            for (chunk, out_chunk) in f32_linear.chunks(8).zip(output.chunks_mut(8)) {
+                let mut arr = [0.0f32; 8];
+                arr[..chunk.len()].copy_from_slice(chunk);
+                let v = f32x8::from(arr);
+                let srgb = simd::linear_to_srgb_x8(v);
+                let srgb_arr: [f32; 8] = srgb.into();
+                for (s, o) in srgb_arr.iter().zip(out_chunk.iter_mut()) {
+                    *o = (*s * 65535.0 + 0.5) as u16;
+                }
+            }
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("f32_u16/lut16_interp", |b| {
+        let mut output = vec![0u16; BATCH_SIZE];
+        b.iter(|| {
+            for (i, o) in f32_linear.iter().zip(output.iter_mut()) {
+                *o = (lut_interp_linear_float(*i, encode16.as_slice()) * 65535.0 + 0.5) as u16;
+            }
+            black_box(&output);
         })
     });
 
     group.finish();
 }
 
-fn bench_u8_srgb_to_linear_10k(c: &mut Criterion) {
-    let mut group = c.benchmark_group("u8_srgb_to_linear_10k");
-    let lut = LinearTable8::new();
-    let u8_data = create_test_u8();
+// ============================================================================
+// Roundtrip Benchmarks (measures full pipeline)
+// ============================================================================
 
-    // SIMD batch conversion
-    group.bench_function("simd_batch", |b| {
-        let mut output = vec![0.0f32; BATCH_SIZE];
+fn bench_roundtrip(c: &mut Criterion) {
+    let mut group = c.benchmark_group("roundtrip");
+    group.throughput(Throughput::Elements(BATCH_SIZE as u64));
+
+    let lut8 = LinearTable8::new();
+    let lut16 = LinearTable16::new();
+    let encode12 = EncodeTable12::new();
+    let encode16 = EncodeTable16::new();
+
+    let u8_data = create_u8_srgb();
+    let u16_data = create_u16_srgb();
+
+    // === u8 → f32 → u8 ===
+
+    group.bench_function("u8_f32_u8/lut8_simd", |b| {
+        let mut linear = vec![0.0f32; BATCH_SIZE];
+        let mut output = vec![0u8; BATCH_SIZE];
         b.iter(|| {
-            simd::srgb_u8_to_linear_batch(&lut, black_box(&u8_data), &mut output);
+            // u8 → f32
+            simd::srgb_u8_to_linear_batch(&lut8, &u8_data, &mut linear);
+            // f32 → u8
+            simd::linear_to_srgb_u8_batch(&linear, &mut output);
             black_box(&output);
         })
     });
 
-    // SrgbConverter batch (scalar LUT)
-    group.bench_function("converter_batch", |b| {
-        let conv = SrgbConverter::new();
-        let mut output = vec![0.0f32; BATCH_SIZE];
-        b.iter(|| {
-            conv.batch_srgb_to_linear(black_box(&u8_data), &mut output);
-            black_box(&output);
-        })
-    });
-
-    // Direct LUT lookup (scalar loop)
-    group.bench_function("lut_scalar", |b| {
-        let mut output = vec![0.0f32; BATCH_SIZE];
+    group.bench_function("u8_f32_u8/lut8_scalar_powf", |b| {
+        let mut output = vec![0u8; BATCH_SIZE];
         b.iter(|| {
             for (i, o) in u8_data.iter().zip(output.iter_mut()) {
-                *o = lut.lookup(*i as usize);
+                let linear = lut8.lookup(*i as usize);
+                *o = (linear_to_srgb(linear) * 255.0 + 0.5) as u8;
             }
             black_box(&output);
         })
     });
 
-    // moxcms 8bit transform (u8 → u8, for reference)
-    // Note: moxcms doesn't support mixed u8→f32 directly
-    group.bench_function("moxcms_8bit", |b| {
-        let srgb = ColorProfile::new_srgb();
-        let linear_srgb = ColorProfile::new_from_cicp(CicpProfile {
-            color_primaries: CicpColorPrimaries::Bt709,
-            transfer_characteristics: TransferCharacteristics::Linear,
-            matrix_coefficients: MatrixCoefficients::Identity,
-            full_range: true,
-        });
-        let options = TransformOptions {
-            rendering_intent: RenderingIntent::Perceptual,
-            ..Default::default()
-        };
-        let transform = srgb
-            .create_transform_8bit(Layout::Rgb, &linear_srgb, Layout::Rgb, options)
-            .expect("Failed to create sRGB u8→linear u8 transform");
-
-        // Create RGB input (3 channels)
-        let rgb_u8: Vec<u8> = u8_data.iter().flat_map(|&v| [v, v, v]).collect();
-        let mut rgb_output = vec![0u8; rgb_u8.len()];
-
+    group.bench_function("u8_f32_u8/lut8_lut12", |b| {
+        let mut output = vec![0u8; BATCH_SIZE];
         b.iter(|| {
-            let _ = transform.transform(black_box(&rgb_u8), &mut rgb_output);
-            black_box(&rgb_output);
+            for (i, o) in u8_data.iter().zip(output.iter_mut()) {
+                let linear = lut8.lookup(*i as usize);
+                *o = (lut_interp_linear_float(linear, encode12.as_slice()) * 255.0 + 0.5) as u8;
+            }
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("u8_f32_u8/imageflow_lut_fastpow", |b| {
+        let iflow_lut = imageflow::SrgbToLinearLut::new();
+        let mut output = vec![0u8; BATCH_SIZE];
+        b.iter(|| {
+            for (i, o) in u8_data.iter().zip(output.iter_mut()) {
+                let linear = iflow_lut.lookup(*i);
+                *o = imageflow::linear_to_srgb_u8_fastpow(linear);
+            }
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("u8_f32_u8/imageflow_lut_lut16k", |b| {
+        let iflow_lut = imageflow::SrgbToLinearLut::new();
+        let mut output = vec![0u8; BATCH_SIZE];
+        b.iter(|| {
+            for (i, o) in u8_data.iter().zip(output.iter_mut()) {
+                let linear = iflow_lut.lookup(*i);
+                *o = imageflow::linear_to_srgb_lut(linear);
+            }
+            black_box(&output);
+        })
+    });
+
+    // === u16 → f32 → u16 ===
+
+    group.bench_function("u16_f32_u16/lut16_scalar_powf", |b| {
+        let mut output = vec![0u16; BATCH_SIZE];
+        b.iter(|| {
+            for (i, o) in u16_data.iter().zip(output.iter_mut()) {
+                let linear = lut16.lookup(*i as usize);
+                *o = (linear_to_srgb(linear) * 65535.0 + 0.5) as u16;
+            }
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("u16_f32_u16/lut16_lut16", |b| {
+        let mut output = vec![0u16; BATCH_SIZE];
+        b.iter(|| {
+            for (i, o) in u16_data.iter().zip(output.iter_mut()) {
+                let linear = lut16.lookup(*i as usize);
+                *o = (lut_interp_linear_float(linear, encode16.as_slice()) * 65535.0 + 0.5) as u16;
+            }
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("u16_f32_u16/scalar_powf_both", |b| {
+        let mut output = vec![0u16; BATCH_SIZE];
+        b.iter(|| {
+            for (i, o) in u16_data.iter().zip(output.iter_mut()) {
+                let linear = srgb_to_linear(*i as f32 / 65535.0);
+                *o = (linear_to_srgb(linear) * 65535.0 + 0.5) as u16;
+            }
+            black_box(&output);
         })
     });
 
     group.finish();
 }
 
-fn bench_linear_to_u8_srgb_10k(c: &mut Criterion) {
-    let mut group = c.benchmark_group("linear_to_u8_srgb_10k");
-    let lut = LinearTable8::new();
-    let linear_data = create_test_linear_from_u8(&lut);
+// ============================================================================
+// Scaling Benchmarks (different batch sizes)
+// ============================================================================
 
-    // SIMD batch conversion
-    group.bench_function("simd_batch", |b| {
-        let mut output = vec![0u8; BATCH_SIZE];
-        b.iter(|| {
-            simd::linear_to_srgb_u8_batch(black_box(&linear_data), &mut output);
-            black_box(&output);
-        })
-    });
+fn bench_scaling(c: &mut Criterion) {
+    let mut group = c.benchmark_group("scaling");
 
-    // SrgbConverter batch (scalar)
-    group.bench_function("converter_batch", |b| {
-        let conv = SrgbConverter::new();
-        let mut output = vec![0u8; BATCH_SIZE];
-        b.iter(|| {
-            conv.batch_linear_to_srgb(black_box(&linear_data), &mut output);
-            black_box(&output);
-        })
-    });
+    let sizes = [100, 1000, 10000, 100000];
 
-    // Scalar loop with transfer function
-    group.bench_function("scalar_transfer", |b| {
-        let mut output = vec![0u8; BATCH_SIZE];
-        b.iter(|| {
-            for (i, o) in linear_data.iter().zip(output.iter_mut()) {
-                let srgb = linear_srgb::linear_to_srgb(*i);
-                *o = (srgb * 255.0 + 0.5) as u8;
-            }
-            black_box(&output);
-        })
-    });
-
-    // moxcms 8bit transform (u8 → u8, for reference)
-    // Note: moxcms doesn't support mixed f32→u8 directly
-    group.bench_function("moxcms_8bit", |b| {
-        let linear_srgb = ColorProfile::new_from_cicp(CicpProfile {
-            color_primaries: CicpColorPrimaries::Bt709,
-            transfer_characteristics: TransferCharacteristics::Linear,
-            matrix_coefficients: MatrixCoefficients::Identity,
-            full_range: true,
-        });
-        let srgb = ColorProfile::new_srgb();
-        let options = TransformOptions {
-            rendering_intent: RenderingIntent::Perceptual,
-            ..Default::default()
-        };
-        let transform = linear_srgb
-            .create_transform_8bit(Layout::Rgb, &srgb, Layout::Rgb, options)
-            .expect("Failed to create linear u8→sRGB u8 transform");
-
-        // Create linear u8 input (approximate f32 values as u8)
-        let linear_u8: Vec<u8> = linear_data
-            .iter()
-            .flat_map(|&v| {
-                let u = (v * 255.0 + 0.5) as u8;
-                [u, u, u]
+    for size in sizes {
+        let f32_data: Vec<f32> = (0..size).map(|i| i as f32 / size as f32).collect();
+        let f32x8_data: Vec<f32x8> = f32_data
+            .chunks(8)
+            .map(|chunk| {
+                let mut arr = [0.0f32; 8];
+                arr[..chunk.len()].copy_from_slice(chunk);
+                f32x8::from(arr)
             })
             .collect();
-        let mut rgb_output = vec![0u8; linear_u8.len()];
 
-        b.iter(|| {
-            let _ = transform.transform(black_box(&linear_u8), &mut rgb_output);
-            black_box(&rgb_output);
-        })
-    });
+        group.throughput(Throughput::Elements(size as u64));
+
+        group.bench_with_input(
+            BenchmarkId::new("simd_s2l", size),
+            &f32x8_data,
+            |b, data| {
+                let mut output = data.clone();
+                b.iter(|| {
+                    simd::srgb_to_linear_x8_slice(&mut output);
+                    black_box(&output);
+                })
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("scalar_s2l", size),
+            &f32_data,
+            |b, data| {
+                let mut output = data.clone();
+                b.iter(|| {
+                    for v in output.iter_mut() {
+                        *v = srgb_to_linear(*v);
+                    }
+                    black_box(&output);
+                })
+            },
+        );
+    }
 
     group.finish();
 }
 
 criterion_group!(
     benches,
-    bench_srgb_to_linear_10k,
-    bench_linear_to_srgb_10k,
-    bench_u8_srgb_to_linear_10k,
-    bench_linear_to_u8_srgb_10k,
+    bench_srgb_to_linear,
+    bench_linear_to_srgb,
+    bench_roundtrip,
+    bench_scaling,
 );
 
 criterion_main!(benches);

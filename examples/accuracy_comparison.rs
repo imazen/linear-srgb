@@ -1,20 +1,338 @@
 //! Comprehensive accuracy comparison of all sRGB conversion implementations.
 //!
 //! Run with: cargo run --release --example accuracy_comparison
+//!
+//! Tests all combinations of:
+//! - 2 directions: sRGB→Linear, Linear→sRGB
+//! - Input types: f32, u8, u16
+//! - Output types: f32, u8, u16
+//! - Multiple implementations for each direction
 
 use linear_srgb::accuracy::{naive_linear_to_srgb_f64, naive_srgb_to_linear_f64, ulp_distance_f32};
-use linear_srgb::lut::{EncodeTable12, LinearTable8, SrgbConverter, lut_interp_linear_float};
+use linear_srgb::imageflow::{self as imageflow};
+use linear_srgb::lut::{
+    EncodeTable12, EncodeTable16, LinearTable8, LinearTable16, SrgbConverter,
+    lut_interp_linear_float,
+};
 use linear_srgb::transfer::{linear_to_srgb_f64, srgb_to_linear_f64};
 use linear_srgb::{linear_to_srgb, simd, srgb_to_linear};
 use moxcms::{
     CicpColorPrimaries, CicpProfile, ColorProfile, Layout, MatrixCoefficients, RenderingIntent,
     TransferCharacteristics, TransformOptions,
 };
+use std::sync::Arc;
 use wide::f32x8;
 
-/// Statistics for error analysis
+// ============================================================================
+// Converter Abstractions
+// ============================================================================
+
+/// A method for converting sRGB → Linear
+struct SrgbToLinearMethod {
+    name: &'static str,
+    /// f32 [0,1] → f32 [0,1]
+    f32_to_f32: Box<dyn Fn(f32) -> f32 + Sync>,
+    /// Optional specialized u8 → f32 (if None, uses f32/255 → f32_to_f32)
+    u8_to_f32: Option<Box<dyn Fn(u8) -> f32 + Sync>>,
+    /// Optional specialized u16 → f32 (if None, uses f32/65535 → f32_to_f32)
+    u16_to_f32: Option<Box<dyn Fn(u16) -> f32 + Sync>>,
+}
+
+impl SrgbToLinearMethod {
+    fn convert_f32(&self, x: f32) -> f32 {
+        (self.f32_to_f32)(x)
+    }
+
+    fn convert_u8(&self, x: u8) -> f32 {
+        match &self.u8_to_f32 {
+            Some(f) => f(x),
+            None => (self.f32_to_f32)(x as f32 / 255.0),
+        }
+    }
+
+    fn convert_u16(&self, x: u16) -> f32 {
+        match &self.u16_to_f32 {
+            Some(f) => f(x),
+            None => (self.f32_to_f32)(x as f32 / 65535.0),
+        }
+    }
+}
+
+/// A method for converting Linear → sRGB
+struct LinearToSrgbMethod {
+    name: &'static str,
+    /// f32 [0,1] → f32 [0,1]
+    f32_to_f32: Box<dyn Fn(f32) -> f32 + Sync>,
+    /// Optional specialized f32 → u8 (if None, uses f32_to_f32 * 255 + 0.5)
+    f32_to_u8: Option<Box<dyn Fn(f32) -> u8 + Sync>>,
+    /// Optional specialized f32 → u16 (if None, uses f32_to_f32 * 65535 + 0.5)
+    f32_to_u16: Option<Box<dyn Fn(f32) -> u16 + Sync>>,
+}
+
+impl LinearToSrgbMethod {
+    fn convert_f32(&self, x: f32) -> f32 {
+        (self.f32_to_f32)(x)
+    }
+
+    fn convert_to_u8(&self, x: f32) -> u8 {
+        match &self.f32_to_u8 {
+            Some(f) => f(x),
+            None => ((self.f32_to_f32)(x) * 255.0 + 0.5) as u8,
+        }
+    }
+
+    fn convert_to_u16(&self, x: f32) -> u16 {
+        match &self.f32_to_u16 {
+            Some(f) => f(x),
+            None => ((self.f32_to_f32)(x) * 65535.0 + 0.5) as u16,
+        }
+    }
+}
+
+// ============================================================================
+// Method Factories
+// ============================================================================
+
+fn create_srgb_to_linear_methods() -> Vec<SrgbToLinearMethod> {
+    // Pre-create shared resources
+    let lut8 = Arc::new(LinearTable8::new());
+    let lut16 = Arc::new(LinearTable16::new());
+    let imageflow_lut = Arc::new(imageflow::SrgbToLinearLut::new());
+    let moxcms_default = create_moxcms_srgb_to_linear_transform(RenderingIntent::Perceptual, false);
+    let moxcms_cicp = create_moxcms_srgb_to_linear_transform(RenderingIntent::Perceptual, true);
+
+    let lut8_clone = lut8.clone();
+    let lut16_clone = lut16.clone();
+    let imageflow_lut_clone = imageflow_lut.clone();
+
+    vec![
+        SrgbToLinearMethod {
+            name: "Scalar powf (optimized constants)",
+            f32_to_f32: Box::new(srgb_to_linear),
+            u8_to_f32: None,
+            u16_to_f32: None,
+        },
+        SrgbToLinearMethod {
+            name: "SIMD wide::f32x8 dirty_pow",
+            f32_to_f32: Box::new(|x| {
+                let v = f32x8::splat(x);
+                let result: [f32; 8] = simd::srgb_to_linear_x8(v).into();
+                result[0]
+            }),
+            u8_to_f32: None,
+            u16_to_f32: None,
+        },
+        SrgbToLinearMethod {
+            name: "LUT-8 direct lookup",
+            f32_to_f32: Box::new(move |x| lut8.lookup((x * 255.0 + 0.5) as usize)),
+            u8_to_f32: Some(Box::new(move |x| lut8_clone.lookup(x as usize))),
+            u16_to_f32: None,
+        },
+        SrgbToLinearMethod {
+            name: "LUT-16 direct lookup",
+            f32_to_f32: Box::new(move |x| lut16.lookup((x * 65535.0 + 0.5) as usize)),
+            u8_to_f32: None,
+            u16_to_f32: Some(Box::new(move |x| lut16_clone.lookup(x as usize))),
+        },
+        SrgbToLinearMethod {
+            name: "Imageflow scalar powf (textbook)",
+            f32_to_f32: Box::new(imageflow::srgb_to_linear),
+            u8_to_f32: None,
+            u16_to_f32: None,
+        },
+        SrgbToLinearMethod {
+            name: "Imageflow LUT-8 lookup",
+            f32_to_f32: Box::new(move |x| imageflow_lut.lookup((x * 255.0 + 0.5) as u8)),
+            u8_to_f32: Some(Box::new(move |x| imageflow_lut_clone.lookup(x))),
+            u16_to_f32: None,
+        },
+        SrgbToLinearMethod {
+            name: "moxcms (default)",
+            f32_to_f32: Box::new(move |x| {
+                let rgb_in = [x, x, x];
+                let mut rgb_out = [0.0f32; 3];
+                let _ = moxcms_default.transform(&rgb_in, &mut rgb_out);
+                rgb_out[0]
+            }),
+            u8_to_f32: None,
+            u16_to_f32: None,
+        },
+        SrgbToLinearMethod {
+            name: "moxcms (allow_use_cicp_transfer)",
+            f32_to_f32: Box::new(move |x| {
+                let rgb_in = [x, x, x];
+                let mut rgb_out = [0.0f32; 3];
+                let _ = moxcms_cicp.transform(&rgb_in, &mut rgb_out);
+                rgb_out[0]
+            }),
+            u8_to_f32: None,
+            u16_to_f32: None,
+        },
+        SrgbToLinearMethod {
+            name: "Naive powf (textbook constants)",
+            f32_to_f32: Box::new(|x| naive_srgb_to_linear_f64(x as f64) as f32),
+            u8_to_f32: None,
+            u16_to_f32: None,
+        },
+    ]
+}
+
+fn create_linear_to_srgb_methods() -> Vec<LinearToSrgbMethod> {
+    // Pre-create shared resources
+    let encode12 = Arc::new(EncodeTable12::new());
+    let encode16 = Arc::new(EncodeTable16::new());
+    let converter = Arc::new(SrgbConverter::new());
+    let moxcms_default = create_moxcms_linear_to_srgb_transform(RenderingIntent::Perceptual, false);
+    let moxcms_cicp = create_moxcms_linear_to_srgb_transform(RenderingIntent::Perceptual, true);
+
+    let encode12_clone = encode12.clone();
+    let encode12_clone2 = encode12.clone();
+    let encode16_clone = encode16.clone();
+    let converter_clone = converter.clone();
+    let converter_clone2 = converter.clone();
+
+    vec![
+        LinearToSrgbMethod {
+            name: "Scalar powf (optimized constants)",
+            f32_to_f32: Box::new(linear_to_srgb),
+            f32_to_u8: None,
+            f32_to_u16: None,
+        },
+        LinearToSrgbMethod {
+            name: "SIMD wide::f32x8 dirty_pow",
+            f32_to_f32: Box::new(|x| {
+                let v = f32x8::splat(x);
+                let result: [f32; 8] = simd::linear_to_srgb_x8(v).into();
+                result[0]
+            }),
+            f32_to_u8: Some(Box::new(|x| {
+                let v = f32x8::splat(x);
+                simd::linear_to_srgb_u8_x8(v)[0]
+            })),
+            f32_to_u16: None,
+        },
+        LinearToSrgbMethod {
+            name: "LUT-12 interpolated",
+            f32_to_f32: Box::new(move |x| lut_interp_linear_float(x, encode12.as_slice())),
+            f32_to_u8: Some(Box::new(move |x| {
+                (lut_interp_linear_float(x, encode12_clone.as_slice()) * 255.0 + 0.5) as u8
+            })),
+            f32_to_u16: Some(Box::new(move |x| {
+                (lut_interp_linear_float(x, encode12_clone2.as_slice()) * 65535.0 + 0.5) as u16
+            })),
+        },
+        LinearToSrgbMethod {
+            name: "LUT-16 interpolated",
+            f32_to_f32: Box::new(move |x| lut_interp_linear_float(x, encode16.as_slice())),
+            f32_to_u8: None,
+            f32_to_u16: Some(Box::new(move |x| {
+                (lut_interp_linear_float(x, encode16_clone.as_slice()) * 65535.0 + 0.5) as u16
+            })),
+        },
+        LinearToSrgbMethod {
+            name: "SrgbConverter (LUT-12)",
+            f32_to_f32: Box::new(move |x| converter.linear_to_srgb(x)),
+            f32_to_u8: Some(Box::new(move |x| converter_clone.linear_to_srgb_u8(x))),
+            f32_to_u16: Some(Box::new(move |x| {
+                (converter_clone2.linear_to_srgb(x) * 65535.0 + 0.5) as u16
+            })),
+        },
+        LinearToSrgbMethod {
+            name: "Imageflow fastpow",
+            f32_to_f32: Box::new(imageflow::linear_to_srgb),
+            f32_to_u8: Some(Box::new(imageflow::linear_to_srgb_u8_fastpow)),
+            f32_to_u16: None,
+        },
+        LinearToSrgbMethod {
+            name: "Imageflow LUT-16K",
+            f32_to_f32: Box::new(|x| imageflow::linear_to_srgb_lut(x) as f32 / 255.0),
+            f32_to_u8: Some(Box::new(imageflow::linear_to_srgb_lut)),
+            f32_to_u16: None,
+        },
+        LinearToSrgbMethod {
+            name: "moxcms (default)",
+            f32_to_f32: Box::new(move |x| {
+                let rgb_in = [x, x, x];
+                let mut rgb_out = [0.0f32; 3];
+                let _ = moxcms_default.transform(&rgb_in, &mut rgb_out);
+                rgb_out[0]
+            }),
+            f32_to_u8: None,
+            f32_to_u16: None,
+        },
+        LinearToSrgbMethod {
+            name: "moxcms (allow_use_cicp_transfer)",
+            f32_to_f32: Box::new(move |x| {
+                let rgb_in = [x, x, x];
+                let mut rgb_out = [0.0f32; 3];
+                let _ = moxcms_cicp.transform(&rgb_in, &mut rgb_out);
+                rgb_out[0]
+            }),
+            f32_to_u8: None,
+            f32_to_u16: None,
+        },
+        LinearToSrgbMethod {
+            name: "Naive powf (textbook constants)",
+            f32_to_f32: Box::new(|x| naive_linear_to_srgb_f64(x as f64) as f32),
+            f32_to_u8: None,
+            f32_to_u16: None,
+        },
+    ]
+}
+
+// ============================================================================
+// moxcms Transform Helpers
+// ============================================================================
+
+fn create_moxcms_srgb_to_linear_transform(
+    intent: RenderingIntent,
+    use_cicp: bool,
+) -> Arc<moxcms::TransformF32Executor> {
+    let srgb = ColorProfile::new_srgb();
+    let linear_srgb = ColorProfile::new_from_cicp(CicpProfile {
+        color_primaries: CicpColorPrimaries::Bt709,
+        transfer_characteristics: TransferCharacteristics::Linear,
+        matrix_coefficients: MatrixCoefficients::Identity,
+        full_range: true,
+    });
+    let options = TransformOptions {
+        rendering_intent: intent,
+        allow_use_cicp_transfer: use_cicp,
+        prefer_fixed_point: false,
+        ..Default::default()
+    };
+    srgb.create_transform_f32(Layout::Rgb, &linear_srgb, Layout::Rgb, options)
+        .expect("Failed to create moxcms sRGB→linear transform")
+}
+
+fn create_moxcms_linear_to_srgb_transform(
+    intent: RenderingIntent,
+    use_cicp: bool,
+) -> Arc<moxcms::TransformF32Executor> {
+    let linear_srgb = ColorProfile::new_from_cicp(CicpProfile {
+        color_primaries: CicpColorPrimaries::Bt709,
+        transfer_characteristics: TransferCharacteristics::Linear,
+        matrix_coefficients: MatrixCoefficients::Identity,
+        full_range: true,
+    });
+    let srgb = ColorProfile::new_srgb();
+    let options = TransformOptions {
+        rendering_intent: intent,
+        allow_use_cicp_transfer: use_cicp,
+        prefer_fixed_point: false,
+        ..Default::default()
+    };
+    linear_srgb
+        .create_transform_f32(Layout::Rgb, &srgb, Layout::Rgb, options)
+        .expect("Failed to create moxcms linear→sRGB transform")
+}
+
+// ============================================================================
+// Statistics
+// ============================================================================
+
 #[derive(Debug, Clone)]
-struct ErrorStats {
+struct F32Stats {
     name: String,
     max_abs_error: f64,
     sum_abs_error: f64,
@@ -23,7 +341,7 @@ struct ErrorStats {
     count: u64,
 }
 
-impl ErrorStats {
+impl F32Stats {
     fn new(name: &str) -> Self {
         Self {
             name: name.to_string(),
@@ -51,27 +369,76 @@ impl ErrorStats {
         }
     }
 
-    #[allow(dead_code)]
-    fn avg_abs_error(&self) -> f64 {
-        if self.count == 0 { 0.0 } else { self.sum_abs_error / self.count as f64 }
-    }
-
     fn avg_ulp(&self) -> f64 {
-        if self.count == 0 { 0.0 } else { self.sum_ulp as f64 / self.count as f64 }
+        if self.count == 0 {
+            0.0
+        } else {
+            self.sum_ulp as f64 / self.count as f64
+        }
     }
 }
 
-fn print_table_header() {
+#[derive(Debug, Clone)]
+struct IntStats {
+    name: String,
+    exact: u32,
+    off_by_1: u32,
+    max_diff: u32,
+    sum_diff: u64,
+    count: u32,
+}
+
+impl IntStats {
+    fn new(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            exact: 0,
+            off_by_1: 0,
+            max_diff: 0,
+            sum_diff: 0,
+            count: 0,
+        }
+    }
+
+    fn update(&mut self, expected: u32, actual: u32) {
+        let diff = (expected as i64 - actual as i64).unsigned_abs() as u32;
+        self.count += 1;
+        self.sum_diff += diff as u64;
+
+        if diff == 0 {
+            self.exact += 1;
+        } else if diff == 1 {
+            self.off_by_1 += 1;
+        }
+        if diff > self.max_diff {
+            self.max_diff = diff;
+        }
+    }
+
+    fn avg_diff(&self) -> f64 {
+        if self.count == 0 {
+            0.0
+        } else {
+            self.sum_diff as f64 / self.count as f64
+        }
+    }
+}
+
+// ============================================================================
+// Comparison Functions
+// ============================================================================
+
+fn print_f32_header() {
     println!(
-        "{:<55} {:>10} {:>10} {:>12}",
+        "{:<45} {:>10} {:>10} {:>12}",
         "Implementation", "Max ULP", "Avg ULP", "Max Abs Err"
     );
-    println!("{}", "-".repeat(89));
+    println!("{}", "-".repeat(79));
 }
 
-fn print_stats(stats: &ErrorStats) {
+fn print_f32_stats(stats: &F32Stats) {
     println!(
-        "{:<55} {:>10} {:>10.2} {:>12.2e}",
+        "{:<45} {:>10} {:>10.2} {:>12.2e}",
         stats.name,
         stats.max_ulp,
         stats.avg_ulp(),
@@ -79,334 +446,294 @@ fn print_stats(stats: &ErrorStats) {
     );
 }
 
-fn main() {
-    println!("=== sRGB Conversion Accuracy Comparison ===");
-    println!("Reference: f64 implementation with precise IEC 61966-2-1 constants\n");
-
-    compare_srgb_to_linear_f32();
-    println!();
-    compare_linear_to_srgb_f32();
-    println!();
-    compare_u8_to_linear();
-    println!();
-    compare_linear_to_u8();
-    println!();
-    compare_u8_roundtrip();
+fn print_int_header(bits: u32) {
+    println!(
+        "{:<45} {:>8} {:>10} {:>10} {:>10}",
+        "Implementation",
+        "Max Diff",
+        format!("Exact/{}", 1 << bits),
+        format!("±1/{}", 1 << bits),
+        "Avg Diff"
+    );
+    println!("{}", "-".repeat(85));
 }
 
-fn create_moxcms_srgb_to_linear_transform(
-    intent: RenderingIntent,
-    use_cicp: bool,
-) -> std::sync::Arc<moxcms::TransformF32Executor> {
-    let srgb = ColorProfile::new_srgb();
-    let linear_srgb = ColorProfile::new_from_cicp(CicpProfile {
-        color_primaries: CicpColorPrimaries::Bt709,
-        transfer_characteristics: TransferCharacteristics::Linear,
-        matrix_coefficients: MatrixCoefficients::Identity,
-        full_range: true,
-    });
-    let options = TransformOptions {
-        rendering_intent: intent,
-        allow_use_cicp_transfer: use_cicp,
-        prefer_fixed_point: false,
-        ..Default::default()
-    };
-    srgb.create_transform_f32(Layout::Rgb, &linear_srgb, Layout::Rgb, options)
-        .expect("Failed to create moxcms sRGB→linear transform")
+fn print_int_stats(stats: &IntStats) {
+    println!(
+        "{:<45} {:>8} {:>10} {:>10} {:>10.3}",
+        stats.name,
+        stats.max_diff,
+        stats.exact,
+        stats.off_by_1,
+        stats.avg_diff()
+    );
 }
 
-fn create_moxcms_linear_to_srgb_transform(
-    intent: RenderingIntent,
-    use_cicp: bool,
-) -> std::sync::Arc<moxcms::TransformF32Executor> {
-    let linear_srgb = ColorProfile::new_from_cicp(CicpProfile {
-        color_primaries: CicpColorPrimaries::Bt709,
-        transfer_characteristics: TransferCharacteristics::Linear,
-        matrix_coefficients: MatrixCoefficients::Identity,
-        full_range: true,
-    });
-    let srgb = ColorProfile::new_srgb();
-    let options = TransformOptions {
-        rendering_intent: intent,
-        allow_use_cicp_transfer: use_cicp,
-        prefer_fixed_point: false,
-        ..Default::default()
-    };
-    linear_srgb
-        .create_transform_f32(Layout::Rgb, &srgb, Layout::Rgb, options)
-        .expect("Failed to create moxcms linear→sRGB transform")
-}
-
-fn compare_srgb_to_linear_f32() {
-    println!("--- sRGB → Linear (f32 input → f32 output) ---\n");
-    println!("(Testing range 0.01-1.0 to exclude near-zero ULP explosion)\n");
+fn compare_srgb_to_linear_f32(methods: &[SrgbToLinearMethod]) {
+    println!("=== sRGB → Linear (f32 → f32) ===\n");
+    println!("Reference: f64 implementation with IEC 61966-2-1 constants");
+    println!("Test range: 0.01 to 1.0 (excluding near-zero ULP explosion)\n");
 
     let test_values: Vec<f64> = (100..=10000).map(|i| i as f64 / 10000.0).collect();
 
-    let mut stats: Vec<ErrorStats> = vec![
-        ErrorStats::new("f32→f32: Scalar powf (optimized constants)"),
-        ErrorStats::new("f32→f32: SIMD dirty_pow approx"),
-        ErrorStats::new("f32→f32: LUT 12-bit interp"),
-        ErrorStats::new("f32→f32: moxcms (default)"),
-        ErrorStats::new("f32→f32: moxcms (allow_use_cicp_transfer)"),
-        ErrorStats::new("f32→f32: Naive powf (textbook constants)"),
-    ];
-
-    let lut12 = linear_srgb::lut::LinearTable12::new();
-    let moxcms_default = create_moxcms_srgb_to_linear_transform(RenderingIntent::Perceptual, false);
-    let moxcms_cicp = create_moxcms_srgb_to_linear_transform(RenderingIntent::Perceptual, true);
+    let mut stats: Vec<F32Stats> = methods.iter().map(|m| F32Stats::new(m.name)).collect();
 
     for &input in &test_values {
         let reference = srgb_to_linear_f64(input);
         let input_f32 = input as f32;
 
-        // Scalar f32
-        let scalar_result = srgb_to_linear(input_f32) as f64;
-        stats[0].update(reference, scalar_result);
-
-        // SIMD f32x8
-        let v = f32x8::splat(input_f32);
-        let simd_result: [f32; 8] = simd::srgb_to_linear_x8(v).into();
-        stats[1].update(reference, simd_result[0] as f64);
-
-        // LUT 12-bit interpolated
-        let lut_result = lut_interp_linear_float(input_f32, lut12.as_slice()) as f64;
-        stats[2].update(reference, lut_result);
-
-        // moxcms default
-        let rgb_in = [input_f32, input_f32, input_f32];
-        let mut rgb_out = [0.0f32; 3];
-        let _ = moxcms_default.transform(&rgb_in, &mut rgb_out);
-        stats[3].update(reference, rgb_out[0] as f64);
-
-        // moxcms with allow_use_cicp_transfer
-        let mut rgb_out2 = [0.0f32; 3];
-        let _ = moxcms_cicp.transform(&rgb_in, &mut rgb_out2);
-        stats[4].update(reference, rgb_out2[0] as f64);
-
-        // Naive f32
-        let naive_result = naive_srgb_to_linear_f64(input);
-        stats[5].update(reference, naive_result);
+        for (i, method) in methods.iter().enumerate() {
+            let result = method.convert_f32(input_f32) as f64;
+            stats[i].update(reference, result);
+        }
     }
 
-    print_table_header();
+    print_f32_header();
     for s in &stats {
-        print_stats(s);
+        print_f32_stats(s);
     }
 }
 
-fn compare_linear_to_srgb_f32() {
-    println!("--- Linear → sRGB (f32 input → f32 output) ---\n");
+fn compare_linear_to_srgb_f32(methods: &[LinearToSrgbMethod]) {
+    println!("\n=== Linear → sRGB (f32 → f32) ===\n");
+    println!("Reference: f64 implementation with IEC 61966-2-1 constants\n");
 
     let test_values: Vec<f64> = (0..=10000).map(|i| i as f64 / 10000.0).collect();
 
-    let mut stats: Vec<ErrorStats> = vec![
-        ErrorStats::new("f32→f32: Scalar powf (optimized constants)"),
-        ErrorStats::new("f32→f32: SIMD dirty_pow approx"),
-        ErrorStats::new("f32→f32: LUT 12-bit interp"),
-        ErrorStats::new("f32→f32: moxcms (default)"),
-        ErrorStats::new("f32→f32: moxcms (allow_use_cicp_transfer)"),
-        ErrorStats::new("f32→f32: Naive powf (textbook constants)"),
-    ];
-
-    let encode_table = EncodeTable12::new();
-    let moxcms_default = create_moxcms_linear_to_srgb_transform(RenderingIntent::Perceptual, false);
-    let moxcms_cicp = create_moxcms_linear_to_srgb_transform(RenderingIntent::Perceptual, true);
+    let mut stats: Vec<F32Stats> = methods.iter().map(|m| F32Stats::new(m.name)).collect();
 
     for &input in &test_values {
         let reference = linear_to_srgb_f64(input);
         let input_f32 = input as f32;
 
-        // Scalar f32
-        let scalar_result = linear_to_srgb(input_f32) as f64;
-        stats[0].update(reference, scalar_result);
-
-        // SIMD f32x8
-        let v = f32x8::splat(input_f32);
-        let simd_result: [f32; 8] = simd::linear_to_srgb_x8(v).into();
-        stats[1].update(reference, simd_result[0] as f64);
-
-        // LUT 12-bit
-        let lut_result = lut_interp_linear_float(input_f32, encode_table.as_slice()) as f64;
-        stats[2].update(reference, lut_result);
-
-        // moxcms default
-        let rgb_in = [input_f32, input_f32, input_f32];
-        let mut rgb_out = [0.0f32; 3];
-        let _ = moxcms_default.transform(&rgb_in, &mut rgb_out);
-        stats[3].update(reference, rgb_out[0] as f64);
-
-        // moxcms with allow_use_cicp_transfer
-        let mut rgb_out2 = [0.0f32; 3];
-        let _ = moxcms_cicp.transform(&rgb_in, &mut rgb_out2);
-        stats[4].update(reference, rgb_out2[0] as f64);
-
-        // Naive f32
-        let naive_result = naive_linear_to_srgb_f64(input);
-        stats[5].update(reference, naive_result);
+        for (i, method) in methods.iter().enumerate() {
+            let result = method.convert_f32(input_f32) as f64;
+            stats[i].update(reference, result);
+        }
     }
 
-    print_table_header();
+    print_f32_header();
     for s in &stats {
-        print_stats(s);
+        print_f32_stats(s);
     }
 }
 
-fn compare_u8_to_linear() {
-    println!("--- u8 sRGB → f32 Linear ---\n");
+fn compare_u8_to_linear(methods: &[SrgbToLinearMethod]) {
+    println!("\n=== sRGB u8 → Linear f32 ===\n");
+    println!("Reference: f64 srgb_to_linear(u8/255.0)\n");
 
-    let lut8 = LinearTable8::new();
-    let converter = SrgbConverter::new();
-
-    let mut stats: Vec<ErrorStats> = vec![
-        ErrorStats::new("u8→f32: LUT 8-bit direct lookup"),
-        ErrorStats::new("u8→f32: SIMD batch (8x LUT lookup)"),
-        ErrorStats::new("u8→f32: SrgbConverter (LUT lookup)"),
-        ErrorStats::new("u8→f32: u8/255→f32, then scalar powf"),
-    ];
+    let mut stats: Vec<F32Stats> = methods.iter().map(|m| F32Stats::new(m.name)).collect();
 
     for i in 0..=255u8 {
-        let input_normalized = i as f64 / 255.0;
-        let reference = srgb_to_linear_f64(input_normalized);
+        let reference = srgb_to_linear_f64(i as f64 / 255.0);
 
-        // LUT 8-bit direct
-        let lut_result = lut8.lookup(i as usize) as f64;
-        stats[0].update(reference, lut_result);
-
-        // SIMD batch
-        let input_arr: [u8; 8] = [i; 8];
-        let simd_result = simd::srgb_u8_to_linear_x8(&lut8, input_arr);
-        let simd_arr: [f32; 8] = simd_result.into();
-        stats[1].update(reference, simd_arr[0] as f64);
-
-        // SrgbConverter
-        let conv_result = converter.srgb_u8_to_linear(i) as f64;
-        stats[2].update(reference, conv_result);
-
-        // f32 scalar (u8/255 then powf)
-        let f32_input = i as f32 / 255.0;
-        let f32_result = srgb_to_linear(f32_input) as f64;
-        stats[3].update(reference, f32_result);
+        for (idx, method) in methods.iter().enumerate() {
+            let result = method.convert_u8(i) as f64;
+            stats[idx].update(reference, result);
+        }
     }
 
-    print_table_header();
+    print_f32_header();
     for s in &stats {
-        print_stats(s);
+        print_f32_stats(s);
     }
 }
 
-fn compare_linear_to_u8() {
-    println!("--- f32 Linear → u8 sRGB ---\n");
+fn compare_u16_to_linear(methods: &[SrgbToLinearMethod]) {
+    println!("\n=== sRGB u16 → Linear f32 ===\n");
+    println!("Reference: f64 srgb_to_linear(u16/65535.0)\n");
 
-    let converter = SrgbConverter::new();
+    let mut stats: Vec<F32Stats> = methods.iter().map(|m| F32Stats::new(m.name)).collect();
 
-    println!(
-        "{:<55} {:>10} {:>10} {:>12}",
-        "Implementation", "Max Diff", "Avg Diff", "Exact Match"
-    );
-    println!("{}", "-".repeat(89));
+    // Test every 256th value (256 samples across the u16 range)
+    for i in (0..=65535u16).step_by(256) {
+        let reference = srgb_to_linear_f64(i as f64 / 65535.0);
 
-    struct U8Stats {
-        name: String,
-        exact: i32,
-        max_diff: i32,
-        sum_diff: i32,
+        for (idx, method) in methods.iter().enumerate() {
+            let result = method.convert_u16(i) as f64;
+            stats[idx].update(reference, result);
+        }
     }
 
-    let mut stats = vec![
-        U8Stats { name: "f32→u8: SIMD dirty_pow, then *255+0.5→u8".into(), exact: 0, max_diff: 0, sum_diff: 0 },
-        U8Stats { name: "f32→u8: LUT 12-bit interp, then *255+0.5→u8".into(), exact: 0, max_diff: 0, sum_diff: 0 },
-        U8Stats { name: "f32→u8: Scalar powf, then *255+0.5→u8".into(), exact: 0, max_diff: 0, sum_diff: 0 },
-    ];
+    print_f32_header();
+    for s in &stats {
+        print_f32_stats(s);
+    }
+}
+
+fn compare_linear_to_u8(methods: &[LinearToSrgbMethod]) {
+    println!("\n=== Linear f32 → sRGB u8 ===\n");
+    println!("Reference: round(f64_linear_to_srgb * 255)\n");
+
+    let mut stats: Vec<IntStats> = methods.iter().map(|m| IntStats::new(m.name)).collect();
 
     for i in 0..=255u8 {
+        // Use the exact linear value that should map back to this u8
         let srgb_normalized = i as f64 / 255.0;
         let linear_input = srgb_to_linear_f64(srgb_normalized);
-        let linear_f32 = linear_input as f32;
+        let reference = i as u32;
 
-        // SIMD dirty pow + round
-        let v = f32x8::splat(linear_f32);
-        let simd_result = simd::linear_to_srgb_u8_x8(v)[0];
-
-        // LUT interp + round
-        let conv_result = converter.linear_to_srgb_u8(linear_f32);
-
-        // Scalar powf + round
-        let scalar_srgb = linear_to_srgb(linear_f32);
-        let scalar_result = (scalar_srgb * 255.0 + 0.5) as u8;
-
-        let results = [simd_result, conv_result, scalar_result];
-        for (idx, &result) in results.iter().enumerate() {
-            let diff = (result as i32 - i as i32).abs();
-            if diff == 0 { stats[idx].exact += 1; }
-            stats[idx].max_diff = stats[idx].max_diff.max(diff);
-            stats[idx].sum_diff += diff;
+        for (idx, method) in methods.iter().enumerate() {
+            let result = method.convert_to_u8(linear_input as f32) as u32;
+            stats[idx].update(reference, result);
         }
     }
 
+    print_int_header(8);
     for s in &stats {
-        println!(
-            "{:<55} {:>10} {:>10.2} {:>8}/256",
-            s.name, s.max_diff, s.sum_diff as f64 / 256.0, s.exact
-        );
+        print_int_stats(s);
     }
 }
 
-fn compare_u8_roundtrip() {
-    println!("\n--- u8 Roundtrip: sRGB u8 → f32 Linear → sRGB u8 ---\n");
+fn compare_linear_to_u16(methods: &[LinearToSrgbMethod]) {
+    println!("\n=== Linear f32 → sRGB u16 ===\n");
+    println!("Reference: round(f64_linear_to_srgb * 65535)\n");
 
-    let lut = LinearTable8::new();
-    let converter = SrgbConverter::new();
+    let mut stats: Vec<IntStats> = methods.iter().map(|m| IntStats::new(m.name)).collect();
 
-    println!(
-        "{:<55} {:>10} {:>10} {:>12}",
-        "Implementation", "Max Diff", "Exact", "Off-by-1"
-    );
-    println!("{}", "-".repeat(89));
+    // Test every 256th value
+    for i in (0..=65535u16).step_by(256) {
+        let srgb_normalized = i as f64 / 65535.0;
+        let linear_input = srgb_to_linear_f64(srgb_normalized);
+        let reference = i as u32;
 
-    struct RoundtripStats {
-        name: String,
-        exact: i32,
-        off1: i32,
-        max_diff: i32,
-    }
-
-    let mut stats = vec![
-        RoundtripStats { name: "u8→LUT→f32→SIMD dirty_pow→*255+0.5→u8".into(), exact: 0, off1: 0, max_diff: 0 },
-        RoundtripStats { name: "u8→LUT→f32→scalar powf→*255+0.5→u8".into(), exact: 0, off1: 0, max_diff: 0 },
-        RoundtripStats { name: "u8→LUT→f32→LUT interp→*255+0.5→u8".into(), exact: 0, off1: 0, max_diff: 0 },
-    ];
-
-    for i in 0..=255u8 {
-        let linear = lut.lookup(i as usize);
-
-        // SIMD path
-        let v = f32x8::splat(linear);
-        let simd_back = simd::linear_to_srgb_u8_x8(v)[0];
-
-        // Scalar path
-        let scalar_srgb = linear_to_srgb(linear);
-        let scalar_back = (scalar_srgb * 255.0 + 0.5) as u8;
-
-        // LUT path
-        let lut_linear = converter.srgb_u8_to_linear(i);
-        let lut_back = converter.linear_to_srgb_u8(lut_linear);
-
-        let results = [simd_back, scalar_back, lut_back];
-        for (idx, &result) in results.iter().enumerate() {
-            let diff = (i as i32 - result as i32).abs();
-            stats[idx].max_diff = stats[idx].max_diff.max(diff);
-            if diff == 0 { stats[idx].exact += 1; }
-            else if diff == 1 { stats[idx].off1 += 1; }
+        for (idx, method) in methods.iter().enumerate() {
+            let result = method.convert_to_u16(linear_input as f32) as u32;
+            stats[idx].update(reference, result);
         }
     }
 
+    print_int_header(16);
     for s in &stats {
-        println!(
-            "{:<55} {:>10} {:>6}/256 {:>8}/256",
-            s.name, s.max_diff, s.exact, s.off1
-        );
+        print_int_stats(s);
     }
+}
 
-    println!("\nNote: Off-by-1 errors are acceptable for u8 precision.");
+fn compare_u8_roundtrip(
+    srgb_to_linear_methods: &[SrgbToLinearMethod],
+    linear_to_srgb_methods: &[LinearToSrgbMethod],
+) {
+    println!("\n=== u8 Round-trip: sRGB u8 → Linear f32 → sRGB u8 ===\n");
+    println!("Testing all pairs of (sRGB→Linear, Linear→sRGB) methods\n");
+
+    println!(
+        "{:<35} × {:<35} {:>6} {:>8} {:>6}",
+        "sRGB→Linear", "Linear→sRGB", "Exact", "±1", "Max"
+    );
+    println!("{}", "-".repeat(95));
+
+    for s2l in srgb_to_linear_methods {
+        for l2s in linear_to_srgb_methods {
+            let mut exact = 0u32;
+            let mut off1 = 0u32;
+            let mut max_diff = 0u32;
+
+            for i in 0..=255u8 {
+                let linear = s2l.convert_u8(i);
+                let back = l2s.convert_to_u8(linear);
+                let diff = (i as i32 - back as i32).unsigned_abs();
+
+                if diff == 0 {
+                    exact += 1;
+                } else if diff == 1 {
+                    off1 += 1;
+                }
+                max_diff = max_diff.max(diff);
+            }
+
+            println!(
+                "{:<35} × {:<35} {:>3}/256 {:>5}/256 {:>6}",
+                truncate(s2l.name, 35),
+                truncate(l2s.name, 35),
+                exact,
+                off1,
+                max_diff
+            );
+        }
+    }
+}
+
+fn compare_u16_roundtrip(
+    srgb_to_linear_methods: &[SrgbToLinearMethod],
+    linear_to_srgb_methods: &[LinearToSrgbMethod],
+) {
+    println!("\n=== u16 Round-trip: sRGB u16 → Linear f32 → sRGB u16 ===\n");
+    println!("Testing all 65536 values for each pair\n");
+
+    println!(
+        "{:<35} × {:<35} {:>8} {:>8} {:>6}",
+        "sRGB→Linear", "Linear→sRGB", "Exact", "±1", "Max"
+    );
+    println!("{}", "-".repeat(97));
+
+    for s2l in srgb_to_linear_methods {
+        for l2s in linear_to_srgb_methods {
+            let mut exact = 0u32;
+            let mut off1 = 0u32;
+            let mut max_diff = 0u32;
+
+            for i in (0..=65535u16).step_by(1) {
+                let linear = s2l.convert_u16(i);
+                let back = l2s.convert_to_u16(linear);
+                let diff = (i as i32 - back as i32).unsigned_abs();
+
+                if diff == 0 {
+                    exact += 1;
+                } else if diff == 1 {
+                    off1 += 1;
+                }
+                max_diff = max_diff.max(diff);
+            }
+
+            println!(
+                "{:<35} × {:<35} {:>5}/65536 {:>5}/65536 {:>6}",
+                truncate(s2l.name, 35),
+                truncate(l2s.name, 35),
+                exact,
+                off1,
+                max_diff
+            );
+        }
+    }
+}
+
+fn truncate(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}…", &s[..max_len - 1])
+    }
+}
+
+// ============================================================================
+// Main
+// ============================================================================
+
+fn main() {
+    println!("╔══════════════════════════════════════════════════════════════════════════════╗");
+    println!("║           sRGB Conversion Accuracy Comparison - All Implementations          ║");
+    println!("╚══════════════════════════════════════════════════════════════════════════════╝\n");
+
+    let s2l = create_srgb_to_linear_methods();
+    let l2s = create_linear_to_srgb_methods();
+
+    compare_srgb_to_linear_f32(&s2l);
+    compare_linear_to_srgb_f32(&l2s);
+
+    compare_u8_to_linear(&s2l);
+    compare_u16_to_linear(&s2l);
+
+    compare_linear_to_u8(&l2s);
+    compare_linear_to_u16(&l2s);
+
+    compare_u8_roundtrip(&s2l, &l2s);
+    compare_u16_roundtrip(&s2l, &l2s);
+
+    println!("\n═══════════════════════════════════════════════════════════════════════════════");
+    println!("Notes:");
+    println!("  - ULP = Units in Last Place (floating point precision measure)");
+    println!("  - Off-by-1 errors are acceptable for u8 precision");
+    println!("  - For u16, off-by-1 represents ~0.0015% error");
+    println!("  - 'textbook constants' = naive 0.04045/0.0031308 thresholds");
+    println!("  - 'optimized constants' = IEC 61966-2-1 continuous piecewise values");
 }
