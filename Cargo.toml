@@ -11,6 +11,7 @@ categories = ["graphics", "multimedia::images"]
 
 [dependencies]
 num-traits = "0.2"
+wide = "1.1"
 
 [dev-dependencies]
 criterion = "0.5"

@@ -50,9 +50,21 @@
 //!
 //! - `fast-math`: Use faster but slightly less accurate pow approximation for
 //!   extended range conversions (affects `linear_to_srgb_extended` only)
+//!
+//! # SIMD Acceleration
+//!
+//! For maximum throughput on large batches, use the `simd` module:
+//!
+//! ```rust
+//! use linear_srgb::simd;
+//!
+//! let mut values = vec![0.5f32; 10000];
+//! simd::srgb_to_linear_slice(&mut values);
+//! ```
 
 pub mod lut;
 mod mlaf;
+pub mod simd;
 pub mod transfer;
 
 #[doc(hidden)]
