@@ -30,11 +30,8 @@ impl<const N: usize> LinearizationTable<N> {
             *entry = srgb_to_linear_f64(srgb) as f32;
         }
 
-        // Convert boxed slice to boxed array
-        let table = unsafe {
-            let ptr = Box::into_raw(table) as *mut [f32; N];
-            Box::from_raw(ptr)
-        };
+        // Convert boxed slice to boxed array (safe - size is guaranteed by const N)
+        let table: Box<[f32; N]> = table.try_into().expect("size mismatch");
 
         Self { table }
     }
@@ -46,6 +43,7 @@ impl<const N: usize> LinearizationTable<N> {
     }
 
     /// Get the raw table for custom interpolation.
+    #[inline]
     pub fn as_slice(&self) -> &[f32] {
         &self.table[..]
     }
@@ -75,10 +73,8 @@ impl<const N: usize> EncodingTable<N> {
             *entry = linear_to_srgb_f64(linear) as f32;
         }
 
-        let table = unsafe {
-            let ptr = Box::into_raw(table) as *mut [f32; N];
-            Box::from_raw(ptr)
-        };
+        // Convert boxed slice to boxed array (safe - size is guaranteed by const N)
+        let table: Box<[f32; N]> = table.try_into().expect("size mismatch");
 
         Self { table }
     }
@@ -90,6 +86,7 @@ impl<const N: usize> EncodingTable<N> {
     }
 
     /// Get the raw table for custom interpolation.
+    #[inline]
     pub fn as_slice(&self) -> &[f32] {
         &self.table[..]
     }
@@ -203,6 +200,7 @@ impl SrgbConverter {
     }
 
     /// Batch convert sRGB u8 values to linear f32.
+    #[inline]
     pub fn batch_srgb_to_linear(&self, input: &[u8], output: &mut [f32]) {
         assert_eq!(input.len(), output.len());
         for (i, o) in input.iter().zip(output.iter_mut()) {
@@ -211,6 +209,7 @@ impl SrgbConverter {
     }
 
     /// Batch convert linear f32 values to sRGB u8.
+    #[inline]
     pub fn batch_linear_to_srgb(&self, input: &[f32], output: &mut [u8]) {
         assert_eq!(input.len(), output.len());
         for (i, o) in input.iter().zip(output.iter_mut()) {

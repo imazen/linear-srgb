@@ -2,7 +2,7 @@
 //!
 //! Tests all combinations of input/output types (u8, u16, f32) across implementations.
 
-use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 #[cfg(feature = "alt")]
 use linear_srgb::alt::imageflow;
 use linear_srgb::lut::{
@@ -10,6 +10,7 @@ use linear_srgb::lut::{
     lut_interp_linear_float,
 };
 use linear_srgb::{linear_to_srgb, simd, srgb_to_linear};
+use std::hint::black_box;
 use wide::f32x8;
 
 const BATCH_SIZE: usize = 10000;

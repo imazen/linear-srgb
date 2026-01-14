@@ -1,47 +1,38 @@
 //! Imageflow's sRGB conversion algorithms for benchmarking comparison.
 //!
-//! This module contains exact copies of the conversion code from
-//! imageflow_core/src/graphics/color.rs and math.rs for side-by-side
-//! performance and accuracy comparisons.
+//! This module contains conversions equivalent to imageflow_core/src/graphics/color.rs
+//! and math.rs, rewritten to use safe Rust bit manipulation.
 
+#[cfg(feature = "std")]
 use std::sync::LazyLock;
 
 // ============================================================================
-// From imageflow_core/src/graphics/math.rs
+// From imageflow_core/src/graphics/math.rs (rewritten with safe bit ops)
 // ============================================================================
 
-#[derive(Copy, Clone)]
-#[repr(C)]
-union UnionU32F32 {
-    i: u32,
-    f: f32,
-}
-
+/// Fast approximate 2^p using bit manipulation.
+/// Equivalent to imageflow's fastpow2, using safe f32::from_bits.
 #[inline]
 fn fastpow2(p: f32) -> f32 {
-    let offset: f32 = if p < 0_i32 as f32 { 1.0f32 } else { 0.0f32 };
-    let clipp: f32 = if p < -126_f32 { -126.0f32 } else { p };
-    let w: i32 = clipp as i32;
-    let z: f32 = clipp - w as f32 + offset;
-    let v: UnionU32F32 = UnionU32F32 {
-        i: ((1_i32 << 23_i32) as f32
-            * (clipp + 121.274_055_f32 + 27.728_024_f32 / (4.842_525_5_f32 - z)
-                - 1.490_129_1_f32 * z)) as u32,
-    };
-    unsafe { v.f }
+    let offset: f32 = if p < 0.0 { 1.0 } else { 0.0 };
+    let clipp: f32 = if p < -126.0 { -126.0 } else { p };
+    let z: f32 = clipp - (clipp as i32) as f32 + offset;
+    let bits = ((1_i32 << 23) as f32
+        * (clipp + 121.274_055_f32 + 27.728_024_f32 / (4.842_525_5_f32 - z) - 1.490_129_1_f32 * z))
+        as u32;
+    f32::from_bits(bits)
 }
 
+/// Fast approximate log2(x) using bit manipulation.
+/// Equivalent to imageflow's fastlog2, using safe f32::to_bits/from_bits.
 #[inline]
 fn fastlog2(x: f32) -> f32 {
-    unsafe {
-        let vx: UnionU32F32 = UnionU32F32 { f: x };
-        let mx: UnionU32F32 = UnionU32F32 {
-            i: vx.i & 0x7fffff_i32 as u32 | 0x3f000000_i32 as u32,
-        };
-        let mut y: f32 = vx.i as f32;
-        y *= 1.192_092_9e-7_f32;
-        y - 124.225_52_f32 - 1.498_030_3_f32 * mx.f - 1.725_88_f32 / (0.352_088_72_f32 + mx.f)
-    }
+    let vx_bits = x.to_bits();
+    let mx_bits = (vx_bits & 0x007f_ffff) | 0x3f00_0000;
+    let mx = f32::from_bits(mx_bits);
+    let mut y: f32 = vx_bits as f32;
+    y *= 1.192_092_9e-7_f32;
+    y - 124.225_52_f32 - 1.498_030_3_f32 * mx - 1.725_88_f32 / (0.352_088_72_f32 + mx)
 }
 
 /// Fast approximate power function using bit manipulation.
@@ -76,7 +67,7 @@ pub fn linear_to_srgb_raw(clr: f32) -> f32 {
     }
 }
 
-/// Linear to sRGB normalized [0,1] output using fastpow.
+/// Linear to sRGB normalized (0 to 1) output using fastpow.
 #[inline]
 pub fn linear_to_srgb(clr: f32) -> f32 {
     if clr <= 0.0031308f32 {
@@ -133,7 +124,8 @@ impl SrgbToLinearLut {
 
     #[inline]
     pub fn lookup(&self, value: u8) -> f32 {
-        unsafe { *self.table.get_unchecked(value as usize) }
+        // Safe: u8 is always in bounds for a 256-element array
+        self.table[value as usize]
     }
 }
 

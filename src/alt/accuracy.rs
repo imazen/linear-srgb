@@ -104,6 +104,8 @@ pub struct UlpStats {
 }
 
 impl UlpStats {
+    /// Compute average ULP difference.
+    #[inline]
     pub fn avg_ulp(&self) -> f64 {
         if self.count == 0 {
             0.0
