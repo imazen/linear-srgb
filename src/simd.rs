@@ -774,24 +774,28 @@ mod tests {
     }
 
     /// Verify the const LUT stays in sync with the transfer function.
-    /// This test will fail if the transfer constants are changed without regenerating the LUT.
+    /// Allows 1 ULP difference for cross-platform float variance (powf isn't
+    /// perfectly deterministic across architectures).
     #[test]
     fn test_lut_matches_transfer_function() {
         let lut = get_lut();
         for i in 0..=255u8 {
             let expected = crate::srgb_u8_to_linear(i);
             let got = lut[i as usize];
-            assert_eq!(
-                got.to_bits(),
-                expected.to_bits(),
-                "LUT[{}] = {} ({:08x}) != srgb_u8_to_linear({}) = {} ({:08x}). \
+            let got_bits = got.to_bits();
+            let expected_bits = expected.to_bits();
+            let ulp_diff = (got_bits as i64 - expected_bits as i64).unsigned_abs();
+            assert!(
+                ulp_diff <= 1,
+                "LUT[{}] = {} ({:08x}) differs by {} ULP from srgb_u8_to_linear({}) = {} ({:08x}). \
                  LUT needs regeneration if transfer constants changed.",
                 i,
                 got,
-                got.to_bits(),
+                got_bits,
+                ulp_diff,
                 i,
                 expected,
-                expected.to_bits()
+                expected_bits
             );
         }
     }

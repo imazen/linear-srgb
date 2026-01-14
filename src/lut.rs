@@ -228,6 +228,9 @@ impl Default for SrgbConverter {
 mod tests {
     use super::*;
 
+    #[cfg(not(feature = "std"))]
+    use alloc::{vec, vec::Vec};
+
     #[test]
     fn test_linearization_table_8bit() {
         let table = LinearTable8::new();

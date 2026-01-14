@@ -120,6 +120,9 @@ pub fn linear_to_srgb_slice(values: &mut [f32]) {
 mod tests {
     use super::*;
 
+    #[cfg(not(feature = "std"))]
+    use alloc::{vec, vec::Vec};
+
     #[test]
     fn test_api_consistency() {
         // Ensure direct and LUT-based conversions are consistent
