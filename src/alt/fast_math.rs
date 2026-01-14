@@ -7,8 +7,6 @@ use bytemuck::cast;
 use multiversed::multiversed;
 use wide::{CmpLt, f32x8, i32x8, u32x8};
 
-use crate::mlaf::mlaf;
-
 // Constants for dirty_log2f_x8
 const SQRT2_OVER_2_BITS: u32 = 0x3f3504f3; // sqrt(2)/2 ~ 0.7071
 const ONE_BITS: u32 = 0x3f800000; // 1.0
@@ -55,10 +53,10 @@ fn f32x8_from_bits(v: u32x8) -> f32x8 {
     cast(v)
 }
 
-/// Helper: FMA for f32x8: a * b + c
+/// FMA: a * b + c using wide's native mul_add
 #[inline(always)]
 fn f32x8_fma(a: f32x8, b: f32x8, c: f32x8) -> f32x8 {
-    mlaf(c, a, b)
+    a.mul_add(b, c)
 }
 
 /// Fast approximate log2 for 8 f32 values.
