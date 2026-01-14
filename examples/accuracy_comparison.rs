@@ -96,6 +96,7 @@ fn main() {
 
 fn create_moxcms_srgb_to_linear_transform(
     intent: RenderingIntent,
+    use_cicp: bool,
 ) -> std::sync::Arc<moxcms::TransformF32Executor> {
     let srgb = ColorProfile::new_srgb();
     let linear_srgb = ColorProfile::new_from_cicp(CicpProfile {
@@ -106,6 +107,8 @@ fn create_moxcms_srgb_to_linear_transform(
     });
     let options = TransformOptions {
         rendering_intent: intent,
+        allow_use_cicp_transfer: use_cicp,
+        prefer_fixed_point: false,
         ..Default::default()
     };
     srgb.create_transform_f32(Layout::Rgb, &linear_srgb, Layout::Rgb, options)
@@ -114,6 +117,7 @@ fn create_moxcms_srgb_to_linear_transform(
 
 fn create_moxcms_linear_to_srgb_transform(
     intent: RenderingIntent,
+    use_cicp: bool,
 ) -> std::sync::Arc<moxcms::TransformF32Executor> {
     let linear_srgb = ColorProfile::new_from_cicp(CicpProfile {
         color_primaries: CicpColorPrimaries::Bt709,
@@ -124,6 +128,8 @@ fn create_moxcms_linear_to_srgb_transform(
     let srgb = ColorProfile::new_srgb();
     let options = TransformOptions {
         rendering_intent: intent,
+        allow_use_cicp_transfer: use_cicp,
+        prefer_fixed_point: false,
         ..Default::default()
     };
     linear_srgb
@@ -141,15 +147,14 @@ fn compare_srgb_to_linear_f32() {
         ErrorStats::new("f32→f32: Scalar powf (optimized constants)"),
         ErrorStats::new("f32→f32: SIMD dirty_pow approx"),
         ErrorStats::new("f32→f32: LUT 12-bit interp"),
-        ErrorStats::new("f32→f32: moxcms Perceptual"),
-        ErrorStats::new("f32→f32: moxcms RelativeColorimetric"),
+        ErrorStats::new("f32→f32: moxcms (default)"),
+        ErrorStats::new("f32→f32: moxcms (allow_use_cicp_transfer)"),
         ErrorStats::new("f32→f32: Naive powf (textbook constants)"),
     ];
 
     let lut12 = linear_srgb::lut::LinearTable12::new();
-    let moxcms_perceptual = create_moxcms_srgb_to_linear_transform(RenderingIntent::Perceptual);
-    let moxcms_relative =
-        create_moxcms_srgb_to_linear_transform(RenderingIntent::RelativeColorimetric);
+    let moxcms_default = create_moxcms_srgb_to_linear_transform(RenderingIntent::Perceptual, false);
+    let moxcms_cicp = create_moxcms_srgb_to_linear_transform(RenderingIntent::Perceptual, true);
 
     for &input in &test_values {
         let reference = srgb_to_linear_f64(input);
@@ -168,15 +173,15 @@ fn compare_srgb_to_linear_f32() {
         let lut_result = lut_interp_linear_float(input_f32, lut12.as_slice()) as f64;
         stats[2].update(reference, lut_result);
 
-        // moxcms Perceptual
+        // moxcms default
         let rgb_in = [input_f32, input_f32, input_f32];
         let mut rgb_out = [0.0f32; 3];
-        let _ = moxcms_perceptual.transform(&rgb_in, &mut rgb_out);
+        let _ = moxcms_default.transform(&rgb_in, &mut rgb_out);
         stats[3].update(reference, rgb_out[0] as f64);
 
-        // moxcms RelativeColorimetric
+        // moxcms with allow_use_cicp_transfer
         let mut rgb_out2 = [0.0f32; 3];
-        let _ = moxcms_relative.transform(&rgb_in, &mut rgb_out2);
+        let _ = moxcms_cicp.transform(&rgb_in, &mut rgb_out2);
         stats[4].update(reference, rgb_out2[0] as f64);
 
         // Naive f32
@@ -199,15 +204,14 @@ fn compare_linear_to_srgb_f32() {
         ErrorStats::new("f32→f32: Scalar powf (optimized constants)"),
         ErrorStats::new("f32→f32: SIMD dirty_pow approx"),
         ErrorStats::new("f32→f32: LUT 12-bit interp"),
-        ErrorStats::new("f32→f32: moxcms Perceptual"),
-        ErrorStats::new("f32→f32: moxcms RelativeColorimetric"),
+        ErrorStats::new("f32→f32: moxcms (default)"),
+        ErrorStats::new("f32→f32: moxcms (allow_use_cicp_transfer)"),
         ErrorStats::new("f32→f32: Naive powf (textbook constants)"),
     ];
 
     let encode_table = EncodeTable12::new();
-    let moxcms_perceptual = create_moxcms_linear_to_srgb_transform(RenderingIntent::Perceptual);
-    let moxcms_relative =
-        create_moxcms_linear_to_srgb_transform(RenderingIntent::RelativeColorimetric);
+    let moxcms_default = create_moxcms_linear_to_srgb_transform(RenderingIntent::Perceptual, false);
+    let moxcms_cicp = create_moxcms_linear_to_srgb_transform(RenderingIntent::Perceptual, true);
 
     for &input in &test_values {
         let reference = linear_to_srgb_f64(input);
@@ -226,15 +230,15 @@ fn compare_linear_to_srgb_f32() {
         let lut_result = lut_interp_linear_float(input_f32, encode_table.as_slice()) as f64;
         stats[2].update(reference, lut_result);
 
-        // moxcms Perceptual
+        // moxcms default
         let rgb_in = [input_f32, input_f32, input_f32];
         let mut rgb_out = [0.0f32; 3];
-        let _ = moxcms_perceptual.transform(&rgb_in, &mut rgb_out);
+        let _ = moxcms_default.transform(&rgb_in, &mut rgb_out);
         stats[3].update(reference, rgb_out[0] as f64);
 
-        // moxcms RelativeColorimetric
+        // moxcms with allow_use_cicp_transfer
         let mut rgb_out2 = [0.0f32; 3];
-        let _ = moxcms_relative.transform(&rgb_in, &mut rgb_out2);
+        let _ = moxcms_cicp.transform(&rgb_in, &mut rgb_out2);
         stats[4].update(reference, rgb_out2[0] as f64);
 
         // Naive f32
