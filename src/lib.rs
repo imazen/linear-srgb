@@ -55,6 +55,9 @@ pub mod lut;
 mod mlaf;
 pub mod transfer;
 
+#[doc(hidden)]
+pub mod accuracy;
+
 // Re-export main types and functions
 pub use lut::{
     EncodeTable8, EncodeTable12, EncodeTable16, EncodingTable, LinearTable8, LinearTable10,

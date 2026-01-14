@@ -1,6 +1,6 @@
 //! Basic usage of linear-srgb conversions.
 
-use linear_srgb::{linear_to_srgb, srgb_to_linear, SrgbConverter};
+use linear_srgb::{SrgbConverter, linear_to_srgb, srgb_to_linear};
 
 fn main() {
     // Direct conversion
@@ -8,7 +8,10 @@ fn main() {
     let srgb = 0.5_f32;
     let linear = srgb_to_linear(srgb);
     let back = linear_to_srgb(linear);
-    println!("sRGB {:.3} -> linear {:.6} -> sRGB {:.3}", srgb, linear, back);
+    println!(
+        "sRGB {:.3} -> linear {:.6} -> sRGB {:.3}",
+        srgb, linear, back
+    );
 
     // 8-bit conversions
     println!("\n=== 8-bit Values ===");
