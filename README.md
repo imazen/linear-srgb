@@ -84,7 +84,7 @@ This crate is carefully tuned for maximum throughput. The `default` module expos
 |------------|----------------------|-----|
 | **u8 → f32** | LUT direct lookup | 3-4 Gelem/s. 256-entry table fits in L1 cache. Beats both scalar (170 Melem/s) and SIMD. |
 | **u16 → f32** | LUT direct lookup | 450-820 Melem/s. 2.5-16x faster than scalar powf. |
-| **f32 → f32 (sRGB→linear)** | Scalar powf | 1.5-1.7 Gelem/s. *Counterintuitively*, hardware transcendentals beat SIMD polynomial approximation by 4x. |
+| **f32 → f32 (sRGB→linear)** | SIMD with dispatch | 1.6 Gelem/s. ~15-20% faster than scalar powf (1.4 Gelem/s). |
 | **f32 → f32 (linear→sRGB)** | SIMD with dispatch | 440-480 Melem/s. ~2x faster than scalar for this direction. |
 | **f32 → u8** | SIMD with dispatch | 270-275 Melem/s. ~1.8x faster than scalar. |
 | **f32 → u16** | Scalar powf | 145-200 Melem/s. Beats LUT interpolation due to interpolation overhead. |
@@ -228,8 +228,8 @@ Measured on AMD Ryzen / Intel with AVX2. Results show median time per element.
 | u8 | f32 | LUT8 direct | **3.0-4.3 Gelem/s** | Fastest. Used by default. |
 | u8 | f32 | Scalar powf | 170-180 Melem/s | 20x slower than LUT |
 | u16 | f32 | LUT16 direct | **450-820 Melem/s** | 2.5-16x faster than scalar |
-| f32 | f32 | Scalar powf | **1.5-1.7 Gelem/s** | Fastest. Hardware transcendentals win. |
-| f32 | f32 | SIMD dispatch | 275-435 Melem/s | 4x slower than scalar! |
+| f32 | f32 | SIMD dispatch | **~1.6 Gelem/s** | Fastest. Used by default. |
+| f32 | f32 | Scalar powf | 1.3-1.4 Gelem/s | ~15-20% slower than SIMD |
 
 ### Linear → sRGB (Encoding)
 
@@ -270,11 +270,8 @@ These functions are marked `#[deprecated]` because faster alternatives exist. Th
 | Deprecated | Speed vs Alternative | Use Instead |
 |------------|---------------------|-------------|
 | `scalar::srgb_u8_to_linear` | 20x slower | `simd::srgb_u8_to_linear` (LUT) |
-| `simd::srgb_to_linear_x8*` | 4x slower | `scalar::srgb_to_linear` in a loop |
 | `SrgbConverter::linear_to_srgb_u8` | 2x slower | `simd::linear_to_srgb_u8_slice` |
 | `SrgbConverter::batch_linear_to_srgb` | 2x slower | `simd::linear_to_srgb_u8_slice` |
-
-**Why SIMD srgb_to_linear is slower:** The sRGB→linear direction uses `powf(2.4)`. Hardware scalar transcendentals beat our SIMD polynomial approximation by 4x. The inverse direction (`powf(1/2.4)`) is different enough that SIMD wins there.
 
 ## Feature Flags
 

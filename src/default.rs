@@ -95,7 +95,6 @@ pub use crate::simd::{
 // x8 SIMD functions with CPU dispatch (default)
 // ============================================================================
 
-#[allow(deprecated)]
 pub use crate::simd::{
     // Custom gamma x8 with dispatch
     gamma_to_linear_x8_dispatch as gamma_to_linear_x8,
@@ -146,7 +145,6 @@ pub mod inline {
     //! ```
 
     // Re-export inline x8 functions with clean names (no _inline suffix)
-    #[allow(deprecated)]
     pub use crate::simd::{
         gamma_to_linear_x8_inline as gamma_to_linear_x8,
         linear_to_gamma_x8_inline as linear_to_gamma_x8,
