@@ -575,7 +575,7 @@ pub fn srgb_to_linear_slice(values: &mut [f32]) {
     }
 
     for v in remainder {
-        *v = crate::transfer::srgb_to_linear(*v);
+        *v = crate::scalar::srgb_to_linear(*v);
     }
 }
 
@@ -601,7 +601,7 @@ pub fn linear_to_srgb_slice(values: &mut [f32]) {
     }
 
     for v in remainder {
-        *v = crate::transfer::linear_to_srgb(*v);
+        *v = crate::scalar::linear_to_srgb(*v);
     }
 }
 
@@ -674,7 +674,7 @@ pub fn linear_to_srgb_u8_slice(input: &[f32], output: &mut [u8]) {
     }
 
     for (inp, out) in in_remainder.iter().zip(out_remainder.iter_mut()) {
-        let srgb = crate::transfer::linear_to_srgb(*inp);
+        let srgb = crate::scalar::linear_to_srgb(*inp);
         *out = (srgb * 255.0 + 0.5) as u8;
     }
 }
@@ -705,7 +705,7 @@ pub fn gamma_to_linear_slice(values: &mut [f32], gamma: f32) {
     }
 
     for v in remainder {
-        *v = crate::transfer::gamma_to_linear(*v, gamma);
+        *v = crate::scalar::gamma_to_linear(*v, gamma);
     }
 }
 
@@ -731,7 +731,7 @@ pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
     }
 
     for v in remainder {
-        *v = crate::transfer::linear_to_gamma(*v, gamma);
+        *v = crate::scalar::linear_to_gamma(*v, gamma);
     }
 }
 
@@ -755,7 +755,7 @@ mod tests {
         let result_arr: [f32; 8] = result.into();
 
         for (i, &inp) in input.iter().enumerate() {
-            let expected = crate::transfer::srgb_to_linear(inp);
+            let expected = crate::scalar::srgb_to_linear(inp);
             assert!(
                 (result_arr[i] - expected).abs() < 1e-5,
                 "srgb_to_linear_x8 mismatch at {}: got {}, expected {}",
@@ -773,7 +773,7 @@ mod tests {
         let result_arr: [f32; 8] = result.into();
 
         for (i, &inp) in input.iter().enumerate() {
-            let expected = crate::transfer::linear_to_srgb(inp);
+            let expected = crate::scalar::linear_to_srgb(inp);
             assert!(
                 (result_arr[i] - expected).abs() < 1e-5,
                 "linear_to_srgb_x8 mismatch at {}: got {}, expected {}",
@@ -791,7 +791,7 @@ mod tests {
         let result_arr: [f32; 8] = result.into();
 
         for (i, &inp) in input.iter().enumerate() {
-            let expected = crate::transfer::srgb_u8_to_linear(inp);
+            let expected = crate::scalar::srgb_u8_to_linear(inp);
             assert!(
                 (result_arr[i] - expected).abs() < 1e-6,
                 "srgb_u8_to_linear_x8 mismatch at {}: got {}, expected {}",
@@ -808,7 +808,7 @@ mod tests {
         let result = linear_to_srgb_u8_x8(f32x8::from(input));
 
         for (i, &inp) in input.iter().enumerate() {
-            let expected = (crate::transfer::linear_to_srgb(inp) * 255.0 + 0.5) as u8;
+            let expected = (crate::scalar::linear_to_srgb(inp) * 255.0 + 0.5) as u8;
             assert!(
                 (result[i] as i16 - expected as i16).abs() <= 1,
                 "linear_to_srgb_u8_x8 mismatch at {}: got {}, expected {}",
@@ -826,7 +826,7 @@ mod tests {
         let mut values: Vec<f32> = (0..100).map(|i| i as f32 / 99.0).collect();
         let expected: Vec<f32> = values
             .iter()
-            .map(|&v| crate::transfer::srgb_to_linear(v))
+            .map(|&v| crate::scalar::srgb_to_linear(v))
             .collect();
 
         srgb_to_linear_slice(&mut values);
@@ -847,7 +847,7 @@ mod tests {
         let mut values: Vec<f32> = (0..100).map(|i| i as f32 / 99.0).collect();
         let expected: Vec<f32> = values
             .iter()
-            .map(|&v| crate::transfer::linear_to_srgb(v))
+            .map(|&v| crate::scalar::linear_to_srgb(v))
             .collect();
 
         linear_to_srgb_slice(&mut values);
@@ -871,7 +871,7 @@ mod tests {
         srgb_u8_to_linear_slice(&input, &mut output);
 
         for (i, &out) in output.iter().enumerate() {
-            let expected = crate::transfer::srgb_u8_to_linear(i as u8);
+            let expected = crate::scalar::srgb_u8_to_linear(i as u8);
             assert!(
                 (out - expected).abs() < 1e-6,
                 "srgb_u8_to_linear_slice mismatch at {}: got {}, expected {}",
@@ -890,7 +890,7 @@ mod tests {
         linear_to_srgb_u8_slice(&input, &mut output);
 
         for i in 0..256 {
-            let expected = (crate::transfer::linear_to_srgb(input[i]) * 255.0 + 0.5) as u8;
+            let expected = (crate::scalar::linear_to_srgb(input[i]) * 255.0 + 0.5) as u8;
             assert!(
                 (output[i] as i16 - expected as i16).abs() <= 1,
                 "linear_to_srgb_u8_slice mismatch at {}: got {}, expected {}",
@@ -985,7 +985,7 @@ mod tests {
     fn test_lut_matches_transfer_function() {
         let lut = get_lut();
         for i in 0..=255u8 {
-            let expected = crate::transfer::srgb_u8_to_linear(i);
+            let expected = crate::scalar::srgb_u8_to_linear(i);
             let got = lut[i as usize];
             let got_bits = got.to_bits();
             let expected_bits = expected.to_bits();
@@ -1023,7 +1023,7 @@ mod tests {
             let mut values: Vec<f32> = (0..len).map(|i| i as f32 / len as f32).collect();
             let expected: Vec<f32> = values
                 .iter()
-                .map(|&v| crate::transfer::srgb_to_linear(v))
+                .map(|&v| crate::scalar::srgb_to_linear(v))
                 .collect();
 
             srgb_to_linear_slice(&mut values);
@@ -1051,7 +1051,7 @@ mod tests {
         let result_arr: [f32; 8] = result.into();
 
         for (i, &inp) in input.iter().enumerate() {
-            let expected = crate::transfer::gamma_to_linear(inp, gamma);
+            let expected = crate::scalar::gamma_to_linear(inp, gamma);
             assert!(
                 (result_arr[i] - expected).abs() < 1e-5,
                 "gamma_to_linear_x8 mismatch at {}: got {}, expected {}",
@@ -1070,7 +1070,7 @@ mod tests {
         let result_arr: [f32; 8] = result.into();
 
         for (i, &inp) in input.iter().enumerate() {
-            let expected = crate::transfer::linear_to_gamma(inp, gamma);
+            let expected = crate::scalar::linear_to_gamma(inp, gamma);
             assert!(
                 (result_arr[i] - expected).abs() < 1e-5,
                 "linear_to_gamma_x8 mismatch at {}: got {}, expected {}",
@@ -1109,7 +1109,7 @@ mod tests {
         let mut values: Vec<f32> = (0..100).map(|i| i as f32 / 99.0).collect();
         let expected: Vec<f32> = values
             .iter()
-            .map(|&v| crate::transfer::gamma_to_linear(v, gamma))
+            .map(|&v| crate::scalar::gamma_to_linear(v, gamma))
             .collect();
 
         gamma_to_linear_slice(&mut values, gamma);
@@ -1127,7 +1127,7 @@ mod tests {
         // Test linear_to_gamma_slice
         let expected_back: Vec<f32> = values
             .iter()
-            .map(|&v| crate::transfer::linear_to_gamma(v, gamma))
+            .map(|&v| crate::scalar::linear_to_gamma(v, gamma))
             .collect();
 
         linear_to_gamma_slice(&mut values, gamma);

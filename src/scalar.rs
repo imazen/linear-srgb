@@ -1,4 +1,4 @@
-//! Core sRGB transfer functions.
+//! Scalar (single-value) sRGB conversion functions.
 //!
 //! Implements the IEC 61966-2-1:1999 sRGB transfer functions with optimizations:
 //! - Piecewise function avoids pow() for ~1.2% of values in the linear segment
@@ -170,7 +170,7 @@ pub fn linear_to_srgb_u8(linear: f32) -> u8 {
 ///
 /// # Example
 /// ```
-/// use linear_srgb::transfer::gamma_to_linear;
+/// use linear_srgb::scalar::gamma_to_linear;
 ///
 /// let linear = gamma_to_linear(0.5, 2.2);
 /// assert!((linear - 0.218).abs() < 0.001);
@@ -196,7 +196,7 @@ pub fn gamma_to_linear(encoded: f32, gamma: f32) -> f32 {
 ///
 /// # Example
 /// ```
-/// use linear_srgb::transfer::linear_to_gamma;
+/// use linear_srgb::scalar::linear_to_gamma;
 ///
 /// let encoded = linear_to_gamma(0.218, 2.2);
 /// assert!((encoded - 0.5).abs() < 0.01);

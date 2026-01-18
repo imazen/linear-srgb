@@ -7,7 +7,7 @@
 //!
 //! - [`default`] - **Recommended API** with optimal implementations for each use case
 //! - [`simd`] - SIMD-accelerated functions with full control over dispatch
-//! - [`transfer`] - Scalar transfer functions (f32/f64)
+//! - [`scalar`] - Single-value conversion functions (f32/f64)
 //! - [`lut`] - Lookup table types for custom bit depths
 //!
 //! # Quick Start
@@ -116,10 +116,10 @@ pub mod lut;
 /// Provides full control over CPU dispatch with `_dispatch` and `_inline` variants.
 pub mod simd;
 
-/// Scalar transfer functions.
+/// Scalar (single-value) conversion functions.
 ///
-/// Direct computation without SIMD. Best for single-value conversions.
-pub mod transfer;
+/// Direct computation without SIMD. Best for individual value conversions.
+pub mod scalar;
 
 // ============================================================================
 // Internal modules

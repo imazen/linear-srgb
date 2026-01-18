@@ -24,7 +24,7 @@
 use alloc::{boxed::Box, vec};
 
 use crate::mlaf::{mlaf, neg_mlaf};
-use crate::transfer::{linear_to_srgb_f64, srgb_to_linear_f64};
+use crate::scalar::{linear_to_srgb_f64, srgb_to_linear_f64};
 
 /// Pre-computed linearization table for sRGB to linear conversion.
 pub struct LinearizationTable<const N: usize> {
@@ -313,7 +313,7 @@ mod tests {
 
     #[test]
     fn test_lut_vs_direct() {
-        use crate::transfer::srgb_to_linear;
+        use crate::scalar::srgb_to_linear;
 
         let table = LinearTable8::new();
 

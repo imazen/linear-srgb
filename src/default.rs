@@ -46,7 +46,7 @@
 // Single-value functions (scalar - best for individual values)
 // ============================================================================
 
-pub use crate::transfer::{
+pub use crate::scalar::{
     // Custom gamma (pure power function)
     gamma_to_linear,
     gamma_to_linear_f64,

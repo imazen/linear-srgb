@@ -9,8 +9,8 @@ use linear_srgb::lut::{
     EncodeTable12, EncodeTable16, LinearTable8, LinearTable16, SrgbConverter,
     lut_interp_linear_float,
 };
+use linear_srgb::scalar::{linear_to_srgb, srgb_to_linear};
 use linear_srgb::simd;
-use linear_srgb::transfer::{linear_to_srgb, srgb_to_linear};
 use std::hint::black_box;
 use wide::f32x8;
 
