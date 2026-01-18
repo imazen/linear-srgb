@@ -25,6 +25,55 @@ let linear = srgb_u8_to_linear(128);
 let srgb_byte = linear_to_srgb_u8(linear);
 ```
 
+## Which Function Should I Use?
+
+```
+                    ┌─────────────────────────┐
+                    │ How many values?        │
+                    └───────────┬─────────────┘
+                                │
+              ┌─────────────────┼─────────────────┐
+              ▼                 ▼                 ▼
+         ┌────────┐        ┌────────┐        ┌────────────┐
+         │ One    │        │ Slice  │        │ Building   │
+         │ value  │        │ [f32]  │        │ own SIMD?  │
+         └───┬────┘        └───┬────┘        └─────┬──────┘
+             │                 │                   │
+             ▼                 ▼                   ▼
+    ┌─────────────────┐  ┌──────────────┐   ┌─────────────────┐
+    │ srgb_to_linear  │  │ *_slice()    │   │ Inside your own │
+    │ linear_to_srgb  │  │              │   │ #[multiversed]? │
+    │ srgb_u8_to_     │  │ Dispatch once│   └────────┬────────┘
+    │   linear (LUT)  │  │ loop is fast │            │
+    └─────────────────┘  └──────────────┘     ┌──────┴──────┐
+                                              ▼             ▼
+                                           ┌─────┐      ┌─────┐
+                                           │ Yes │      │ No  │
+                                           └──┬──┘      └──┬──┘
+                                              │            │
+                                              ▼            ▼
+                                    ┌──────────────┐  ┌──────────────┐
+                                    │ default::    │  │ *_x8() or    │
+                                    │ inline::*    │  │ *_x8_slice() │
+                                    │              │  │              │
+                                    │ No dispatch, │  │ Has dispatch │
+                                    │ #[inline]    │  │ (that's fine)│
+                                    └──────────────┘  └──────────────┘
+```
+
+**Quick reference:**
+
+| Your situation | Use this |
+|----------------|----------|
+| One f32 value | `srgb_to_linear(x)` / `linear_to_srgb(x)` |
+| One u8 value | `srgb_u8_to_linear(x)` (LUT, 20x faster than scalar) |
+| `&mut [f32]` slice | `srgb_to_linear_slice()` / `linear_to_srgb_slice()` |
+| `&[u8]` → `&mut [f32]` | `srgb_u8_to_linear_slice()` |
+| `&[f32]` → `&mut [u8]` | `linear_to_srgb_u8_slice()` |
+| `&mut [f32x8]` slice | `linear_to_srgb_x8_slice()` (dispatch once) |
+| Inside `#[multiversed]` | `default::inline::*` (no dispatch) |
+| Standalone x8 call | `linear_to_srgb_x8()` (has dispatch, that's fine) |
+
 ## Performance Guide
 
 This crate is carefully tuned for maximum throughput. The `default` module exposes the fastest implementation for each conversion type, chosen based on extensive benchmarking.
@@ -133,12 +182,12 @@ let encode_lut = EncodingTable16::new();
 let srgb = lut_interp_linear_float(0.5, encode_lut.as_slice());
 ```
 
-## Advanced: Using `_inline` with `#[multiversed]`
+## Advanced: Using `default::inline` with `#[multiversed]`
 
-If you're building your own SIMD-accelerated function with `multiversed`, use the `_inline` variants to avoid nested dispatch overhead:
+If you're building your own SIMD-accelerated function with `multiversed`, use `default::inline::*` to avoid nested dispatch overhead:
 
 ```rust
-use linear_srgb::simd::{srgb_to_linear_x8_inline, linear_to_srgb_x8_inline};
+use linear_srgb::default::inline::*;  // Clean names, no _inline suffix
 use multiversed::multiversed;
 use wide::f32x8;
 
@@ -151,10 +200,10 @@ pub fn process_pixels(data: &mut [f32]) {
             chunk[4], chunk[5], chunk[6], chunk[7],
         ]);
 
-        // Use _inline variants - no dispatch, just raw SIMD
-        let linear = srgb_to_linear_x8_inline(v);
+        // No dispatch here - your #[multiversed] already handled it
+        let linear = srgb_to_linear_x8(v);
         let processed = linear * f32x8::splat(1.5);  // Your processing
-        let result = linear_to_srgb_x8_inline(processed);
+        let result = linear_to_srgb_x8(processed);
 
         let arr: [f32; 8] = result.into();
         chunk.copy_from_slice(&arr);
@@ -163,19 +212,10 @@ pub fn process_pixels(data: &mut [f32]) {
 ```
 
 **Why this matters:**
-- `_dispatch` variants: Include CPU feature detection (~1-3ns overhead per call)
-- `_inline` variants: Pure SIMD code, `#[inline(always)]`, zero overhead
+- `default::*` x8 functions: Include CPU feature detection (~1-3ns overhead per call)
+- `default::inline::*`: Pure SIMD code, `#[inline(always)]`, zero overhead
 
-If you call `_dispatch` inside a loop within your own `#[multiversed]` function, you pay dispatch cost per iteration. Use `_inline` to avoid this.
-
-### When to Use Each Variant
-
-| Scenario | Use |
-|----------|-----|
-| Standalone batch processing | Slice functions (`srgb_to_linear_slice`) |
-| Single SIMD call | `_dispatch` variants (`srgb_to_linear_x8_dispatch`) |
-| Inside your own `#[multiversed]` code | `_inline` variants (`srgb_to_linear_x8_inline`) |
-| Single scalar value | Scalar functions (`srgb_to_linear`) |
+If you call dispatched functions inside a loop within your own `#[multiversed]` function, you pay dispatch cost per iteration. Use `default::inline::*` to avoid this.
 
 ## Benchmark Results
 
