@@ -4,7 +4,6 @@
 //! Uses LUT-based exp2 with polynomial log2 for best performance.
 
 use bytemuck::cast;
-use multiversed::multiversed;
 use wide::{f32x8, i32x8, u32x8};
 
 // Constants for log2 approximation
@@ -53,9 +52,8 @@ fn f32x8_fma(a: f32x8, b: f32x8, c: f32x8) -> f32x8 {
 }
 
 /// Fast approximate log2 for 8 f32 values.
-#[multiversed]
-#[inline]
-pub(crate) fn log2_x8(d: f32x8) -> f32x8 {
+#[inline(always)]
+fn log2_x8(d: f32x8) -> f32x8 {
     let bits = f32x8_to_bits(d);
     let offset = u32x8::splat(ONE_BITS - SQRT2_OVER_2_BITS);
     let adjusted = bits + offset;
@@ -80,9 +78,8 @@ pub(crate) fn log2_x8(d: f32x8) -> f32x8 {
 }
 
 /// Fast approximate exp2 (2^x) for 8 f32 values.
-#[multiversed]
-#[inline]
-pub(crate) fn exp2_x8(d: f32x8) -> f32x8 {
+#[inline(always)]
+fn exp2_x8(d: f32x8) -> f32x8 {
     let redux = f32x8::splat(f32::from_bits(0x4b400000) / TBLSIZE as f32);
     let sum = d + redux;
     let ui = f32x8_to_bits(sum);
@@ -119,8 +116,7 @@ pub(crate) fn exp2_x8(d: f32x8) -> f32x8 {
 }
 
 /// Fast approximate pow(x, n) for 8 f32 values.
-#[multiversed]
-#[inline]
+#[inline(always)]
 pub(crate) fn pow_x8(x: f32x8, n: f32) -> f32x8 {
     let lg = log2_x8(x);
     exp2_x8(f32x8::splat(n) * lg)

@@ -70,7 +70,7 @@
 //! | f32 slice (in-place) | [`default::srgb_to_linear_slice`] |
 //! | u8 slice → f32 slice | [`default::srgb_u8_to_linear_slice`] |
 //! | Manual SIMD (8 values) | [`default::srgb_to_linear_x8`] |
-//! | Inside `#[multiversed]` | [`default::srgb_to_linear_x8_inline`] |
+//! | Inside `#[multiversed]` | [`default::inline::srgb_to_linear_x8`] |
 //! | Custom bit depth LUT | [`lut::LinearTable16`] |
 //!
 //! # Feature Flags
