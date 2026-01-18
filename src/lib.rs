@@ -99,11 +99,20 @@ pub use lut::{
 };
 
 pub use transfer::{
-    // sRGB conversions (piecewise with linear segment)
-    linear_to_srgb, linear_to_srgb_extended, linear_to_srgb_f64, linear_to_srgb_u8, srgb_to_linear,
-    srgb_to_linear_extended, srgb_to_linear_f64, srgb_u8_to_linear,
     // Custom gamma conversions (pure power function)
-    gamma_to_linear, gamma_to_linear_f64, linear_to_gamma, linear_to_gamma_f64,
+    gamma_to_linear,
+    gamma_to_linear_f64,
+    linear_to_gamma,
+    linear_to_gamma_f64,
+    // sRGB conversions (piecewise with linear segment)
+    linear_to_srgb,
+    linear_to_srgb_extended,
+    linear_to_srgb_f64,
+    linear_to_srgb_u8,
+    srgb_to_linear,
+    srgb_to_linear_extended,
+    srgb_to_linear_f64,
+    srgb_u8_to_linear,
 };
 
 /// Convert a slice of sRGB f32 values to linear in-place.
