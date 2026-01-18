@@ -258,9 +258,23 @@ At small sizes (8-64 elements), dispatch overhead is measurable but acceptable:
 ## Module Organization
 
 - **`default`** - Recommended API. Re-exports optimal implementations.
+- **`default::inline`** - Dispatch-free variants for use inside `#[multiversed]`.
 - **`simd`** - Full SIMD API with `_dispatch` and `_inline` variants.
 - **`scalar`** - Single-value functions. Use for individual conversions.
 - **`lut`** - Lookup tables for custom bit depths.
+
+## Deprecated Functions
+
+These functions are marked `#[deprecated]` because faster alternatives exist. They remain available for benchmarking and compatibility.
+
+| Deprecated | Speed vs Alternative | Use Instead |
+|------------|---------------------|-------------|
+| `scalar::srgb_u8_to_linear` | 20x slower | `simd::srgb_u8_to_linear` (LUT) |
+| `simd::srgb_to_linear_x8*` | 4x slower | `scalar::srgb_to_linear` in a loop |
+| `SrgbConverter::linear_to_srgb_u8` | 2x slower | `simd::linear_to_srgb_u8_slice` |
+| `SrgbConverter::batch_linear_to_srgb` | 2x slower | `simd::linear_to_srgb_u8_slice` |
+
+**Why SIMD srgb_to_linear is slower:** The sRGB→linear direction uses `powf(2.4)`. Hardware scalar transcendentals beat our SIMD polynomial approximation by 4x. The inverse direction (`powf(1/2.4)`) is different enough that SIMD wins there.
 
 ## Feature Flags
 
