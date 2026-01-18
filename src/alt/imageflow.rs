@@ -148,6 +148,7 @@ pub fn linear_to_srgb_u8_fastpow(linear: f32) -> u8 {
 }
 
 /// Fast linear→sRGB using precomputed 16K LUT.
+#[cfg(feature = "std")]
 #[inline]
 pub fn linear_to_srgb_lut(linear: f32) -> u8 {
     let idx = (linear * 16383.0).clamp(0.0, 16383.0) as usize;
@@ -158,7 +159,7 @@ pub fn linear_to_srgb_lut(linear: f32) -> u8 {
 ///
 /// # Safety
 /// The index is clamped to 0..16384 before access, so this is always safe.
-#[cfg(feature = "unsafe_simd")]
+#[cfg(all(feature = "std", feature = "unsafe_simd"))]
 #[inline]
 pub unsafe fn linear_to_srgb_lut_unchecked(linear: f32) -> u8 {
     let idx = (linear * 16383.0).clamp(0.0, 16383.0) as usize;
@@ -214,6 +215,7 @@ impl Default for SrgbToLinearLut {
 
 /// Generate the linear→sRGB LUT using imageflow's exact formula.
 /// Returns 16384 entries matching imageflow's static table.
+#[cfg(feature = "std")]
 fn generate_linear_to_srgb_lut() -> [u8; 16384] {
     let mut lut = [0u8; 16384];
     for (i, entry) in lut.iter_mut().enumerate() {
@@ -231,6 +233,7 @@ fn generate_linear_to_srgb_lut() -> [u8; 16384] {
 
 /// Precomputed linear→sRGB LUT (16384 entries)
 /// Generated using imageflow's exact formula
+#[cfg(feature = "std")]
 pub static LINEAR_TO_SRGB_LUT: LazyLock<[u8; 16384]> = LazyLock::new(generate_linear_to_srgb_lut);
 
 #[cfg(test)]
@@ -244,6 +247,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn test_linear_to_srgb_lut_boundaries() {
         assert_eq!(linear_to_srgb_lut(0.0), 0);
         assert_eq!(linear_to_srgb_lut(1.0), 255);
@@ -261,6 +265,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn test_roundtrip_u8() {
         // Test that u8 roundtrip works within ±1
         for i in 0..=255u8 {
