@@ -22,12 +22,14 @@ use wide::{CmpLt, f32x8};
 
 use crate::fast_math::pow_x8;
 
-// sRGB transfer function constants (IEC 61966-2-1)
+// sRGB transfer function constants (C0-continuous, moxcms-derived)
+// These ensure exact continuity at the linear/power segment junction.
+// Standard IEC values (0.055, 1.055, 0.04045) have a tiny discontinuity.
 const SRGB_LINEAR_THRESHOLD: f32x8 = f32x8::splat(0.039_293_37);
 const LINEAR_THRESHOLD: f32x8 = f32x8::splat(0.003_041_282_6);
 const LINEAR_SCALE: f32x8 = f32x8::splat(1.0 / 12.92);
-const SRGB_OFFSET: f32x8 = f32x8::splat(0.055);
-const SRGB_SCALE: f32x8 = f32x8::splat(1.055);
+const SRGB_OFFSET: f32x8 = f32x8::splat(0.055_010_72);
+const SRGB_SCALE: f32x8 = f32x8::splat(1.055_010_7);
 const TWELVE_92: f32x8 = f32x8::splat(12.92);
 const ZERO: f32x8 = f32x8::splat(0.0);
 const ONE: f32x8 = f32x8::splat(1.0);
@@ -537,6 +539,104 @@ pub fn linear_to_srgb_u8_slice(input: &[f32], output: &mut [u8]) {
 }
 
 // ============================================================================
+// Custom Gamma Functions (pure power, no linear segment)
+// ============================================================================
+
+/// Convert 8 gamma-encoded f32 values to linear using a custom gamma exponent.
+///
+/// This is a pure power function: `linear = encoded.powf(gamma)`
+///
+/// Input values are clamped to \[0, 1\].
+///
+/// # Example
+/// ```
+/// use linear_srgb::simd::gamma_to_linear_x8;
+/// use wide::f32x8;
+///
+/// let encoded = f32x8::from([0.0, 0.25, 0.5, 0.75, 1.0, 0.1, 0.9, 0.5]);
+/// let linear = gamma_to_linear_x8(encoded, 2.2);
+/// ```
+#[multiversed]
+#[inline]
+pub fn gamma_to_linear_x8(encoded: f32x8, gamma: f32) -> f32x8 {
+    let encoded = encoded.max(ZERO).min(ONE);
+    pow_x8(encoded, gamma)
+}
+
+/// Convert 8 linear f32 values to gamma-encoded using a custom gamma exponent.
+///
+/// This is a pure power function: `encoded = linear.powf(1.0 / gamma)`
+///
+/// Input values are clamped to \[0, 1\].
+///
+/// # Example
+/// ```
+/// use linear_srgb::simd::linear_to_gamma_x8;
+/// use wide::f32x8;
+///
+/// let linear = f32x8::from([0.0, 0.1, 0.2, 0.5, 1.0, 0.01, 0.05, 0.8]);
+/// let encoded = linear_to_gamma_x8(linear, 2.2);
+/// ```
+#[multiversed]
+#[inline]
+pub fn linear_to_gamma_x8(linear: f32x8, gamma: f32) -> f32x8 {
+    let linear = linear.max(ZERO).min(ONE);
+    pow_x8(linear, 1.0 / gamma)
+}
+
+/// Convert gamma-encoded f32 values to linear in-place using a custom gamma.
+///
+/// Processes 8 values at a time using SIMD, with scalar fallback for remainder.
+///
+/// # Example
+/// ```
+/// use linear_srgb::simd::gamma_to_linear_slice;
+///
+/// let mut values = vec![0.0f32, 0.25, 0.5, 0.75, 1.0];
+/// gamma_to_linear_slice(&mut values, 2.2);
+/// ```
+#[multiversed]
+#[inline]
+pub fn gamma_to_linear_slice(values: &mut [f32], gamma: f32) {
+    let (chunks, remainder) = values.as_chunks_mut::<8>();
+
+    for chunk in chunks {
+        let result = gamma_to_linear_x8(f32x8::from(*chunk), gamma);
+        *chunk = result.into();
+    }
+
+    for v in remainder {
+        *v = crate::gamma_to_linear(*v, gamma);
+    }
+}
+
+/// Convert linear f32 values to gamma-encoded in-place using a custom gamma.
+///
+/// Processes 8 values at a time using SIMD, with scalar fallback for remainder.
+///
+/// # Example
+/// ```
+/// use linear_srgb::simd::linear_to_gamma_slice;
+///
+/// let mut values = vec![0.0f32, 0.1, 0.2, 0.5, 1.0];
+/// linear_to_gamma_slice(&mut values, 2.2);
+/// ```
+#[multiversed]
+#[inline]
+pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
+    let (chunks, remainder) = values.as_chunks_mut::<8>();
+
+    for chunk in chunks {
+        let result = linear_to_gamma_x8(f32x8::from(*chunk), gamma);
+        *chunk = result.into();
+    }
+
+    for v in remainder {
+        *v = crate::linear_to_gamma(*v, gamma);
+    }
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -830,6 +930,108 @@ mod tests {
                     exp
                 );
             }
+        }
+    }
+
+    // ---- Custom gamma tests ----
+
+    #[test]
+    fn test_gamma_to_linear_x8() {
+        let input = [0.0f32, 0.25, 0.5, 0.75, 1.0, 0.1, 0.9, 0.04];
+        let gamma = 2.2f32;
+        let result = gamma_to_linear_x8(f32x8::from(input), gamma);
+        let result_arr: [f32; 8] = result.into();
+
+        for (i, &inp) in input.iter().enumerate() {
+            let expected = crate::gamma_to_linear(inp, gamma);
+            assert!(
+                (result_arr[i] - expected).abs() < 1e-5,
+                "gamma_to_linear_x8 mismatch at {}: got {}, expected {}",
+                i,
+                result_arr[i],
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_linear_to_gamma_x8() {
+        let input = [0.0f32, 0.1, 0.2, 0.5, 1.0, 0.01, 0.001, 0.8];
+        let gamma = 2.2f32;
+        let result = linear_to_gamma_x8(f32x8::from(input), gamma);
+        let result_arr: [f32; 8] = result.into();
+
+        for (i, &inp) in input.iter().enumerate() {
+            let expected = crate::linear_to_gamma(inp, gamma);
+            assert!(
+                (result_arr[i] - expected).abs() < 1e-5,
+                "linear_to_gamma_x8 mismatch at {}: got {}, expected {}",
+                i,
+                result_arr[i],
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_gamma_roundtrip_x8() {
+        let input = [0.0f32, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99, 1.0];
+        for gamma in [1.8f32, 2.0, 2.2, 2.4] {
+            let linear = gamma_to_linear_x8(f32x8::from(input), gamma);
+            let back = linear_to_gamma_x8(linear, gamma);
+            let back_arr: [f32; 8] = back.into();
+
+            for (i, &inp) in input.iter().enumerate() {
+                assert!(
+                    (inp - back_arr[i]).abs() < 1e-4,
+                    "gamma {} roundtrip failed at {}: {} -> {}",
+                    gamma,
+                    i,
+                    inp,
+                    back_arr[i]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_gamma_slice_functions() {
+        let gamma = 2.2f32;
+
+        let mut values: Vec<f32> = (0..100).map(|i| i as f32 / 99.0).collect();
+        let expected: Vec<f32> = values
+            .iter()
+            .map(|&v| crate::gamma_to_linear(v, gamma))
+            .collect();
+
+        gamma_to_linear_slice(&mut values, gamma);
+
+        for (i, (&got, &exp)) in values.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < 1e-5,
+                "gamma_to_linear_slice mismatch at {}: got {}, expected {}",
+                i,
+                got,
+                exp
+            );
+        }
+
+        // Test linear_to_gamma_slice
+        let expected_back: Vec<f32> = values
+            .iter()
+            .map(|&v| crate::linear_to_gamma(v, gamma))
+            .collect();
+
+        linear_to_gamma_slice(&mut values, gamma);
+
+        for (i, (&got, &exp)) in values.iter().zip(expected_back.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < 1e-5,
+                "linear_to_gamma_slice mismatch at {}: got {}, expected {}",
+                i,
+                got,
+                exp
+            );
         }
     }
 }
