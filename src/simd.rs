@@ -756,6 +756,27 @@ pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
 // f32x8 Slice Functions (for pre-aligned SIMD data)
 // ============================================================================
 
+/// Convert sRGB f32x8 values to linear in-place.
+///
+/// For data already structured as `f32x8` slices. If you have `&mut [f32]`,
+/// use [`srgb_to_linear_slice`] instead which handles remainders automatically.
+///
+/// # Example
+/// ```
+/// use linear_srgb::simd::srgb_to_linear_x8_slice;
+/// use wide::f32x8;
+///
+/// let mut values = vec![f32x8::splat(0.5); 100];
+/// srgb_to_linear_x8_slice(&mut values);
+/// ```
+#[multiversed]
+#[inline]
+pub fn srgb_to_linear_x8_slice(values: &mut [f32x8]) {
+    for v in values.iter_mut() {
+        *v = srgb_to_linear_x8_inline(*v);
+    }
+}
+
 /// Convert linear f32x8 values to sRGB in-place.
 ///
 /// For data already structured as `f32x8` slices. If you have `&mut [f32]`,
@@ -822,6 +843,17 @@ pub fn linear_to_gamma_x8_slice(values: &mut [f32x8], gamma: f32) {
 // ============================================================================
 // f32x8 Slice Inline Functions (for use inside caller's multiversed code)
 // ============================================================================
+
+/// Convert sRGB f32x8 values to linear in-place (always inlined).
+///
+/// Use this variant inside your own `#[multiversed]` functions to avoid
+/// double dispatch overhead. For standalone calls, use [`srgb_to_linear_x8_slice`].
+#[inline(always)]
+pub fn srgb_to_linear_x8_slice_inline(values: &mut [f32x8]) {
+    for v in values.iter_mut() {
+        *v = srgb_to_linear_x8_inline(*v);
+    }
+}
 
 /// Convert linear f32x8 values to sRGB in-place (always inlined).
 ///

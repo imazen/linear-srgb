@@ -88,6 +88,7 @@ pub use crate::simd::{
     linear_to_srgb_u8_slice,
     linear_to_srgb_x8_slice,
     srgb_to_linear_slice,
+    srgb_to_linear_x8_slice,
     srgb_u8_to_linear_slice,
 };
 
@@ -158,5 +159,6 @@ pub mod inline {
         gamma_to_linear_x8_slice_inline as gamma_to_linear_x8_slice,
         linear_to_gamma_x8_slice_inline as linear_to_gamma_x8_slice,
         linear_to_srgb_x8_slice_inline as linear_to_srgb_x8_slice,
+        srgb_to_linear_x8_slice_inline as srgb_to_linear_x8_slice,
     };
 }
