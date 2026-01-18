@@ -186,7 +186,7 @@ pub type EncodeTable16 = EncodingTable<65536>;
 /// # Example
 ///
 /// ```rust
-/// use linear_srgb::SrgbConverter;
+/// use linear_srgb::lut::SrgbConverter;
 ///
 /// let conv = SrgbConverter::new();  // No allocation, just a marker type
 ///

@@ -18,8 +18,10 @@ use linear_srgb::lut::{
     EncodeTable12, EncodeTable16, LinearTable8, LinearTable16, SrgbConverter,
     lut_interp_linear_float,
 };
-use linear_srgb::transfer::{linear_to_srgb_f64, srgb_to_linear_f64};
-use linear_srgb::{linear_to_srgb, simd, srgb_to_linear};
+use linear_srgb::simd;
+use linear_srgb::transfer::{
+    linear_to_srgb, linear_to_srgb_f64, srgb_to_linear, srgb_to_linear_f64,
+};
 use std::sync::Arc;
 use wide::f32x8;
 

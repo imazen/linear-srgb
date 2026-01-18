@@ -1,22 +1,19 @@
 //! Fast linear↔sRGB color space conversion.
 //!
-//! This crate is `no_std` compatible by default. Enable the `std` feature
-//! if you need std library support.
-//!
 //! This crate provides efficient conversion between linear light values and
 //! sRGB gamma-encoded values following the IEC 61966-2-1:1999 standard.
 //!
-//! # Features
+//! # Module Organization
 //!
-//! - **Direct computation**: Single value conversion with piecewise functions
-//! - **FMA acceleration**: Uses hardware FMA when available (x86 FMA, ARM64 NEON)
-//! - **LUT-based conversion**: Pre-computed tables for batch processing
-//! - **Multiple precisions**: f32, f64, and u8/u16 conversions
+//! - [`default`] - **Recommended API** with optimal implementations for each use case
+//! - [`simd`] - SIMD-accelerated functions with full control over dispatch
+//! - [`transfer`] - Scalar transfer functions (f32/f64)
+//! - [`lut`] - Lookup table types for custom bit depths
 //!
 //! # Quick Start
 //!
 //! ```rust
-//! use linear_srgb::{srgb_to_linear, linear_to_srgb};
+//! use linear_srgb::default::{srgb_to_linear, linear_to_srgb};
 //!
 //! // Convert sRGB 0.5 to linear
 //! let linear = srgb_to_linear(0.5);
@@ -27,42 +24,66 @@
 //! assert!((srgb - 0.5).abs() < 0.001);
 //! ```
 //!
-//! # LUT-based Conversion
+//! # Batch Processing (SIMD)
 //!
-//! For batch processing, use `SrgbConverter` which pre-computes lookup tables:
+//! For maximum throughput on slices:
 //!
 //! ```rust
-//! use linear_srgb::SrgbConverter;
+//! use linear_srgb::default::{srgb_to_linear_slice, linear_to_srgb_slice};
 //!
-//! let conv = SrgbConverter::new();
+//! let mut values = vec![0.5f32; 10000];
+//! srgb_to_linear_slice(&mut values);  // SIMD-accelerated
+//! linear_to_srgb_slice(&mut values);
+//! ```
+//!
+//! # Custom Gamma
+//!
+//! For non-sRGB gamma (pure power function without linear segment):
+//!
+//! ```rust
+//! use linear_srgb::default::{gamma_to_linear, linear_to_gamma};
+//!
+//! let linear = gamma_to_linear(0.5, 2.2);  // gamma 2.2
+//! let encoded = linear_to_gamma(linear, 2.2);
+//! ```
+//!
+//! # LUT-based Conversion
+//!
+//! For batch processing with pre-computed lookup tables:
+//!
+//! ```rust
+//! use linear_srgb::default::SrgbConverter;
+//!
+//! let conv = SrgbConverter::new();  // Zero-cost, const tables
 //!
 //! // Fast 8-bit conversions
 //! let linear = conv.srgb_u8_to_linear(128);
 //! let srgb = conv.linear_to_srgb_u8(linear);
 //! ```
 //!
-//! # Performance
+//! # Choosing the Right API
 //!
-//! The implementation uses several optimizations:
-//! - Piecewise functions avoid `pow()` for ~1.2% of values in the linear segment
-//! - Early exit for out-of-range values avoids expensive transcendentals
-//! - FMA instructions combine multiply+add into single-cycle operations
-//! - Pre-computed LUTs trade memory for compute time
+//! | Use Case | Recommended Function |
+//! |----------|---------------------|
+//! | Single f32 value | [`default::srgb_to_linear`] |
+//! | Single u8 value | [`default::srgb_u8_to_linear`] |
+//! | f32 slice (in-place) | [`default::srgb_to_linear_slice`] |
+//! | u8 slice → f32 slice | [`default::srgb_u8_to_linear_slice`] |
+//! | Manual SIMD (8 values) | [`default::srgb_to_linear_x8`] |
+//! | Inside `#[multiversed]` | [`default::srgb_to_linear_x8_inline`] |
+//! | Custom bit depth LUT | [`lut::LinearTable16`] |
 //!
 //! # Feature Flags
 //!
-//! - `fast-math`: Use faster but slightly less accurate pow approximation for
-//!   extended range conversions (affects `linear_to_srgb_extended` only)
+//! - `std` (default): Enable std library support
+//! - `unsafe_simd`: Enable unsafe optimizations for maximum performance
 //!
-//! # SIMD Acceleration
+//! # `no_std` Support
 //!
-//! For maximum throughput on large batches, use the `simd` module:
+//! This crate is `no_std` compatible. Disable the `std` feature:
 //!
-//! ```rust
-//! use linear_srgb::simd;
-//!
-//! let mut values = vec![0.5f32; 10000];
-//! simd::srgb_to_linear_slice(&mut values);
+//! ```toml
+//! linear-srgb = { version = "0.2", default-features = false }
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -75,11 +96,37 @@ extern crate alloc;
 #[cfg(all(test, not(feature = "std")))]
 extern crate std;
 
+// ============================================================================
+// Public modules
+// ============================================================================
+
+/// Recommended API with optimal implementations for each use case.
+///
+/// See module documentation for details.
+pub mod default;
+
+/// Lookup table types for sRGB conversion.
+///
+/// Provides both build-time const tables ([`SrgbConverter`](lut::SrgbConverter))
+/// and runtime-generated tables for custom bit depths.
 pub mod lut;
-mod mlaf;
+
+/// SIMD-accelerated conversion functions.
+///
+/// Provides full control over CPU dispatch with `_dispatch` and `_inline` variants.
 pub mod simd;
-mod targets;
+
+/// Scalar transfer functions.
+///
+/// Direct computation without SIMD. Best for single-value conversions.
 pub mod transfer;
+
+// ============================================================================
+// Internal modules
+// ============================================================================
+
+mod mlaf;
+mod targets;
 
 // Internal fast math for SIMD (not public API)
 pub(crate) mod fast_math;
@@ -91,49 +138,13 @@ mod const_luts;
 #[cfg(feature = "alt")]
 pub mod alt;
 
-// Re-export main types and functions
-pub use lut::{
-    EncodeTable8, EncodeTable12, EncodeTable16, EncodingTable, LinearTable8, LinearTable10,
-    LinearTable12, LinearTable16, LinearizationTable, SrgbConverter, lut_interp_linear_float,
-    lut_interp_linear_u16,
-};
-
-pub use transfer::{
-    // Custom gamma conversions (pure power function)
-    gamma_to_linear,
-    gamma_to_linear_f64,
-    linear_to_gamma,
-    linear_to_gamma_f64,
-    // sRGB conversions (piecewise with linear segment)
-    linear_to_srgb,
-    linear_to_srgb_extended,
-    linear_to_srgb_f64,
-    linear_to_srgb_u8,
-    srgb_to_linear,
-    srgb_to_linear_extended,
-    srgb_to_linear_f64,
-    srgb_u8_to_linear,
-};
-
-/// Convert a slice of sRGB f32 values to linear in-place.
-#[inline]
-pub fn srgb_to_linear_slice(values: &mut [f32]) {
-    for v in values.iter_mut() {
-        *v = srgb_to_linear(*v);
-    }
-}
-
-/// Convert a slice of linear f32 values to sRGB in-place.
-#[inline]
-pub fn linear_to_srgb_slice(values: &mut [f32]) {
-    for v in values.iter_mut() {
-        *v = linear_to_srgb(*v);
-    }
-}
+// ============================================================================
+// Tests
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::default::*;
 
     #[cfg(not(feature = "std"))]
     use alloc::vec::Vec;

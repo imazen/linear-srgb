@@ -170,7 +170,7 @@ pub fn linear_to_srgb_u8(linear: f32) -> u8 {
 ///
 /// # Example
 /// ```
-/// use linear_srgb::gamma_to_linear;
+/// use linear_srgb::transfer::gamma_to_linear;
 ///
 /// let linear = gamma_to_linear(0.5, 2.2);
 /// assert!((linear - 0.218).abs() < 0.001);
@@ -196,7 +196,7 @@ pub fn gamma_to_linear(encoded: f32, gamma: f32) -> f32 {
 ///
 /// # Example
 /// ```
-/// use linear_srgb::linear_to_gamma;
+/// use linear_srgb::transfer::linear_to_gamma;
 ///
 /// let encoded = linear_to_gamma(0.218, 2.2);
 /// assert!((encoded - 0.5).abs() < 0.01);
