@@ -155,7 +155,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{linear_to_srgb, linear_to_srgb_f64, srgb_to_linear, srgb_to_linear_f64};
+    use crate::scalar::{linear_to_srgb, linear_to_srgb_f64, srgb_to_linear, srgb_to_linear_f64};
 
     #[test]
     fn test_ulp_distance() {

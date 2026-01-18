@@ -30,16 +30,21 @@
 //!
 //! For manual SIMD control, use the x8 functions:
 //!
-//! - `*_x8` - Default with CPU dispatch
-//! - `*_x8_inline` - `#[inline(always)]`, for use inside your own `#[multiversed]` code
+//! - `*_x8` - Default with CPU dispatch (standalone use)
+//! - [`inline`] module - `#[inline(always)]` variants for use inside your own `#[multiversed]` code
 //!
 //! ```rust
-//! use linear_srgb::default::{srgb_to_linear_x8, linear_to_srgb_x8};
+//! use linear_srgb::default::{linear_to_srgb_x8, linear_to_srgb_u8_x8};
 //! use wide::f32x8;
 //!
-//! let srgb = f32x8::splat(0.5);
-//! let linear = srgb_to_linear_x8(srgb);  // CPU dispatch
-//! let back = linear_to_srgb_x8(linear);
+//! let linear = f32x8::splat(0.214);
+//! let srgb = linear_to_srgb_x8(linear);  // CPU dispatch
+//! let srgb_u8 = linear_to_srgb_u8_x8(linear);
+//! ```
+//!
+//! For use inside `#[multiversed]` functions (no dispatch overhead):
+//! ```rust,ignore
+//! use linear_srgb::default::inline::*;
 //! ```
 
 // ============================================================================
@@ -61,8 +66,10 @@ pub use crate::scalar::{
     srgb_to_linear,
     srgb_to_linear_extended,
     srgb_to_linear_f64,
-    srgb_u8_to_linear,
 };
+
+// u8 → f32 uses LUT (20x faster than scalar powf)
+pub use crate::simd::srgb_u8_to_linear;
 
 // ============================================================================
 // Slice functions (SIMD with dispatch - best for batches)
@@ -71,11 +78,15 @@ pub use crate::scalar::{
 pub use crate::simd::{
     // Custom gamma slices
     gamma_to_linear_slice,
+    // f32x8 slices (for pre-aligned SIMD data)
+    gamma_to_linear_x8_slice,
     linear_to_gamma_slice,
+    linear_to_gamma_x8_slice,
     // f32 slices (in-place)
     linear_to_srgb_slice,
     // u8 ↔ f32 slices
     linear_to_srgb_u8_slice,
+    linear_to_srgb_x8_slice,
     srgb_to_linear_slice,
     srgb_u8_to_linear_slice,
 };
@@ -84,6 +95,7 @@ pub use crate::simd::{
 // x8 SIMD functions with CPU dispatch (default)
 // ============================================================================
 
+#[allow(deprecated)]
 pub use crate::simd::{
     // Custom gamma x8 with dispatch
     gamma_to_linear_x8_dispatch as gamma_to_linear_x8,
@@ -97,16 +109,56 @@ pub use crate::simd::{
 };
 
 // ============================================================================
-// x8 SIMD inline functions (for embedding in caller's multiversed code)
-// ============================================================================
-
-pub use crate::simd::{
-    gamma_to_linear_x8_inline, linear_to_gamma_x8_inline, linear_to_srgb_u8_x8_inline,
-    linear_to_srgb_x8_inline, srgb_to_linear_x8_inline,
-};
-
-// ============================================================================
 // LUT converter (zero-cost const tables)
 // ============================================================================
 
 pub use crate::lut::SrgbConverter;
+
+pub mod inline {
+    //! Dispatch-free inline variants for use inside `#[multiversed]` functions.
+    //!
+    //! When building your own SIMD-accelerated functions with `multiversed`,
+    //! use these `_inline` variants to avoid nested dispatch overhead.
+    //! These functions are `#[inline(always)]` and contain no dispatch overhead.
+    //!
+    //! # Example
+    //!
+    //! ```rust,ignore
+    //! use linear_srgb::default::inline::*;
+    //! use multiversed::multiversed;
+    //! use wide::f32x8;
+    //!
+    //! #[multiversed]  // Your function handles dispatch
+    //! pub fn process_pixels(data: &mut [f32]) {
+    //!     for chunk in data.chunks_exact_mut(8) {
+    //!         let v = f32x8::from([
+    //!             chunk[0], chunk[1], chunk[2], chunk[3],
+    //!             chunk[4], chunk[5], chunk[6], chunk[7],
+    //!         ]);
+    //!         // Use inline variants - no dispatch, just raw SIMD
+    //!         let linear = srgb_to_linear_x8(v);
+    //!         let processed = linear * f32x8::splat(1.5);
+    //!         let result = linear_to_srgb_x8(processed);
+    //!         let arr: [f32; 8] = result.into();
+    //!         chunk.copy_from_slice(&arr);
+    //!     }
+    //! }
+    //! ```
+
+    // Re-export inline x8 functions with clean names (no _inline suffix)
+    #[allow(deprecated)]
+    pub use crate::simd::{
+        gamma_to_linear_x8_inline as gamma_to_linear_x8,
+        linear_to_gamma_x8_inline as linear_to_gamma_x8,
+        linear_to_srgb_u8_x8_inline as linear_to_srgb_u8_x8,
+        linear_to_srgb_x8_inline as linear_to_srgb_x8,
+        srgb_to_linear_x8_inline as srgb_to_linear_x8,
+    };
+
+    // Re-export inline x8 slice functions with clean names (no _inline suffix)
+    pub use crate::simd::{
+        gamma_to_linear_x8_slice_inline as gamma_to_linear_x8_slice,
+        linear_to_gamma_x8_slice_inline as linear_to_gamma_x8_slice,
+        linear_to_srgb_x8_slice_inline as linear_to_srgb_x8_slice,
+    };
+}

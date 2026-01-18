@@ -8,6 +8,8 @@
 //! - Output types: f32, u8, u16
 //! - Multiple implementations for each direction
 
+#![allow(deprecated)]
+
 #[cfg(feature = "alt")]
 use linear_srgb::alt::accuracy::{
     naive_linear_to_srgb_f64, naive_srgb_to_linear_f64, ulp_distance_f32,

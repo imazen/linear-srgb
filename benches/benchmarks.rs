@@ -2,6 +2,8 @@
 //!
 //! Tests all combinations of input/output types (u8, u16, f32) across implementations.
 
+#![allow(deprecated)]
+
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 #[cfg(feature = "alt")]
 use linear_srgb::alt::imageflow;

@@ -304,6 +304,23 @@ fn get_lut() -> &'static [f32; 256] {
     &SRGB_U8_TO_LINEAR_LUT
 }
 
+/// Convert a single sRGB u8 value to linear f32 using LUT lookup.
+///
+/// This is the fastest method for u8 input as it uses a precomputed lookup table
+/// embedded in the binary. For batch conversions, use [`srgb_u8_to_linear_slice`].
+///
+/// # Example
+/// ```
+/// use linear_srgb::simd::srgb_u8_to_linear;
+///
+/// let linear = srgb_u8_to_linear(128);
+/// assert!((linear - 0.2158).abs() < 0.001);
+/// ```
+#[inline]
+pub fn srgb_u8_to_linear(value: u8) -> f32 {
+    get_lut()[value as usize]
+}
+
 // ============================================================================
 // x8 Inline Functions - Always inlined, for use in caller's multiversed code
 // ============================================================================
@@ -314,6 +331,17 @@ fn get_lut() -> &'static [f32; 256] {
 /// double dispatch overhead. For standalone calls, use [`srgb_to_linear_x8_dispatch`].
 ///
 /// Input values are clamped to \[0, 1\].
+///
+/// # Deprecation
+///
+/// This SIMD implementation is ~4x slower than scalar `powf(2.4)` due to
+/// polynomial approximation overhead. Prefer [`srgb_to_linear_slice`] or
+/// [`crate::scalar::srgb_to_linear`] in a loop. Kept for benchmarking and
+/// compatibility.
+#[deprecated(
+    since = "0.3.0",
+    note = "SIMD srgb_to_linear is ~4x slower than scalar. Use srgb_to_linear_slice or scalar::srgb_to_linear instead."
+)]
 #[inline(always)]
 pub fn srgb_to_linear_x8_inline(srgb: f32x8) -> f32x8 {
     let srgb = srgb.max(ZERO).min(ONE);
@@ -390,8 +418,18 @@ pub fn linear_to_gamma_x8_inline(linear: f32x8, gamma: f32) -> f32x8 {
 /// `#[multiversed]` functions to avoid double dispatch.
 ///
 /// Input values are clamped to \[0, 1\].
+///
+/// # Deprecation
+///
+/// This SIMD implementation is ~4x slower than scalar `powf(2.4)`.
+/// Prefer [`srgb_to_linear_slice`] or [`crate::scalar::srgb_to_linear`].
+#[deprecated(
+    since = "0.3.0",
+    note = "SIMD srgb_to_linear is ~4x slower than scalar. Use srgb_to_linear_slice or scalar::srgb_to_linear instead."
+)]
 #[multiversed]
 #[inline]
+#[allow(deprecated)]
 pub fn srgb_to_linear_x8_dispatch(srgb: f32x8) -> f32x8 {
     srgb_to_linear_x8_inline(srgb)
 }
@@ -442,15 +480,26 @@ pub fn linear_to_gamma_x8_dispatch(linear: f32x8, gamma: f32) -> f32x8 {
 ///
 /// Input values are clamped to \[0, 1\].
 ///
+/// # Deprecation
+///
+/// This SIMD implementation is ~4x slower than scalar `powf(2.4)`.
+/// Prefer [`srgb_to_linear_slice`] or [`crate::scalar::srgb_to_linear`].
+///
 /// # Example
 /// ```
 /// use linear_srgb::simd::srgb_to_linear_x8;
 /// use wide::f32x8;
 ///
 /// let srgb = f32x8::from([0.0, 0.25, 0.5, 0.75, 1.0, 0.1, 0.9, 0.5]);
+/// #[allow(deprecated)]
 /// let linear = srgb_to_linear_x8(srgb);
 /// ```
+#[deprecated(
+    since = "0.3.0",
+    note = "SIMD srgb_to_linear is ~4x slower than scalar. Use srgb_to_linear_slice or scalar::srgb_to_linear instead."
+)]
 #[inline]
+#[allow(deprecated)]
 pub fn srgb_to_linear_x8(srgb: f32x8) -> f32x8 {
     srgb_to_linear_x8_inline(srgb)
 }
@@ -555,8 +604,6 @@ pub fn linear_to_gamma_x8(linear: f32x8, gamma: f32) -> f32x8 {
 
 /// Convert sRGB f32 values to linear in-place.
 ///
-/// Processes 8 values at a time using SIMD, with scalar fallback for remainder.
-///
 /// # Example
 /// ```
 /// use linear_srgb::simd::srgb_to_linear_slice;
@@ -564,17 +611,18 @@ pub fn linear_to_gamma_x8(linear: f32x8, gamma: f32) -> f32x8 {
 /// let mut values = vec![0.0f32, 0.25, 0.5, 0.75, 1.0];
 /// srgb_to_linear_slice(&mut values);
 /// ```
-#[multiversed]
+///
+/// # Performance Note
+///
+/// This function uses scalar `powf()` internally because hardware transcendentals
+/// are ~4x faster than SIMD polynomial approximation for the sRGB linearization
+/// exponent (2.4). For the inverse direction, see [`linear_to_srgb_slice`] which
+/// does benefit from SIMD.
 #[inline]
 pub fn srgb_to_linear_slice(values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<8>();
-
-    for chunk in chunks {
-        let result = srgb_to_linear_x8_inline(f32x8::from(*chunk));
-        *chunk = result.into();
-    }
-
-    for v in remainder {
+    // Scalar powf(2.4) is ~4x faster than SIMD polynomial approximation.
+    // See benchmarks in benches/benchmarks.rs for details.
+    for v in values.iter_mut() {
         *v = crate::scalar::srgb_to_linear(*v);
     }
 }
@@ -736,6 +784,110 @@ pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
 }
 
 // ============================================================================
+// f32x8 Slice Functions (for pre-aligned SIMD data)
+// ============================================================================
+
+/// Convert linear f32x8 values to sRGB in-place.
+///
+/// For data already structured as `f32x8` slices. If you have `&mut [f32]`,
+/// use [`linear_to_srgb_slice`] instead which handles remainders automatically.
+///
+/// # Example
+/// ```
+/// use linear_srgb::simd::linear_to_srgb_x8_slice;
+/// use wide::f32x8;
+///
+/// let mut values = vec![f32x8::splat(0.5); 100];
+/// linear_to_srgb_x8_slice(&mut values);
+/// ```
+#[multiversed]
+#[inline]
+pub fn linear_to_srgb_x8_slice(values: &mut [f32x8]) {
+    for v in values.iter_mut() {
+        *v = linear_to_srgb_x8_inline(*v);
+    }
+}
+
+/// Convert gamma-encoded f32x8 values to linear in-place using a custom gamma.
+///
+/// For data already structured as `f32x8` slices. If you have `&mut [f32]`,
+/// use [`gamma_to_linear_slice`] instead which handles remainders automatically.
+///
+/// # Example
+/// ```
+/// use linear_srgb::simd::gamma_to_linear_x8_slice;
+/// use wide::f32x8;
+///
+/// let mut values = vec![f32x8::splat(0.5); 100];
+/// gamma_to_linear_x8_slice(&mut values, 2.2);
+/// ```
+#[multiversed]
+#[inline]
+pub fn gamma_to_linear_x8_slice(values: &mut [f32x8], gamma: f32) {
+    for v in values.iter_mut() {
+        *v = gamma_to_linear_x8_inline(*v, gamma);
+    }
+}
+
+/// Convert linear f32x8 values to gamma-encoded in-place using a custom gamma.
+///
+/// For data already structured as `f32x8` slices. If you have `&mut [f32]`,
+/// use [`linear_to_gamma_slice`] instead which handles remainders automatically.
+///
+/// # Example
+/// ```
+/// use linear_srgb::simd::linear_to_gamma_x8_slice;
+/// use wide::f32x8;
+///
+/// let mut values = vec![f32x8::splat(0.2); 100];
+/// linear_to_gamma_x8_slice(&mut values, 2.2);
+/// ```
+#[multiversed]
+#[inline]
+pub fn linear_to_gamma_x8_slice(values: &mut [f32x8], gamma: f32) {
+    for v in values.iter_mut() {
+        *v = linear_to_gamma_x8_inline(*v, gamma);
+    }
+}
+
+// ============================================================================
+// f32x8 Slice Inline Functions (for use inside caller's multiversed code)
+// ============================================================================
+
+/// Convert linear f32x8 values to sRGB in-place (always inlined).
+///
+/// Use this variant inside your own `#[multiversed]` functions to avoid
+/// double dispatch overhead. For standalone calls, use [`linear_to_srgb_x8_slice`].
+#[inline(always)]
+pub fn linear_to_srgb_x8_slice_inline(values: &mut [f32x8]) {
+    for v in values.iter_mut() {
+        *v = linear_to_srgb_x8_inline(*v);
+    }
+}
+
+/// Convert gamma-encoded f32x8 values to linear in-place (always inlined).
+///
+/// Use this variant inside your own `#[multiversed]` functions to avoid
+/// double dispatch overhead. For standalone calls, use [`gamma_to_linear_x8_slice`].
+#[inline(always)]
+pub fn gamma_to_linear_x8_slice_inline(values: &mut [f32x8], gamma: f32) {
+    for v in values.iter_mut() {
+        *v = gamma_to_linear_x8_inline(*v, gamma);
+    }
+}
+
+/// Convert linear f32x8 values to gamma-encoded in-place (always inlined).
+///
+/// Use this variant inside your own `#[multiversed]` functions to avoid
+/// double dispatch overhead. For standalone calls, use [`linear_to_gamma_x8_slice`].
+#[inline(always)]
+pub fn linear_to_gamma_x8_slice_inline(values: &mut [f32x8], gamma: f32) {
+    for v in values.iter_mut() {
+        *v = linear_to_gamma_x8_inline(*v, gamma);
+    }
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -749,6 +901,7 @@ mod tests {
     // ---- x8 function tests ----
 
     #[test]
+    #[allow(deprecated)]
     fn test_srgb_to_linear_x8() {
         let input = [0.0f32, 0.25, 0.5, 0.75, 1.0, 0.1, 0.9, 0.04];
         let result = srgb_to_linear_x8(f32x8::from(input));
@@ -785,6 +938,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_srgb_u8_to_linear_x8() {
         let input: [u8; 8] = [0, 64, 128, 192, 255, 32, 96, 160];
         let result = srgb_u8_to_linear_x8(input);
@@ -864,6 +1018,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_srgb_u8_to_linear_slice() {
         let input: Vec<u8> = (0..=255).collect();
         let mut output = vec![0.0f32; 256];
@@ -946,6 +1101,7 @@ mod tests {
     // ---- Edge case tests ----
 
     #[test]
+    #[allow(deprecated)]
     fn test_clamping() {
         // Test that out-of-range values are clamped
         let input = f32x8::from([-0.5, -0.1, 0.0, 0.5, 1.0, 1.5, 2.0, 10.0]);
@@ -959,6 +1115,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_linear_segment() {
         // Test values in the linear segment (< 0.04045)
         let input = f32x8::from([0.0, 0.01, 0.02, 0.03, 0.04, 0.005, 0.015, 0.035]);
@@ -982,6 +1139,7 @@ mod tests {
     /// Allows 1 ULP difference for cross-platform float variance (powf isn't
     /// perfectly deterministic across architectures).
     #[test]
+    #[allow(deprecated)]
     fn test_lut_matches_transfer_function() {
         let lut = get_lut();
         for i in 0..=255u8 {

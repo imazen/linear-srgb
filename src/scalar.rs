@@ -142,6 +142,16 @@ pub fn linear_to_srgb_extended(linear: f32) -> f32 {
 }
 
 /// Convert 8-bit sRGB to linear (using direct computation).
+///
+/// # Deprecation
+///
+/// This function uses `powf()` which is ~20x slower than LUT lookup.
+/// Prefer [`crate::lut::SrgbConverter::srgb_u8_to_linear`] or
+/// [`crate::simd::srgb_u8_to_linear_slice`] for batches.
+#[deprecated(
+    since = "0.3.0",
+    note = "20x slower than LUT. Use lut::SrgbConverter::srgb_u8_to_linear or simd::srgb_u8_to_linear_slice instead."
+)]
 #[inline]
 pub fn srgb_u8_to_linear(value: u8) -> f32 {
     srgb_to_linear(value as f32 / 255.0)
@@ -315,6 +325,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_u8_conversion() {
         assert_eq!(srgb_u8_to_linear(0), 0.0);
         assert_eq!(linear_to_srgb_u8(0.0), 0);

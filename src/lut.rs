@@ -223,6 +223,16 @@ impl SrgbConverter {
     }
 
     /// Convert linear to 8-bit sRGB.
+    ///
+    /// # Deprecation
+    ///
+    /// This LUT interpolation method is ~2x slower than SIMD.
+    /// Prefer [`crate::simd::linear_to_srgb_u8_slice`] for batches or
+    /// [`crate::scalar::linear_to_srgb_u8`] for single values.
+    #[deprecated(
+        since = "0.3.0",
+        note = "2x slower than SIMD. Use simd::linear_to_srgb_u8_slice for batches or scalar::linear_to_srgb_u8 for single values."
+    )]
     #[inline]
     pub fn linear_to_srgb_u8(&self, linear: f32) -> u8 {
         (self.linear_to_srgb(linear) * 255.0 + 0.5) as u8
@@ -238,7 +248,17 @@ impl SrgbConverter {
     }
 
     /// Batch convert linear f32 values to sRGB u8.
+    ///
+    /// # Deprecation
+    ///
+    /// This LUT interpolation method is ~2x slower than SIMD.
+    /// Prefer [`crate::simd::linear_to_srgb_u8_slice`] instead.
+    #[deprecated(
+        since = "0.3.0",
+        note = "2x slower than SIMD. Use simd::linear_to_srgb_u8_slice instead."
+    )]
     #[inline]
+    #[allow(deprecated)]
     pub fn batch_linear_to_srgb(&self, input: &[f32], output: &mut [u8]) {
         assert_eq!(input.len(), output.len());
         for (i, o) in input.iter().zip(output.iter_mut()) {
@@ -294,6 +314,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_converter_roundtrip() {
         let conv = SrgbConverter::new();
 
@@ -344,6 +365,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_batch_conversion() {
         let conv = SrgbConverter::new();
 

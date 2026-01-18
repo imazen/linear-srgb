@@ -1,5 +1,7 @@
 //! Basic usage of linear-srgb conversions.
 
+#![allow(deprecated)]
+
 use linear_srgb::default::{
     SrgbConverter, linear_to_srgb, linear_to_srgb_u8, srgb_to_linear, srgb_u8_to_linear,
 };
