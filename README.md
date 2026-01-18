@@ -280,13 +280,13 @@ These functions are marked `#[deprecated]` because faster alternatives exist. Th
 
 ```toml
 [dependencies]
-linear-srgb = "0.2"  # std enabled by default
+linear-srgb = "0.3"  # std enabled by default
 
 # no_std (requires alloc for LUT generation)
-linear-srgb = { version = "0.2", default-features = false }
+linear-srgb = { version = "0.3", default-features = false }
 
 # Enable unsafe optimizations
-linear-srgb = { version = "0.2", features = ["unsafe_simd"] }
+linear-srgb = { version = "0.3", features = ["unsafe_simd"] }
 ```
 
 - **`std`** (default): Required for runtime SIMD dispatch
