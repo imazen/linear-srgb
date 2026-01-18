@@ -305,7 +305,63 @@ fn get_lut() -> &'static [f32; 256] {
 }
 
 // ============================================================================
-// x8 Functions - Process 8 values at once
+// x8 Inner Functions - Always inlined, no dispatch overhead
+// ============================================================================
+
+/// Inner implementation - always inlined to avoid dispatch in hot loops.
+#[inline(always)]
+fn srgb_to_linear_x8_inner(srgb: f32x8) -> f32x8 {
+    let srgb = srgb.max(ZERO).min(ONE);
+    let linear_result = srgb * LINEAR_SCALE;
+    let power_result = pow_x8((srgb + SRGB_OFFSET) / SRGB_SCALE, 2.4);
+    let mask = srgb.simd_lt(SRGB_LINEAR_THRESHOLD);
+    mask.blend(linear_result, power_result)
+}
+
+/// Inner implementation - always inlined to avoid dispatch in hot loops.
+#[inline(always)]
+fn linear_to_srgb_x8_inner(linear: f32x8) -> f32x8 {
+    let linear = linear.max(ZERO).min(ONE);
+    let linear_result = linear * TWELVE_92;
+    let power_result = SRGB_SCALE * pow_x8(linear, 1.0 / 2.4) - SRGB_OFFSET;
+    let mask = linear.simd_lt(LINEAR_THRESHOLD);
+    mask.blend(linear_result, power_result)
+}
+
+/// Inner implementation - always inlined to avoid dispatch in hot loops.
+#[inline(always)]
+fn linear_to_srgb_u8_x8_inner(linear: f32x8) -> [u8; 8] {
+    let srgb = linear_to_srgb_x8_inner(linear);
+    let scaled = srgb * U8_MAX + HALF;
+    let arr: [f32; 8] = scaled.into();
+    [
+        arr[0] as u8,
+        arr[1] as u8,
+        arr[2] as u8,
+        arr[3] as u8,
+        arr[4] as u8,
+        arr[5] as u8,
+        arr[6] as u8,
+        arr[7] as u8,
+    ]
+}
+
+/// Inner implementation - always inlined to avoid dispatch in hot loops.
+#[inline(always)]
+fn gamma_to_linear_x8_inner(encoded: f32x8, gamma: f32) -> f32x8 {
+    let encoded = encoded.max(ZERO).min(ONE);
+    pow_x8(encoded, gamma)
+}
+
+/// Inner implementation - always inlined to avoid dispatch in hot loops.
+#[inline(always)]
+fn linear_to_gamma_x8_inner(linear: f32x8, gamma: f32) -> f32x8 {
+    let linear = linear.max(ZERO).min(ONE);
+    pow_x8(linear, 1.0 / gamma)
+}
+
+// ============================================================================
+// x8 Functions - Process 8 values at once (with dispatch for direct callers)
 // ============================================================================
 
 /// Convert 8 sRGB f32 values to linear.
@@ -323,11 +379,7 @@ fn get_lut() -> &'static [f32; 256] {
 #[multiversed]
 #[inline]
 pub fn srgb_to_linear_x8(srgb: f32x8) -> f32x8 {
-    let srgb = srgb.max(ZERO).min(ONE);
-    let linear_result = srgb * LINEAR_SCALE;
-    let power_result = pow_x8((srgb + SRGB_OFFSET) / SRGB_SCALE, 2.4);
-    let mask = srgb.simd_lt(SRGB_LINEAR_THRESHOLD);
-    mask.blend(linear_result, power_result)
+    srgb_to_linear_x8_inner(srgb)
 }
 
 /// Convert 8 linear f32 values to sRGB.
@@ -345,11 +397,7 @@ pub fn srgb_to_linear_x8(srgb: f32x8) -> f32x8 {
 #[multiversed]
 #[inline]
 pub fn linear_to_srgb_x8(linear: f32x8) -> f32x8 {
-    let linear = linear.max(ZERO).min(ONE);
-    let linear_result = linear * TWELVE_92;
-    let power_result = SRGB_SCALE * pow_x8(linear, 1.0 / 2.4) - SRGB_OFFSET;
-    let mask = linear.simd_lt(LINEAR_THRESHOLD);
-    mask.blend(linear_result, power_result)
+    linear_to_srgb_x8_inner(linear)
 }
 
 /// Convert 8 sRGB u8 values to linear f32 using LUT lookup.
@@ -393,19 +441,7 @@ pub fn srgb_u8_to_linear_x8(srgb: [u8; 8]) -> f32x8 {
 #[multiversed]
 #[inline]
 pub fn linear_to_srgb_u8_x8(linear: f32x8) -> [u8; 8] {
-    let srgb = linear_to_srgb_x8(linear);
-    let scaled = srgb * U8_MAX + HALF;
-    let arr: [f32; 8] = scaled.into();
-    [
-        arr[0] as u8,
-        arr[1] as u8,
-        arr[2] as u8,
-        arr[3] as u8,
-        arr[4] as u8,
-        arr[5] as u8,
-        arr[6] as u8,
-        arr[7] as u8,
-    ]
+    linear_to_srgb_u8_x8_inner(linear)
 }
 
 // ============================================================================
@@ -429,7 +465,7 @@ pub fn srgb_to_linear_slice(values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
-        let result = srgb_to_linear_x8(f32x8::from(*chunk));
+        let result = srgb_to_linear_x8_inner(f32x8::from(*chunk));
         *chunk = result.into();
     }
 
@@ -455,7 +491,7 @@ pub fn linear_to_srgb_slice(values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
-        let result = linear_to_srgb_x8(f32x8::from(*chunk));
+        let result = linear_to_srgb_x8_inner(f32x8::from(*chunk));
         *chunk = result.into();
     }
 
@@ -529,7 +565,7 @@ pub fn linear_to_srgb_u8_slice(input: &[f32], output: &mut [u8]) {
     let (out_chunks, out_remainder) = output.as_chunks_mut::<8>();
 
     for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
-        *out = linear_to_srgb_u8_x8(f32x8::from(*inp));
+        *out = linear_to_srgb_u8_x8_inner(f32x8::from(*inp));
     }
 
     for (inp, out) in in_remainder.iter().zip(out_remainder.iter_mut()) {
@@ -559,8 +595,7 @@ pub fn linear_to_srgb_u8_slice(input: &[f32], output: &mut [u8]) {
 #[multiversed]
 #[inline]
 pub fn gamma_to_linear_x8(encoded: f32x8, gamma: f32) -> f32x8 {
-    let encoded = encoded.max(ZERO).min(ONE);
-    pow_x8(encoded, gamma)
+    gamma_to_linear_x8_inner(encoded, gamma)
 }
 
 /// Convert 8 linear f32 values to gamma-encoded using a custom gamma exponent.
@@ -580,8 +615,7 @@ pub fn gamma_to_linear_x8(encoded: f32x8, gamma: f32) -> f32x8 {
 #[multiversed]
 #[inline]
 pub fn linear_to_gamma_x8(linear: f32x8, gamma: f32) -> f32x8 {
-    let linear = linear.max(ZERO).min(ONE);
-    pow_x8(linear, 1.0 / gamma)
+    linear_to_gamma_x8_inner(linear, gamma)
 }
 
 /// Convert gamma-encoded f32 values to linear in-place using a custom gamma.
@@ -601,7 +635,7 @@ pub fn gamma_to_linear_slice(values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
-        let result = gamma_to_linear_x8(f32x8::from(*chunk), gamma);
+        let result = gamma_to_linear_x8_inner(f32x8::from(*chunk), gamma);
         *chunk = result.into();
     }
 
@@ -627,7 +661,7 @@ pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
-        let result = linear_to_gamma_x8(f32x8::from(*chunk), gamma);
+        let result = linear_to_gamma_x8_inner(f32x8::from(*chunk), gamma);
         *chunk = result.into();
     }
 
