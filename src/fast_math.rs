@@ -1,121 +1,120 @@
 //! Fast SIMD math approximations for pow, exp2, and log2.
 //!
 //! Internal module providing SIMD pow approximation for sRGB conversion.
-//! Uses LUT-based exp2 with polynomial log2 for best performance.
+//! Uses polynomial approximation (no table lookups) for best performance.
+//!
+//! Implementation derived from archmage's mid-precision transcendental functions.
 
 use bytemuck::cast;
-use wide::{f32x8, i32x8, u32x8};
+use wide::{f32x8, i32x8};
 
-// Constants for log2 approximation
-const SQRT2_OVER_2_BITS: u32 = 0x3f3504f3; // sqrt(2)/2 ~ 0.7071
-const ONE_BITS: u32 = 0x3f800000; // 1.0
-
-// Polynomial coefficients for log2
-const LOG2_C0: f32 = 0.412_198_57;
-const LOG2_C1: f32 = 0.577_078_04;
-const LOG2_C2: f32 = 0.961_796_7;
-const LOG2_SCALE: f32 = 2.885_39; // 2/ln(2)
-
-// 64-entry exp2 lookup table
-#[rustfmt::skip]
-static EXP2_TABLE: [u32; 64] = [
-    0x3F3504F3, 0x3F36FD92, 0x3F38FBAF, 0x3F3AFF5B, 0x3F3D08A4, 0x3F3F179A, 0x3F412C4D, 0x3F4346CD,
-    0x3F45672A, 0x3F478D75, 0x3F49B9BE, 0x3F4BEC15, 0x3F4E248C, 0x3F506334, 0x3F52A81E, 0x3F54F35B,
-    0x3F5744FD, 0x3F599D16, 0x3F5BFBB8, 0x3F5E60F5, 0x3F60CCDF, 0x3F633F89, 0x3F65B907, 0x3F68396A,
-    0x3F6AC0C7, 0x3F6D4F30, 0x3F6FE4BA, 0x3F728177, 0x3F75257D, 0x3F77D0DF, 0x3F7A83B3, 0x3F7D3E0C,
-    0x3F800000, 0x3F8164D2, 0x3F82CD87, 0x3F843A29, 0x3F85AAC3, 0x3F871F62, 0x3F88980F, 0x3F8A14D5,
-    0x3F8B95C2, 0x3F8D1ADF, 0x3F8EA43A, 0x3F9031DC, 0x3F91C3D3, 0x3F935A2B, 0x3F94F4F0, 0x3F96942D,
-    0x3F9837F0, 0x3F99E046, 0x3F9B8D3A, 0x3F9D3EDA, 0x3F9EF532, 0x3FA0B051, 0x3FA27043, 0x3FA43516,
-    0x3FA5FED7, 0x3FA7CD94, 0x3FA9A15B, 0x3FAB7A3A, 0x3FAD583F, 0x3FAF3B79, 0x3FB123F6, 0x3FB311C4,
-];
-
-// exp2 polynomial coefficients
-const EXP2_C0: f32 = 0.240_226_5;
-#[allow(clippy::approx_constant)]
-const EXP2_C1: f32 = 0.693_147_2;
-const TBLSIZE: usize = 64;
-
-#[inline(always)]
-fn f32x8_to_bits(v: f32x8) -> u32x8 {
-    cast(v)
-}
-
-#[inline(always)]
-fn f32x8_from_bits(v: u32x8) -> f32x8 {
-    cast(v)
-}
-
-/// FMA: a * b + c using wide's native mul_add
-#[inline(always)]
-fn f32x8_fma(a: f32x8, b: f32x8, c: f32x8) -> f32x8 {
-    a.mul_add(b, c)
-}
+// ============================================================================
+// Mid-precision log2 (~3 ULP max error)
+// Uses (a-1)/(a+1) transform with degree-6 odd polynomial
+// ============================================================================
 
 /// Fast approximate log2 for 8 f32 values.
+///
+/// Uses (a-1)/(a+1) transform with odd polynomial.
+/// Max error ~3 ULP (sufficient for 8-bit to 12-bit color).
 #[inline(always)]
-fn log2_x8(d: f32x8) -> f32x8 {
-    let bits = f32x8_to_bits(d);
-    let offset = u32x8::splat(ONE_BITS - SQRT2_OVER_2_BITS);
-    let adjusted = bits + offset;
+fn log2_x8(x: f32x8) -> f32x8 {
+    // Constants for range reduction
+    const SQRT2_OVER_2: u32 = 0x3f3504f3; // sqrt(2)/2 in f32 bits
+    const ONE: u32 = 0x3f800000; // 1.0 in f32 bits
+    const MANTISSA_MASK: u32 = 0x007fffff;
+    const EXPONENT_BIAS: i32 = 127;
 
-    let exponent_raw: u32x8 = adjusted >> 23;
-    let exponent_i32: i32x8 = cast(exponent_raw);
-    let n = f32x8::from_i32x8(exponent_i32 - i32x8::splat(0x7f));
+    // Coefficients for odd polynomial on y = (a-1)/(a+1)
+    const C0: f32 = 2.885_390_08; // 2/ln(2)
+    const C1: f32 = 0.961_800_76; // y^2 coefficient
+    const C2: f32 = 0.576_974_45; // y^4 coefficient
+    const C3: f32 = 0.434_411_97; // y^6 coefficient
 
-    let mantissa_mask = u32x8::splat(0x007fffff);
-    let mantissa_bits = (adjusted & mantissa_mask) + u32x8::splat(SQRT2_OVER_2_BITS);
-    let a = f32x8_from_bits(mantissa_bits);
+    let x_bits: i32x8 = cast(x);
 
+    // Normalize mantissa to [sqrt(2)/2, sqrt(2)]
+    let offset = i32x8::splat((ONE - SQRT2_OVER_2) as i32);
+    let adjusted = x_bits + offset;
+
+    // Extract exponent
+    let exp_raw = adjusted >> 23;
+    let exp_biased = exp_raw - i32x8::splat(EXPONENT_BIAS);
+    let n = f32x8::from_i32x8(exp_biased);
+
+    // Reconstruct normalized mantissa
+    let mantissa_bits = adjusted & i32x8::splat(MANTISSA_MASK as i32);
+    let a_bits = mantissa_bits + i32x8::splat(SQRT2_OVER_2 as i32);
+    let a: f32x8 = cast(a_bits);
+
+    // y = (a - 1) / (a + 1)
     let one = f32x8::splat(1.0);
-    let x = (a - one) / (a + one);
-    let x2 = x * x;
+    let y = (a - one) / (a + one);
 
-    let mut u = f32x8::splat(LOG2_C0);
-    u = f32x8_fma(u, x2, f32x8::splat(LOG2_C1));
-    u = f32x8_fma(u, x2, f32x8::splat(LOG2_C2));
+    // y^2
+    let y2 = y * y;
 
-    f32x8_fma(x2 * x, u, f32x8_fma(x, f32x8::splat(LOG2_SCALE), n))
+    // Polynomial: c0 + y^2*(c1 + y^2*(c2 + y^2*c3))
+    let poly = y2.mul_add(f32x8::splat(C3), f32x8::splat(C2));
+    let poly = y2.mul_add(poly, f32x8::splat(C1));
+    let poly = y2.mul_add(poly, f32x8::splat(C0));
+
+    // Result: y * poly + n
+    y.mul_add(poly, n)
 }
 
-/// Fast approximate exp2 (2^x) for 8 f32 values.
+// ============================================================================
+// Mid-precision exp2 (~140 ULP max error)
+// Uses degree-6 minimax polynomial
+// ============================================================================
+
+/// Fast approximate 2^x for 8 f32 values.
+///
+/// Uses a degree-6 minimax polynomial.
+/// Max error ~140 ULP (~8e-6 relative error).
 #[inline(always)]
-fn exp2_x8(d: f32x8) -> f32x8 {
-    let redux = f32x8::splat(f32::from_bits(0x4b400000) / TBLSIZE as f32);
-    let sum = d + redux;
-    let ui = f32x8_to_bits(sum);
+fn exp2_x8(x: f32x8) -> f32x8 {
+    // Degree-6 minimax polynomial coefficients for 2^x on [0, 1]
+    const C0: f32 = 1.0;
+    const C1: f32 = 0.693_147_180_559_945;
+    const C2: f32 = 0.240_226_506_959_101;
+    const C3: f32 = 0.055_504_108_664_822;
+    const C4: f32 = 0.009_618_129_107_629;
+    const C5: f32 = 0.001_333_355_814_497;
+    const C6: f32 = 0.000_154_035_303_933;
 
-    let i0 = (ui + u32x8::splat(TBLSIZE as u32 / 2)) & u32x8::splat(TBLSIZE as u32 - 1);
-    let k: u32x8 = (ui + u32x8::splat(TBLSIZE as u32 / 2)) >> 6;
+    // Clamp to safe range to avoid overflow/underflow
+    let x = x.max(f32x8::splat(-126.0)).min(f32x8::splat(126.0));
 
-    let uf = sum - redux;
-    let f = d - uf;
+    // Split into integer and fractional parts
+    let xi = x.floor();
+    let xf = x - xi;
 
-    let i0_arr: [u32; 8] = i0.into();
-    let z0 = f32x8::from([
-        f32::from_bits(EXP2_TABLE[i0_arr[0] as usize]),
-        f32::from_bits(EXP2_TABLE[i0_arr[1] as usize]),
-        f32::from_bits(EXP2_TABLE[i0_arr[2] as usize]),
-        f32::from_bits(EXP2_TABLE[i0_arr[3] as usize]),
-        f32::from_bits(EXP2_TABLE[i0_arr[4] as usize]),
-        f32::from_bits(EXP2_TABLE[i0_arr[5] as usize]),
-        f32::from_bits(EXP2_TABLE[i0_arr[6] as usize]),
-        f32::from_bits(EXP2_TABLE[i0_arr[7] as usize]),
-    ]);
+    // Horner's method for the polynomial
+    let poly = xf.mul_add(f32x8::splat(C6), f32x8::splat(C5));
+    let poly = xf.mul_add(poly, f32x8::splat(C4));
+    let poly = xf.mul_add(poly, f32x8::splat(C3));
+    let poly = xf.mul_add(poly, f32x8::splat(C2));
+    let poly = xf.mul_add(poly, f32x8::splat(C1));
+    let poly = xf.mul_add(poly, f32x8::splat(C0));
 
-    let mut u = f32x8::splat(EXP2_C0);
-    u = f32x8_fma(u, f, f32x8::splat(EXP2_C1));
-    u *= f;
-
-    let result_unscaled = f32x8_fma(u, z0, z0);
-
-    let k_i32: i32x8 = cast(k);
-    let scale_bits: u32x8 = cast((k_i32 + i32x8::splat(0x7f)) << 23);
+    // Scale by 2^integer: construct float with exponent = xi + 127
+    let xi_i32 = xi.round_int();
+    let bias = i32x8::splat(127);
+    let scale_bits: i32x8 = (xi_i32 + bias) << 23;
     let scale: f32x8 = cast(scale_bits);
 
-    result_unscaled * scale
+    poly * scale
 }
 
+// ============================================================================
+// pow(x, n) = 2^(n * log2(x))
+// ============================================================================
+
 /// Fast approximate pow(x, n) for 8 f32 values.
+///
+/// Computed as `2^(n * log2(x))`.
+/// Combined error sufficient for sRGB 8-bit/10-bit/12-bit work.
 #[inline(always)]
 pub(crate) fn pow_x8(x: f32x8, n: f32) -> f32x8 {
     let lg = log2_x8(x);
