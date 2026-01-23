@@ -1,6 +1,6 @@
 [package]
 name = "linear-srgb"
-version = "0.3.2"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.92"
 license = "MIT OR Apache-2.0"
@@ -15,7 +15,7 @@ wide = "1.1"
 bytemuck = "1.21"
 multiversion = { version = "0.8", default-features = false }
 multiversed = { version = "0.1", default-features = false, features = ["x86-64-v3", "x86-64-v4", "aarch64-basic"] }
-archmage = { version = "0.2", path = "../archmage", default-features = false, features = ["macros", "avx512", "std"], optional = true }
+archmage = { version = "0.2", default-features = false, features = ["macros", "avx512", "std"], optional = true }
 
 [dev-dependencies]
 criterion = "0.8"
