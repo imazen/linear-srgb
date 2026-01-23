@@ -943,11 +943,9 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
 
 #[cfg(feature = "mage")]
 fn bench_mage(c: &mut Criterion) {
-    use archmage::SimdToken;
-    use archmage::simd::avx2::f32x8 as mage_f32x8;
-    use mage::Avx2FmaToken;
+    use mage::{SimdToken, Token};
 
-    let Some(token) = Avx2FmaToken::try_new() else {
+    let Some(token) = Token::try_new() else {
         eprintln!("Skipping mage benchmarks: AVX2+FMA not available");
         return;
     };
@@ -990,49 +988,6 @@ fn bench_mage(c: &mut Criterion) {
         let mut output = f32_linear.clone();
         b.iter(|| {
             simd::linear_to_srgb_slice(&mut output);
-            black_box(&output);
-        })
-    });
-
-    // === x8 function comparison ===
-
-    group.bench_function("x8/mage_srgb_to_linear", |b| {
-        let mut output = f32_srgb.clone();
-        b.iter(|| {
-            for chunk in output.chunks_exact_mut(8) {
-                let arr: [f32; 8] = chunk.try_into().unwrap();
-                let v = mage_f32x8::from_array(token, arr);
-                let result = mage::srgb_to_linear_x8(token, v);
-                result.store(chunk.try_into().unwrap());
-            }
-            black_box(&output);
-        })
-    });
-
-    group.bench_function("x8/simd_srgb_to_linear_dispatch", |b| {
-        let mut output = f32_srgb.clone();
-        b.iter(|| {
-            for chunk in output.chunks_exact_mut(8) {
-                let arr: [f32; 8] = chunk.try_into().unwrap();
-                let v = f32x8::from(arr);
-                let result = simd::srgb_to_linear_x8_dispatch(v);
-                let out_arr: [f32; 8] = result.into();
-                chunk.copy_from_slice(&out_arr);
-            }
-            black_box(&output);
-        })
-    });
-
-    group.bench_function("x8/simd_srgb_to_linear_inline", |b| {
-        let mut output = f32_srgb.clone();
-        b.iter(|| {
-            for chunk in output.chunks_exact_mut(8) {
-                let arr: [f32; 8] = chunk.try_into().unwrap();
-                let v = f32x8::from(arr);
-                let result = simd::srgb_to_linear_x8_inline(v);
-                let out_arr: [f32; 8] = result.into();
-                chunk.copy_from_slice(&out_arr);
-            }
             black_box(&output);
         })
     });
