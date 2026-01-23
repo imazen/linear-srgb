@@ -121,6 +121,16 @@ pub mod simd;
 /// Direct computation without SIMD. Best for individual value conversions.
 pub mod scalar;
 
+/// Token-based API using archmage for zero dispatch overhead.
+///
+/// This module provides an alternative API using archmage tokens for users who
+/// want to avoid per-call dispatch overhead. Obtain a token once at startup,
+/// then pass it to all conversion functions.
+///
+/// Requires the `mage` feature.
+#[cfg(feature = "mage")]
+pub mod mage;
+
 // ============================================================================
 // Internal modules
 // ============================================================================

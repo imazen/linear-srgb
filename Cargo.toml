@@ -15,6 +15,7 @@ wide = "1.1"
 bytemuck = "1.21"
 multiversion = { version = "0.8", default-features = false }
 multiversed = { version = "0.1", default-features = false, features = ["x86-64-v3", "x86-64-v4", "aarch64-basic"] }
+archmage = { version = "0.2", path = "../archmage", default-features = false, features = ["macros", "avx512"], optional = true }
 
 [dev-dependencies]
 criterion = "0.8"
@@ -27,6 +28,8 @@ std = ["num-traits/std", "multiversion/std"]
 alt = []
 # Use unsafe variants for maximum performance (union-based bit manipulation, unchecked indexing)
 unsafe_simd = []
+# Token-based API using archmage (zero dispatch overhead)
+mage = ["dep:archmage"]
 
 [[bench]]
 name = "benchmarks"

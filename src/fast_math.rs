@@ -26,10 +26,10 @@ fn log2_x8(x: f32x8) -> f32x8 {
     const EXPONENT_BIAS: i32 = 127;
 
     // Coefficients for odd polynomial on y = (a-1)/(a+1)
-    const C0: f32 = 2.885_390_08; // 2/ln(2)
-    const C1: f32 = 0.961_800_76; // y^2 coefficient
-    const C2: f32 = 0.576_974_45; // y^4 coefficient
-    const C3: f32 = 0.434_411_97; // y^6 coefficient
+    const C0: f32 = 2.885_39; // 2/ln(2)
+    const C1: f32 = 0.961_800_8; // y^2 coefficient
+    const C2: f32 = 0.576_974_5; // y^4 coefficient
+    const C3: f32 = 0.434_412; // y^6 coefficient
 
     let x_bits: i32x8 = cast(x);
 
@@ -75,13 +75,14 @@ fn log2_x8(x: f32x8) -> f32x8 {
 #[inline(always)]
 fn exp2_x8(x: f32x8) -> f32x8 {
     // Degree-6 minimax polynomial coefficients for 2^x on [0, 1]
+    // (truncated to f32 precision)
     const C0: f32 = 1.0;
-    const C1: f32 = 0.693_147_180_559_945;
-    const C2: f32 = 0.240_226_506_959_101;
-    const C3: f32 = 0.055_504_108_664_822;
-    const C4: f32 = 0.009_618_129_107_629;
-    const C5: f32 = 0.001_333_355_814_497;
-    const C6: f32 = 0.000_154_035_303_933;
+    const C1: f32 = core::f32::consts::LN_2; // 0.693_147_18
+    const C2: f32 = 0.240_226_5;
+    const C3: f32 = 0.055_504_11;
+    const C4: f32 = 0.009_618_129;
+    const C5: f32 = 0.001_333_355_8;
+    const C6: f32 = 0.000_154_035_3;
 
     // Clamp to safe range to avoid overflow/underflow
     let x = x.max(f32x8::splat(-126.0)).min(f32x8::splat(126.0));
