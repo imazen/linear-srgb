@@ -11,6 +11,8 @@ use linear_srgb::lut::{
     EncodeTable12, EncodeTable16, LinearTable8, LinearTable12, LinearTable16, SrgbConverter,
     lut_interp_linear_float,
 };
+#[cfg(feature = "mage")]
+use linear_srgb::mage;
 use linear_srgb::scalar::{linear_to_srgb, srgb_to_linear};
 use linear_srgb::simd;
 use std::hint::black_box;
@@ -935,6 +937,154 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
     group.finish();
 }
 
+// ============================================================================
+// Mage Module Benchmarks (archmage native SIMD with true FMA)
+// ============================================================================
+
+#[cfg(feature = "mage")]
+fn bench_mage(c: &mut Criterion) {
+    use archmage::SimdToken;
+    use archmage::simd::avx2::f32x8 as mage_f32x8;
+    use mage::Avx2FmaToken;
+
+    let Some(token) = Avx2FmaToken::try_new() else {
+        eprintln!("Skipping mage benchmarks: AVX2+FMA not available");
+        return;
+    };
+
+    let mut group = c.benchmark_group("mage");
+    group.throughput(Throughput::Elements(BATCH_SIZE as u64));
+
+    let f32_srgb = create_f32_srgb();
+    let f32_linear = create_f32_linear();
+
+    // === f32 slice conversion (primary use case) ===
+
+    group.bench_function("f32_f32/srgb_to_linear_slice", |b| {
+        let mut output = f32_srgb.clone();
+        b.iter(|| {
+            mage::srgb_to_linear_slice(token, &mut output);
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("f32_f32/linear_to_srgb_slice", |b| {
+        let mut output = f32_linear.clone();
+        b.iter(|| {
+            mage::linear_to_srgb_slice(token, &mut output);
+            black_box(&output);
+        })
+    });
+
+    // === Compare with simd module (wide-based) ===
+
+    group.bench_function("f32_f32/simd_srgb_to_linear_slice", |b| {
+        let mut output = f32_srgb.clone();
+        b.iter(|| {
+            simd::srgb_to_linear_slice(&mut output);
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("f32_f32/simd_linear_to_srgb_slice", |b| {
+        let mut output = f32_linear.clone();
+        b.iter(|| {
+            simd::linear_to_srgb_slice(&mut output);
+            black_box(&output);
+        })
+    });
+
+    // === x8 function comparison ===
+
+    group.bench_function("x8/mage_srgb_to_linear", |b| {
+        let mut output = f32_srgb.clone();
+        b.iter(|| {
+            for chunk in output.chunks_exact_mut(8) {
+                let arr: [f32; 8] = chunk.try_into().unwrap();
+                let v = mage_f32x8::from_array(token, arr);
+                let result = mage::srgb_to_linear_x8(token, v);
+                result.store(chunk.try_into().unwrap());
+            }
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("x8/simd_srgb_to_linear_dispatch", |b| {
+        let mut output = f32_srgb.clone();
+        b.iter(|| {
+            for chunk in output.chunks_exact_mut(8) {
+                let arr: [f32; 8] = chunk.try_into().unwrap();
+                let v = f32x8::from(arr);
+                let result = simd::srgb_to_linear_x8_dispatch(v);
+                let out_arr: [f32; 8] = result.into();
+                chunk.copy_from_slice(&out_arr);
+            }
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("x8/simd_srgb_to_linear_inline", |b| {
+        let mut output = f32_srgb.clone();
+        b.iter(|| {
+            for chunk in output.chunks_exact_mut(8) {
+                let arr: [f32; 8] = chunk.try_into().unwrap();
+                let v = f32x8::from(arr);
+                let result = simd::srgb_to_linear_x8_inline(v);
+                let out_arr: [f32; 8] = result.into();
+                chunk.copy_from_slice(&out_arr);
+            }
+            black_box(&output);
+        })
+    });
+
+    // === f32 → u8 ===
+
+    let lut8 = LinearTable8::new();
+    let u8_srgb = create_u8_srgb();
+    let linear_from_u8: Vec<f32> = u8_srgb.iter().map(|&v| lut8.lookup(v as usize)).collect();
+
+    group.bench_function("f32_u8/mage_linear_to_srgb_u8_slice", |b| {
+        let mut output = vec![0u8; BATCH_SIZE];
+        b.iter(|| {
+            mage::linear_to_srgb_u8_slice(token, black_box(&linear_from_u8), &mut output);
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("f32_u8/simd_linear_to_srgb_u8_slice", |b| {
+        let mut output = vec![0u8; BATCH_SIZE];
+        b.iter(|| {
+            simd::linear_to_srgb_u8_slice(black_box(&linear_from_u8), &mut output);
+            black_box(&output);
+        })
+    });
+
+    // === Gamma conversion ===
+
+    group.bench_function("gamma/mage_to_linear_2.2", |b| {
+        let mut output = f32_srgb.clone();
+        b.iter(|| {
+            mage::gamma_to_linear_slice(token, &mut output, 2.2);
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("gamma/simd_to_linear_2.2", |b| {
+        let mut output = f32_srgb.clone();
+        b.iter(|| {
+            simd::gamma_to_linear_slice(&mut output, 2.2);
+            black_box(&output);
+        })
+    });
+
+    group.finish();
+}
+
+#[cfg(not(feature = "mage"))]
+fn bench_mage(_c: &mut Criterion) {
+    // No-op when mage feature is disabled
+}
+
 criterion_group!(
     benches,
     bench_srgb_to_linear,
@@ -942,6 +1092,7 @@ criterion_group!(
     bench_roundtrip,
     bench_scaling,
     bench_dispatch_overhead,
+    bench_mage,
 );
 
 criterion_main!(benches);
