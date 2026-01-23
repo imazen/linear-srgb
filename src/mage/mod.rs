@@ -7,11 +7,11 @@
 //! # Usage
 //!
 //! ```rust,ignore
-//! use linear_srgb::mage::{self, X64V3Token, SimdToken};
+//! use linear_srgb::mage::{self, Avx2FmaToken, SimdToken};
 //!
 //! fn main() {
 //!     // Detection once at startup
-//!     let token = X64V3Token::try_new().expect("need AVX2+FMA");
+//!     let token = Avx2FmaToken::try_new().expect("need AVX2+FMA");
 //!
 //!     let mut data = vec![0.5f32; 10000];
 //!
@@ -24,9 +24,9 @@
 //! # Performance
 //!
 //! Unlike the `default::inline::*` functions, the mage module uses `#[arcane]`
-//! to enable `#[target_feature]` on the generated code. This allows LLVM to:
+//! with archmage's native SIMD types. This allows LLVM to:
 //!
-//! - Use FMA instructions directly (instead of separate mul+add)
+//! - Use FMA instructions directly (vfmadd213ps, vfmadd231ps)
 //! - Better inline SIMD operations
 //! - Optimize across function boundaries
 //!
@@ -39,14 +39,14 @@
 //! | Best for | Casual use | Tight loops, max performance |
 
 use archmage::arcane;
-use wide::{CmpLt, f32x8};
+use archmage::simd::avx2::f32x8;
 
 // Re-export core types from archmage
-pub use archmage::{SimdToken, X64V3Token};
+pub use archmage::{Avx2FmaToken, SimdToken};
 
 // Also export other common tokens users might want
 #[cfg(target_arch = "x86_64")]
-pub use archmage::{Avx2FmaToken, X64V2Token, X64V4Token};
+pub use archmage::{X64V2Token, X64V3Token, X64V4Token};
 
 #[cfg(target_arch = "aarch64")]
 pub use archmage::NeonToken;
@@ -60,67 +60,55 @@ const SRGB_SCALE: f32 = 1.055_010_7;
 const TWELVE_92: f32 = 12.92;
 
 // ============================================================================
-// Core SIMD math (compiled with target features)
-// ============================================================================
-
-/// Fast pow approximation using log2/exp2.
-/// Compiled with AVX2+FMA for optimal instruction selection.
-#[arcane]
-fn pow_x8(_token: X64V3Token, x: f32x8, n: f32) -> f32x8 {
-    crate::fast_math::pow_x8(x, n)
-}
-
-// ============================================================================
 // x8 Functions - process 8 values at once
 // ============================================================================
 
 /// Convert 8 sRGB f32 values to linear.
 ///
 /// Compiled with `#[target_feature(enable = "avx2,fma")]` for optimal codegen.
+/// Uses archmage's native SIMD types for true FMA instruction generation.
 /// Input values are clamped to \[0, 1\].
 #[arcane]
-pub fn srgb_to_linear_x8(token: X64V3Token, srgb: f32x8) -> f32x8 {
-    let zero = f32x8::splat(0.0);
-    let one = f32x8::splat(1.0);
-    let srgb = srgb.max(zero).min(one);
+pub fn srgb_to_linear_x8(token: Avx2FmaToken, srgb: f32x8) -> f32x8 {
+    let zero = f32x8::splat(token, 0.0);
+    let one = f32x8::splat(token, 1.0);
+    let srgb = srgb.clamp(zero, one);
 
-    let linear_result = srgb * f32x8::splat(LINEAR_SCALE);
-    let power_result = pow_x8(
-        token,
-        (srgb + f32x8::splat(SRGB_OFFSET)) / f32x8::splat(SRGB_SCALE),
-        2.4,
-    );
+    let linear_result = srgb * f32x8::splat(token, LINEAR_SCALE);
+    let power_result =
+        ((srgb + f32x8::splat(token, SRGB_OFFSET)) / f32x8::splat(token, SRGB_SCALE)).pow_midp(2.4);
 
-    let mask = srgb.simd_lt(f32x8::splat(SRGB_LINEAR_THRESHOLD));
-    mask.blend(linear_result, power_result)
+    let mask = srgb.simd_lt(f32x8::splat(token, SRGB_LINEAR_THRESHOLD));
+    f32x8::blend(mask, linear_result, power_result)
 }
 
 /// Convert 8 linear f32 values to sRGB.
 ///
 /// Compiled with `#[target_feature(enable = "avx2,fma")]` for optimal codegen.
+/// Uses archmage's native SIMD types for true FMA instruction generation.
 /// Input values are clamped to \[0, 1\].
 #[arcane]
-pub fn linear_to_srgb_x8(token: X64V3Token, linear: f32x8) -> f32x8 {
-    let zero = f32x8::splat(0.0);
-    let one = f32x8::splat(1.0);
-    let linear = linear.max(zero).min(one);
+pub fn linear_to_srgb_x8(token: Avx2FmaToken, linear: f32x8) -> f32x8 {
+    let zero = f32x8::splat(token, 0.0);
+    let one = f32x8::splat(token, 1.0);
+    let linear = linear.clamp(zero, one);
 
-    let linear_result = linear * f32x8::splat(TWELVE_92);
-    let power_result =
-        f32x8::splat(SRGB_SCALE) * pow_x8(token, linear, 1.0 / 2.4) - f32x8::splat(SRGB_OFFSET);
+    let linear_result = linear * f32x8::splat(token, TWELVE_92);
+    let power_result = f32x8::splat(token, SRGB_SCALE) * linear.pow_midp(1.0 / 2.4)
+        - f32x8::splat(token, SRGB_OFFSET);
 
-    let mask = linear.simd_lt(f32x8::splat(LINEAR_THRESHOLD));
-    mask.blend(linear_result, power_result)
+    let mask = linear.simd_lt(f32x8::splat(token, LINEAR_THRESHOLD));
+    f32x8::blend(mask, linear_result, power_result)
 }
 
 /// Convert 8 linear f32 values to sRGB u8.
 ///
 /// Compiled with `#[target_feature(enable = "avx2,fma")]` for optimal codegen.
 #[arcane]
-pub fn linear_to_srgb_u8_x8(token: X64V3Token, linear: f32x8) -> [u8; 8] {
+pub fn linear_to_srgb_u8_x8(token: Avx2FmaToken, linear: f32x8) -> [u8; 8] {
     let srgb = linear_to_srgb_x8(token, linear);
-    let scaled = srgb * f32x8::splat(255.0) + f32x8::splat(0.5);
-    let arr: [f32; 8] = scaled.into();
+    let scaled = srgb * f32x8::splat(token, 255.0) + f32x8::splat(token, 0.5);
+    let arr = scaled.to_array();
     [
         arr[0] as u8,
         arr[1] as u8,
@@ -137,22 +125,22 @@ pub fn linear_to_srgb_u8_x8(token: X64V3Token, linear: f32x8) -> [u8; 8] {
 ///
 /// Compiled with `#[target_feature(enable = "avx2,fma")]` for optimal codegen.
 #[arcane]
-pub fn gamma_to_linear_x8(token: X64V3Token, encoded: f32x8, gamma: f32) -> f32x8 {
-    let zero = f32x8::splat(0.0);
-    let one = f32x8::splat(1.0);
-    let encoded = encoded.max(zero).min(one);
-    pow_x8(token, encoded, gamma)
+pub fn gamma_to_linear_x8(token: Avx2FmaToken, encoded: f32x8, gamma: f32) -> f32x8 {
+    let zero = f32x8::splat(token, 0.0);
+    let one = f32x8::splat(token, 1.0);
+    let encoded = encoded.clamp(zero, one);
+    encoded.pow_midp(gamma)
 }
 
 /// Convert 8 linear f32 values to gamma-encoded.
 ///
 /// Compiled with `#[target_feature(enable = "avx2,fma")]` for optimal codegen.
 #[arcane]
-pub fn linear_to_gamma_x8(token: X64V3Token, linear: f32x8, gamma: f32) -> f32x8 {
-    let zero = f32x8::splat(0.0);
-    let one = f32x8::splat(1.0);
-    let linear = linear.max(zero).min(one);
-    pow_x8(token, linear, 1.0 / gamma)
+pub fn linear_to_gamma_x8(token: Avx2FmaToken, linear: f32x8, gamma: f32) -> f32x8 {
+    let zero = f32x8::splat(token, 0.0);
+    let one = f32x8::splat(token, 1.0);
+    let linear = linear.clamp(zero, one);
+    linear.pow_midp(1.0 / gamma)
 }
 
 // ============================================================================
@@ -164,12 +152,13 @@ pub fn linear_to_gamma_x8(token: X64V3Token, linear: f32x8, gamma: f32) -> f32x8
 /// Processes 8 values at a time using SIMD with AVX2+FMA enabled.
 /// The token parameter proves features are available at compile time.
 #[arcane]
-pub fn srgb_to_linear_slice(token: X64V3Token, values: &mut [f32]) {
+pub fn srgb_to_linear_slice(token: Avx2FmaToken, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
-        let result = srgb_to_linear_x8(token, f32x8::from(*chunk));
-        *chunk = result.into();
+        let v = f32x8::from_array(token, *chunk);
+        let result = srgb_to_linear_x8(token, v);
+        result.store(chunk);
     }
 
     for v in remainder {
@@ -182,12 +171,13 @@ pub fn srgb_to_linear_slice(token: X64V3Token, values: &mut [f32]) {
 /// Processes 8 values at a time using SIMD with AVX2+FMA enabled.
 /// The token parameter proves features are available at compile time.
 #[arcane]
-pub fn linear_to_srgb_slice(token: X64V3Token, values: &mut [f32]) {
+pub fn linear_to_srgb_slice(token: Avx2FmaToken, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
-        let result = linear_to_srgb_x8(token, f32x8::from(*chunk));
-        *chunk = result.into();
+        let v = f32x8::from_array(token, *chunk);
+        let result = linear_to_srgb_x8(token, v);
+        result.store(chunk);
     }
 
     for v in remainder {
@@ -202,7 +192,7 @@ pub fn linear_to_srgb_slice(token: X64V3Token, values: &mut [f32]) {
 /// # Panics
 /// Panics if `input.len() != output.len()`.
 #[inline]
-pub fn srgb_u8_to_linear_slice(_token: X64V3Token, input: &[u8], output: &mut [f32]) {
+pub fn srgb_u8_to_linear_slice(_token: Avx2FmaToken, input: &[u8], output: &mut [f32]) {
     assert_eq!(input.len(), output.len());
 
     // LUT-based, no SIMD needed - just prove we have the token
@@ -218,14 +208,14 @@ pub fn srgb_u8_to_linear_slice(_token: X64V3Token, input: &[u8], output: &mut [f
 /// # Panics
 /// Panics if `input.len() != output.len()`.
 #[arcane]
-pub fn linear_to_srgb_u8_slice(token: X64V3Token, input: &[f32], output: &mut [u8]) {
+pub fn linear_to_srgb_u8_slice(token: Avx2FmaToken, input: &[f32], output: &mut [u8]) {
     assert_eq!(input.len(), output.len());
 
     let (in_chunks, in_remainder) = input.as_chunks::<8>();
     let (out_chunks, out_remainder) = output.as_chunks_mut::<8>();
 
     for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
-        *out = linear_to_srgb_u8_x8(token, f32x8::from(*inp));
+        *out = linear_to_srgb_u8_x8(token, f32x8::from_array(token, *inp));
     }
 
     for (inp, out) in in_remainder.iter().zip(out_remainder.iter_mut()) {
@@ -238,12 +228,13 @@ pub fn linear_to_srgb_u8_slice(token: X64V3Token, input: &[f32], output: &mut [u
 ///
 /// Processes 8 values at a time using SIMD with AVX2+FMA enabled.
 #[arcane]
-pub fn gamma_to_linear_slice(token: X64V3Token, values: &mut [f32], gamma: f32) {
+pub fn gamma_to_linear_slice(token: Avx2FmaToken, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
-        let result = gamma_to_linear_x8(token, f32x8::from(*chunk), gamma);
-        *chunk = result.into();
+        let v = f32x8::from_array(token, *chunk);
+        let result = gamma_to_linear_x8(token, v, gamma);
+        result.store(chunk);
     }
 
     for v in remainder {
@@ -255,12 +246,13 @@ pub fn gamma_to_linear_slice(token: X64V3Token, values: &mut [f32], gamma: f32) 
 ///
 /// Processes 8 values at a time using SIMD with AVX2+FMA enabled.
 #[arcane]
-pub fn linear_to_gamma_slice(token: X64V3Token, values: &mut [f32], gamma: f32) {
+pub fn linear_to_gamma_slice(token: Avx2FmaToken, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
-        let result = linear_to_gamma_x8(token, f32x8::from(*chunk), gamma);
-        *chunk = result.into();
+        let v = f32x8::from_array(token, *chunk);
+        let result = linear_to_gamma_x8(token, v, gamma);
+        result.store(chunk);
     }
 
     for v in remainder {
@@ -276,7 +268,7 @@ pub fn linear_to_gamma_slice(token: X64V3Token, values: &mut [f32], gamma: f32) 
 ///
 /// For data already structured as `f32x8` slices.
 #[arcane]
-pub fn srgb_to_linear_x8_slice(token: X64V3Token, values: &mut [f32x8]) {
+pub fn srgb_to_linear_x8_slice(token: Avx2FmaToken, values: &mut [f32x8]) {
     for v in values.iter_mut() {
         *v = srgb_to_linear_x8(token, *v);
     }
@@ -286,7 +278,7 @@ pub fn srgb_to_linear_x8_slice(token: X64V3Token, values: &mut [f32x8]) {
 ///
 /// For data already structured as `f32x8` slices.
 #[arcane]
-pub fn linear_to_srgb_x8_slice(token: X64V3Token, values: &mut [f32x8]) {
+pub fn linear_to_srgb_x8_slice(token: Avx2FmaToken, values: &mut [f32x8]) {
     for v in values.iter_mut() {
         *v = linear_to_srgb_x8(token, *v);
     }
@@ -296,7 +288,7 @@ pub fn linear_to_srgb_x8_slice(token: X64V3Token, values: &mut [f32x8]) {
 ///
 /// For data already structured as `f32x8` slices.
 #[arcane]
-pub fn gamma_to_linear_x8_slice(token: X64V3Token, values: &mut [f32x8], gamma: f32) {
+pub fn gamma_to_linear_x8_slice(token: Avx2FmaToken, values: &mut [f32x8], gamma: f32) {
     for v in values.iter_mut() {
         *v = gamma_to_linear_x8(token, *v, gamma);
     }
@@ -306,7 +298,7 @@ pub fn gamma_to_linear_x8_slice(token: X64V3Token, values: &mut [f32x8], gamma: 
 ///
 /// For data already structured as `f32x8` slices.
 #[arcane]
-pub fn linear_to_gamma_x8_slice(token: X64V3Token, values: &mut [f32x8], gamma: f32) {
+pub fn linear_to_gamma_x8_slice(token: Avx2FmaToken, values: &mut [f32x8], gamma: f32) {
     for v in values.iter_mut() {
         *v = linear_to_gamma_x8(token, *v, gamma);
     }
@@ -323,20 +315,20 @@ mod tests {
     #[cfg(not(feature = "std"))]
     use alloc::{vec, vec::Vec};
 
-    fn get_token() -> Option<X64V3Token> {
-        X64V3Token::try_new()
+    fn get_token() -> Option<Avx2FmaToken> {
+        Avx2FmaToken::try_new()
     }
 
     #[test]
     fn test_srgb_to_linear_x8_with_token() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: X64V3 not available");
+            eprintln!("Skipping test: AVX2+FMA not available");
             return;
         };
 
         let input = [0.0f32, 0.25, 0.5, 0.75, 1.0, 0.1, 0.9, 0.04];
-        let result = srgb_to_linear_x8(token, f32x8::from(input));
-        let result_arr: [f32; 8] = result.into();
+        let result = srgb_to_linear_x8(token, f32x8::from_array(token, input));
+        let result_arr = result.to_array();
 
         for (i, &inp) in input.iter().enumerate() {
             let expected = crate::scalar::srgb_to_linear(inp);
@@ -353,7 +345,7 @@ mod tests {
     #[test]
     fn test_srgb_to_linear_slice_with_token() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: X64V3 not available");
+            eprintln!("Skipping test: AVX2+FMA not available");
             return;
         };
 
@@ -379,7 +371,7 @@ mod tests {
     #[test]
     fn test_roundtrip_with_token() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: X64V3 not available");
+            eprintln!("Skipping test: AVX2+FMA not available");
             return;
         };
 
