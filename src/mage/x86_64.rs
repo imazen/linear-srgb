@@ -125,16 +125,14 @@ pub fn linear_to_srgb_slice(token: Avx2FmaToken, values: &mut [f32]) {
 /// Convert sRGB u8 values to linear f32.
 ///
 /// Uses a precomputed LUT for each u8 value (no SIMD needed).
+/// Delegates to the optimized batch implementation.
 ///
 /// # Panics
 /// Panics if `input.len() != output.len()`.
 #[inline]
 pub fn srgb_u8_to_linear_slice(_token: Avx2FmaToken, input: &[u8], output: &mut [f32]) {
-    assert_eq!(input.len(), output.len());
-
-    for (inp, out) in input.iter().zip(output.iter_mut()) {
-        *out = crate::simd::srgb_u8_to_linear(*inp);
-    }
+    // Delegate to the optimized simd implementation which does batch LUT lookups
+    crate::simd::srgb_u8_to_linear_slice(input, output);
 }
 
 /// Convert linear f32 values to sRGB u8.
