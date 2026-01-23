@@ -277,7 +277,7 @@ These functions are marked `#[deprecated]` because faster alternatives exist. Th
 
 ```toml
 [dependencies]
-linear-srgb = "0.3"  # std enabled by default
+linear-srgb = "0.4"  # std enabled by default
 
 # no_std (requires alloc for LUT generation)
 linear-srgb = { version = "0.3", default-features = false }
