@@ -18,7 +18,7 @@ use wide::{f32x8, i32x8};
 /// Uses (a-1)/(a+1) transform with odd polynomial.
 /// Max error ~3 ULP (sufficient for 8-bit to 12-bit color).
 #[inline(always)]
-fn log2_x8(x: f32x8) -> f32x8 {
+pub(crate) fn log2_x8(x: f32x8) -> f32x8 {
     // Constants for range reduction
     const SQRT2_OVER_2: u32 = 0x3f3504f3; // sqrt(2)/2 in f32 bits
     const ONE: u32 = 0x3f800000; // 1.0 in f32 bits
@@ -73,7 +73,7 @@ fn log2_x8(x: f32x8) -> f32x8 {
 /// Uses a degree-6 minimax polynomial.
 /// Max error ~140 ULP (~8e-6 relative error).
 #[inline(always)]
-fn exp2_x8(x: f32x8) -> f32x8 {
+pub(crate) fn exp2_x8(x: f32x8) -> f32x8 {
     // Degree-6 minimax polynomial coefficients for 2^x on [0, 1]
     // (truncated to f32 precision)
     const C0: f32 = 1.0;
