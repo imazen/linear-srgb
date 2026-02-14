@@ -168,6 +168,29 @@ pub fn linear_to_srgb_u8(linear: f32) -> u8 {
 }
 
 // ============================================================================
+// u16 LUT-based conversions
+// ============================================================================
+
+/// Convert 16-bit sRGB to linear f32 using a 65536-entry const LUT.
+///
+/// Zero math — pure table lookup. The LUT is 256KB and generated at compile time
+/// with f64 precision. Roundtrip error is 0 u16 levels.
+#[inline]
+pub fn srgb_u16_to_linear(value: u16) -> f32 {
+    crate::const_luts_u16::SRGB_U16_TO_LINEAR_F32[value as usize]
+}
+
+/// Convert linear f32 to 16-bit sRGB using a 65537-entry const LUT.
+///
+/// Uses the same pattern as [`linear_to_srgb_u8`] but with 16-bit resolution.
+/// Max error: ±0 u16 levels at 1/65536 resolution.
+#[inline]
+pub fn linear_to_srgb_u16(linear: f32) -> u16 {
+    let idx = (linear.clamp(0.0, 1.0) * 65536.0 + 0.5) as usize;
+    crate::const_luts_u16::LINEAR_TO_SRGB_U16_65536[idx]
+}
+
+// ============================================================================
 // Custom Gamma Functions (pure power, no linear segment)
 // ============================================================================
 

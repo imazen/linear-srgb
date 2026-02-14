@@ -143,6 +143,7 @@ pub(crate) mod fast_math;
 
 // Pre-computed const lookup tables (embedded in binary)
 mod const_luts;
+mod const_luts_u16;
 
 // Alternative/experimental implementations (for benchmarking)
 #[cfg(feature = "alt")]

@@ -718,6 +718,74 @@ pub fn linear_to_srgb_u8_slice(input: &[f32], output: &mut [u8]) {
 }
 
 // ============================================================================
+// u16 Batch Functions (LUT-based)
+// ============================================================================
+
+/// Convert sRGB u16 values to linear f32 using a 65536-entry const LUT.
+///
+/// Pure table lookup, no math. The LUT is 256KB.
+///
+/// # Panics
+/// Panics if `input.len() != output.len()`.
+pub fn srgb_u16_to_linear_slice(input: &[u16], output: &mut [f32]) {
+    assert_eq!(input.len(), output.len());
+    let lut = &crate::const_luts_u16::SRGB_U16_TO_LINEAR_F32;
+
+    let (in_chunks, in_remainder) = input.as_chunks::<8>();
+    let (out_chunks, out_remainder) = output.as_chunks_mut::<8>();
+
+    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+        *out = [
+            lut[inp[0] as usize],
+            lut[inp[1] as usize],
+            lut[inp[2] as usize],
+            lut[inp[3] as usize],
+            lut[inp[4] as usize],
+            lut[inp[5] as usize],
+            lut[inp[6] as usize],
+            lut[inp[7] as usize],
+        ];
+    }
+
+    for (inp, out) in in_remainder.iter().zip(out_remainder.iter_mut()) {
+        *out = lut[*inp as usize];
+    }
+}
+
+/// Convert linear f32 values to sRGB u16 using a 65537-entry const LUT.
+///
+/// # Panics
+/// Panics if `input.len() != output.len()`.
+pub fn linear_to_srgb_u16_slice(input: &[f32], output: &mut [u16]) {
+    assert_eq!(input.len(), output.len());
+    let lut = &crate::const_luts_u16::LINEAR_TO_SRGB_U16_65536;
+
+    let (in_chunks, in_remainder) = input.as_chunks::<8>();
+    let (out_chunks, out_remainder) = output.as_chunks_mut::<8>();
+
+    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+        let linear = f32x8::from(*inp);
+        let clamped = linear.max(ZERO).min(ONE);
+        let scaled = clamped * f32x8::splat(65536.0) + HALF;
+        let arr: [f32; 8] = scaled.into();
+        *out = [
+            lut[arr[0] as usize],
+            lut[arr[1] as usize],
+            lut[arr[2] as usize],
+            lut[arr[3] as usize],
+            lut[arr[4] as usize],
+            lut[arr[5] as usize],
+            lut[arr[6] as usize],
+            lut[arr[7] as usize],
+        ];
+    }
+
+    for (inp, out) in in_remainder.iter().zip(out_remainder.iter_mut()) {
+        *out = crate::scalar::linear_to_srgb_u16(*inp);
+    }
+}
+
+// ============================================================================
 // Custom Gamma Slice Functions
 // ============================================================================
 

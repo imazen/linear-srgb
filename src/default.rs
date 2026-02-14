@@ -63,9 +63,12 @@ pub use crate::scalar::{
     // f64 sRGB (high precision)
     linear_to_srgb_f64,
     linear_to_srgb_u8,
+    // u16 sRGB (LUT-based)
+    linear_to_srgb_u16,
     srgb_to_linear,
     srgb_to_linear_extended,
     srgb_to_linear_f64,
+    srgb_u16_to_linear,
 };
 
 // u8 → f32 uses LUT (20x faster than scalar powf)
@@ -76,6 +79,9 @@ pub use crate::simd::srgb_u8_to_linear;
 // ============================================================================
 
 pub use crate::simd::{
+    // u16 slices
+    linear_to_srgb_u16_slice,
+    srgb_u16_to_linear_slice,
     // Custom gamma slices
     gamma_to_linear_slice,
     // f32x8 slices (for pre-aligned SIMD data)
