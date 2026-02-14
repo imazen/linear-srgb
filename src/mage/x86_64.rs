@@ -1,9 +1,9 @@
 //! x86-64 AVX2+FMA implementation.
 //!
-//! Uses `wide::f32x8` with `#[arcane]` for FMA-enabled target features.
+//! Uses `wide::f32x8` with `#[arcane]`/`#[rite]` for FMA-enabled target features.
 
 use archmage::Avx2FmaToken;
-use archmage::arcane;
+use archmage::{arcane, rite};
 use wide::{CmpLt, f32x8};
 
 /// Token type for this platform (AVX2+FMA).
@@ -30,7 +30,7 @@ fn pow_x8(x: f32x8, gamma: f32) -> f32x8 {
     crate::fast_math::exp2_x8(log2_x * f32x8::splat(gamma))
 }
 
-#[arcane]
+#[rite]
 fn srgb_to_linear_x8(_token: Avx2FmaToken, srgb: f32x8) -> f32x8 {
     let zero = f32x8::ZERO;
     let one = f32x8::ONE;
@@ -46,7 +46,7 @@ fn srgb_to_linear_x8(_token: Avx2FmaToken, srgb: f32x8) -> f32x8 {
     mask.blend(linear_result, power_result)
 }
 
-#[arcane]
+#[rite]
 fn linear_to_srgb_x8(_token: Avx2FmaToken, linear: f32x8) -> f32x8 {
     let zero = f32x8::ZERO;
     let one = f32x8::ONE;
@@ -60,7 +60,7 @@ fn linear_to_srgb_x8(_token: Avx2FmaToken, linear: f32x8) -> f32x8 {
     mask.blend(linear_result, power_result)
 }
 
-#[arcane]
+#[rite]
 fn gamma_to_linear_x8(_token: Avx2FmaToken, encoded: f32x8, gamma: f32) -> f32x8 {
     let zero = f32x8::ZERO;
     let one = f32x8::ONE;
@@ -68,7 +68,7 @@ fn gamma_to_linear_x8(_token: Avx2FmaToken, encoded: f32x8, gamma: f32) -> f32x8
     pow_x8(encoded, gamma)
 }
 
-#[arcane]
+#[rite]
 fn linear_to_gamma_x8(_token: Avx2FmaToken, linear: f32x8, gamma: f32) -> f32x8 {
     let zero = f32x8::ZERO;
     let one = f32x8::ONE;
