@@ -2,9 +2,11 @@
 //!
 //! These are "dirty" approximations optimized for speed over precision.
 //! Suitable for sRGB transfer functions where ~1e-5 error is acceptable.
+//!
+//! All functions are `_inline` only (no dispatch wrappers). Used by tests
+//! and available for benchmarking.
 
 use bytemuck::cast;
-use multiversed::multiversed;
 use wide::{CmpLt, f32x8, i32x8, u32x8};
 
 // Constants for dirty_log2f_x8
@@ -167,34 +169,6 @@ fn dirty_pow_x8_inline(x: f32x8, n: f32x8) -> f32x8 {
     dirty_exp2f_x8_inline(n * lg)
 }
 
-/// Fast approximate log2 for 8 f32 values (with CPU dispatch).
-#[multiversed]
-#[inline]
-pub fn dirty_log2f_x8_dispatch(d: f32x8) -> f32x8 {
-    dirty_log2f_x8_inline(d)
-}
-
-/// Fast approximate exp2 (2^x) for 8 f32 values (with CPU dispatch).
-#[multiversed]
-#[inline]
-pub fn dirty_exp2f_x8_dispatch(d: f32x8) -> f32x8 {
-    dirty_exp2f_x8_inline(d)
-}
-
-/// Fast approximate pow(x, n) for 8 f32 values (with CPU dispatch).
-#[multiversed]
-#[inline]
-pub fn dirty_pow_x8_dispatch(x: f32x8, n: f32x8) -> f32x8 {
-    dirty_pow_x8_inline(x, n)
-}
-
-/// Fast approximate pow(x, n) where n is a constant (with CPU dispatch).
-#[multiversed]
-#[inline]
-pub fn dirty_pow_const_x8_dispatch(x: f32x8, n: f32) -> f32x8 {
-    dirty_pow_x8_inline(x, f32x8::splat(n))
-}
-
 // ============================================================================
 // Imageflow-style fast math (no LUT, uses division-based polynomial)
 // ============================================================================
@@ -276,34 +250,6 @@ fn imageflow_pow2_x8_inline(p: f32x8) -> f32x8 {
 fn imageflow_pow_x8_inline(x: f32x8, n: f32x8) -> f32x8 {
     let lg = imageflow_log2_x8_inline(x);
     imageflow_pow2_x8_inline(n * lg)
-}
-
-/// Imageflow-style fast log2 for 8 f32 values (with CPU dispatch).
-#[multiversed]
-#[inline]
-pub fn imageflow_log2_x8_dispatch(x: f32x8) -> f32x8 {
-    imageflow_log2_x8_inline(x)
-}
-
-/// Imageflow-style fast pow2 (2^x) for 8 f32 values (with CPU dispatch).
-#[multiversed]
-#[inline]
-pub fn imageflow_pow2_x8_dispatch(p: f32x8) -> f32x8 {
-    imageflow_pow2_x8_inline(p)
-}
-
-/// Imageflow-style fast pow(x, n) for 8 f32 values (with CPU dispatch).
-#[multiversed]
-#[inline]
-pub fn imageflow_pow_x8_dispatch(x: f32x8, n: f32x8) -> f32x8 {
-    imageflow_pow_x8_inline(x, n)
-}
-
-/// Imageflow-style fast pow(x, n) where n is a constant (with CPU dispatch).
-#[multiversed]
-#[inline]
-pub fn imageflow_pow_const_x8_dispatch(x: f32x8, n: f32) -> f32x8 {
-    imageflow_pow_x8_inline(x, f32x8::splat(n))
 }
 
 // ============================================================================
@@ -396,34 +342,6 @@ fn fastpow_x8_inline(x: f32x8, n: f32x8) -> f32x8 {
     fastpow_pow2_x8_inline(n * lg)
 }
 
-/// Optimized fast log2 using reciprocal approximation (with CPU dispatch).
-#[multiversed]
-#[inline]
-pub fn fastpow_log2_x8_dispatch(x: f32x8) -> f32x8 {
-    fastpow_log2_x8_inline(x)
-}
-
-/// Optimized fast pow2 using reciprocal approximation (with CPU dispatch).
-#[multiversed]
-#[inline]
-pub fn fastpow_pow2_x8_dispatch(p: f32x8) -> f32x8 {
-    fastpow_pow2_x8_inline(p)
-}
-
-/// Optimized fast pow using reciprocal approximation (with CPU dispatch).
-#[multiversed]
-#[inline]
-pub fn fastpow_x8_dispatch(x: f32x8, n: f32x8) -> f32x8 {
-    fastpow_x8_inline(x, n)
-}
-
-/// Optimized fast pow with constant exponent (with CPU dispatch).
-#[multiversed]
-#[inline]
-pub fn fastpow_const_x8_dispatch(x: f32x8, n: f32) -> f32x8 {
-    fastpow_x8_inline(x, f32x8::splat(n))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -431,7 +349,7 @@ mod tests {
     #[test]
     fn test_dirty_log2f_x8() {
         let input = f32x8::from([0.5, 1.0, 2.0, 4.0, 0.25, 8.0, 0.125, 16.0]);
-        let result = dirty_log2f_x8_dispatch(input);
+        let result = dirty_log2f_x8_inline(input);
         let result_arr: [f32; 8] = result.into();
 
         let expected = [-1.0, 0.0, 1.0, 2.0, -2.0, 3.0, -3.0, 4.0];
@@ -450,7 +368,7 @@ mod tests {
     fn test_dirty_exp2f_x8() {
         // Test values in typical sRGB range (avoiding 0 which is an edge case)
         let input = f32x8::from([-3.0, -2.0, -1.0, -0.5, 0.5, 1.0, 2.0, 3.0]);
-        let result = dirty_exp2f_x8_dispatch(input);
+        let result = dirty_exp2f_x8_inline(input);
         let result_arr: [f32; 8] = result.into();
         let input_arr: [f32; 8] = input.into();
 
@@ -471,7 +389,7 @@ mod tests {
         // Test values relevant to sRGB conversion (avoiding 0)
         let x = f32x8::from([0.1, 0.2, 0.3, 0.5, 0.7, 0.8, 0.9, 1.0]);
         let n = f32x8::splat(2.4);
-        let result = dirty_pow_x8_dispatch(x, n);
+        let result = dirty_pow_x8_inline(x, n);
         let result_arr: [f32; 8] = result.into();
         let x_arr: [f32; 8] = x.into();
 
@@ -495,7 +413,7 @@ mod tests {
 
         // Test x^2.4 (sRGB decode)
         let gamma = f32x8::splat(2.4);
-        let result = dirty_pow_x8_dispatch(x, gamma);
+        let result = dirty_pow_x8_inline(x, gamma);
         let result_arr: [f32; 8] = result.into();
         let x_arr: [f32; 8] = x.into();
 
@@ -512,7 +430,7 @@ mod tests {
 
         // Test x^(1/2.4) (sRGB encode)
         let inv_gamma = f32x8::splat(1.0 / 2.4);
-        let result = dirty_pow_x8_dispatch(x, inv_gamma);
+        let result = dirty_pow_x8_inline(x, inv_gamma);
         let result_arr: [f32; 8] = result.into();
 
         for (i, (&r, &inp)) in result_arr.iter().zip(x_arr.iter()).enumerate() {
@@ -530,7 +448,7 @@ mod tests {
     #[test]
     fn test_imageflow_log2_x8() {
         let input = f32x8::from([0.5, 1.0, 2.0, 4.0, 0.25, 8.0, 0.125, 16.0]);
-        let result = imageflow_log2_x8_dispatch(input);
+        let result = imageflow_log2_x8_inline(input);
         let result_arr: [f32; 8] = result.into();
 
         let expected = [-1.0, 0.0, 1.0, 2.0, -2.0, 3.0, -3.0, 4.0];
@@ -549,7 +467,7 @@ mod tests {
     #[test]
     fn test_imageflow_pow2_x8() {
         let input = f32x8::from([-3.0, -2.0, -1.0, -0.5, 0.5, 1.0, 2.0, 3.0]);
-        let result = imageflow_pow2_x8_dispatch(input);
+        let result = imageflow_pow2_x8_inline(input);
         let result_arr: [f32; 8] = result.into();
         let input_arr: [f32; 8] = input.into();
 
@@ -573,7 +491,7 @@ mod tests {
 
         // Test x^(1/2.4) which is used in linear→sRGB
         let inv_gamma = f32x8::splat(1.0 / 2.4);
-        let result = imageflow_pow_x8_dispatch(x, inv_gamma);
+        let result = imageflow_pow_x8_inline(x, inv_gamma);
         let result_arr: [f32; 8] = result.into();
         let x_arr: [f32; 8] = x.into();
 
@@ -593,7 +511,7 @@ mod tests {
     #[test]
     fn test_fastpow_log2_x8() {
         let input = f32x8::from([0.5, 1.0, 2.0, 4.0, 0.25, 8.0, 0.125, 16.0]);
-        let result = fastpow_log2_x8_dispatch(input);
+        let result = fastpow_log2_x8_inline(input);
         let result_arr: [f32; 8] = result.into();
 
         let expected = [-1.0, 0.0, 1.0, 2.0, -2.0, 3.0, -3.0, 4.0];
@@ -612,7 +530,7 @@ mod tests {
     #[test]
     fn test_fastpow_pow2_x8() {
         let input = f32x8::from([-3.0, -2.0, -1.0, -0.5, 0.5, 1.0, 2.0, 3.0]);
-        let result = fastpow_pow2_x8_dispatch(input);
+        let result = fastpow_pow2_x8_inline(input);
         let result_arr: [f32; 8] = result.into();
         let input_arr: [f32; 8] = input.into();
 
@@ -636,7 +554,7 @@ mod tests {
 
         // Test x^(1/2.4) which is used in linear→sRGB
         let inv_gamma = f32x8::splat(1.0 / 2.4);
-        let result = fastpow_x8_dispatch(x, inv_gamma);
+        let result = fastpow_x8_inline(x, inv_gamma);
         let result_arr: [f32; 8] = result.into();
         let x_arr: [f32; 8] = x.into();
 
@@ -654,7 +572,7 @@ mod tests {
 
         // Test x^2.4 which is used in sRGB→linear
         let gamma = f32x8::splat(2.4);
-        let result = fastpow_x8_dispatch(x, gamma);
+        let result = fastpow_x8_inline(x, gamma);
         let result_arr: [f32; 8] = result.into();
 
         for (i, (&r, &inp)) in result_arr.iter().zip(x_arr.iter()).enumerate() {

@@ -17,7 +17,7 @@
 //! - [`srgb_u8_to_linear_slice`] - &\[u8\] sRGB → &mut \[f32\] linear
 //! - [`linear_to_srgb_u8_slice`] - &\[f32\] linear → &mut \[u8\] sRGB
 
-use multiversed::multiversed;
+use archmage::{incant, magetypes};
 use wide::{CmpLt, f32x8};
 
 use crate::fast_math::pow_x8;
@@ -321,12 +321,12 @@ pub fn srgb_u8_to_linear(value: u8) -> f32 {
 }
 
 // ============================================================================
-// x8 Inline Functions - Always inlined, for use in caller's multiversed code
+// x8 Inline Functions - Always inlined, for use in caller's magetypes code
 // ============================================================================
 
 /// Convert 8 sRGB f32 values to linear (always inlined).
 ///
-/// Use this variant inside your own `#[multiversed]` functions to avoid
+/// Use this variant inside your own `#[magetypes]` functions to avoid
 /// double dispatch overhead. For standalone calls, use [`srgb_to_linear_x8_dispatch`].
 ///
 /// Input values are clamped to \[0, 1\].
@@ -341,7 +341,7 @@ pub fn srgb_to_linear_x8_inline(srgb: f32x8) -> f32x8 {
 
 /// Convert 8 linear f32 values to sRGB (always inlined).
 ///
-/// Use this variant inside your own `#[multiversed]` functions to avoid
+/// Use this variant inside your own `#[magetypes]` functions to avoid
 /// double dispatch overhead. For standalone calls, use [`linear_to_srgb_x8_dispatch`].
 ///
 /// Input values are clamped to \[0, 1\].
@@ -387,7 +387,7 @@ pub(crate) fn linear_to_srgb_u8_lut_x8(linear: f32x8) -> [u8; 8] {
 
 /// Convert 8 gamma-encoded f32 values to linear (always inlined).
 ///
-/// Use this variant inside your own `#[multiversed]` functions to avoid
+/// Use this variant inside your own `#[magetypes]` functions to avoid
 /// double dispatch overhead.
 #[inline(always)]
 pub fn gamma_to_linear_x8_inline(encoded: f32x8, gamma: f32) -> f32x8 {
@@ -397,7 +397,7 @@ pub fn gamma_to_linear_x8_inline(encoded: f32x8, gamma: f32) -> f32x8 {
 
 /// Convert 8 linear f32 values to gamma-encoded (always inlined).
 ///
-/// Use this variant inside your own `#[multiversed]` functions to avoid
+/// Use this variant inside your own `#[magetypes]` functions to avoid
 /// double dispatch overhead.
 #[inline(always)]
 pub fn linear_to_gamma_x8_inline(linear: f32x8, gamma: f32) -> f32x8 {
@@ -409,30 +409,38 @@ pub fn linear_to_gamma_x8_inline(linear: f32x8, gamma: f32) -> f32x8 {
 // x8 Dispatch Functions - Runtime CPU feature detection
 // ============================================================================
 
+#[magetypes(v3)]
+fn srgb_to_linear_x8_tier(_token: Token, srgb: f32x8) -> f32x8 {
+    srgb_to_linear_x8_inline(srgb)
+}
+
 /// Convert 8 sRGB f32 values to linear (with CPU dispatch).
 ///
 /// This variant uses runtime CPU feature detection to select the optimal
 /// implementation. Use [`srgb_to_linear_x8_inline`] inside your own
-/// `#[multiversed]` functions to avoid double dispatch.
+/// `#[magetypes]` functions to avoid double dispatch.
 ///
 /// Input values are clamped to \[0, 1\].
-#[multiversed]
 #[inline]
 pub fn srgb_to_linear_x8_dispatch(srgb: f32x8) -> f32x8 {
-    srgb_to_linear_x8_inline(srgb)
+    incant!(srgb_to_linear_x8_tier(srgb), [v3])
+}
+
+#[magetypes(v3)]
+fn linear_to_srgb_x8_tier(_token: Token, linear: f32x8) -> f32x8 {
+    linear_to_srgb_x8_inline(linear)
 }
 
 /// Convert 8 linear f32 values to sRGB (with CPU dispatch).
 ///
 /// This variant uses runtime CPU feature detection to select the optimal
 /// implementation. Use [`linear_to_srgb_x8_inline`] inside your own
-/// `#[multiversed]` functions to avoid double dispatch.
+/// `#[magetypes]` functions to avoid double dispatch.
 ///
 /// Input values are clamped to \[0, 1\].
-#[multiversed]
 #[inline]
 pub fn linear_to_srgb_x8_dispatch(linear: f32x8) -> f32x8 {
-    linear_to_srgb_x8_inline(linear)
+    incant!(linear_to_srgb_x8_tier(linear), [v3])
 }
 
 /// Convert 8 linear f32 values to sRGB u8 (LUT-based, no dispatch needed).
@@ -441,18 +449,26 @@ pub fn linear_to_srgb_u8_x8_dispatch(linear: f32x8) -> [u8; 8] {
     linear_to_srgb_u8_x8_inline(linear)
 }
 
-/// Convert 8 gamma-encoded f32 values to linear (with CPU dispatch).
-#[multiversed]
-#[inline]
-pub fn gamma_to_linear_x8_dispatch(encoded: f32x8, gamma: f32) -> f32x8 {
+#[magetypes(v3)]
+fn gamma_to_linear_x8_tier(_token: Token, encoded: f32x8, gamma: f32) -> f32x8 {
     gamma_to_linear_x8_inline(encoded, gamma)
 }
 
+/// Convert 8 gamma-encoded f32 values to linear (with CPU dispatch).
+#[inline]
+pub fn gamma_to_linear_x8_dispatch(encoded: f32x8, gamma: f32) -> f32x8 {
+    incant!(gamma_to_linear_x8_tier(encoded, gamma), [v3])
+}
+
+#[magetypes(v3)]
+fn linear_to_gamma_x8_tier(_token: Token, linear: f32x8, gamma: f32) -> f32x8 {
+    linear_to_gamma_x8_inline(linear, gamma)
+}
+
 /// Convert 8 linear f32 values to gamma-encoded (with CPU dispatch).
-#[multiversed]
 #[inline]
 pub fn linear_to_gamma_x8_dispatch(linear: f32x8, gamma: f32) -> f32x8 {
-    linear_to_gamma_x8_inline(linear, gamma)
+    incant!(linear_to_gamma_x8_tier(linear, gamma), [v3])
 }
 
 // ============================================================================
@@ -463,7 +479,7 @@ pub fn linear_to_gamma_x8_dispatch(linear: f32x8, gamma: f32) -> f32x8 {
 ///
 /// This is the default variant that calls the inline implementation.
 /// Use `_dispatch` for guaranteed CPU feature detection, or `_inline`
-/// inside your own `#[multiversed]` functions.
+/// inside your own `#[magetypes]` functions.
 ///
 /// Input values are clamped to \[0, 1\].
 ///
@@ -484,7 +500,7 @@ pub fn srgb_to_linear_x8(srgb: f32x8) -> f32x8 {
 ///
 /// This is the default variant that calls the inline implementation.
 /// Use `_dispatch` for guaranteed CPU feature detection, or `_inline`
-/// inside your own `#[multiversed]` functions.
+/// inside your own `#[magetypes]` functions.
 ///
 /// Input values are clamped to \[0, 1\].
 ///
@@ -578,6 +594,20 @@ pub fn linear_to_gamma_x8(linear: f32x8, gamma: f32) -> f32x8 {
 // Slice Functions - Process entire slices
 // ============================================================================
 
+#[magetypes(v3)]
+fn srgb_to_linear_slice_tier(_token: Token, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<8>();
+
+    for chunk in chunks {
+        let result = srgb_to_linear_x8_inline(f32x8::from(*chunk));
+        *chunk = result.into();
+    }
+
+    for v in remainder {
+        *v = crate::scalar::srgb_to_linear(*v);
+    }
+}
+
 /// Convert sRGB f32 values to linear in-place.
 ///
 /// Processes 8 values at a time using SIMD, with scalar fallback for remainder.
@@ -589,18 +619,22 @@ pub fn linear_to_gamma_x8(linear: f32x8, gamma: f32) -> f32x8 {
 /// let mut values = vec![0.0f32, 0.25, 0.5, 0.75, 1.0];
 /// srgb_to_linear_slice(&mut values);
 /// ```
-#[multiversed]
 #[inline]
 pub fn srgb_to_linear_slice(values: &mut [f32]) {
+    incant!(srgb_to_linear_slice_tier(values), [v3])
+}
+
+#[magetypes(v3)]
+fn linear_to_srgb_slice_tier(_token: Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
-        let result = srgb_to_linear_x8_inline(f32x8::from(*chunk));
+        let result = linear_to_srgb_x8_inline(f32x8::from(*chunk));
         *chunk = result.into();
     }
 
     for v in remainder {
-        *v = crate::scalar::srgb_to_linear(*v);
+        *v = crate::scalar::linear_to_srgb(*v);
     }
 }
 
@@ -615,19 +649,9 @@ pub fn srgb_to_linear_slice(values: &mut [f32]) {
 /// let mut values = vec![0.0f32, 0.1, 0.2, 0.5, 1.0];
 /// linear_to_srgb_slice(&mut values);
 /// ```
-#[multiversed]
 #[inline]
 pub fn linear_to_srgb_slice(values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<8>();
-
-    for chunk in chunks {
-        let result = linear_to_srgb_x8_inline(f32x8::from(*chunk));
-        *chunk = result.into();
-    }
-
-    for v in remainder {
-        *v = crate::scalar::linear_to_srgb(*v);
-    }
+    incant!(linear_to_srgb_slice_tier(values), [v3])
 }
 
 /// Convert sRGB u8 values to linear f32.
@@ -789,6 +813,20 @@ pub fn linear_to_srgb_u16_slice(input: &[f32], output: &mut [u16]) {
 // Custom Gamma Slice Functions
 // ============================================================================
 
+#[magetypes(v3)]
+fn gamma_to_linear_slice_tier(_token: Token, values: &mut [f32], gamma: f32) {
+    let (chunks, remainder) = values.as_chunks_mut::<8>();
+
+    for chunk in chunks {
+        let result = gamma_to_linear_x8_inline(f32x8::from(*chunk), gamma);
+        *chunk = result.into();
+    }
+
+    for v in remainder {
+        *v = crate::scalar::gamma_to_linear(*v, gamma);
+    }
+}
+
 /// Convert gamma-encoded f32 values to linear in-place using a custom gamma.
 ///
 /// Processes 8 values at a time using SIMD, with scalar fallback for remainder.
@@ -800,18 +838,22 @@ pub fn linear_to_srgb_u16_slice(input: &[f32], output: &mut [u16]) {
 /// let mut values = vec![0.0f32, 0.25, 0.5, 0.75, 1.0];
 /// gamma_to_linear_slice(&mut values, 2.2);
 /// ```
-#[multiversed]
 #[inline]
 pub fn gamma_to_linear_slice(values: &mut [f32], gamma: f32) {
+    incant!(gamma_to_linear_slice_tier(values, gamma), [v3])
+}
+
+#[magetypes(v3)]
+fn linear_to_gamma_slice_tier(_token: Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
-        let result = gamma_to_linear_x8_inline(f32x8::from(*chunk), gamma);
+        let result = linear_to_gamma_x8_inline(f32x8::from(*chunk), gamma);
         *chunk = result.into();
     }
 
     for v in remainder {
-        *v = crate::scalar::gamma_to_linear(*v, gamma);
+        *v = crate::scalar::linear_to_gamma(*v, gamma);
     }
 }
 
@@ -826,24 +868,21 @@ pub fn gamma_to_linear_slice(values: &mut [f32], gamma: f32) {
 /// let mut values = vec![0.0f32, 0.1, 0.2, 0.5, 1.0];
 /// linear_to_gamma_slice(&mut values, 2.2);
 /// ```
-#[multiversed]
 #[inline]
 pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<8>();
-
-    for chunk in chunks {
-        let result = linear_to_gamma_x8_inline(f32x8::from(*chunk), gamma);
-        *chunk = result.into();
-    }
-
-    for v in remainder {
-        *v = crate::scalar::linear_to_gamma(*v, gamma);
-    }
+    incant!(linear_to_gamma_slice_tier(values, gamma), [v3])
 }
 
 // ============================================================================
 // f32x8 Slice Functions (for pre-aligned SIMD data)
 // ============================================================================
+
+#[magetypes(v3)]
+fn srgb_to_linear_x8_slice_tier(_token: Token, values: &mut [f32x8]) {
+    for v in values.iter_mut() {
+        *v = srgb_to_linear_x8_inline(*v);
+    }
+}
 
 /// Convert sRGB f32x8 values to linear in-place.
 ///
@@ -858,11 +897,15 @@ pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
 /// let mut values = vec![f32x8::splat(0.5); 100];
 /// srgb_to_linear_x8_slice(&mut values);
 /// ```
-#[multiversed]
 #[inline]
 pub fn srgb_to_linear_x8_slice(values: &mut [f32x8]) {
+    incant!(srgb_to_linear_x8_slice_tier(values), [v3])
+}
+
+#[magetypes(v3)]
+fn linear_to_srgb_x8_slice_tier(_token: Token, values: &mut [f32x8]) {
     for v in values.iter_mut() {
-        *v = srgb_to_linear_x8_inline(*v);
+        *v = linear_to_srgb_x8_inline(*v);
     }
 }
 
@@ -879,11 +922,15 @@ pub fn srgb_to_linear_x8_slice(values: &mut [f32x8]) {
 /// let mut values = vec![f32x8::splat(0.5); 100];
 /// linear_to_srgb_x8_slice(&mut values);
 /// ```
-#[multiversed]
 #[inline]
 pub fn linear_to_srgb_x8_slice(values: &mut [f32x8]) {
+    incant!(linear_to_srgb_x8_slice_tier(values), [v3])
+}
+
+#[magetypes(v3)]
+fn gamma_to_linear_x8_slice_tier(_token: Token, values: &mut [f32x8], gamma: f32) {
     for v in values.iter_mut() {
-        *v = linear_to_srgb_x8_inline(*v);
+        *v = gamma_to_linear_x8_inline(*v, gamma);
     }
 }
 
@@ -900,11 +947,15 @@ pub fn linear_to_srgb_x8_slice(values: &mut [f32x8]) {
 /// let mut values = vec![f32x8::splat(0.5); 100];
 /// gamma_to_linear_x8_slice(&mut values, 2.2);
 /// ```
-#[multiversed]
 #[inline]
 pub fn gamma_to_linear_x8_slice(values: &mut [f32x8], gamma: f32) {
+    incant!(gamma_to_linear_x8_slice_tier(values, gamma), [v3])
+}
+
+#[magetypes(v3)]
+fn linear_to_gamma_x8_slice_tier(_token: Token, values: &mut [f32x8], gamma: f32) {
     for v in values.iter_mut() {
-        *v = gamma_to_linear_x8_inline(*v, gamma);
+        *v = linear_to_gamma_x8_inline(*v, gamma);
     }
 }
 
@@ -921,21 +972,18 @@ pub fn gamma_to_linear_x8_slice(values: &mut [f32x8], gamma: f32) {
 /// let mut values = vec![f32x8::splat(0.2); 100];
 /// linear_to_gamma_x8_slice(&mut values, 2.2);
 /// ```
-#[multiversed]
 #[inline]
 pub fn linear_to_gamma_x8_slice(values: &mut [f32x8], gamma: f32) {
-    for v in values.iter_mut() {
-        *v = linear_to_gamma_x8_inline(*v, gamma);
-    }
+    incant!(linear_to_gamma_x8_slice_tier(values, gamma), [v3])
 }
 
 // ============================================================================
-// f32x8 Slice Inline Functions (for use inside caller's multiversed code)
+// f32x8 Slice Inline Functions (for use inside caller's magetypes code)
 // ============================================================================
 
 /// Convert sRGB f32x8 values to linear in-place (always inlined).
 ///
-/// Use this variant inside your own `#[multiversed]` functions to avoid
+/// Use this variant inside your own `#[magetypes]` functions to avoid
 /// double dispatch overhead. For standalone calls, use [`srgb_to_linear_x8_slice`].
 #[inline(always)]
 pub fn srgb_to_linear_x8_slice_inline(values: &mut [f32x8]) {
@@ -946,7 +994,7 @@ pub fn srgb_to_linear_x8_slice_inline(values: &mut [f32x8]) {
 
 /// Convert linear f32x8 values to sRGB in-place (always inlined).
 ///
-/// Use this variant inside your own `#[multiversed]` functions to avoid
+/// Use this variant inside your own `#[magetypes]` functions to avoid
 /// double dispatch overhead. For standalone calls, use [`linear_to_srgb_x8_slice`].
 #[inline(always)]
 pub fn linear_to_srgb_x8_slice_inline(values: &mut [f32x8]) {
@@ -957,7 +1005,7 @@ pub fn linear_to_srgb_x8_slice_inline(values: &mut [f32x8]) {
 
 /// Convert gamma-encoded f32x8 values to linear in-place (always inlined).
 ///
-/// Use this variant inside your own `#[multiversed]` functions to avoid
+/// Use this variant inside your own `#[magetypes]` functions to avoid
 /// double dispatch overhead. For standalone calls, use [`gamma_to_linear_x8_slice`].
 #[inline(always)]
 pub fn gamma_to_linear_x8_slice_inline(values: &mut [f32x8], gamma: f32) {
@@ -968,7 +1016,7 @@ pub fn gamma_to_linear_x8_slice_inline(values: &mut [f32x8], gamma: f32) {
 
 /// Convert linear f32x8 values to gamma-encoded in-place (always inlined).
 ///
-/// Use this variant inside your own `#[multiversed]` functions to avoid
+/// Use this variant inside your own `#[magetypes]` functions to avoid
 /// double dispatch overhead. For standalone calls, use [`linear_to_gamma_x8_slice`].
 #[inline(always)]
 pub fn linear_to_gamma_x8_slice_inline(values: &mut [f32x8], gamma: f32) {
@@ -1389,5 +1437,27 @@ mod tests {
                 exp
             );
         }
+    }
+
+    // ---- Permutation tests (archmage tier testing) ----
+
+    #[test]
+    fn srgb_roundtrip_all_tiers() {
+        let report = archmage::testing::for_each_token_permutation(
+            archmage::testing::CompileTimePolicy::Warn,
+            |_perm| {
+                let mut values: Vec<f32> = (0..100).map(|i| i as f32 / 99.0).collect();
+                let original = values.clone();
+                srgb_to_linear_slice(&mut values);
+                linear_to_srgb_slice(&mut values);
+                for (i, (&orig, &conv)) in original.iter().zip(values.iter()).enumerate() {
+                    assert!(
+                        (orig - conv).abs() < 1e-4,
+                        "tier roundtrip failed at {i}: {orig} -> {conv}"
+                    );
+                }
+            },
+        );
+        eprintln!("{report}");
     }
 }

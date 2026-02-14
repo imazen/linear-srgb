@@ -5,7 +5,7 @@
 //!
 //! Enable with the `alt` feature flag.
 
-#![allow(missing_docs)]
+#![allow(missing_docs, dead_code)]
 
 pub mod accuracy;
 pub mod fast_math;

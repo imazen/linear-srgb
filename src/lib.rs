@@ -70,7 +70,7 @@
 //! | f32 slice (in-place) | [`default::srgb_to_linear_slice`] |
 //! | u8 slice → f32 slice | [`default::srgb_u8_to_linear_slice`] |
 //! | Manual SIMD (8 values) | [`default::srgb_to_linear_x8`] |
-//! | Inside `#[multiversed]` | [`default::inline::srgb_to_linear_x8`] |
+//! | Inside `#[magetypes]` | [`default::inline::srgb_to_linear_x8`] |
 //! | Custom bit depth LUT | [`lut::LinearTable16`] |
 //!
 //! # Feature Flags
@@ -136,7 +136,6 @@ pub mod mage;
 // ============================================================================
 
 mod mlaf;
-mod targets;
 
 // Internal fast math for SIMD (not public API)
 pub(crate) mod fast_math;

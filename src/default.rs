@@ -31,7 +31,7 @@
 //! For manual SIMD control, use the x8 functions:
 //!
 //! - `*_x8` - Default with CPU dispatch (standalone use)
-//! - [`inline`] module - `#[inline(always)]` variants for use inside your own `#[multiversed]` code
+//! - [`inline`] module - `#[inline(always)]` variants for use inside your own `#[magetypes]` code
 //!
 //! ```rust
 //! use linear_srgb::default::{linear_to_srgb_x8, linear_to_srgb_u8_x8};
@@ -42,7 +42,7 @@
 //! let srgb_u8 = linear_to_srgb_u8_x8(linear);
 //! ```
 //!
-//! For use inside `#[multiversed]` functions (no dispatch overhead):
+//! For use inside `#[magetypes]` functions (no dispatch overhead):
 //! ```rust,ignore
 //! use linear_srgb::default::inline::*;
 //! ```
@@ -79,9 +79,6 @@ pub use crate::simd::srgb_u8_to_linear;
 // ============================================================================
 
 pub use crate::simd::{
-    // u16 slices
-    linear_to_srgb_u16_slice,
-    srgb_u16_to_linear_slice,
     // Custom gamma slices
     gamma_to_linear_slice,
     // f32x8 slices (for pre-aligned SIMD data)
@@ -92,10 +89,13 @@ pub use crate::simd::{
     linear_to_srgb_slice,
     // u8 ↔ f32 slices
     linear_to_srgb_u8_slice,
+    // u16 slices
+    linear_to_srgb_u16_slice,
     linear_to_srgb_x8_slice,
     srgb_to_linear_slice,
     srgb_to_linear_x8_slice,
     srgb_u8_to_linear_slice,
+    srgb_u16_to_linear_slice,
 };
 
 // ============================================================================
@@ -121,9 +121,9 @@ pub use crate::simd::{
 pub use crate::lut::SrgbConverter;
 
 pub mod inline {
-    //! Dispatch-free inline variants for use inside `#[multiversed]` functions.
+    //! Dispatch-free inline variants for use inside `#[magetypes]` functions.
     //!
-    //! When building your own SIMD-accelerated functions with `multiversed`,
+    //! When building your own SIMD-accelerated functions with `archmage`,
     //! use these `_inline` variants to avoid nested dispatch overhead.
     //! These functions are `#[inline(always)]` and contain no dispatch overhead.
     //!
@@ -131,11 +131,11 @@ pub mod inline {
     //!
     //! ```rust,ignore
     //! use linear_srgb::default::inline::*;
-    //! use multiversed::multiversed;
+    //! use archmage::magetypes;
     //! use wide::f32x8;
     //!
-    //! #[multiversed]  // Your function handles dispatch
-    //! pub fn process_pixels(data: &mut [f32]) {
+    //! #[magetypes(v3)]  // Your function handles dispatch
+    //! fn process_pixels(_token: Token, data: &mut [f32]) {
     //!     for chunk in data.chunks_exact_mut(8) {
     //!         let v = f32x8::from([
     //!             chunk[0], chunk[1], chunk[2], chunk[3],

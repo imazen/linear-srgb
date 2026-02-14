@@ -809,7 +809,7 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
             },
         );
 
-        // f32→u8 via SIMD slice with dispatch (multiversed)
+        // f32→u8 via SIMD slice with dispatch (archmage incant!)
         group.bench_with_input(
             BenchmarkId::new("l2s_u8_simd_dispatch_slice", size),
             &linear_data,
