@@ -15,7 +15,7 @@ wide = "1.1"
 bytemuck = "1.21"
 multiversion = { version = "0.8", default-features = false }
 multiversed = { version = "0.2", default-features = false, features = ["x86-64-v3", "x86-64-v4"] }
-archmage = { version = "0.5", default-features = false, features = ["macros", "avx512", "std"], optional = true }
+archmage = { version = "0.7", path = "../archmage", default-features = false, features = ["macros", "avx512", "std"], optional = true }
 
 [dev-dependencies]
 criterion = "0.8"

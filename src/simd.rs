@@ -33,7 +33,6 @@ const SRGB_SCALE: f32x8 = f32x8::splat(1.055_010_7);
 const TWELVE_92: f32x8 = f32x8::splat(12.92);
 const ZERO: f32x8 = f32x8::splat(0.0);
 const ONE: f32x8 = f32x8::splat(1.0);
-const U8_MAX: f32x8 = f32x8::splat(255.0);
 const HALF: f32x8 = f32x8::splat(0.5);
 
 /// Precomputed sRGB u8 → linear f32 lookup table.
@@ -357,22 +356,32 @@ pub fn linear_to_srgb_x8_inline(linear: f32x8) -> f32x8 {
 
 /// Convert 8 linear f32 values to sRGB u8 (always inlined).
 ///
-/// Use this variant inside your own `#[multiversed]` functions to avoid
-/// double dispatch overhead.
+/// Uses a 4097-entry const LUT for direct lookup — no pow/log/exp computation.
+/// Max error: ±1 u8 level (same as the SIMD polynomial path).
 #[inline(always)]
 pub fn linear_to_srgb_u8_x8_inline(linear: f32x8) -> [u8; 8] {
-    let srgb = linear_to_srgb_x8_inline(linear);
-    let scaled = srgb * U8_MAX + HALF;
+    linear_to_srgb_u8_lut_x8(linear)
+}
+
+/// Convert 8 linear f32 values to sRGB u8 using const LUT.
+///
+/// Clamps to [0,1], scales to LUT index, does 8 scalar lookups from
+/// a 4KB table (fits L1 cache). No pow/exp/log computation.
+#[inline(always)]
+pub(crate) fn linear_to_srgb_u8_lut_x8(linear: f32x8) -> [u8; 8] {
+    let clamped = linear.max(ZERO).min(ONE);
+    let scaled = clamped * f32x8::splat(4096.0) + HALF;
     let arr: [f32; 8] = scaled.into();
+    let lut = &crate::const_luts::LINEAR_TO_SRGB_U8_4096;
     [
-        arr[0] as u8,
-        arr[1] as u8,
-        arr[2] as u8,
-        arr[3] as u8,
-        arr[4] as u8,
-        arr[5] as u8,
-        arr[6] as u8,
-        arr[7] as u8,
+        lut[arr[0] as usize],
+        lut[arr[1] as usize],
+        lut[arr[2] as usize],
+        lut[arr[3] as usize],
+        lut[arr[4] as usize],
+        lut[arr[5] as usize],
+        lut[arr[6] as usize],
+        lut[arr[7] as usize],
     ]
 }
 
@@ -426,8 +435,7 @@ pub fn linear_to_srgb_x8_dispatch(linear: f32x8) -> f32x8 {
     linear_to_srgb_x8_inline(linear)
 }
 
-/// Convert 8 linear f32 values to sRGB u8 (with CPU dispatch).
-#[multiversed]
+/// Convert 8 linear f32 values to sRGB u8 (LUT-based, no dispatch needed).
 #[inline]
 pub fn linear_to_srgb_u8_x8_dispatch(linear: f32x8) -> [u8; 8] {
     linear_to_srgb_u8_x8_inline(linear)
@@ -678,21 +686,34 @@ pub fn srgb_u8_to_linear_slice(input: &[u8], output: &mut [f32]) {
 /// let mut output = vec![0u8; 256];
 /// linear_to_srgb_u8_slice(&input, &mut output);
 /// ```
-#[multiversed]
-#[inline]
 pub fn linear_to_srgb_u8_slice(input: &[f32], output: &mut [u8]) {
     assert_eq!(input.len(), output.len());
 
+    let lut = &crate::const_luts::LINEAR_TO_SRGB_U8_4096;
+
+    // Process 8 at a time using SIMD for index computation
     let (in_chunks, in_remainder) = input.as_chunks::<8>();
     let (out_chunks, out_remainder) = output.as_chunks_mut::<8>();
 
     for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
-        *out = linear_to_srgb_u8_x8_inline(f32x8::from(*inp));
+        let linear = f32x8::from(*inp);
+        let clamped = linear.max(ZERO).min(ONE);
+        let scaled = clamped * f32x8::splat(4096.0) + HALF;
+        let arr: [f32; 8] = scaled.into();
+        *out = [
+            lut[arr[0] as usize],
+            lut[arr[1] as usize],
+            lut[arr[2] as usize],
+            lut[arr[3] as usize],
+            lut[arr[4] as usize],
+            lut[arr[5] as usize],
+            lut[arr[6] as usize],
+            lut[arr[7] as usize],
+        ];
     }
 
     for (inp, out) in in_remainder.iter().zip(out_remainder.iter_mut()) {
-        let srgb = crate::scalar::linear_to_srgb(*inp);
-        *out = (srgb * 255.0 + 0.5) as u8;
+        *out = crate::scalar::linear_to_srgb_u8(*inp);
     }
 }
 

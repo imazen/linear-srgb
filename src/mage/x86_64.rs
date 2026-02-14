@@ -2,8 +2,8 @@
 //!
 //! Uses `wide::f32x8` with `#[arcane]` for FMA-enabled target features.
 
-use archmage::arcane;
 use archmage::Avx2FmaToken;
+use archmage::arcane;
 use wide::{CmpLt, f32x8};
 
 /// Token type for this platform (AVX2+FMA).
@@ -37,8 +37,10 @@ fn srgb_to_linear_x8(_token: Avx2FmaToken, srgb: f32x8) -> f32x8 {
     let srgb = srgb.max(zero).min(one);
 
     let linear_result = srgb * f32x8::splat(LINEAR_SCALE);
-    let power_result =
-        pow_x8((srgb + f32x8::splat(SRGB_OFFSET)) / f32x8::splat(SRGB_SCALE), 2.4);
+    let power_result = pow_x8(
+        (srgb + f32x8::splat(SRGB_OFFSET)) / f32x8::splat(SRGB_SCALE),
+        2.4,
+    );
 
     let mask = srgb.simd_lt(f32x8::splat(SRGB_LINEAR_THRESHOLD));
     mask.blend(linear_result, power_result)
@@ -56,33 +58,6 @@ fn linear_to_srgb_x8(_token: Avx2FmaToken, linear: f32x8) -> f32x8 {
 
     let mask = linear.simd_lt(f32x8::splat(LINEAR_THRESHOLD));
     mask.blend(linear_result, power_result)
-}
-
-#[arcane]
-fn linear_to_srgb_u8_x8(_token: Avx2FmaToken, linear: f32x8) -> [u8; 8] {
-    let zero = f32x8::ZERO;
-    let one = f32x8::ONE;
-    let linear = linear.max(zero).min(one);
-
-    let linear_result = linear * f32x8::splat(TWELVE_92);
-    let power_result =
-        f32x8::splat(SRGB_SCALE) * pow_x8(linear, 1.0 / 2.4) - f32x8::splat(SRGB_OFFSET);
-
-    let mask = linear.simd_lt(f32x8::splat(LINEAR_THRESHOLD));
-    let srgb = mask.blend(linear_result, power_result);
-
-    let scaled = srgb * f32x8::splat(255.0) + f32x8::splat(0.5);
-    let arr = scaled.to_array();
-    [
-        arr[0] as u8,
-        arr[1] as u8,
-        arr[2] as u8,
-        arr[3] as u8,
-        arr[4] as u8,
-        arr[5] as u8,
-        arr[6] as u8,
-        arr[7] as u8,
-    ]
 }
 
 #[arcane]
@@ -158,25 +133,15 @@ pub fn srgb_u8_to_linear_slice(_token: Avx2FmaToken, input: &[u8], output: &mut 
 
 /// Convert linear f32 values to sRGB u8.
 ///
-/// Processes 8 values at a time using AVX2+FMA SIMD.
+/// Uses a 4097-entry const LUT — no pow/log/exp computation.
+/// The token is accepted for API compatibility but not required for this path.
 ///
 /// # Panics
 /// Panics if `input.len() != output.len()`.
-#[arcane]
-pub fn linear_to_srgb_u8_slice(token: Avx2FmaToken, input: &[f32], output: &mut [u8]) {
-    assert_eq!(input.len(), output.len());
-
-    let (in_chunks, in_remainder) = input.as_chunks::<8>();
-    let (out_chunks, out_remainder) = output.as_chunks_mut::<8>();
-
-    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
-        *out = linear_to_srgb_u8_x8(token, f32x8::from(*inp));
-    }
-
-    for (inp, out) in in_remainder.iter().zip(out_remainder.iter_mut()) {
-        let srgb = crate::scalar::linear_to_srgb(*inp);
-        *out = (srgb * 255.0 + 0.5) as u8;
-    }
+#[inline]
+pub fn linear_to_srgb_u8_slice(_token: Avx2FmaToken, input: &[f32], output: &mut [u8]) {
+    // Delegate to the LUT-based implementation (no SIMD dispatch needed)
+    crate::simd::linear_to_srgb_u8_slice(input, output);
 }
 
 /// Convert gamma-encoded f32 values to linear in-place.

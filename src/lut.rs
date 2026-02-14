@@ -222,20 +222,12 @@ impl SrgbConverter {
         lut_interp_linear_float(linear, &crate::const_luts::ENCODE_TABLE_12)
     }
 
-    /// Convert linear to 8-bit sRGB.
+    /// Convert linear to 8-bit sRGB using direct LUT lookup.
     ///
-    /// # Deprecation
-    ///
-    /// This LUT interpolation method is ~2x slower than SIMD.
-    /// Prefer [`crate::simd::linear_to_srgb_u8_slice`] for batches or
-    /// [`crate::scalar::linear_to_srgb_u8`] for single values.
-    #[deprecated(
-        since = "0.3.0",
-        note = "2x slower than SIMD. Use simd::linear_to_srgb_u8_slice for batches or scalar::linear_to_srgb_u8 for single values."
-    )]
+    /// Uses a 4097-entry const u8 table — no interpolation or transcendental math.
     #[inline]
     pub fn linear_to_srgb_u8(&self, linear: f32) -> u8 {
-        (self.linear_to_srgb(linear) * 255.0 + 0.5) as u8
+        crate::scalar::linear_to_srgb_u8(linear)
     }
 
     /// Batch convert sRGB u8 values to linear f32.
@@ -249,21 +241,11 @@ impl SrgbConverter {
 
     /// Batch convert linear f32 values to sRGB u8.
     ///
-    /// # Deprecation
-    ///
-    /// This LUT interpolation method is ~2x slower than SIMD.
-    /// Prefer [`crate::simd::linear_to_srgb_u8_slice`] instead.
-    #[deprecated(
-        since = "0.3.0",
-        note = "2x slower than SIMD. Use simd::linear_to_srgb_u8_slice instead."
-    )]
+    /// Uses [`crate::simd::linear_to_srgb_u8_slice`] for SIMD-accelerated
+    /// index computation with LUT lookup.
     #[inline]
-    #[allow(deprecated)]
     pub fn batch_linear_to_srgb(&self, input: &[f32], output: &mut [u8]) {
-        assert_eq!(input.len(), output.len());
-        for (i, o) in input.iter().zip(output.iter_mut()) {
-            *o = self.linear_to_srgb_u8(*i);
-        }
+        crate::simd::linear_to_srgb_u8_slice(input, output);
     }
 }
 
@@ -314,7 +296,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn test_converter_roundtrip() {
         let conv = SrgbConverter::new();
 
@@ -365,7 +346,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn test_batch_conversion() {
         let conv = SrgbConverter::new();
 
