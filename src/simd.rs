@@ -30,6 +30,7 @@ const LINEAR_THRESHOLD: f32x8 = f32x8::splat(0.003_041_282_6);
 const LINEAR_SCALE: f32x8 = f32x8::splat(1.0 / 12.92);
 const SRGB_OFFSET: f32x8 = f32x8::splat(0.055_010_72);
 const SRGB_SCALE: f32x8 = f32x8::splat(1.055_010_7);
+const INV_SRGB_SCALE: f32x8 = f32x8::splat(1.0 / 1.055_010_7);
 const TWELVE_92: f32x8 = f32x8::splat(12.92);
 const ZERO: f32x8 = f32x8::splat(0.0);
 const ONE: f32x8 = f32x8::splat(1.0);
@@ -334,7 +335,7 @@ pub fn srgb_u8_to_linear(value: u8) -> f32 {
 pub fn srgb_to_linear_x8_inline(srgb: f32x8) -> f32x8 {
     let srgb = srgb.max(ZERO).min(ONE);
     let linear_result = srgb * LINEAR_SCALE;
-    let power_result = pow_x8((srgb + SRGB_OFFSET) / SRGB_SCALE, 2.4);
+    let power_result = pow_x8((srgb + SRGB_OFFSET) * INV_SRGB_SCALE, 2.4);
     let mask = srgb.simd_lt(SRGB_LINEAR_THRESHOLD);
     mask.blend(linear_result, power_result)
 }

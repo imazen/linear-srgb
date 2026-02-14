@@ -15,6 +15,7 @@ const LINEAR_THRESHOLD: f32 = 0.003_041_282_6;
 const LINEAR_SCALE: f32 = 1.0 / 12.92;
 const SRGB_OFFSET: f32 = 0.055_010_72;
 const SRGB_SCALE: f32 = 1.055_010_7;
+const INV_SRGB_SCALE: f32 = 1.0 / 1.055_010_7;
 const TWELVE_92: f32 = 12.92;
 
 // ============================================================================
@@ -38,7 +39,7 @@ fn srgb_to_linear_x8(_token: Avx2FmaToken, srgb: f32x8) -> f32x8 {
 
     let linear_result = srgb * f32x8::splat(LINEAR_SCALE);
     let power_result = pow_x8(
-        (srgb + f32x8::splat(SRGB_OFFSET)) / f32x8::splat(SRGB_SCALE),
+        (srgb + f32x8::splat(SRGB_OFFSET)) * f32x8::splat(INV_SRGB_SCALE),
         2.4,
     );
 

@@ -47,9 +47,13 @@ pub(crate) fn log2_x8(x: f32x8) -> f32x8 {
     let a_bits = mantissa_bits + i32x8::splat(SQRT2_OVER_2 as i32);
     let a: f32x8 = cast(a_bits);
 
-    // y = (a - 1) / (a + 1)
+    // y = (a - 1) / (a + 1) using fast reciprocal + Newton-Raphson
     let one = f32x8::splat(1.0);
-    let y = (a - one) / (a + one);
+    let two = f32x8::splat(2.0);
+    let ap1 = a + one;
+    let r = ap1.recip(); // RCPPS: ~12-bit precision
+    let r = r * (two - ap1 * r); // Newton-Raphson: ~24-bit precision
+    let y = (a - one) * r;
 
     // y^2
     let y2 = y * y;
