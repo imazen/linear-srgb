@@ -71,6 +71,7 @@
 //! | u8 slice → f32 slice | [`default::srgb_u8_to_linear_slice`] |
 //! | Manual SIMD (8 values) | [`default::srgb_to_linear_x8`] |
 //! | Inside `#[magetypes]` | [`default::inline::srgb_to_linear_x8`] |
+//! | Inside `#[arcane]` (token) | [`rites::x8::srgb_to_linear_v3`] |
 //! | Custom bit depth LUT | [`lut::LinearTable16`] |
 //!
 //! # Feature Flags
@@ -120,6 +121,13 @@ pub mod simd;
 ///
 /// Direct computation without SIMD. Best for individual value conversions.
 pub mod scalar;
+
+/// Inlineable `#[rite]` functions for embedding in your own `#[arcane]` code.
+///
+/// These carry `#[target_feature]` + `#[inline]` directly — no wrapper, no
+/// dispatch. When called from a matching `#[arcane]` context, LLVM inlines
+/// them fully. Organized by SIMD unit width; suffixed by required token tier.
+pub mod rites;
 
 /// Token-based API using archmage for zero dispatch overhead.
 ///
