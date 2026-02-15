@@ -1,7 +1,9 @@
+#![allow(clippy::excessive_precision)]
+
 // sRGB u16 → linear f32 (65536 entries, 256KB)
 // Index i corresponds to sRGB u16 value i.
 // Generated with f64 precision, stored as f32.
-pub(crate) const SRGB_U16_TO_LINEAR_F32: [f32; 65536] = [
+pub(crate) static SRGB_U16_TO_LINEAR_F32: [f32; 65536] = [
     0.0000000000e0,
     1.1810388969e-6,
     2.3620777938e-6,
@@ -65543,7 +65545,7 @@ pub(crate) const SRGB_U16_TO_LINEAR_F32: [f32; 65536] = [
 // Linear f32 → sRGB u16 (65537 entries, 128KB)
 // Index i corresponds to linear value i/65536.
 // Lookup: LUT[(linear.clamp(0,1) * 65536.0 + 0.5) as usize]
-pub(crate) const LINEAR_TO_SRGB_U16_65536: [u16; 65537] = [
+pub(crate) static LINEAR_TO_SRGB_U16_65536: [u16; 65537] = [
     0, 13, 26, 39, 52, 65, 78, 90, 103, 116, 129, 142, 155, 168, 181, 194, 207, 220, 233, 245, 258,
     271, 284, 297, 310, 323, 336, 349, 362, 375, 388, 401, 413, 426, 439, 452, 465, 478, 491, 504,
     517, 530, 543, 556, 568, 581, 594, 607, 620, 633, 646, 659, 672, 685, 698, 711, 724, 736, 749,
