@@ -32,9 +32,6 @@ use magetypes::simd::f32x8 as mt_f32x8;
 const SRGB_LINEAR_THRESHOLD: f32x8 = f32x8::splat(0.039_293_37);
 const LINEAR_THRESHOLD: f32x8 = f32x8::splat(0.003_041_282_6);
 const LINEAR_SCALE: f32x8 = f32x8::splat(1.0 / 12.92);
-const SRGB_OFFSET: f32x8 = f32x8::splat(0.055_010_72);
-const SRGB_SCALE: f32x8 = f32x8::splat(1.055_010_7);
-const INV_SRGB_SCALE: f32x8 = f32x8::splat(1.0 / 1.055_010_7);
 const TWELVE_92: f32x8 = f32x8::splat(12.92);
 const ZERO: f32x8 = f32x8::splat(0.0);
 const ONE: f32x8 = f32x8::splat(1.0);
@@ -339,7 +336,24 @@ pub fn srgb_u8_to_linear(value: u8) -> f32 {
 pub fn srgb_to_linear_x8_inline(srgb: f32x8) -> f32x8 {
     let srgb = srgb.max(ZERO).min(ONE);
     let linear_result = srgb * LINEAR_SCALE;
-    let power_result = pow_x8((srgb + SRGB_OFFSET) * INV_SRGB_SCALE, 2.4);
+
+    // Degree-11 Chebyshev polynomial (Estrin evaluation)
+    let u = srgb.mul_add(f32x8::splat(S2L_INV_HW), f32x8::splat(S2L_BIAS));
+    let u2 = u * u;
+    let u4 = u2 * u2;
+    let u_8 = u4 * u4;
+    let p01 = f32x8::splat(S2L_C1).mul_add(u, f32x8::splat(S2L_C0));
+    let p23 = f32x8::splat(S2L_C3).mul_add(u, f32x8::splat(S2L_C2));
+    let p45 = f32x8::splat(S2L_C5).mul_add(u, f32x8::splat(S2L_C4));
+    let p67 = f32x8::splat(S2L_C7).mul_add(u, f32x8::splat(S2L_C6));
+    let p89 = f32x8::splat(S2L_C9).mul_add(u, f32x8::splat(S2L_C8));
+    let pab = f32x8::splat(S2L_C11).mul_add(u, f32x8::splat(S2L_C10));
+    let p0123 = p23.mul_add(u2, p01);
+    let p4567 = p67.mul_add(u2, p45);
+    let p8_11 = pab.mul_add(u2, p89);
+    let p0_7 = p4567.mul_add(u4, p0123);
+    let power_result = p8_11.mul_add(u_8, p0_7);
+
     let mask = srgb.simd_lt(SRGB_LINEAR_THRESHOLD);
     mask.blend(linear_result, power_result)
 }
@@ -354,7 +368,29 @@ pub fn srgb_to_linear_x8_inline(srgb: f32x8) -> f32x8 {
 pub fn linear_to_srgb_x8_inline(linear: f32x8) -> f32x8 {
     let linear = linear.max(ZERO).min(ONE);
     let linear_result = linear * TWELVE_92;
-    let power_result = SRGB_SCALE * pow_x8(linear, 1.0 / 2.4) - SRGB_OFFSET;
+
+    // sqrt transform + degree-15 Chebyshev polynomial (Estrin evaluation)
+    let s = linear.sqrt();
+    let u = s.mul_add(f32x8::splat(L2S_INV_HW), f32x8::splat(L2S_BIAS));
+    let u2 = u * u;
+    let u4 = u2 * u2;
+    let u_8 = u4 * u4;
+    let p01 = f32x8::splat(L2S_C1).mul_add(u, f32x8::splat(L2S_C0));
+    let p23 = f32x8::splat(L2S_C3).mul_add(u, f32x8::splat(L2S_C2));
+    let p45 = f32x8::splat(L2S_C5).mul_add(u, f32x8::splat(L2S_C4));
+    let p67 = f32x8::splat(L2S_C7).mul_add(u, f32x8::splat(L2S_C6));
+    let p89 = f32x8::splat(L2S_C9).mul_add(u, f32x8::splat(L2S_C8));
+    let pab = f32x8::splat(L2S_C11).mul_add(u, f32x8::splat(L2S_C10));
+    let pcd = f32x8::splat(L2S_C13).mul_add(u, f32x8::splat(L2S_C12));
+    let pef = f32x8::splat(L2S_C15).mul_add(u, f32x8::splat(L2S_C14));
+    let p0123 = p23.mul_add(u2, p01);
+    let p4567 = p67.mul_add(u2, p45);
+    let p89ab = pab.mul_add(u2, p89);
+    let pcdef = pef.mul_add(u2, pcd);
+    let p0_7 = p4567.mul_add(u4, p0123);
+    let p8_f = pcdef.mul_add(u4, p89ab);
+    let power_result = p8_f.mul_add(u_8, p0_7);
+
     let mask = linear.simd_lt(LINEAR_THRESHOLD);
     mask.blend(linear_result, power_result)
 }
