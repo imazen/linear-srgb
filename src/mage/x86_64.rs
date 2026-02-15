@@ -1,10 +1,13 @@
-//! x86-64 AVX2+FMA implementation.
+//! x86-64 AVX2+FMA implementation using magetypes for real SIMD.
 //!
-//! Uses `wide::f32x8` with `#[arcane]`/`#[rite]` for FMA-enabled target features.
+//! Uses `magetypes::simd::f32x8` with `#[arcane]`/`#[rite]` for FMA-enabled
+//! target features. Unlike `wide::f32x8` (which only uses AVX when compiled
+//! with `+avx`), magetypes applies `#[target_feature]` at function level,
+//! producing real AVX2+FMA instructions regardless of compile flags.
 
 use archmage::Avx2FmaToken;
 use archmage::{arcane, rite};
-use wide::{CmpLt, f32x8};
+use magetypes::simd::f32x8;
 
 /// Token type for this platform (AVX2+FMA).
 pub type Token = Avx2FmaToken;
@@ -22,59 +25,49 @@ const TWELVE_92: f32 = 12.92;
 // Internal x8 functions (not public - SIMD types hidden)
 // ============================================================================
 
-/// Compute x^gamma using exp2/log2 approximation.
-/// FMA-accelerated when compiled with target_feature.
-#[inline(always)]
-fn pow_x8(x: f32x8, gamma: f32) -> f32x8 {
-    // x^gamma = 2^(gamma * log2(x))
-    let log2_x = crate::fast_math::log2_x8(x);
-    crate::fast_math::exp2_x8(log2_x * f32x8::splat(gamma))
-}
-
 #[rite]
-fn srgb_to_linear_x8(_token: Avx2FmaToken, srgb: f32x8) -> f32x8 {
-    let zero = f32x8::ZERO;
-    let one = f32x8::ONE;
+fn srgb_to_linear_x8(token: Avx2FmaToken, srgb: f32x8) -> f32x8 {
+    let zero = f32x8::zero(token);
+    let one = f32x8::splat(token, 1.0);
     let srgb = srgb.max(zero).min(one);
 
-    let linear_result = srgb * f32x8::splat(LINEAR_SCALE);
-    let power_result = pow_x8(
-        (srgb + f32x8::splat(SRGB_OFFSET)) * f32x8::splat(INV_SRGB_SCALE),
-        2.4,
-    );
+    let linear_result = srgb * f32x8::splat(token, LINEAR_SCALE);
+    let normalized =
+        (srgb + f32x8::splat(token, SRGB_OFFSET)) * f32x8::splat(token, INV_SRGB_SCALE);
+    let power_result = normalized.pow_midp(2.4);
 
-    let mask = srgb.simd_lt(f32x8::splat(SRGB_LINEAR_THRESHOLD));
-    mask.blend(linear_result, power_result)
+    let mask = srgb.simd_lt(f32x8::splat(token, SRGB_LINEAR_THRESHOLD));
+    f32x8::blend(mask, linear_result, power_result)
 }
 
 #[rite]
-fn linear_to_srgb_x8(_token: Avx2FmaToken, linear: f32x8) -> f32x8 {
-    let zero = f32x8::ZERO;
-    let one = f32x8::ONE;
+fn linear_to_srgb_x8(token: Avx2FmaToken, linear: f32x8) -> f32x8 {
+    let zero = f32x8::zero(token);
+    let one = f32x8::splat(token, 1.0);
     let linear = linear.max(zero).min(one);
 
-    let linear_result = linear * f32x8::splat(TWELVE_92);
-    let power_result =
-        f32x8::splat(SRGB_SCALE) * pow_x8(linear, 1.0 / 2.4) - f32x8::splat(SRGB_OFFSET);
+    let linear_result = linear * f32x8::splat(token, TWELVE_92);
+    let power_result = f32x8::splat(token, SRGB_SCALE) * linear.pow_midp(1.0 / 2.4)
+        - f32x8::splat(token, SRGB_OFFSET);
 
-    let mask = linear.simd_lt(f32x8::splat(LINEAR_THRESHOLD));
-    mask.blend(linear_result, power_result)
+    let mask = linear.simd_lt(f32x8::splat(token, LINEAR_THRESHOLD));
+    f32x8::blend(mask, linear_result, power_result)
 }
 
 #[rite]
-fn gamma_to_linear_x8(_token: Avx2FmaToken, encoded: f32x8, gamma: f32) -> f32x8 {
-    let zero = f32x8::ZERO;
-    let one = f32x8::ONE;
+fn gamma_to_linear_x8(token: Avx2FmaToken, encoded: f32x8, gamma: f32) -> f32x8 {
+    let zero = f32x8::zero(token);
+    let one = f32x8::splat(token, 1.0);
     let encoded = encoded.max(zero).min(one);
-    pow_x8(encoded, gamma)
+    encoded.pow_midp(gamma)
 }
 
 #[rite]
-fn linear_to_gamma_x8(_token: Avx2FmaToken, linear: f32x8, gamma: f32) -> f32x8 {
-    let zero = f32x8::ZERO;
-    let one = f32x8::ONE;
+fn linear_to_gamma_x8(token: Avx2FmaToken, linear: f32x8, gamma: f32) -> f32x8 {
+    let zero = f32x8::zero(token);
+    let one = f32x8::splat(token, 1.0);
     let linear = linear.max(zero).min(one);
-    pow_x8(linear, 1.0 / gamma)
+    linear.pow_midp(1.0 / gamma)
 }
 
 // ============================================================================
@@ -90,7 +83,7 @@ pub fn srgb_to_linear_slice(token: Avx2FmaToken, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
-        let v = f32x8::from(*chunk);
+        let v = f32x8::from_array(token, *chunk);
         let result = srgb_to_linear_x8(token, v);
         *chunk = result.to_array();
     }
@@ -109,7 +102,7 @@ pub fn linear_to_srgb_slice(token: Avx2FmaToken, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
-        let v = f32x8::from(*chunk);
+        let v = f32x8::from_array(token, *chunk);
         let result = linear_to_srgb_x8(token, v);
         *chunk = result.to_array();
     }
@@ -153,7 +146,7 @@ pub fn gamma_to_linear_slice(token: Avx2FmaToken, values: &mut [f32], gamma: f32
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
-        let v = f32x8::from(*chunk);
+        let v = f32x8::from_array(token, *chunk);
         let result = gamma_to_linear_x8(token, v, gamma);
         *chunk = result.to_array();
     }
@@ -171,7 +164,7 @@ pub fn linear_to_gamma_slice(token: Avx2FmaToken, values: &mut [f32], gamma: f32
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
-        let v = f32x8::from(*chunk);
+        let v = f32x8::from_array(token, *chunk);
         let result = linear_to_gamma_x8(token, v, gamma);
         *chunk = result.to_array();
     }

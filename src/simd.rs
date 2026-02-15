@@ -17,10 +17,14 @@
 //! - [`srgb_u8_to_linear_slice`] - &\[u8\] sRGB → &mut \[f32\] linear
 //! - [`linear_to_srgb_u8_slice`] - &\[f32\] linear → &mut \[u8\] sRGB
 
-use archmage::{incant, magetypes};
+use archmage::{Desktop64, ScalarToken, arcane, incant, rite};
 use wide::{CmpLt, f32x8};
 
 use crate::fast_math::pow_x8;
+
+// Alias magetypes f32x8 to avoid name clash with wide::f32x8
+#[cfg(target_arch = "x86_64")]
+use magetypes::simd::f32x8 as mt_f32x8;
 
 // sRGB transfer function constants (C0-continuous, moxcms-derived)
 // These ensure exact continuity at the linear/power segment junction.
@@ -407,11 +411,81 @@ pub fn linear_to_gamma_x8_inline(linear: f32x8, gamma: f32) -> f32x8 {
 }
 
 // ============================================================================
+// magetypes #[rite] helpers (x86-64 only) — real AVX2+FMA SIMD
+// ============================================================================
+
+// sRGB transfer function scalar constants (for magetypes which needs token-gated splat)
+const MT_SRGB_LINEAR_THRESHOLD: f32 = 0.039_293_37;
+const MT_LINEAR_THRESHOLD: f32 = 0.003_041_282_6;
+const MT_LINEAR_SCALE: f32 = 1.0 / 12.92;
+const MT_SRGB_OFFSET: f32 = 0.055_010_72;
+const MT_SRGB_SCALE: f32 = 1.055_010_7;
+const MT_INV_SRGB_SCALE: f32 = 1.0 / 1.055_010_7;
+const MT_TWELVE_92: f32 = 12.92;
+
+#[cfg(target_arch = "x86_64")]
+#[rite]
+fn srgb_to_linear_mt(token: Desktop64, srgb: mt_f32x8) -> mt_f32x8 {
+    let zero = mt_f32x8::zero(token);
+    let one = mt_f32x8::splat(token, 1.0);
+    let srgb = srgb.max(zero).min(one);
+
+    let linear_result = srgb * mt_f32x8::splat(token, MT_LINEAR_SCALE);
+    let normalized =
+        (srgb + mt_f32x8::splat(token, MT_SRGB_OFFSET)) * mt_f32x8::splat(token, MT_INV_SRGB_SCALE);
+    let power_result = normalized.pow_midp(2.4);
+
+    let mask = srgb.simd_lt(mt_f32x8::splat(token, MT_SRGB_LINEAR_THRESHOLD));
+    mt_f32x8::blend(mask, linear_result, power_result)
+}
+
+#[cfg(target_arch = "x86_64")]
+#[rite]
+fn linear_to_srgb_mt(token: Desktop64, linear: mt_f32x8) -> mt_f32x8 {
+    let zero = mt_f32x8::zero(token);
+    let one = mt_f32x8::splat(token, 1.0);
+    let linear = linear.max(zero).min(one);
+
+    let linear_result = linear * mt_f32x8::splat(token, MT_TWELVE_92);
+    let power_result = mt_f32x8::splat(token, MT_SRGB_SCALE) * linear.pow_midp(1.0 / 2.4)
+        - mt_f32x8::splat(token, MT_SRGB_OFFSET);
+
+    let mask = linear.simd_lt(mt_f32x8::splat(token, MT_LINEAR_THRESHOLD));
+    mt_f32x8::blend(mask, linear_result, power_result)
+}
+
+#[cfg(target_arch = "x86_64")]
+#[rite]
+fn gamma_to_linear_mt(token: Desktop64, encoded: mt_f32x8, gamma: f32) -> mt_f32x8 {
+    let zero = mt_f32x8::zero(token);
+    let one = mt_f32x8::splat(token, 1.0);
+    let encoded = encoded.max(zero).min(one);
+    encoded.pow_midp(gamma)
+}
+
+#[cfg(target_arch = "x86_64")]
+#[rite]
+fn linear_to_gamma_mt(token: Desktop64, linear: mt_f32x8, gamma: f32) -> mt_f32x8 {
+    let zero = mt_f32x8::zero(token);
+    let one = mt_f32x8::splat(token, 1.0);
+    let linear = linear.max(zero).min(one);
+    linear.pow_midp(1.0 / gamma)
+}
+
+// ============================================================================
 // x8 Dispatch Functions - Runtime CPU feature detection
 // ============================================================================
 
-#[magetypes(v3)]
-fn srgb_to_linear_x8_tier(_token: Token, srgb: f32x8) -> f32x8 {
+#[cfg(target_arch = "x86_64")]
+#[arcane]
+fn srgb_to_linear_x8_tier_v3(token: Desktop64, srgb: f32x8) -> f32x8 {
+    let arr: [f32; 8] = srgb.into();
+    let v = mt_f32x8::from_array(token, arr);
+    let result = srgb_to_linear_mt(token, v);
+    f32x8::from(result.to_array())
+}
+
+fn srgb_to_linear_x8_tier_scalar(_token: ScalarToken, srgb: f32x8) -> f32x8 {
     srgb_to_linear_x8_inline(srgb)
 }
 
@@ -427,8 +501,16 @@ pub fn srgb_to_linear_x8_dispatch(srgb: f32x8) -> f32x8 {
     incant!(srgb_to_linear_x8_tier(srgb), [v3])
 }
 
-#[magetypes(v3)]
-fn linear_to_srgb_x8_tier(_token: Token, linear: f32x8) -> f32x8 {
+#[cfg(target_arch = "x86_64")]
+#[arcane]
+fn linear_to_srgb_x8_tier_v3(token: Desktop64, linear: f32x8) -> f32x8 {
+    let arr: [f32; 8] = linear.into();
+    let v = mt_f32x8::from_array(token, arr);
+    let result = linear_to_srgb_mt(token, v);
+    f32x8::from(result.to_array())
+}
+
+fn linear_to_srgb_x8_tier_scalar(_token: ScalarToken, linear: f32x8) -> f32x8 {
     linear_to_srgb_x8_inline(linear)
 }
 
@@ -450,8 +532,16 @@ pub fn linear_to_srgb_u8_x8_dispatch(linear: f32x8) -> [u8; 8] {
     linear_to_srgb_u8_x8_inline(linear)
 }
 
-#[magetypes(v3)]
-fn gamma_to_linear_x8_tier(_token: Token, encoded: f32x8, gamma: f32) -> f32x8 {
+#[cfg(target_arch = "x86_64")]
+#[arcane]
+fn gamma_to_linear_x8_tier_v3(token: Desktop64, encoded: f32x8, gamma: f32) -> f32x8 {
+    let arr: [f32; 8] = encoded.into();
+    let v = mt_f32x8::from_array(token, arr);
+    let result = gamma_to_linear_mt(token, v, gamma);
+    f32x8::from(result.to_array())
+}
+
+fn gamma_to_linear_x8_tier_scalar(_token: ScalarToken, encoded: f32x8, gamma: f32) -> f32x8 {
     gamma_to_linear_x8_inline(encoded, gamma)
 }
 
@@ -461,8 +551,16 @@ pub fn gamma_to_linear_x8_dispatch(encoded: f32x8, gamma: f32) -> f32x8 {
     incant!(gamma_to_linear_x8_tier(encoded, gamma), [v3])
 }
 
-#[magetypes(v3)]
-fn linear_to_gamma_x8_tier(_token: Token, linear: f32x8, gamma: f32) -> f32x8 {
+#[cfg(target_arch = "x86_64")]
+#[arcane]
+fn linear_to_gamma_x8_tier_v3(token: Desktop64, linear: f32x8, gamma: f32) -> f32x8 {
+    let arr: [f32; 8] = linear.into();
+    let v = mt_f32x8::from_array(token, arr);
+    let result = linear_to_gamma_mt(token, v, gamma);
+    f32x8::from(result.to_array())
+}
+
+fn linear_to_gamma_x8_tier_scalar(_token: ScalarToken, linear: f32x8, gamma: f32) -> f32x8 {
     linear_to_gamma_x8_inline(linear, gamma)
 }
 
@@ -595,16 +693,24 @@ pub fn linear_to_gamma_x8(linear: f32x8, gamma: f32) -> f32x8 {
 // Slice Functions - Process entire slices
 // ============================================================================
 
-#[magetypes(v3)]
-fn srgb_to_linear_slice_tier(_token: Token, values: &mut [f32]) {
+#[cfg(target_arch = "x86_64")]
+#[arcane]
+fn srgb_to_linear_slice_tier_v3(token: Desktop64, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
-        let result = srgb_to_linear_x8_inline(f32x8::from(*chunk));
-        *chunk = result.into();
+        let v = mt_f32x8::from_array(token, *chunk);
+        let result = srgb_to_linear_mt(token, v);
+        *chunk = result.to_array();
     }
 
     for v in remainder {
+        *v = crate::scalar::srgb_to_linear(*v);
+    }
+}
+
+fn srgb_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+    for v in values.iter_mut() {
         *v = crate::scalar::srgb_to_linear(*v);
     }
 }
@@ -625,16 +731,24 @@ pub fn srgb_to_linear_slice(values: &mut [f32]) {
     incant!(srgb_to_linear_slice_tier(values), [v3])
 }
 
-#[magetypes(v3)]
-fn linear_to_srgb_slice_tier(_token: Token, values: &mut [f32]) {
+#[cfg(target_arch = "x86_64")]
+#[arcane]
+fn linear_to_srgb_slice_tier_v3(token: Desktop64, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
-        let result = linear_to_srgb_x8_inline(f32x8::from(*chunk));
-        *chunk = result.into();
+        let v = mt_f32x8::from_array(token, *chunk);
+        let result = linear_to_srgb_mt(token, v);
+        *chunk = result.to_array();
     }
 
     for v in remainder {
+        *v = crate::scalar::linear_to_srgb(*v);
+    }
+}
+
+fn linear_to_srgb_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+    for v in values.iter_mut() {
         *v = crate::scalar::linear_to_srgb(*v);
     }
 }
@@ -814,16 +928,24 @@ pub fn linear_to_srgb_u16_slice(input: &[f32], output: &mut [u16]) {
 // Custom Gamma Slice Functions
 // ============================================================================
 
-#[magetypes(v3)]
-fn gamma_to_linear_slice_tier(_token: Token, values: &mut [f32], gamma: f32) {
+#[cfg(target_arch = "x86_64")]
+#[arcane]
+fn gamma_to_linear_slice_tier_v3(token: Desktop64, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
-        let result = gamma_to_linear_x8_inline(f32x8::from(*chunk), gamma);
-        *chunk = result.into();
+        let v = mt_f32x8::from_array(token, *chunk);
+        let result = gamma_to_linear_mt(token, v, gamma);
+        *chunk = result.to_array();
     }
 
     for v in remainder {
+        *v = crate::scalar::gamma_to_linear(*v, gamma);
+    }
+}
+
+fn gamma_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], gamma: f32) {
+    for v in values.iter_mut() {
         *v = crate::scalar::gamma_to_linear(*v, gamma);
     }
 }
@@ -844,16 +966,24 @@ pub fn gamma_to_linear_slice(values: &mut [f32], gamma: f32) {
     incant!(gamma_to_linear_slice_tier(values, gamma), [v3])
 }
 
-#[magetypes(v3)]
-fn linear_to_gamma_slice_tier(_token: Token, values: &mut [f32], gamma: f32) {
+#[cfg(target_arch = "x86_64")]
+#[arcane]
+fn linear_to_gamma_slice_tier_v3(token: Desktop64, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
-        let result = linear_to_gamma_x8_inline(f32x8::from(*chunk), gamma);
-        *chunk = result.into();
+        let v = mt_f32x8::from_array(token, *chunk);
+        let result = linear_to_gamma_mt(token, v, gamma);
+        *chunk = result.to_array();
     }
 
     for v in remainder {
+        *v = crate::scalar::linear_to_gamma(*v, gamma);
+    }
+}
+
+fn linear_to_gamma_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], gamma: f32) {
+    for v in values.iter_mut() {
         *v = crate::scalar::linear_to_gamma(*v, gamma);
     }
 }
@@ -878,8 +1008,18 @@ pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
 // f32x8 Slice Functions (for pre-aligned SIMD data)
 // ============================================================================
 
-#[magetypes(v3)]
-fn srgb_to_linear_x8_slice_tier(_token: Token, values: &mut [f32x8]) {
+#[cfg(target_arch = "x86_64")]
+#[arcane]
+fn srgb_to_linear_x8_slice_tier_v3(token: Desktop64, values: &mut [f32x8]) {
+    for v in values.iter_mut() {
+        let arr: [f32; 8] = (*v).into();
+        let mt_v = mt_f32x8::from_array(token, arr);
+        let result = srgb_to_linear_mt(token, mt_v);
+        *v = f32x8::from(result.to_array());
+    }
+}
+
+fn srgb_to_linear_x8_slice_tier_scalar(_token: ScalarToken, values: &mut [f32x8]) {
     for v in values.iter_mut() {
         *v = srgb_to_linear_x8_inline(*v);
     }
@@ -903,8 +1043,18 @@ pub fn srgb_to_linear_x8_slice(values: &mut [f32x8]) {
     incant!(srgb_to_linear_x8_slice_tier(values), [v3])
 }
 
-#[magetypes(v3)]
-fn linear_to_srgb_x8_slice_tier(_token: Token, values: &mut [f32x8]) {
+#[cfg(target_arch = "x86_64")]
+#[arcane]
+fn linear_to_srgb_x8_slice_tier_v3(token: Desktop64, values: &mut [f32x8]) {
+    for v in values.iter_mut() {
+        let arr: [f32; 8] = (*v).into();
+        let mt_v = mt_f32x8::from_array(token, arr);
+        let result = linear_to_srgb_mt(token, mt_v);
+        *v = f32x8::from(result.to_array());
+    }
+}
+
+fn linear_to_srgb_x8_slice_tier_scalar(_token: ScalarToken, values: &mut [f32x8]) {
     for v in values.iter_mut() {
         *v = linear_to_srgb_x8_inline(*v);
     }
@@ -928,8 +1078,18 @@ pub fn linear_to_srgb_x8_slice(values: &mut [f32x8]) {
     incant!(linear_to_srgb_x8_slice_tier(values), [v3])
 }
 
-#[magetypes(v3)]
-fn gamma_to_linear_x8_slice_tier(_token: Token, values: &mut [f32x8], gamma: f32) {
+#[cfg(target_arch = "x86_64")]
+#[arcane]
+fn gamma_to_linear_x8_slice_tier_v3(token: Desktop64, values: &mut [f32x8], gamma: f32) {
+    for v in values.iter_mut() {
+        let arr: [f32; 8] = (*v).into();
+        let mt_v = mt_f32x8::from_array(token, arr);
+        let result = gamma_to_linear_mt(token, mt_v, gamma);
+        *v = f32x8::from(result.to_array());
+    }
+}
+
+fn gamma_to_linear_x8_slice_tier_scalar(_token: ScalarToken, values: &mut [f32x8], gamma: f32) {
     for v in values.iter_mut() {
         *v = gamma_to_linear_x8_inline(*v, gamma);
     }
@@ -953,8 +1113,18 @@ pub fn gamma_to_linear_x8_slice(values: &mut [f32x8], gamma: f32) {
     incant!(gamma_to_linear_x8_slice_tier(values, gamma), [v3])
 }
 
-#[magetypes(v3)]
-fn linear_to_gamma_x8_slice_tier(_token: Token, values: &mut [f32x8], gamma: f32) {
+#[cfg(target_arch = "x86_64")]
+#[arcane]
+fn linear_to_gamma_x8_slice_tier_v3(token: Desktop64, values: &mut [f32x8], gamma: f32) {
+    for v in values.iter_mut() {
+        let arr: [f32; 8] = (*v).into();
+        let mt_v = mt_f32x8::from_array(token, arr);
+        let result = linear_to_gamma_mt(token, mt_v, gamma);
+        *v = f32x8::from(result.to_array());
+    }
+}
+
+fn linear_to_gamma_x8_slice_tier_scalar(_token: ScalarToken, values: &mut [f32x8], gamma: f32) {
     for v in values.iter_mut() {
         *v = linear_to_gamma_x8_inline(*v, gamma);
     }
