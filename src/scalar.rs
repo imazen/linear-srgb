@@ -38,10 +38,10 @@ const INV_GAMMA_F32: f32 = INV_GAMMA as f32;
 
 /// Convert sRGB gamma-encoded value to linear light (f64).
 ///
-/// Input: sRGB value in [0, 1]
-/// Output: Linear light value in [0, 1]
+/// Input: sRGB value in \[0, 1\]
+/// Output: Linear light value in \[0, 1\]
 ///
-/// Values outside [0, 1] are clamped.
+/// **Clamps** inputs to \[0, 1\]. No extended-range f64 variant exists.
 #[inline]
 pub fn srgb_to_linear_f64(gamma: f64) -> f64 {
     if gamma < 0.0 {
@@ -59,10 +59,11 @@ pub fn srgb_to_linear_f64(gamma: f64) -> f64 {
 
 /// Convert sRGB gamma-encoded value to linear light (f32).
 ///
-/// Input: sRGB value in [0, 1]
-/// Output: Linear light value in [0, 1]
+/// Input: sRGB value in \[0, 1\]
+/// Output: Linear light value in \[0, 1\]
 ///
-/// Values outside [0, 1] are clamped.
+/// **Clamps** inputs to \[0, 1\]. For HDR/ICC workflows with out-of-range
+/// values, use [`srgb_to_linear_extended`] instead.
 #[inline]
 pub fn srgb_to_linear(gamma: f32) -> f32 {
     if gamma < 0.0 {
@@ -78,10 +79,10 @@ pub fn srgb_to_linear(gamma: f32) -> f32 {
 
 /// Convert linear light value to sRGB gamma-encoded (f64).
 ///
-/// Input: Linear light value in [0, 1]
-/// Output: sRGB value in [0, 1]
+/// Input: Linear light value in \[0, 1\]
+/// Output: sRGB value in \[0, 1\]
 ///
-/// Values outside [0, 1] are clamped.
+/// **Clamps** inputs to \[0, 1\]. No extended-range f64 variant exists.
 #[inline]
 pub fn linear_to_srgb_f64(linear: f64) -> f64 {
     if linear < 0.0 {
@@ -99,10 +100,11 @@ pub fn linear_to_srgb_f64(linear: f64) -> f64 {
 
 /// Convert linear light value to sRGB gamma-encoded (f32).
 ///
-/// Input: Linear light value in [0, 1]
-/// Output: sRGB value in [0, 1]
+/// Input: Linear light value in \[0, 1\]
+/// Output: sRGB value in \[0, 1\]
 ///
-/// Values outside [0, 1] are clamped.
+/// **Clamps** inputs to \[0, 1\]. For HDR/ICC workflows with out-of-range
+/// values, use [`linear_to_srgb_extended`] instead.
 #[inline]
 pub fn linear_to_srgb(linear: f32) -> f32 {
     if linear < 0.0 {
@@ -118,8 +120,13 @@ pub fn linear_to_srgb(linear: f32) -> f32 {
 
 /// Convert sRGB gamma-encoded value to linear light without clamping (f32).
 ///
-/// For extended range HDR workflows where values may exceed [0, 1].
-/// Uses the transfer function for all values, following the mathematical definition.
+/// Unlike [`srgb_to_linear`], this does **not** clamp to \[0, 1\]. Use this for:
+/// - **HDR content** where values exceed 1.0
+/// - **ICC profile conversions** where negative values are possible
+/// - **Scene-referred** workflows with unbounded linear light
+///
+/// Negative inputs pass through the linear segment (scaled by 1/12.92).
+/// Inputs above 1.0 pass through the power segment.
 #[inline]
 pub fn srgb_to_linear_extended(gamma: f32) -> f32 {
     if gamma < SRGB_LINEAR_THRESHOLD_F32 {
@@ -131,7 +138,13 @@ pub fn srgb_to_linear_extended(gamma: f32) -> f32 {
 
 /// Convert linear light value to sRGB gamma-encoded without clamping (f32).
 ///
-/// For extended range HDR workflows where values may exceed [0, 1].
+/// Unlike [`linear_to_srgb`], this does **not** clamp to \[0, 1\]. Use this for:
+/// - **HDR content** where linear values exceed 1.0
+/// - **ICC profile conversions** where negative values are possible
+/// - **Scene-referred** workflows with unbounded linear light
+///
+/// Negative inputs pass through the linear segment (scaled by 12.92).
+/// Inputs above 1.0 pass through the power segment.
 #[inline]
 pub fn linear_to_srgb_extended(linear: f32) -> f32 {
     if linear < LINEAR_THRESHOLD_F32 {
