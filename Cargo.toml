@@ -1,6 +1,6 @@
 [package]
 name = "linear-srgb"
-version = "0.5.3"
+version = "0.5.4"
 edition = "2024"
 rust-version = "1.92"
 license = "MIT OR Apache-2.0"
