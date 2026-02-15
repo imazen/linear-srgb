@@ -76,26 +76,26 @@
 //!
 //! # Clamping and Range
 //!
-//! All functions **clamp inputs to \[0, 1\]** — negatives become 0, values
-//! above 1 become 1. This is correct for the primary use case: decode sRGB,
-//! process in linear (resize, blur, blend), re-encode to sRGB.
+//! All functions **clamp f32 inputs to \[0, 1\]** by default. This is the right
+//! behavior for the common pipeline: decode → process (resize, blur, blend) →
+//! re-encode in the **same color space**. Resize filter ringing can produce
+//! small negatives near dark edges and values slightly above 1.0 near bright
+//! edges — these are artifacts, not real colors, and should be clamped.
 //!
-//! **Why clamping is right for image processing:** Sharp resize filters (Lanczos,
-//! etc.) have negative lobes that produce small negative values near dark edges
-//! and values slightly above 1.0 near bright edges. These are ringing artifacts,
-//! not real colors — clamping them is the correct behavior.
+//! **When you need unclamped values:** If the sRGB transfer function is being
+//! applied to values that came from a **different, wider gamut** (e.g.,
+//! Rec. 2020 or Display P3 linear → sRGB encoding), those values can be
+//! legitimately negative or above 1.0 — they represent real out-of-gamut
+//! colors, not ringing. Clamping destroys them. Use the `_extended` variants:
 //!
-//! **When you need unclamped values:** The `_extended` scalar variants preserve
-//! out-of-range values for scRGB (HDR float sRGB) or multi-step float ICC
-//! pipelines where intermediate values pass through another transform before
-//! final quantization. This is niche — if you're decoding, processing, and
-//! re-encoding in the same color space, you don't need it.
+//! | Function | Range | Use when... |
+//! |----------|-------|-------------|
+//! | All `simd::*`, `mage::*`, `rites::*`, `lut::*` | \[0, 1\] | Same-gamut pipelines |
+//! | [`scalar::srgb_to_linear`] / [`scalar::linear_to_srgb`] | \[0, 1\] | Same-gamut, single values |
+//! | [`scalar::srgb_to_linear_extended`] / [`scalar::linear_to_srgb_extended`] | Unbounded | Cross-gamut or scRGB/HDR |
 //!
-//! | Function | Range |
-//! |----------|-------|
-//! | All `simd::*`, `mage::*`, `rites::*`, `lut::*` | Clamped to \[0, 1\] |
-//! | [`scalar::srgb_to_linear`] / [`scalar::linear_to_srgb`] | Clamped to \[0, 1\] |
-//! | [`scalar::srgb_to_linear_extended`] / [`scalar::linear_to_srgb_extended`] | Unbounded (scalar only) |
+//! Integer paths (u8, u16) always clamp — out-of-range values can't be
+//! represented and you're at the final quantization step anyway.
 //!
 //! # Feature Flags
 //!
