@@ -127,7 +127,7 @@ pub fn srgb_u8_to_linear_slice(_token: Avx2FmaToken, input: &[u8], output: &mut 
 
 /// Convert linear f32 values to sRGB u8.
 ///
-/// Uses a 4097-entry const LUT — no pow/log/exp computation.
+/// Uses a 4096-entry const LUT — no pow/log/exp computation.
 /// The token is accepted for API compatibility but not required for this path.
 ///
 /// # Panics

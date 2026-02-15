@@ -224,7 +224,7 @@ impl SrgbConverter {
 
     /// Convert linear to 8-bit sRGB using direct LUT lookup.
     ///
-    /// Uses a 4097-entry const u8 table — no interpolation or transcendental math.
+    /// Uses a 4096-entry const u8 table — no interpolation or transcendental math.
     #[inline]
     pub fn linear_to_srgb_u8(&self, linear: f32) -> u8 {
         crate::scalar::linear_to_srgb_u8(linear)

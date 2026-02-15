@@ -361,7 +361,7 @@ pub fn linear_to_srgb_x8_inline(linear: f32x8) -> f32x8 {
 
 /// Convert 8 linear f32 values to sRGB u8 (always inlined).
 ///
-/// Uses a 4097-entry const LUT for direct lookup — no pow/log/exp computation.
+/// Uses a 4096-entry const LUT for direct lookup — no pow/log/exp computation.
 /// Max error: ±1 u8 level (same as the SIMD polynomial path).
 #[inline(always)]
 pub fn linear_to_srgb_u8_x8_inline(linear: f32x8) -> [u8; 8] {
@@ -375,18 +375,18 @@ pub fn linear_to_srgb_u8_x8_inline(linear: f32x8) -> [u8; 8] {
 #[inline(always)]
 pub(crate) fn linear_to_srgb_u8_lut_x8(linear: f32x8) -> [u8; 8] {
     let clamped = linear.max(ZERO).min(ONE);
-    let scaled = clamped * f32x8::splat(4096.0) + HALF;
+    let scaled = clamped * f32x8::splat(4095.0) + HALF;
     let arr: [f32; 8] = scaled.into();
-    let lut = &crate::const_luts::LINEAR_TO_SRGB_U8_4096;
+    let lut = &crate::const_luts::LINEAR_TO_SRGB_U8;
     [
-        lut[arr[0] as usize],
-        lut[arr[1] as usize],
-        lut[arr[2] as usize],
-        lut[arr[3] as usize],
-        lut[arr[4] as usize],
-        lut[arr[5] as usize],
-        lut[arr[6] as usize],
-        lut[arr[7] as usize],
+        lut[arr[0] as usize & 0xFFF],
+        lut[arr[1] as usize & 0xFFF],
+        lut[arr[2] as usize & 0xFFF],
+        lut[arr[3] as usize & 0xFFF],
+        lut[arr[4] as usize & 0xFFF],
+        lut[arr[5] as usize & 0xFFF],
+        lut[arr[6] as usize & 0xFFF],
+        lut[arr[7] as usize & 0xFFF],
     ]
 }
 
@@ -828,7 +828,7 @@ pub fn srgb_u8_to_linear_slice(input: &[u8], output: &mut [f32]) {
 pub fn linear_to_srgb_u8_slice(input: &[f32], output: &mut [u8]) {
     assert_eq!(input.len(), output.len());
 
-    let lut = &crate::const_luts::LINEAR_TO_SRGB_U8_4096;
+    let lut = &crate::const_luts::LINEAR_TO_SRGB_U8;
 
     // Process 8 at a time using SIMD for index computation
     let (in_chunks, in_remainder) = input.as_chunks::<8>();
@@ -837,17 +837,17 @@ pub fn linear_to_srgb_u8_slice(input: &[f32], output: &mut [u8]) {
     for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
         let linear = f32x8::from(*inp);
         let clamped = linear.max(ZERO).min(ONE);
-        let scaled = clamped * f32x8::splat(4096.0) + HALF;
+        let scaled = clamped * f32x8::splat(4095.0) + HALF;
         let arr: [f32; 8] = scaled.into();
         *out = [
-            lut[arr[0] as usize],
-            lut[arr[1] as usize],
-            lut[arr[2] as usize],
-            lut[arr[3] as usize],
-            lut[arr[4] as usize],
-            lut[arr[5] as usize],
-            lut[arr[6] as usize],
-            lut[arr[7] as usize],
+            lut[arr[0] as usize & 0xFFF],
+            lut[arr[1] as usize & 0xFFF],
+            lut[arr[2] as usize & 0xFFF],
+            lut[arr[3] as usize & 0xFFF],
+            lut[arr[4] as usize & 0xFFF],
+            lut[arr[5] as usize & 0xFFF],
+            lut[arr[6] as usize & 0xFFF],
+            lut[arr[7] as usize & 0xFFF],
         ];
     }
 

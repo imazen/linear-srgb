@@ -159,12 +159,13 @@ pub fn srgb_u8_to_linear(value: u8) -> f32 {
 
 /// Convert linear to 8-bit sRGB using const LUT.
 ///
-/// Uses a 4097-entry lookup table (4KB, fits L1 cache). No transcendental math.
+/// Uses a 4096-entry lookup table (4KB, fits L1 cache). No transcendental math.
+/// Bitmask indexing (`& 0xFFF`) guarantees bounds safety with zero overhead.
 /// Max error: ±1 u8 level vs exact computation.
 #[inline]
 pub fn linear_to_srgb_u8(linear: f32) -> u8 {
-    let idx = (linear.clamp(0.0, 1.0) * 4096.0 + 0.5) as usize;
-    crate::const_luts::LINEAR_TO_SRGB_U8_4096[idx]
+    let idx = (linear.clamp(0.0, 1.0) * 4095.0 + 0.5) as usize & 0xFFF;
+    crate::const_luts::LINEAR_TO_SRGB_U8[idx]
 }
 
 // ============================================================================

@@ -61,4 +61,25 @@ fn main() {
         }
     }
     println!("];");
+    println!();
+
+    // LinearToSrgbU8: 4096 entries (linear f32 -> sRGB u8)
+    // Power-of-2 size enables bitmask indexing: idx & 0xFFF
+    println!("// LinearToSrgbU8: linear f32 → sRGB u8 (4096 entries, 4KB)");
+    println!("// Index i corresponds to linear value i/4095.");
+    println!("// Lookup: LUT[(linear.clamp(0,1) * 4095.0 + 0.5) as usize & 0xFFF]");
+    println!("pub(crate) const LINEAR_TO_SRGB_U8: [u8; 4096] = [");
+    for i in 0..4096u32 {
+        let linear = i as f64 / 4095.0;
+        let srgb = linear_to_srgb_f64(linear);
+        let u8_val = (srgb * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
+        if i % 16 == 0 {
+            print!("    ");
+        }
+        print!("{}, ", u8_val);
+        if i % 16 == 15 {
+            println!();
+        }
+    }
+    println!("];");
 }
