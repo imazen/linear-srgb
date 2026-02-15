@@ -166,9 +166,9 @@ const L2S_C15: f32 = 6.419_743e-3;
 /// polynomial. ~4× faster on scalar and identical to the SIMD path.
 ///
 /// Max error vs f64 reference (exhaustive over all f32):
-/// - Full power segment: 303 ULP max, 28 ULP avg
-/// - \[0.05, 1.0\]: 167 ULP max, 22 ULP avg
-/// - \[0.5, 1.0\]: 3 ULP max, 0.6 ULP avg
+/// - Full power segment: 221 ULP max, 28 ULP avg
+/// - \[0.05, 1.0\]: 121 ULP max, 22 ULP avg
+/// - \[0.5, 1.0\]: 2 ULP max, 0.4 ULP avg
 ///
 /// Worst case is near the linear/power threshold (~0.039) where the
 /// polynomial domain starts. For typical image values (sRGB > 0.1),
@@ -187,22 +187,22 @@ pub fn srgb_to_linear_fast(gamma: f32) -> f32 {
         return gamma * LINEAR_SCALE_F32;
     }
 
-    // Degree-11 Chebyshev polynomial (Estrin evaluation)
-    let u = gamma.mul_add(S2L_INV_HW, S2L_BIAS);
+    // Degree-11 Chebyshev polynomial (Estrin evaluation in f64 for precision)
+    let u = (gamma as f64).mul_add(S2L_INV_HW as f64, S2L_BIAS as f64);
     let u2 = u * u;
     let u4 = u2 * u2;
     let u_8 = u4 * u4;
-    let p01 = S2L_C1.mul_add(u, S2L_C0);
-    let p23 = S2L_C3.mul_add(u, S2L_C2);
-    let p45 = S2L_C5.mul_add(u, S2L_C4);
-    let p67 = S2L_C7.mul_add(u, S2L_C6);
-    let p89 = S2L_C9.mul_add(u, S2L_C8);
-    let pab = S2L_C11.mul_add(u, S2L_C10);
+    let p01 = (S2L_C1 as f64).mul_add(u, S2L_C0 as f64);
+    let p23 = (S2L_C3 as f64).mul_add(u, S2L_C2 as f64);
+    let p45 = (S2L_C5 as f64).mul_add(u, S2L_C4 as f64);
+    let p67 = (S2L_C7 as f64).mul_add(u, S2L_C6 as f64);
+    let p89 = (S2L_C9 as f64).mul_add(u, S2L_C8 as f64);
+    let pab = (S2L_C11 as f64).mul_add(u, S2L_C10 as f64);
     let p0123 = p23.mul_add(u2, p01);
     let p4567 = p67.mul_add(u2, p45);
     let p8_11 = pab.mul_add(u2, p89);
     let p0_7 = p4567.mul_add(u4, p0123);
-    p8_11.mul_add(u_8, p0_7)
+    p8_11.mul_add(u_8, p0_7) as f32
 }
 
 /// Convert linear light value to sRGB gamma-encoded using a polynomial (f32).
@@ -211,9 +211,9 @@ pub fn srgb_to_linear_fast(gamma: f32) -> f32 {
 /// Chebyshev polynomial. ~4× faster on scalar and identical to the SIMD path.
 ///
 /// Max error vs f64 reference (exhaustive over all f32):
-/// - Full power segment: 300 ULP max, 31 ULP avg
-/// - \[0.01, 1.0\]: 76 ULP max, 10 ULP avg
-/// - \[0.5, 1.0\]: 6 ULP max, 1.4 ULP avg
+/// - Full power segment: 294 ULP max, 31 ULP avg
+/// - \[0.01, 1.0\]: 72 ULP max, 10 ULP avg
+/// - \[0.5, 1.0\]: 3 ULP max, 1.3 ULP avg
 ///
 /// Worst case is near the linear/power threshold (~0.003) where the
 /// polynomial domain starts. For typical image values (linear > 0.01),
@@ -232,27 +232,27 @@ pub fn linear_to_srgb_fast(linear: f32) -> f32 {
         return linear * 12.92;
     }
 
-    // sqrt transform + degree-15 Chebyshev polynomial (Estrin evaluation)
-    let s = linear.sqrt();
-    let u = s.mul_add(L2S_INV_HW, L2S_BIAS);
+    // sqrt transform + degree-15 Chebyshev polynomial (Estrin evaluation in f64 for precision)
+    let s = (linear as f64).sqrt();
+    let u = s.mul_add(L2S_INV_HW as f64, L2S_BIAS as f64);
     let u2 = u * u;
     let u4 = u2 * u2;
     let u_8 = u4 * u4;
-    let p01 = L2S_C1.mul_add(u, L2S_C0);
-    let p23 = L2S_C3.mul_add(u, L2S_C2);
-    let p45 = L2S_C5.mul_add(u, L2S_C4);
-    let p67 = L2S_C7.mul_add(u, L2S_C6);
-    let p89 = L2S_C9.mul_add(u, L2S_C8);
-    let pab = L2S_C11.mul_add(u, L2S_C10);
-    let pcd = L2S_C13.mul_add(u, L2S_C12);
-    let pef = L2S_C15.mul_add(u, L2S_C14);
+    let p01 = (L2S_C1 as f64).mul_add(u, L2S_C0 as f64);
+    let p23 = (L2S_C3 as f64).mul_add(u, L2S_C2 as f64);
+    let p45 = (L2S_C5 as f64).mul_add(u, L2S_C4 as f64);
+    let p67 = (L2S_C7 as f64).mul_add(u, L2S_C6 as f64);
+    let p89 = (L2S_C9 as f64).mul_add(u, L2S_C8 as f64);
+    let pab = (L2S_C11 as f64).mul_add(u, L2S_C10 as f64);
+    let pcd = (L2S_C13 as f64).mul_add(u, L2S_C12 as f64);
+    let pef = (L2S_C15 as f64).mul_add(u, L2S_C14 as f64);
     let p0123 = p23.mul_add(u2, p01);
     let p4567 = p67.mul_add(u2, p45);
     let p89ab = pab.mul_add(u2, p89);
     let pcdef = pef.mul_add(u2, pcd);
     let p0_7 = p4567.mul_add(u4, p0123);
     let p8_f = pcdef.mul_add(u4, p89ab);
-    p8_f.mul_add(u_8, p0_7)
+    p8_f.mul_add(u_8, p0_7) as f32
 }
 
 /// Convert sRGB gamma-encoded value to linear light without clamping (f32).

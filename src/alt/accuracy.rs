@@ -314,10 +314,10 @@ mod tests {
             exhaustive_ulp_sweep(srgb_to_linear_fast, srgb_to_linear_f64, 0.5, 1.0);
         println!("  [0.5, 1.0] ({count_hi} values): max={max_ulp_hi}, avg={avg_ulp_hi:.4}");
 
-        // Measured: max 303 ULP at threshold, ~28 avg
+        // Measured: max 221 ULP at threshold, ~28 avg (f64 Estrin evaluation)
         assert!(
-            max_ulp <= 310,
-            "srgb_to_linear_fast max ULP {max_ulp} exceeds 310"
+            max_ulp <= 230,
+            "srgb_to_linear_fast max ULP {max_ulp} exceeds 230"
         );
     }
 
@@ -350,10 +350,10 @@ mod tests {
             exhaustive_ulp_sweep(linear_to_srgb_fast, linear_to_srgb_f64, 0.5, 1.0);
         println!("  [0.5, 1.0] ({count_hi} values): max={max_ulp_hi}, avg={avg_ulp_hi:.4}");
 
-        // Measured: max 300 ULP at threshold, ~31 avg
+        // Measured: max 294 ULP at threshold, ~31 avg (f64 Estrin evaluation)
         assert!(
-            max_ulp <= 310,
-            "linear_to_srgb_fast max ULP {max_ulp} exceeds 310"
+            max_ulp <= 300,
+            "linear_to_srgb_fast max ULP {max_ulp} exceeds 300"
         );
     }
 
