@@ -95,8 +95,63 @@ pub fn linear_to_gamma_v3(token: Desktop64, linear: [f32; 8], gamma: f32) -> [f3
 }
 
 // ============================================================================
-// x8 LUT functions — linear f32 → sRGB u8
+// x8 LUT functions — u8↔f32
 // ============================================================================
+
+/// Convert 8 sRGB u8 values to linear f32 via 256-entry LUT.
+///
+/// Pure table lookup — no math. The 1KB table fits in L1 cache.
+/// The token is accepted for API consistency; the operation itself
+/// is scalar lookups assembled into an array.
+///
+/// # Safety
+///
+/// Safe when called from a context with matching target features (e.g. inside
+/// an `#[arcane]` function taking `Desktop64`). The token proves CPU support.
+#[rite]
+pub fn srgb_u8_to_linear_v3(_token: Desktop64, srgb: [u8; 8]) -> [f32; 8] {
+    let lut = &crate::const_luts::LINEAR_TABLE_8;
+    [
+        lut[srgb[0] as usize],
+        lut[srgb[1] as usize],
+        lut[srgb[2] as usize],
+        lut[srgb[3] as usize],
+        lut[srgb[4] as usize],
+        lut[srgb[5] as usize],
+        lut[srgb[6] as usize],
+        lut[srgb[7] as usize],
+    ]
+}
+
+/// Convert sRGB u8 values to linear f32 using 8-wide LUT lookup.
+///
+/// # Safety
+///
+/// Safe when called from a context with matching target features.
+#[rite]
+pub fn srgb_u8_to_linear_slice_v3(_token: Desktop64, input: &[u8], output: &mut [f32]) {
+    assert_eq!(input.len(), output.len());
+    let lut = &crate::const_luts::LINEAR_TABLE_8;
+    let (in_chunks, in_remainder) = input.as_chunks::<8>();
+    let (out_chunks, out_remainder) = output.as_chunks_mut::<8>();
+
+    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+        *out = [
+            lut[inp[0] as usize],
+            lut[inp[1] as usize],
+            lut[inp[2] as usize],
+            lut[inp[3] as usize],
+            lut[inp[4] as usize],
+            lut[inp[5] as usize],
+            lut[inp[6] as usize],
+            lut[inp[7] as usize],
+        ];
+    }
+
+    for (inp, out) in in_remainder.iter().zip(out_remainder.iter_mut()) {
+        *out = lut[*inp as usize];
+    }
+}
 
 /// Convert 8 linear f32 values to sRGB u8 via LUT. Input clamped to \[0, 1\].
 ///
