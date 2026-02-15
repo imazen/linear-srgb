@@ -40,6 +40,6 @@ pub use x86_64::*;
 // Re-export SimdToken trait for token creation
 pub use archmage::SimdToken;
 
-// Stub for unsupported platforms
-#[cfg(not(target_arch = "x86_64"))]
-compile_error!("mage module currently only supports x86_64 with AVX2+FMA");
+// Future: aarch64/NEON and wasm32/SIMD128 implementations will go here.
+// Currently a no-op on non-x86_64 — the module compiles but exports nothing
+// beyond the SimdToken trait re-export.

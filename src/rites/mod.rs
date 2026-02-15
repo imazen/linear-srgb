@@ -8,9 +8,9 @@
 //!
 //! Organized by SIMD unit width:
 //!
-//! - [`x4`] — 4×f32 operations (NEON on AArch64, SIMD128 on WebAssembly)
-//! - [`x8`] — 8×f32 operations (AVX2+FMA on x86-64)
-//! - [`x16`] — 16×f32 operations (AVX-512 on x86-64)
+//! - `x4` — 4×f32 operations (NEON on AArch64, SIMD128 on WebAssembly)
+//! - `x8` — 8×f32 operations (AVX2+FMA on x86-64)
+//! - `x16` — 16×f32 operations (AVX-512 on x86-64)
 //!
 //! # Naming Convention
 //!

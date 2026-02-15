@@ -6,18 +6,20 @@
 //! # API Overview
 //!
 //! ## x8 Functions (process 8 values at once)
-//! - [`srgb_to_linear_x8`] - f32x8 sRGB → f32x8 linear
-//! - [`linear_to_srgb_x8`] - f32x8 linear → f32x8 sRGB
-//! - [`srgb_u8_to_linear_x8`] - \[u8; 8\] sRGB → f32x8 linear
-//! - [`linear_to_srgb_u8_x8`] - f32x8 linear → \[u8; 8\] sRGB
+//! - `srgb_to_linear_x8` - f32x8 sRGB → f32x8 linear
+//! - `linear_to_srgb_x8` - f32x8 linear → f32x8 sRGB
+//! - `srgb_u8_to_linear_x8` - \[u8; 8\] sRGB → f32x8 linear
+//! - `linear_to_srgb_u8_x8` - f32x8 linear → \[u8; 8\] sRGB
 //!
 //! ## Slice Functions (process entire slices)
-//! - [`srgb_to_linear_slice`] - &mut \[f32\] sRGB → linear in-place
-//! - [`linear_to_srgb_slice`] - &mut \[f32\] linear → sRGB in-place
-//! - [`srgb_u8_to_linear_slice`] - &\[u8\] sRGB → &mut \[f32\] linear
-//! - [`linear_to_srgb_u8_slice`] - &\[f32\] linear → &mut \[u8\] sRGB
+//! - `srgb_to_linear_slice` - &mut \[f32\] sRGB → linear in-place
+//! - `linear_to_srgb_slice` - &mut \[f32\] linear → sRGB in-place
+//! - `srgb_u8_to_linear_slice` - &\[u8\] sRGB → &mut \[f32\] linear
+//! - `linear_to_srgb_u8_slice` - &\[f32\] linear → &mut \[u8\] sRGB
 
-use archmage::{Desktop64, ScalarToken, arcane, incant, rite};
+#[cfg(target_arch = "x86_64")]
+use archmage::{Desktop64, arcane, rite};
+use archmage::{ScalarToken, incant};
 use wide::{CmpLt, f32x8};
 
 use crate::fast_math::pow_x8;
@@ -451,9 +453,13 @@ pub fn linear_to_gamma_x8_inline(linear: f32x8, gamma: f32) -> f32x8 {
 // ============================================================================
 
 // sRGB transfer function scalar constants (for magetypes which needs token-gated splat)
+#[cfg(target_arch = "x86_64")]
 const MT_SRGB_LINEAR_THRESHOLD: f32 = 0.039_293_37;
+#[cfg(target_arch = "x86_64")]
 const MT_LINEAR_THRESHOLD: f32 = 0.003_041_282_6;
+#[cfg(target_arch = "x86_64")]
 const MT_LINEAR_SCALE: f32 = 1.0 / 12.92;
+#[cfg(target_arch = "x86_64")]
 const MT_TWELVE_92: f32 = 12.92;
 
 // sRGB→linear degree-11 Chebyshev polynomial (Estrin's scheme)

@@ -31,7 +31,7 @@
 //! For manual SIMD control, use the x8 functions:
 //!
 //! - `*_x8` - Default with CPU dispatch (standalone use)
-//! - [`inline`] module - `#[inline(always)]` variants for use inside your own `#[magetypes]` code
+//! - `inline` module - `#[inline(always)]` variants for use inside your own `#[magetypes]` code
 //!
 //! ```rust
 //! use linear_srgb::default::{linear_to_srgb_x8, linear_to_srgb_u8_x8};

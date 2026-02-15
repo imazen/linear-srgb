@@ -4,14 +4,14 @@
 //!
 //! ## Build-time Tables (Recommended)
 //!
-//! [`SrgbConverter`] uses pre-computed const tables embedded in the binary:
+//! `SrgbConverter` uses pre-computed const tables embedded in the binary:
 //! - **Zero initialization cost** - tables exist at compile time
 //! - **8-bit linearization** (256 entries, 1KB): Direct lookup for sRGB u8 → linear f32
 //! - **12-bit encoding** (4096 entries, 16KB): Interpolated lookup for linear f32 → sRGB f32
 //!
 //! ## Runtime Tables (For Custom Bit Depths)
 //!
-//! [`LinearizationTable`] and [`EncodingTable`] generate tables at runtime:
+//! `LinearizationTable` and `EncodingTable` generate tables at runtime:
 //! - Use when you need non-standard bit depths (10-bit, 16-bit, etc.)
 //! - Incur one-time allocation and computation cost
 //! - Table sizes:
