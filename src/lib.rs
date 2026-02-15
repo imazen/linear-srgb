@@ -74,45 +74,81 @@
 //! | Inside `#[arcane]` (token) | [`rites::x8::srgb_to_linear_v3`] |
 //! | Custom bit depth LUT | [`lut::LinearTable16`] |
 //!
-//! # Clamping and Range
+//! # Clamping and Extended Range
 //!
-//! All functions **clamp f32 inputs to \[0, 1\]** by default. This is correct
-//! when you're staying in one color space: decode sRGB → process (resize,
-//! blur, blend) → re-encode sRGB. Resize filters with negative lobes
-//! (Lanczos, etc.) produce small out-of-range values that are ringing
-//! artifacts, not real colors — clamping them is right.
+//! The f32↔f32 conversion functions come in two flavors: **clamped** (default)
+//! and **extended** (unclamped). Integer paths (u8, u16) always clamp since
+//! out-of-range values can't be represented in the output format.
 //!
-//! **Cross-gamut pipelines need unclamped values.** When a wider-gamut source
-//! (Rec. 2020, Display P3) is converted to sRGB linear via an ICC profile
-//! or matrix transform, the resulting sRGB values can be legitimately
-//! negative or above 1.0. These represent real out-of-gamut colors, and
-//! clamping destroys them. This is common — a JPEG or JPEG XL with a
-//! Rec. 2020 ICC profile, decoded and converted to sRGB for display, will
-//! have real out-of-gamut values that should survive until final gamut
-//! mapping or quantization.
+//! ## Clamped (default) — use for same-gamut pipelines
 //!
-//! **Compression artifacts vs real colors:** Codecs like JPEG (YCbCr) and
-//! JPEG XL (XYB) can produce out-of-range values from lossy quantization.
-//! When the image is sRGB, these are pure artifacts — clamp them. When the
-//! image has a wider-gamut ICC profile, the decoder artifacts are small and
-//! the gamut excursions from the color space conversion dominate. Decoding
-//! to integer first (as most decoders do) clamps the artifacts; the
-//! subsequent ICC matrix produces clean out-of-gamut values in float.
+//! All functions except the `_extended` variants clamp inputs to \[0, 1\]:
+//! negatives become 0, values above 1 become 1.
 //!
-//! | Function | Range | Use when... |
-//! |----------|-------|-------------|
-//! | All `simd::*`, `mage::*`, `rites::*`, `lut::*` | \[0, 1\] | Same-gamut pipelines |
-//! | [`scalar::srgb_to_linear`] / [`scalar::linear_to_srgb`] | \[0, 1\] | Same-gamut, single values |
-//! | [`scalar::srgb_to_linear_extended`] / [`scalar::linear_to_srgb_extended`] | Unbounded | Cross-gamut, scRGB, HDR |
+//! This is correct whenever the source and destination share the same color
+//! space (gamut + transfer function). The typical pipeline:
 //!
-//! Integer paths (u8, u16) always clamp — out-of-range values can't be
-//! represented and you're at the final quantization step anyway.
+//! 1. Decode sRGB image (u8 → linear f32 via LUT, or f32 via TRC)
+//! 2. Process in linear light (resize, blur, blend, composite)
+//! 3. Re-encode to sRGB (linear f32 → sRGB f32 or u8)
+//!
+//! In this pipeline, out-of-range values only come from processing artifacts:
+//! resize filters with negative lobes (Lanczos, Mitchell, etc.) produce small
+//! negatives near dark edges and values slightly above 1.0 near bright edges.
+//! These are ringing artifacts, not real colors — clamping is correct.
+//!
+//! Float decoders like jpegli can also produce small out-of-range values from
+//! YCbCr quantization noise. When the image is sRGB, these are compression
+//! artifacts and clamping is correct — gives the same result as decoding to
+//! u8 first.
+//!
+//! ## Extended (unclamped) — use for cross-gamut pipelines
+//!
+//! [`scalar::srgb_to_linear_extended`] and [`scalar::linear_to_srgb_extended`]
+//! do not clamp. They follow the mathematical sRGB transfer function for all
+//! inputs: negatives pass through the linear segment, values above 1.0 pass
+//! through the power segment.
+//!
+//! Use these when the sRGB transfer function is applied to values from a
+//! **different, wider gamut**. A 3×3 matrix converting Rec. 2020 linear or
+//! Display P3 linear to sRGB linear can produce values well outside \[0, 1\]:
+//! a saturated Rec. 2020 green maps to deeply negative sRGB red and blue.
+//! These are real out-of-gamut colors, not artifacts — clamping destroys
+//! information that downstream gamut mapping or compositing may need.
+//!
+//! This matters in practice: JPEG and JPEG XL images can carry Rec. 2020 or
+//! Display P3 ICC profiles. Phones shoot Rec. 2020 HLG, cameras embed
+//! wide-gamut profiles. Decoding such an image and converting to sRGB for
+//! display produces out-of-gamut values that should survive until final
+//! output.
+//!
+//! If a float decoder (jpegli, libjxl) outputs wide-gamut data directly to
+//! f32, the output contains both small compression artifacts and real
+//! out-of-gamut values. The artifacts are tiny; the gamut excursions
+//! dominate. Using `_extended` preserves both — the artifacts are harmless
+//! noise that vanishes at quantization.
+//!
+//! The `_extended` variants also cover **scRGB** (float sRGB with values
+//! outside \[0, 1\] for HDR and wide color) and any pipeline where
+//! intermediate f32 values are not yet at the final output stage.
+//!
+//! ## Summary
+//!
+//! | Function | Range | Pipeline |
+//! |----------|-------|----------|
+//! | All `simd::*`, `mage::*`, `rites::*`, `lut::*` | \[0, 1\] | Same-gamut batch processing |
+//! | [`scalar::srgb_to_linear`] | \[0, 1\] | Same-gamut single values |
+//! | [`scalar::linear_to_srgb`] | \[0, 1\] | Same-gamut single values |
+//! | [`scalar::srgb_to_linear_extended`] | Unbounded | Cross-gamut, scRGB, HDR |
+//! | [`scalar::linear_to_srgb_extended`] | Unbounded | Cross-gamut, scRGB, HDR |
+//! | All u8/u16 paths | \[0, 1\] | Final quantization (clamp inherent) |
 //!
 //! **No SIMD extended-range variants exist yet.** The fast polynomial
 //! approximation is fitted to \[0, 1\] and produces garbage outside that
-//! domain. Extended-range SIMD would need `pow_midp` (slower but handles
-//! any positive input). If you need batch extended-range conversion today,
-//! loop over [`scalar::srgb_to_linear_extended`].
+//! domain. Extended-range SIMD would use `pow` instead of the polynomial
+//! (~3× slower, still faster than scalar for `linear_to_srgb`). For batch
+//! extended-range conversion today, loop over the scalar `_extended`
+//! functions.
 //!
 //! # Feature Flags
 //!
