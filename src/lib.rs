@@ -74,31 +74,28 @@
 //! | Inside `#[arcane]` (token) | [`rites::x8::srgb_to_linear_v3`] |
 //! | Custom bit depth LUT | [`lut::LinearTable16`] |
 //!
-//! # Clamping Behavior
+//! # Clamping and Range
 //!
-//! Almost every function in this crate **clamps inputs to \[0, 1\]**. Out-of-range
-//! values are silently saturated: negatives become 0, values above 1 become 1.
-//! This applies to all SIMD, slice, x8, LUT, rite, mage, and standard scalar
-//! functions.
+//! All functions **clamp inputs to \[0, 1\]** — negatives become 0, values
+//! above 1 become 1. This is correct for the primary use case: decode sRGB,
+//! process in linear (resize, blur, blend), re-encode to sRGB.
 //!
-//! For HDR, arbitrary ICC profiles, or any workflow where values can be negative
-//! or exceed 1.0, use the **`_extended`** scalar variants:
+//! **Why clamping is right for image processing:** Sharp resize filters (Lanczos,
+//! etc.) have negative lobes that produce small negative values near dark edges
+//! and values slightly above 1.0 near bright edges. These are ringing artifacts,
+//! not real colors — clamping them is the correct behavior.
 //!
-//! | Function | Clamped? | Use case |
-//! |----------|----------|----------|
-//! | [`scalar::srgb_to_linear`] | **Yes** | Standard 8/10/16-bit content |
-//! | [`scalar::srgb_to_linear_extended`] | **No** | HDR, ICC, scene-referred |
-//! | [`scalar::linear_to_srgb`] | **Yes** | Standard 8/10/16-bit content |
-//! | [`scalar::linear_to_srgb_extended`] | **No** | HDR, ICC, scene-referred |
-//! | All `simd::*`, `mage::*`, `rites::*` | **Yes** | Batch processing, [0,1] only |
-//! | All `lut::*` | **Yes** | Table lookup requires bounded input |
-//! | [`scalar::gamma_to_linear`] | **Yes** | Pure power, [0,1] |
-//! | [`scalar::gamma_to_linear_f64`] | **Yes** | Pure power, [0,1] |
+//! **When you need unclamped values:** The `_extended` scalar variants preserve
+//! out-of-range values for scRGB (HDR float sRGB) or multi-step float ICC
+//! pipelines where intermediate values pass through another transform before
+//! final quantization. This is niche — if you're decoding, processing, and
+//! re-encoding in the same color space, you don't need it.
 //!
-//! The `_extended` functions follow the mathematical definition of the sRGB
-//! transfer function for all inputs, including negative values (mapped through
-//! the linear segment) and values above 1.0 (mapped through the power segment).
-//! They are scalar-only — no SIMD extended-range variants exist yet.
+//! | Function | Range |
+//! |----------|-------|
+//! | All `simd::*`, `mage::*`, `rites::*`, `lut::*` | Clamped to \[0, 1\] |
+//! | [`scalar::srgb_to_linear`] / [`scalar::linear_to_srgb`] | Clamped to \[0, 1\] |
+//! | [`scalar::srgb_to_linear_extended`] / [`scalar::linear_to_srgb_extended`] | Unbounded (scalar only) |
 //!
 //! # Feature Flags
 //!
