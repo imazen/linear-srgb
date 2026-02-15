@@ -16,8 +16,6 @@ use magetypes::simd::f32x16 as mt_f32x16;
 const SRGB_LINEAR_THRESHOLD: f32 = 0.039_293_37;
 const LINEAR_THRESHOLD: f32 = 0.003_041_282_6;
 const LINEAR_SCALE: f32 = 1.0 / 12.92;
-const SRGB_OFFSET: f32 = 0.055_010_72;
-const SRGB_SCALE: f32 = 1.055_010_7;
 const TWELVE_92: f32 = 12.92;
 
 // sRGB→linear degree-11 Chebyshev polynomial (Estrin's scheme)
@@ -35,6 +33,26 @@ const S2L_C8: f32 = 2.025_719_4e-5;
 const S2L_C9: f32 = -2.400_594_3e-5;
 const S2L_C10: f32 = -8.762_017e-5;
 const S2L_C11: f32 = 5.557_536_5e-5;
+
+// linear→sRGB degree-15 Chebyshev polynomial via sqrt transform (Estrin's scheme)
+const L2S_INV_HW: f32 = 2.116_733_3;
+const L2S_BIAS: f32 = -1.116_733_2;
+const L2S_C0: f32 = 5.641_828e-1;
+const L2S_C1: f32 = 4.620_569_3e-1;
+const L2S_C2: f32 = -3.450_065e-2;
+const L2S_C3: f32 = 1.202_464_2e-2;
+const L2S_C4: f32 = -5.398_721e-3;
+const L2S_C5: f32 = 2.946_610_3e-3;
+const L2S_C6: f32 = -5.274_399_6e-3;
+const L2S_C7: f32 = 4.055_202e-3;
+const L2S_C8: f32 = 1.062_489_9e-2;
+const L2S_C9: f32 = -9.012_202e-3;
+const L2S_C10: f32 = -2.186_026_6e-2;
+const L2S_C11: f32 = 1.824_478_4e-2;
+const L2S_C12: f32 = 1.958_387_2e-2;
+const L2S_C13: f32 = -1.638_288e-2;
+const L2S_C14: f32 = -7.710_282_7e-3;
+const L2S_C15: f32 = 6.419_743e-3;
 
 // ============================================================================
 // x16 functions — operate on [f32; 16]
@@ -91,8 +109,31 @@ pub fn linear_to_srgb_v4(token: Server64, linear: [f32; 16]) -> [f32; 16] {
     let linear = mt_f32x16::from_array(token, linear).max(zero).min(one);
 
     let linear_result = linear * mt_f32x16::splat(token, TWELVE_92);
-    let power_result = mt_f32x16::splat(token, SRGB_SCALE) * linear.pow_midp(1.0 / 2.4)
-        - mt_f32x16::splat(token, SRGB_OFFSET);
+
+    // sqrt transform + degree-15 Chebyshev polynomial (Estrin evaluation)
+    let s = linear.sqrt();
+    let u = s.mul_add(
+        mt_f32x16::splat(token, L2S_INV_HW),
+        mt_f32x16::splat(token, L2S_BIAS),
+    );
+    let u2 = u * u;
+    let u4 = u2 * u2;
+    let u_8 = u4 * u4;
+    let p01 = mt_f32x16::splat(token, L2S_C1).mul_add(u, mt_f32x16::splat(token, L2S_C0));
+    let p23 = mt_f32x16::splat(token, L2S_C3).mul_add(u, mt_f32x16::splat(token, L2S_C2));
+    let p45 = mt_f32x16::splat(token, L2S_C5).mul_add(u, mt_f32x16::splat(token, L2S_C4));
+    let p67 = mt_f32x16::splat(token, L2S_C7).mul_add(u, mt_f32x16::splat(token, L2S_C6));
+    let p89 = mt_f32x16::splat(token, L2S_C9).mul_add(u, mt_f32x16::splat(token, L2S_C8));
+    let pab = mt_f32x16::splat(token, L2S_C11).mul_add(u, mt_f32x16::splat(token, L2S_C10));
+    let pcd = mt_f32x16::splat(token, L2S_C13).mul_add(u, mt_f32x16::splat(token, L2S_C12));
+    let pef = mt_f32x16::splat(token, L2S_C15).mul_add(u, mt_f32x16::splat(token, L2S_C14));
+    let p0123 = p23.mul_add(u2, p01);
+    let p4567 = p67.mul_add(u2, p45);
+    let p89ab = pab.mul_add(u2, p89);
+    let pcdef = pef.mul_add(u2, pcd);
+    let p0_7 = p4567.mul_add(u4, p0123);
+    let p8_f = pcdef.mul_add(u4, p89ab);
+    let power_result = p8_f.mul_add(u_8, p0_7);
 
     let mask = linear.simd_lt(mt_f32x16::splat(token, LINEAR_THRESHOLD));
     mt_f32x16::blend(mask, linear_result, power_result).to_array()

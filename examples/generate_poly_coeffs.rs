@@ -341,7 +341,7 @@ fn main() {
 
     println!("Domain (sqrt): [{:.10}, {:.10}]", sqrt_lo, sqrt_hi);
 
-    for degree in [5, 7, 9, 11, 13] {
+    for degree in [5, 7, 9, 11, 13, 15, 17] {
         let coeffs_c = fit_polynomial_centered(sqrt_power, sqrt_lo, sqrt_hi, degree);
 
         let (abs64_c, rel64_c, abs32_c) = check_errors(
@@ -363,7 +363,7 @@ fn main() {
             "  Centered: f64 abs={abs64_c:.2e} rel={rel64_c:.2e} ({bits_c:.1} bits) | f32 abs={abs32_c:.2e}"
         );
 
-        if degree >= 7 && degree <= 11 {
+        if degree >= 7 {
             println!(
                 "  --- Centered coefficients (u = (√l - {sqrt_center:.8}) / {sqrt_hw:.8}) ---"
             );
