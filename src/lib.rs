@@ -127,6 +127,9 @@ pub mod scalar;
 /// These carry `#[target_feature]` + `#[inline]` directly — no wrapper, no
 /// dispatch. When called from a matching `#[arcane]` context, LLVM inlines
 /// them fully. Organized by SIMD unit width; suffixed by required token tier.
+///
+/// Requires the `rites` feature.
+#[cfg(feature = "rites")]
 pub mod rites;
 
 /// Token-based API using archmage for zero dispatch overhead.

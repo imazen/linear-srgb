@@ -29,6 +29,8 @@ alt = []
 unsafe_simd = []
 # Token-based API using archmage (zero dispatch overhead)
 mage = []
+# Inlineable #[rite] functions for embedding in #[arcane] code
+rites = []
 
 [[bench]]
 name = "benchmarks"
