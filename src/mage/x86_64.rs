@@ -18,8 +18,23 @@ const LINEAR_THRESHOLD: f32 = 0.003_041_282_6;
 const LINEAR_SCALE: f32 = 1.0 / 12.92;
 const SRGB_OFFSET: f32 = 0.055_010_72;
 const SRGB_SCALE: f32 = 1.055_010_7;
-const INV_SRGB_SCALE: f32 = 1.0 / 1.055_010_7;
 const TWELVE_92: f32 = 12.92;
+
+// sRGB→linear degree-11 Chebyshev polynomial (Estrin's scheme)
+const S2L_INV_HW: f32 = 2.081_801;
+const S2L_BIAS: f32 = -1.081_800_9;
+const S2L_C0: f32 = 2.326_832_7e-1;
+const S2L_C1: f32 = 4.667_970_8e-1;
+const S2L_C2: f32 = 2.731_341e-1;
+const S2L_C3: f32 = 3.044_251_2e-2;
+const S2L_C4: f32 = -3.802_638_5e-3;
+const S2L_C5: f32 = 1.011_499_3e-3;
+const S2L_C6: f32 = -4.267_19e-4;
+const S2L_C7: f32 = 1.966_666_5e-4;
+const S2L_C8: f32 = 2.025_719_4e-5;
+const S2L_C9: f32 = -2.400_594_3e-5;
+const S2L_C10: f32 = -8.762_017e-5;
+const S2L_C11: f32 = 5.557_536_5e-5;
 
 // ============================================================================
 // Internal x8 functions (not public - SIMD types hidden)
@@ -32,9 +47,26 @@ fn srgb_to_linear_x8(token: Avx2FmaToken, srgb: f32x8) -> f32x8 {
     let srgb = srgb.max(zero).min(one);
 
     let linear_result = srgb * f32x8::splat(token, LINEAR_SCALE);
-    let normalized =
-        (srgb + f32x8::splat(token, SRGB_OFFSET)) * f32x8::splat(token, INV_SRGB_SCALE);
-    let power_result = normalized.pow_midp(2.4);
+
+    // Degree-11 Chebyshev polynomial (Estrin evaluation)
+    let u = srgb.mul_add(
+        f32x8::splat(token, S2L_INV_HW),
+        f32x8::splat(token, S2L_BIAS),
+    );
+    let u2 = u * u;
+    let u4 = u2 * u2;
+    let u_8 = u4 * u4;
+    let p01 = f32x8::splat(token, S2L_C1).mul_add(u, f32x8::splat(token, S2L_C0));
+    let p23 = f32x8::splat(token, S2L_C3).mul_add(u, f32x8::splat(token, S2L_C2));
+    let p45 = f32x8::splat(token, S2L_C5).mul_add(u, f32x8::splat(token, S2L_C4));
+    let p67 = f32x8::splat(token, S2L_C7).mul_add(u, f32x8::splat(token, S2L_C6));
+    let p89 = f32x8::splat(token, S2L_C9).mul_add(u, f32x8::splat(token, S2L_C8));
+    let pab = f32x8::splat(token, S2L_C11).mul_add(u, f32x8::splat(token, S2L_C10));
+    let p0123 = p23.mul_add(u2, p01);
+    let p4567 = p67.mul_add(u2, p45);
+    let p8_11 = pab.mul_add(u2, p89);
+    let p0_7 = p4567.mul_add(u4, p0123);
+    let power_result = p8_11.mul_add(u_8, p0_7);
 
     let mask = srgb.simd_lt(f32x8::splat(token, SRGB_LINEAR_THRESHOLD));
     f32x8::blend(mask, linear_result, power_result)
