@@ -95,6 +95,40 @@ pub fn linear_to_gamma_v3(token: Desktop64, linear: [f32; 8], gamma: f32) -> [f3
 }
 
 // ============================================================================
+// x8 LUT functions — linear f32 → sRGB u8
+// ============================================================================
+
+/// Convert 8 linear f32 values to sRGB u8 via LUT. Input clamped to \[0, 1\].
+///
+/// Uses a 4096-entry const LUT with bitmask indexing (`& 0xFFF`) for
+/// provably safe bounds. SIMD accelerates the clamp and scale; lookups
+/// are scalar from an L1-resident 4KB table.
+///
+/// # Safety
+///
+/// Safe when called from a context with matching target features (e.g. inside
+/// an `#[arcane]` function taking `Desktop64`). The token proves CPU support.
+#[rite]
+pub fn linear_to_srgb_u8_v3(token: Desktop64, linear: [f32; 8]) -> [u8; 8] {
+    let zero = mt_f32x8::zero(token);
+    let one = mt_f32x8::splat(token, 1.0);
+    let linear = mt_f32x8::from_array(token, linear).max(zero).min(one);
+    let scaled = linear * mt_f32x8::splat(token, 4095.0) + mt_f32x8::splat(token, 0.5);
+    let arr = scaled.to_array();
+    let lut = &crate::const_luts::LINEAR_TO_SRGB_U8;
+    [
+        lut[arr[0] as usize & 0xFFF],
+        lut[arr[1] as usize & 0xFFF],
+        lut[arr[2] as usize & 0xFFF],
+        lut[arr[3] as usize & 0xFFF],
+        lut[arr[4] as usize & 0xFFF],
+        lut[arr[5] as usize & 0xFFF],
+        lut[arr[6] as usize & 0xFFF],
+        lut[arr[7] as usize & 0xFFF],
+    ]
+}
+
+// ============================================================================
 // Slice functions — process &mut [f32] with x8 chunking
 // ============================================================================
 
@@ -170,6 +204,26 @@ pub fn linear_to_gamma_slice_v3(token: Desktop64, values: &mut [f32], gamma: f32
     }
 }
 
+/// Convert linear f32 values to sRGB u8 using 8-wide SIMD + LUT.
+///
+/// # Safety
+///
+/// Safe when called from a context with matching target features.
+#[rite]
+pub fn linear_to_srgb_u8_slice_v3(token: Desktop64, input: &[f32], output: &mut [u8]) {
+    assert_eq!(input.len(), output.len());
+    let (in_chunks, in_remainder) = input.as_chunks::<8>();
+    let (out_chunks, out_remainder) = output.as_chunks_mut::<8>();
+
+    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+        *out = linear_to_srgb_u8_v3(token, *inp);
+    }
+
+    for (inp, out) in in_remainder.iter().zip(out_remainder.iter_mut()) {
+        *out = crate::scalar::linear_to_srgb_u8(*inp);
+    }
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -205,6 +259,34 @@ mod tests {
     #[archmage::arcane]
     fn call_linear_to_srgb_slice(token: Desktop64, values: &mut [f32]) {
         linear_to_srgb_slice_v3(token, values);
+    }
+
+    #[archmage::arcane]
+    fn call_linear_to_srgb_u8(token: Desktop64, input: [f32; 8]) -> [u8; 8] {
+        linear_to_srgb_u8_v3(token, input)
+    }
+
+    #[test]
+    fn test_x8_linear_to_srgb_u8() {
+        let Some(token) = get_token() else {
+            eprintln!("Skipping test: AVX2+FMA not available");
+            return;
+        };
+
+        let input = [0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9, 1.0];
+        let result = call_linear_to_srgb_u8(token, input);
+
+        for (i, (&got, &inp)) in result.iter().zip(input.iter()).enumerate() {
+            let expected = crate::scalar::linear_to_srgb_u8(inp);
+            assert!(
+                (got as i32 - expected as i32).abs() <= 1,
+                "u8 mismatch at {}: got {}, expected {} (input={})",
+                i,
+                got,
+                expected,
+                inp
+            );
+        }
     }
 
     #[test]

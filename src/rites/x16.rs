@@ -95,6 +95,48 @@ pub fn linear_to_gamma_v4(token: Server64, linear: [f32; 16], gamma: f32) -> [f3
 }
 
 // ============================================================================
+// x16 LUT functions — linear f32 → sRGB u8
+// ============================================================================
+
+/// Convert 16 linear f32 values to sRGB u8 via LUT. Input clamped to \[0, 1\].
+///
+/// Uses a 4096-entry const LUT with bitmask indexing (`& 0xFFF`) for
+/// provably safe bounds. SIMD accelerates the clamp and scale; lookups
+/// are scalar from an L1-resident 4KB table.
+///
+/// # Safety
+///
+/// Safe when called from a context with matching target features (e.g. inside
+/// an `#[arcane]` function taking `Server64`). The token proves CPU support.
+#[rite]
+pub fn linear_to_srgb_u8_v4(token: Server64, linear: [f32; 16]) -> [u8; 16] {
+    let zero = mt_f32x16::zero(token);
+    let one = mt_f32x16::splat(token, 1.0);
+    let linear = mt_f32x16::from_array(token, linear).max(zero).min(one);
+    let scaled = linear * mt_f32x16::splat(token, 4095.0) + mt_f32x16::splat(token, 0.5);
+    let arr = scaled.to_array();
+    let lut = &crate::const_luts::LINEAR_TO_SRGB_U8;
+    [
+        lut[arr[0] as usize & 0xFFF],
+        lut[arr[1] as usize & 0xFFF],
+        lut[arr[2] as usize & 0xFFF],
+        lut[arr[3] as usize & 0xFFF],
+        lut[arr[4] as usize & 0xFFF],
+        lut[arr[5] as usize & 0xFFF],
+        lut[arr[6] as usize & 0xFFF],
+        lut[arr[7] as usize & 0xFFF],
+        lut[arr[8] as usize & 0xFFF],
+        lut[arr[9] as usize & 0xFFF],
+        lut[arr[10] as usize & 0xFFF],
+        lut[arr[11] as usize & 0xFFF],
+        lut[arr[12] as usize & 0xFFF],
+        lut[arr[13] as usize & 0xFFF],
+        lut[arr[14] as usize & 0xFFF],
+        lut[arr[15] as usize & 0xFFF],
+    ]
+}
+
+// ============================================================================
 // Slice functions — process &mut [f32] with x16 chunking
 // ============================================================================
 
@@ -170,6 +212,26 @@ pub fn linear_to_gamma_slice_v4(token: Server64, values: &mut [f32], gamma: f32)
     }
 }
 
+/// Convert linear f32 values to sRGB u8 using 16-wide SIMD + LUT.
+///
+/// # Safety
+///
+/// Safe when called from a context with matching target features.
+#[rite]
+pub fn linear_to_srgb_u8_slice_v4(token: Server64, input: &[f32], output: &mut [u8]) {
+    assert_eq!(input.len(), output.len());
+    let (in_chunks, in_remainder) = input.as_chunks::<16>();
+    let (out_chunks, out_remainder) = output.as_chunks_mut::<16>();
+
+    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+        *out = linear_to_srgb_u8_v4(token, *inp);
+    }
+
+    for (inp, out) in in_remainder.iter().zip(out_remainder.iter_mut()) {
+        *out = crate::scalar::linear_to_srgb_u8(*inp);
+    }
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -204,6 +266,36 @@ mod tests {
     #[archmage::arcane]
     fn call_linear_to_srgb_slice(token: Server64, values: &mut [f32]) {
         linear_to_srgb_slice_v4(token, values);
+    }
+
+    #[archmage::arcane]
+    fn call_linear_to_srgb_u8(token: Server64, input: [f32; 16]) -> [u8; 16] {
+        linear_to_srgb_u8_v4(token, input)
+    }
+
+    #[test]
+    fn test_x16_linear_to_srgb_u8() {
+        let Some(token) = get_token() else {
+            eprintln!("Skipping test: AVX-512 not available");
+            return;
+        };
+
+        let input = [
+            0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95, 1.0,
+        ];
+        let result = call_linear_to_srgb_u8(token, input);
+
+        for (i, (&got, &inp)) in result.iter().zip(input.iter()).enumerate() {
+            let expected = crate::scalar::linear_to_srgb_u8(inp);
+            assert!(
+                (got as i32 - expected as i32).abs() <= 1,
+                "u8 mismatch at {}: got {}, expected {} (input={})",
+                i,
+                got,
+                expected,
+                inp
+            );
+        }
     }
 
     #[test]
