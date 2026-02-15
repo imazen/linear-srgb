@@ -57,17 +57,21 @@ pub use crate::scalar::{
     gamma_to_linear_f64,
     linear_to_gamma,
     linear_to_gamma_f64,
-    // f32 sRGB
+    // f32 sRGB (exact powf)
     linear_to_srgb,
     linear_to_srgb_extended,
     // f64 sRGB (high precision)
     linear_to_srgb_f64,
+    // f32 sRGB (fast polynomial, ~3 ULP, no powf)
+    linear_to_srgb_fast,
     linear_to_srgb_u8,
     // u16 sRGB (LUT-based)
     linear_to_srgb_u16,
     srgb_to_linear,
     srgb_to_linear_extended,
     srgb_to_linear_f64,
+    // f32 sRGB (fast polynomial, ~3 ULP, no powf)
+    srgb_to_linear_fast,
     srgb_u16_to_linear,
 };
 
