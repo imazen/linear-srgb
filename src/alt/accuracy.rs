@@ -244,6 +244,119 @@ mod tests {
         );
     }
 
+    /// Sweep every f32 bit pattern in [start, end], comparing f32_impl against
+    /// f64 reference. Returns (max_ulp, avg_ulp, worst_input, count).
+    fn exhaustive_ulp_sweep<F, G>(
+        f32_impl: F,
+        f64_reference: G,
+        start: f32,
+        end: f32,
+    ) -> (u32, f64, f32, u64)
+    where
+        F: Fn(f32) -> f32,
+        G: Fn(f64) -> f64,
+    {
+        let start_bits = start.to_bits();
+        let end_bits = end.to_bits();
+        let mut max_ulp: u32 = 0;
+        let mut total_ulp: u128 = 0;
+        let mut worst_input: f32 = start;
+        let mut count: u64 = 0;
+
+        let mut bits = start_bits;
+        loop {
+            let input = f32::from_bits(bits);
+            let expected = f64_reference(input as f64) as f32;
+            let actual = f32_impl(input);
+            let ulp = ulp_distance_f32(actual, expected);
+            total_ulp += ulp as u128;
+            count += 1;
+            if ulp > max_ulp {
+                max_ulp = ulp;
+                worst_input = input;
+            }
+            if bits == end_bits {
+                break;
+            }
+            bits += 1;
+        }
+
+        let avg = total_ulp as f64 / count as f64;
+        (max_ulp, avg, worst_input, count)
+    }
+
+    #[test]
+    fn test_srgb_to_linear_fast_exhaustive_ulp() {
+        use crate::scalar::{srgb_to_linear_f64, srgb_to_linear_fast};
+
+        // Sweep every f32 in the power segment [threshold, 1.0]
+        let threshold = 0.039_293_37_f32; // SRGB_LINEAR_THRESHOLD
+
+        // Full range
+        let (max_ulp, avg_ulp, worst, count) =
+            exhaustive_ulp_sweep(srgb_to_linear_fast, srgb_to_linear_f64, threshold, 1.0);
+        let f64_ref = srgb_to_linear_f64(worst as f64);
+        let fast_val = srgb_to_linear_fast(worst);
+        println!("srgb_to_linear_fast exhaustive ({count} values):");
+        println!("  Max ULP: {max_ulp} at input {worst:.10}");
+        println!("  f64 ref: {f64_ref:.12}, fast: {fast_val:.12}");
+        println!("  Avg ULP: {avg_ulp:.4}");
+
+        // Away from threshold: [0.05, 1.0]
+        let (max_ulp_mid, avg_ulp_mid, worst_mid, count_mid) =
+            exhaustive_ulp_sweep(srgb_to_linear_fast, srgb_to_linear_f64, 0.05, 1.0);
+        println!(
+            "  [0.05, 1.0] ({count_mid} values): max={max_ulp_mid}, avg={avg_ulp_mid:.4}, worst={worst_mid:.10}"
+        );
+
+        // Upper half: [0.5, 1.0]
+        let (max_ulp_hi, avg_ulp_hi, _, count_hi) =
+            exhaustive_ulp_sweep(srgb_to_linear_fast, srgb_to_linear_f64, 0.5, 1.0);
+        println!("  [0.5, 1.0] ({count_hi} values): max={max_ulp_hi}, avg={avg_ulp_hi:.4}");
+
+        // Measured: max 303 ULP at threshold, ~28 avg
+        assert!(
+            max_ulp <= 310,
+            "srgb_to_linear_fast max ULP {max_ulp} exceeds 310"
+        );
+    }
+
+    #[test]
+    fn test_linear_to_srgb_fast_exhaustive_ulp() {
+        use crate::scalar::{linear_to_srgb_f64, linear_to_srgb_fast};
+
+        // Sweep every f32 in the power segment [threshold, 1.0]
+        let threshold = 0.003_041_282_6_f32; // LINEAR_THRESHOLD
+
+        // Full range
+        let (max_ulp, avg_ulp, worst, count) =
+            exhaustive_ulp_sweep(linear_to_srgb_fast, linear_to_srgb_f64, threshold, 1.0);
+        let f64_ref = linear_to_srgb_f64(worst as f64);
+        let fast_val = linear_to_srgb_fast(worst);
+        println!("linear_to_srgb_fast exhaustive ({count} values):");
+        println!("  Max ULP: {max_ulp} at input {worst:.10}");
+        println!("  f64 ref: {f64_ref:.12}, fast: {fast_val:.12}");
+        println!("  Avg ULP: {avg_ulp:.4}");
+
+        // Away from threshold: [0.01, 1.0]
+        let (max_ulp_mid, avg_ulp_mid, worst_mid, count_mid) =
+            exhaustive_ulp_sweep(linear_to_srgb_fast, linear_to_srgb_f64, 0.01, 1.0);
+        println!(
+            "  [0.01, 1.0] ({count_mid} values): max={max_ulp_mid}, avg={avg_ulp_mid:.4}, worst={worst_mid:.10}"
+        );
+
+        // Upper half: [0.5, 1.0]
+        let (max_ulp_hi, avg_ulp_hi, _, count_hi) =
+            exhaustive_ulp_sweep(linear_to_srgb_fast, linear_to_srgb_f64, 0.5, 1.0);
+        println!("  [0.5, 1.0] ({count_hi} values): max={max_ulp_hi}, avg={avg_ulp_hi:.4}");
+
+        // Measured: max 300 ULP at threshold, ~31 avg
+        assert!(
+            max_ulp <= 310,
+            "linear_to_srgb_fast max ULP {max_ulp} exceeds 310"
+        );
+    }
+
     #[test]
     fn test_constant_differences() {
         // Document the difference between naive textbook constants and

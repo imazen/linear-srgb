@@ -15,7 +15,7 @@ use linear_srgb::default::*;
 let linear = srgb_to_linear(0.5f32);
 let srgb = linear_to_srgb(linear);
 
-// Fast polynomial (~4x faster than powf, ~3 ULP)
+// Fast polynomial (~4x faster than powf, 303 ULP max near black, &lt;6 ULP in upper half)
 let linear = srgb_to_linear_fast(0.5f32);
 let srgb = linear_to_srgb_fast(linear);
 
@@ -53,7 +53,7 @@ use linear_srgb::default::*;
 let linear = srgb_to_linear(0.5f32);
 let srgb = linear_to_srgb(0.214f32);
 
-// f32 conversions — polynomial (~4x faster, ~3 ULP)
+// f32 conversions — polynomial (~4x faster, 303 ULP max near black, &lt;6 ULP in upper half)
 let linear = srgb_to_linear_fast(0.5f32);
 let srgb = linear_to_srgb_fast(0.214f32);
 
@@ -197,7 +197,7 @@ Implements IEC 61966-2-1:1999 sRGB transfer functions with:
 - C0-continuous piecewise function (no discontinuity at threshold)
 - Constants derived from moxcms reference implementation
 - Scalar `powf`: exact to f32/f64 precision
-- Polynomial (`_fast`, SIMD): ~3 ULP max error vs exact transfer function
+- Polynomial (`_fast`, SIMD): 303 ULP max near threshold, 3-6 ULP in upper half (exhaustive f32 sweep)
 - f32 roundtrip: ~1e-5 accuracy
 - f64 roundtrip: ~1e-10 accuracy
 

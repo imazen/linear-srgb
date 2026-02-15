@@ -62,7 +62,7 @@ pub use crate::scalar::{
     linear_to_srgb_extended,
     // f64 sRGB (high precision)
     linear_to_srgb_f64,
-    // f32 sRGB (fast polynomial, ~3 ULP, no powf)
+    // f32 sRGB (fast polynomial, no powf)
     linear_to_srgb_fast,
     linear_to_srgb_u8,
     // u16 sRGB (LUT-based)
@@ -70,7 +70,7 @@ pub use crate::scalar::{
     srgb_to_linear,
     srgb_to_linear_extended,
     srgb_to_linear_f64,
-    // f32 sRGB (fast polynomial, ~3 ULP, no powf)
+    // f32 sRGB (fast polynomial, no powf)
     srgb_to_linear_fast,
     srgb_u16_to_linear,
 };

@@ -119,7 +119,7 @@ pub fn linear_to_srgb(linear: f32) -> f32 {
 }
 
 // ============================================================================
-// Fast polynomial variants (no powf, ~3 ULP max error vs exact)
+// Fast polynomial variants (no powf — see function docs for ULP accuracy)
 // ============================================================================
 
 // Degree-11 Chebyshev polynomial coefficients for srgb_to_linear power segment.
@@ -165,7 +165,14 @@ const L2S_C15: f32 = 6.419_743e-3;
 /// Same as [`srgb_to_linear`] but replaces `powf()` with a degree-11 Chebyshev
 /// polynomial. ~4× faster on scalar and identical to the SIMD path.
 ///
-/// Max error: ~3 ULP vs the exact sRGB transfer function.
+/// Max error vs f64 reference (exhaustive over all f32):
+/// - Full power segment: 303 ULP max, 28 ULP avg
+/// - \[0.05, 1.0\]: 167 ULP max, 22 ULP avg
+/// - \[0.5, 1.0\]: 3 ULP max, 0.6 ULP avg
+///
+/// Worst case is near the linear/power threshold (~0.039) where the
+/// polynomial domain starts. For typical image values (sRGB > 0.1),
+/// accuracy is much better.
 ///
 /// **Clamps** inputs to \[0, 1\].
 #[inline]
@@ -203,7 +210,14 @@ pub fn srgb_to_linear_fast(gamma: f32) -> f32 {
 /// Same as [`linear_to_srgb`] but replaces `powf()` with sqrt + degree-15
 /// Chebyshev polynomial. ~4× faster on scalar and identical to the SIMD path.
 ///
-/// Max error: ~3 ULP vs the exact sRGB transfer function.
+/// Max error vs f64 reference (exhaustive over all f32):
+/// - Full power segment: 300 ULP max, 31 ULP avg
+/// - \[0.01, 1.0\]: 76 ULP max, 10 ULP avg
+/// - \[0.5, 1.0\]: 6 ULP max, 1.4 ULP avg
+///
+/// Worst case is near the linear/power threshold (~0.003) where the
+/// polynomial domain starts. For typical image values (linear > 0.01),
+/// accuracy is much better.
 ///
 /// **Clamps** inputs to \[0, 1\].
 #[inline]
