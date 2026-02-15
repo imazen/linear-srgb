@@ -8,13 +8,18 @@
 //!
 //! Organized by SIMD unit width:
 //!
+//! - [`x4`] — 4×f32 operations (NEON on AArch64, SIMD128 on WebAssembly)
 //! - [`x8`] — 8×f32 operations (AVX2+FMA on x86-64)
+//! - [`x16`] — 16×f32 operations (AVX-512 on x86-64)
 //!
 //! # Naming Convention
 //!
 //! Function suffixes match the required token type:
 //!
-//! - `_v3` — requires [`Desktop64`] (x86-64-v3: AVX2+FMA)
+//! - `_neon` — requires [`Arm64`](archmage::Arm64) (AArch64 NEON)
+//! - `_wasm128` — requires [`Wasm128Token`](archmage::Wasm128Token) (WebAssembly SIMD128)
+//! - `_v3` — requires [`Desktop64`](archmage::Desktop64) (x86-64-v3: AVX2+FMA)
+//! - `_v4` — requires [`Server64`](archmage::Server64) (x86-64-v4: AVX-512)
 //!
 //! # Example
 //!
@@ -29,5 +34,11 @@
 //! }
 //! ```
 
+#[cfg(any(target_arch = "aarch64", target_arch = "wasm32"))]
+pub mod x4;
+
 #[cfg(target_arch = "x86_64")]
 pub mod x8;
+
+#[cfg(target_arch = "x86_64")]
+pub mod x16;
