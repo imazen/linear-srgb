@@ -2,7 +2,7 @@
 name = "linear-srgb"
 version = "0.5.5"
 edition = "2024"
-rust-version = "1.92"
+rust-version = "1.89"
 license = "MIT OR Apache-2.0"
 description = "Fast linear↔sRGB color space conversion with FMA acceleration and LUT support"
 repository = "https://github.com/imazen/linear-srgb"
