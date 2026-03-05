@@ -17,6 +17,9 @@
 //! The overall max occurs at the piecewise threshold where the linear segment
 //! meets the polynomial. Away from the threshold, error is <8 ULP.
 
+#[allow(unused_imports)]
+use num_traits::Float; // provides mul_add/sqrt via libm in no_std
+
 // =============================================================================
 // Coefficients (lowest-degree-first: p[0] + p[1]*x + p[2]*x^2 + ...)
 // =============================================================================

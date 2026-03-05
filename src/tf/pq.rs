@@ -1,6 +1,8 @@
 //! PQ (SMPTE ST 2084) transfer function (scalar + generic SIMD).
 
 use super::fast_math;
+#[allow(unused_imports)]
+use num_traits::Float; // provides powf/sqrt via libm in no_std
 
 // =============================================================================
 // Scalar

@@ -28,6 +28,9 @@
 //! | PQ inverse | ~3e-6 | Yes | Yes |
 //! | HLG | ~5e-6 | Yes | Yes |
 
+#[allow(unused_imports)]
+use num_traits::Float; // provides powf/sqrt via libm in no_std
+
 // Submodules with implementations
 pub(crate) mod bt709;
 pub(crate) mod fast_math;

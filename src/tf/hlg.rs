@@ -1,6 +1,8 @@
 //! HLG (ARIB STD-B67) transfer function (scalar + generic SIMD).
 
 use super::fast_math;
+#[allow(unused_imports)]
+use num_traits::Float; // provides sqrt via libm in no_std
 
 // =============================================================================
 // Scalar

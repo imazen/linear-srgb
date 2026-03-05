@@ -25,6 +25,8 @@ use alloc::{boxed::Box, vec};
 
 use crate::mlaf::{mlaf, neg_mlaf};
 use crate::scalar::{linear_to_srgb_f64, srgb_to_linear_f64};
+#[allow(unused_imports)]
+use num_traits::Float; // provides ceil/floor via libm in no_std
 
 /// Pre-computed linearization table for sRGB to linear conversion.
 pub struct LinearizationTable<const N: usize> {

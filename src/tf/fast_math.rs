@@ -5,6 +5,9 @@
 
 #![allow(clippy::excessive_precision, clippy::assign_op_pattern)]
 
+#[allow(unused_imports)]
+use num_traits::Float; // provides mul_add/floor via libm in no_std
+
 // =============================================================================
 // Rational polynomial evaluator — Horner's method for P(x)/Q(x)
 // =============================================================================
