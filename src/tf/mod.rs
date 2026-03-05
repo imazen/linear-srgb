@@ -1,3 +1,4 @@
+#![allow(clippy::excessive_precision)]
 //! Transfer function implementations for sRGB, BT.709, PQ, and HLG.
 //!
 //! This module provides scalar functions for all four transfer curves.

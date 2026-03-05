@@ -529,6 +529,10 @@ pub fn linear_to_gamma_slice_wasm128(token: Wasm128Token, values: &mut [f32], ga
 macro_rules! x86_tf_rite {
     ($name:ident, $inner:path) => {
         /// Transfer function rite (4×f32, x86-64 V3). Requires `transfer` feature.
+        ///
+        /// # Safety
+        ///
+        /// Call from an `#[arcane]` context with a valid `X64V3Token`.
         #[cfg(all(feature = "transfer", target_arch = "x86_64"))]
         #[rite]
         pub fn $name(token: X64V3Token, v: [f32; 4]) -> [f32; 4] {
@@ -549,6 +553,10 @@ x86_tf_rite!(linear_to_hlg_v3, crate::tf::hlg::linear_to_hlg_x4);
 macro_rules! x86_tf_slice_rite {
     ($name:ident, $rite:ident, $scalar:path) => {
         /// Transfer function slice rite (4×f32, x86-64 V3). Requires `transfer` feature.
+        ///
+        /// # Safety
+        ///
+        /// Call from an `#[arcane]` context with a valid `X64V3Token`.
         #[cfg(all(feature = "transfer", target_arch = "x86_64"))]
         #[rite]
         pub fn $name(token: X64V3Token, values: &mut [f32]) {

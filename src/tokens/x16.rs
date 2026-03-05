@@ -436,6 +436,10 @@ pub fn linear_to_hlg_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
 macro_rules! tf_slice_v4 {
     ($name:ident, $rite:ident, $scalar:path) => {
         /// Apply transfer function to a slice using AVX-512.
+        ///
+        /// # Safety
+        ///
+        /// Call from an `#[arcane]` context with a valid `X64V4Token`.
         #[rite]
         pub fn $name(token: X64V4Token, values: &mut [f32]) {
             let (chunks, remainder) = values.as_chunks_mut::<16>();

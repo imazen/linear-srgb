@@ -3,6 +3,8 @@
 //! Replaces libm `powf()` (~40-100ns, non-vectorizable) with rational polynomial
 //! approximations (~5ns, SIMD-vectorizable). Coefficients from libjxl (BSD licensed).
 
+#![allow(clippy::excessive_precision, clippy::assign_op_pattern)]
+
 // =============================================================================
 // Rational polynomial evaluator — Horner's method for P(x)/Q(x)
 // =============================================================================
