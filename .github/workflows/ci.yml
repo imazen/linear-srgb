@@ -53,20 +53,24 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown,wasm32-wasip1
+
+      - name: Install wasmtime
+        run: curl https://wasmtime.dev/install.sh -sSf | bash && echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Check WASM (std)
-        run: cargo check --target wasm32-unknown-unknown --features "std"
+      - name: Check WASM (wasm32-unknown-unknown)
+        run: cargo check --target wasm32-unknown-unknown --all-features
         env:
           RUSTFLAGS: -C target-feature=+simd128
 
-      - name: Check WASM (std only)
-        run: cargo check --target wasm32-unknown-unknown --features std
+      - name: Test WASM (wasm32-wasip1)
+        run: cargo test --target wasm32-wasip1 --all-features --release
         env:
           RUSTFLAGS: -C target-feature=+simd128
+          CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime --dir=.
 
   cross-check:
     name: Cross-check (${{ matrix.target }})
