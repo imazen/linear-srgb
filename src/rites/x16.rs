@@ -10,7 +10,7 @@ use archmage::rite;
 
 pub use archmage::Server64;
 
-use magetypes::simd::f32x16 as mt_f32x16;
+use magetypes::simd::v4::f32x16 as mt_f32x16;
 
 // sRGB transfer function constants (IEC 61966-2-1, matching rational polynomial)
 const SRGB_LINEAR_THRESHOLD: f32 = 0.04045;
@@ -98,10 +98,16 @@ pub fn linear_to_srgb_v4(token: Server64, linear: [f32; 16]) -> [f32; 16] {
 /// an `#[arcane]` function taking `Server64`). The token proves CPU support.
 #[rite]
 pub fn gamma_to_linear_v4(token: Server64, encoded: [f32; 16], gamma: f32) -> [f32; 16] {
-    let zero = mt_f32x16::zero(token);
-    let one = mt_f32x16::splat(token, 1.0);
-    let encoded = mt_f32x16::from_array(token, encoded).max(zero).min(one);
-    encoded.pow_midp(gamma).to_array()
+    // 2×x8 via rites/x8 — pow_midp not available on f32x16
+    let t3 = token.v3();
+    let lo: [f32; 8] = encoded[..8].try_into().unwrap();
+    let hi: [f32; 8] = encoded[8..].try_into().unwrap();
+    let lo = super::x8::gamma_to_linear_v3(t3, lo, gamma);
+    let hi = super::x8::gamma_to_linear_v3(t3, hi, gamma);
+    let mut out = [0.0f32; 16];
+    out[..8].copy_from_slice(&lo);
+    out[8..].copy_from_slice(&hi);
+    out
 }
 
 /// Convert 16 linear values to gamma-encoded. Input clamped to \[0, 1\].
@@ -112,10 +118,16 @@ pub fn gamma_to_linear_v4(token: Server64, encoded: [f32; 16], gamma: f32) -> [f
 /// an `#[arcane]` function taking `Server64`). The token proves CPU support.
 #[rite]
 pub fn linear_to_gamma_v4(token: Server64, linear: [f32; 16], gamma: f32) -> [f32; 16] {
-    let zero = mt_f32x16::zero(token);
-    let one = mt_f32x16::splat(token, 1.0);
-    let linear = mt_f32x16::from_array(token, linear).max(zero).min(one);
-    linear.pow_midp(1.0 / gamma).to_array()
+    // 2×x8 via rites/x8 — pow_midp not available on f32x16
+    let t3 = token.v3();
+    let lo: [f32; 8] = linear[..8].try_into().unwrap();
+    let hi: [f32; 8] = linear[8..].try_into().unwrap();
+    let lo = super::x8::linear_to_gamma_v3(t3, lo, gamma);
+    let hi = super::x8::linear_to_gamma_v3(t3, hi, gamma);
+    let mut out = [0.0f32; 16];
+    out[..8].copy_from_slice(&lo);
+    out[8..].copy_from_slice(&hi);
+    out
 }
 
 // ============================================================================
