@@ -597,4 +597,92 @@ mod tests {
             );
         }
     }
+
+    // Regression tests for GitHub issue #1:
+    // slice functions convert ALL elements including alpha channels.
+    // These tests document the current (incorrect) behavior so any fix
+    // can be verified against them.
+
+    #[test]
+    fn issue_1_srgb_to_linear_slice_modifies_alpha() {
+        // RGBA data: 4 pixels, alpha should stay unchanged
+        let mut rgba = vec![
+            0.5, 0.5, 0.5, 1.0, // pixel 0: mid-gray, full alpha
+            0.2, 0.4, 0.8, 0.5, // pixel 1: color, half alpha
+            0.0, 0.0, 0.0, 0.0, // pixel 2: transparent black
+            1.0, 1.0, 1.0, 0.75, // pixel 3: white, 75% alpha
+        ];
+        let alphas_before: Vec<f32> = rgba.iter().skip(3).step_by(4).copied().collect();
+
+        srgb_to_linear_slice(&mut rgba);
+
+        let alphas_after: Vec<f32> = rgba.iter().skip(3).step_by(4).copied().collect();
+
+        // Current behavior: alpha IS modified (this is the bug).
+        // Alpha 0.0 and 1.0 are fixed points of srgb_to_linear, so they survive.
+        // But 0.5 and 0.75 will be changed.
+        assert_eq!(alphas_before[0], alphas_after[0], "alpha=1.0 is a fixed point");
+        assert_eq!(alphas_before[2], alphas_after[2], "alpha=0.0 is a fixed point");
+        // These SHOULD be equal but aren't — documenting the bug:
+        assert_ne!(
+            alphas_before[1], alphas_after[1],
+            "BUG(#1): alpha=0.5 is incorrectly converted by srgb_to_linear_slice"
+        );
+        assert_ne!(
+            alphas_before[3], alphas_after[3],
+            "BUG(#1): alpha=0.75 is incorrectly converted by srgb_to_linear_slice"
+        );
+    }
+
+    #[test]
+    fn issue_1_linear_to_srgb_slice_modifies_alpha() {
+        // Linear RGBA data
+        let mut rgba = vec![
+            0.2, 0.2, 0.2, 1.0, // pixel 0: full alpha
+            0.1, 0.3, 0.5, 0.5, // pixel 1: half alpha
+            0.0, 0.0, 0.0, 0.0, // pixel 2: transparent
+            0.8, 0.8, 0.8, 0.25, // pixel 3: 25% alpha
+        ];
+        let alphas_before: Vec<f32> = rgba.iter().skip(3).step_by(4).copied().collect();
+
+        linear_to_srgb_slice(&mut rgba);
+
+        let alphas_after: Vec<f32> = rgba.iter().skip(3).step_by(4).copied().collect();
+
+        // 0.0 is exact fixed point, 1.0 has minor rounding in rational poly
+        assert_eq!(alphas_before[2], alphas_after[2], "alpha=0.0 is a fixed point");
+        // Non-trivial alpha values are definitely modified:
+        assert_ne!(
+            alphas_before[1], alphas_after[1],
+            "BUG(#1): alpha=0.5 is incorrectly converted by linear_to_srgb_slice"
+        );
+        assert_ne!(
+            alphas_before[3], alphas_after[3],
+            "BUG(#1): alpha=0.25 is incorrectly converted by linear_to_srgb_slice"
+        );
+    }
+
+    #[test]
+    fn issue_1_srgb_u8_to_linear_converts_all_channels() {
+        // RGBA u8 data: alpha bytes are at indices 3, 7, 11, 15
+        let input: Vec<u8> = vec![
+            128, 128, 128, 255, // pixel 0: mid-gray, full alpha
+            64, 128, 192, 128, // pixel 1: color, half alpha
+        ];
+        let mut output = vec![0.0f32; 8];
+
+        srgb_u8_to_linear_slice(&input, &mut output);
+
+        // Alpha=255 maps to 1.0 (fixed point)
+        assert_eq!(output[3], 1.0, "alpha=255/255 should map to 1.0");
+        // Alpha=128 should stay 128/255 ≈ 0.502 but gets sRGB-decoded instead
+        let alpha_128_linear = output[7];
+        let expected_passthrough = 128.0 / 255.0;
+        assert!(
+            (alpha_128_linear - expected_passthrough).abs() > 0.01,
+            "BUG(#1): alpha=128 is sRGB-decoded ({}) instead of passed through ({})",
+            alpha_128_linear,
+            expected_passthrough
+        );
+    }
 }
