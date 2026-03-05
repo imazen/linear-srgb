@@ -113,24 +113,24 @@ mod tests {
     #[test]
     fn test_mlaf_f32() {
         let result = mlaf(1.0f32, 2.0f32, 3.0f32);
-        assert!((result - 7.0f32).abs() < 1e-6);
+        assert_eq!(result, 7.0f32);
     }
 
     #[test]
     fn test_mlaf_f64() {
         let result = mlaf(1.0f64, 2.0f64, 3.0f64);
-        assert!((result - 7.0f64).abs() < 1e-12);
+        assert_eq!(result, 7.0f64);
     }
 
     #[test]
     fn test_neg_mlaf_f32() {
         let result = neg_mlaf(10.0f32, 2.0f32, 3.0f32);
-        assert!((result - 4.0f32).abs() < 1e-6);
+        assert_eq!(result, 4.0f32);
     }
 
     #[test]
     fn test_fmla_f32() {
         let result = fmla(2.0f32, 3.0f32, 1.0f32);
-        assert!((result - 7.0f32).abs() < 1e-6);
+        assert_eq!(result, 7.0f32);
     }
 }

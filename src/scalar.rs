@@ -6,6 +6,8 @@
 //! - FMA instructions for the encoding formula
 
 use crate::mlaf::fmla;
+#[allow(unused_imports)]
+use num_traits::Float; // provides powf/sqrt/mul_add via libm in no_std
 
 // sRGB constants (IEC 61966-2-1:1999)
 // These are the exact values for the continuous piecewise function.
@@ -493,6 +495,54 @@ mod tests {
                 i
             );
         }
+    }
+
+    #[test]
+    fn test_u16_conversion() {
+        // Boundary values
+        assert_eq!(srgb_u16_to_linear(0), 0.0);
+        assert_eq!(srgb_u16_to_linear(65535), 1.0);
+        assert_eq!(linear_to_srgb_u16(0.0), 0);
+        assert_eq!(linear_to_srgb_u16(1.0), 65535);
+
+        // Clamping
+        assert_eq!(linear_to_srgb_u16(-0.1), 0);
+        assert_eq!(linear_to_srgb_u16(1.1), 65535);
+
+        // Monotonicity
+        let mut prev = 0.0f32;
+        for i in 0..=65535u16 {
+            let linear = srgb_u16_to_linear(i);
+            assert!(
+                linear >= prev,
+                "non-monotonic at {}: {} < {}",
+                i,
+                linear,
+                prev
+            );
+            prev = linear;
+        }
+
+        // Roundtrip at 257-spaced values (equivalent to u8 levels scaled to u16).
+        // Low sRGB values have higher error because the LUT index quantization
+        // through f32 intermediate loses precision in the dark region.
+        for i in 0..=255u16 {
+            let val = i * 257; // 0, 257, 514, ..., 65535
+            let linear = srgb_u16_to_linear(val);
+            let back = linear_to_srgb_u16(linear);
+            let diff = (val as i32 - back as i32).unsigned_abs();
+            assert!(
+                diff <= 10,
+                "u16 roundtrip failed for {}: {} -> {} -> {} (diff {})",
+                i,
+                val,
+                linear,
+                back,
+                diff
+            );
+        }
+        // High values should roundtrip exactly
+        assert_eq!(linear_to_srgb_u16(srgb_u16_to_linear(65535)), 65535);
     }
 
     #[test]
