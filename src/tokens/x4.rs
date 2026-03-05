@@ -31,6 +31,11 @@ pub use archmage::NeonToken;
 pub use archmage::Wasm128Token;
 
 use magetypes::simd::f32x4 as mt_f32x4;
+#[cfg(any(
+    feature = "transfer",
+    target_arch = "aarch64",
+    target_arch = "wasm32"
+))]
 use magetypes::simd::generic::f32x4 as gen_f32x4;
 
 // sRGB transfer function constants (IEC 61966-2-1, matching rational polynomial)
