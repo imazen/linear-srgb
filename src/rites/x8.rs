@@ -12,47 +12,11 @@ pub use archmage::Desktop64;
 
 use magetypes::simd::f32x8 as mt_f32x8;
 
-// sRGB transfer function constants (C0-continuous, moxcms-derived)
-const SRGB_LINEAR_THRESHOLD: f32 = 0.039_293_37;
-const LINEAR_THRESHOLD: f32 = 0.003_041_282_6;
+// sRGB transfer function constants (IEC 61966-2-1, matching rational polynomial)
+const SRGB_LINEAR_THRESHOLD: f32 = 0.04045;
+const LINEAR_THRESHOLD: f32 = 0.003_130_8;
 const LINEAR_SCALE: f32 = 1.0 / 12.92;
 const TWELVE_92: f32 = 12.92;
-
-// sRGB→linear degree-11 Chebyshev polynomial (Estrin's scheme)
-const S2L_INV_HW: f32 = 2.081_801;
-const S2L_BIAS: f32 = -1.081_800_9;
-const S2L_C0: f32 = 2.326_832_7e-1;
-const S2L_C1: f32 = 4.667_970_8e-1;
-const S2L_C2: f32 = 2.731_341e-1;
-const S2L_C3: f32 = 3.044_251_2e-2;
-const S2L_C4: f32 = -3.802_638_5e-3;
-const S2L_C5: f32 = 1.011_499_3e-3;
-const S2L_C6: f32 = -4.267_19e-4;
-const S2L_C7: f32 = 1.966_666_5e-4;
-const S2L_C8: f32 = 2.025_719_4e-5;
-const S2L_C9: f32 = -2.400_594_3e-5;
-const S2L_C10: f32 = -8.762_017e-5;
-const S2L_C11: f32 = 5.557_536_5e-5;
-
-// linear→sRGB degree-15 Chebyshev polynomial via sqrt transform (Estrin's scheme)
-const L2S_INV_HW: f32 = 2.116_733_3;
-const L2S_BIAS: f32 = -1.116_733_2;
-const L2S_C0: f32 = 5.641_828e-1;
-const L2S_C1: f32 = 4.620_569_3e-1;
-const L2S_C2: f32 = -3.450_065e-2;
-const L2S_C3: f32 = 1.202_464_2e-2;
-const L2S_C4: f32 = -5.398_721e-3;
-const L2S_C5: f32 = 2.946_610_3e-3;
-const L2S_C6: f32 = -5.274_399_6e-3;
-const L2S_C7: f32 = 4.055_202e-3;
-const L2S_C8: f32 = 1.062_489_9e-2;
-const L2S_C9: f32 = -9.012_202e-3;
-const L2S_C10: f32 = -2.186_026_6e-2;
-const L2S_C11: f32 = 1.824_478_4e-2;
-const L2S_C12: f32 = 1.958_387_2e-2;
-const L2S_C13: f32 = -1.638_288e-2;
-const L2S_C14: f32 = -7.710_282_7e-3;
-const L2S_C15: f32 = 6.419_743e-3;
 
 // ============================================================================
 // x8 functions — operate on [f32; 8]
@@ -66,31 +30,27 @@ const L2S_C15: f32 = 6.419_743e-3;
 /// an `#[arcane]` function taking `Desktop64`). The token proves CPU support.
 #[rite]
 pub fn srgb_to_linear_v3(token: Desktop64, srgb: [f32; 8]) -> [f32; 8] {
+    use crate::rational_poly::{S2L_P, S2L_Q};
+
     let zero = mt_f32x8::zero(token);
     let one = mt_f32x8::splat(token, 1.0);
     let srgb = mt_f32x8::from_array(token, srgb).max(zero).min(one);
 
     let linear_result = srgb * mt_f32x8::splat(token, LINEAR_SCALE);
 
-    // Degree-11 Chebyshev polynomial (Estrin evaluation)
-    let u = srgb.mul_add(
-        mt_f32x8::splat(token, S2L_INV_HW),
-        mt_f32x8::splat(token, S2L_BIAS),
-    );
-    let u2 = u * u;
-    let u4 = u2 * u2;
-    let u_8 = u4 * u4;
-    let p01 = mt_f32x8::splat(token, S2L_C1).mul_add(u, mt_f32x8::splat(token, S2L_C0));
-    let p23 = mt_f32x8::splat(token, S2L_C3).mul_add(u, mt_f32x8::splat(token, S2L_C2));
-    let p45 = mt_f32x8::splat(token, S2L_C5).mul_add(u, mt_f32x8::splat(token, S2L_C4));
-    let p67 = mt_f32x8::splat(token, S2L_C7).mul_add(u, mt_f32x8::splat(token, S2L_C6));
-    let p89 = mt_f32x8::splat(token, S2L_C9).mul_add(u, mt_f32x8::splat(token, S2L_C8));
-    let pab = mt_f32x8::splat(token, S2L_C11).mul_add(u, mt_f32x8::splat(token, S2L_C10));
-    let p0123 = p23.mul_add(u2, p01);
-    let p4567 = p67.mul_add(u2, p45);
-    let p8_11 = pab.mul_add(u2, p89);
-    let p0_7 = p4567.mul_add(u4, p0123);
-    let power_result = p8_11.mul_add(u_8, p0_7);
+    // Rational polynomial P(x)/Q(x) via Horner's method
+    let x = srgb;
+    let yp = mt_f32x8::splat(token, S2L_P[4]).mul_add(x, mt_f32x8::splat(token, S2L_P[3]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, S2L_P[2]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, S2L_P[1]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, S2L_P[0]));
+
+    let yq = mt_f32x8::splat(token, S2L_Q[4]).mul_add(x, mt_f32x8::splat(token, S2L_Q[3]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, S2L_Q[2]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, S2L_Q[1]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, S2L_Q[0]));
+
+    let power_result = yp / yq;
 
     let mask = srgb.simd_lt(mt_f32x8::splat(token, SRGB_LINEAR_THRESHOLD));
     mt_f32x8::blend(mask, linear_result, power_result).to_array()
@@ -104,36 +64,27 @@ pub fn srgb_to_linear_v3(token: Desktop64, srgb: [f32; 8]) -> [f32; 8] {
 /// an `#[arcane]` function taking `Desktop64`). The token proves CPU support.
 #[rite]
 pub fn linear_to_srgb_v3(token: Desktop64, linear: [f32; 8]) -> [f32; 8] {
+    use crate::rational_poly::{L2S_P, L2S_Q};
+
     let zero = mt_f32x8::zero(token);
     let one = mt_f32x8::splat(token, 1.0);
     let linear = mt_f32x8::from_array(token, linear).max(zero).min(one);
 
     let linear_result = linear * mt_f32x8::splat(token, TWELVE_92);
 
-    // sqrt transform + degree-15 Chebyshev polynomial (Estrin evaluation)
-    let s = linear.sqrt();
-    let u = s.mul_add(
-        mt_f32x8::splat(token, L2S_INV_HW),
-        mt_f32x8::splat(token, L2S_BIAS),
-    );
-    let u2 = u * u;
-    let u4 = u2 * u2;
-    let u_8 = u4 * u4;
-    let p01 = mt_f32x8::splat(token, L2S_C1).mul_add(u, mt_f32x8::splat(token, L2S_C0));
-    let p23 = mt_f32x8::splat(token, L2S_C3).mul_add(u, mt_f32x8::splat(token, L2S_C2));
-    let p45 = mt_f32x8::splat(token, L2S_C5).mul_add(u, mt_f32x8::splat(token, L2S_C4));
-    let p67 = mt_f32x8::splat(token, L2S_C7).mul_add(u, mt_f32x8::splat(token, L2S_C6));
-    let p89 = mt_f32x8::splat(token, L2S_C9).mul_add(u, mt_f32x8::splat(token, L2S_C8));
-    let pab = mt_f32x8::splat(token, L2S_C11).mul_add(u, mt_f32x8::splat(token, L2S_C10));
-    let pcd = mt_f32x8::splat(token, L2S_C13).mul_add(u, mt_f32x8::splat(token, L2S_C12));
-    let pef = mt_f32x8::splat(token, L2S_C15).mul_add(u, mt_f32x8::splat(token, L2S_C14));
-    let p0123 = p23.mul_add(u2, p01);
-    let p4567 = p67.mul_add(u2, p45);
-    let p89ab = pab.mul_add(u2, p89);
-    let pcdef = pef.mul_add(u2, pcd);
-    let p0_7 = p4567.mul_add(u4, p0123);
-    let p8_f = pcdef.mul_add(u4, p89ab);
-    let power_result = p8_f.mul_add(u_8, p0_7);
+    // sqrt transform + rational polynomial P(√x)/Q(√x) via Horner's method
+    let x = linear.sqrt();
+    let yp = mt_f32x8::splat(token, L2S_P[4]).mul_add(x, mt_f32x8::splat(token, L2S_P[3]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, L2S_P[2]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, L2S_P[1]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, L2S_P[0]));
+
+    let yq = mt_f32x8::splat(token, L2S_Q[4]).mul_add(x, mt_f32x8::splat(token, L2S_Q[3]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, L2S_Q[2]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, L2S_Q[1]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, L2S_Q[0]));
+
+    let power_result = yp / yq;
 
     let mask = linear.simd_lt(mt_f32x8::splat(token, LINEAR_THRESHOLD));
     mt_f32x8::blend(mask, linear_result, power_result).to_array()

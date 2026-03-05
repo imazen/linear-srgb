@@ -14,16 +14,16 @@ use crate::mlaf::fmla;
 /// Linear threshold for linearization: 12.92 * 0.0030412825601275209 ≈ 0.04045
 #[allow(clippy::excessive_precision)]
 const SRGB_LINEAR_THRESHOLD: f64 = 12.92 * 0.003_041_282_560_127_521;
-const SRGB_LINEAR_THRESHOLD_F32: f32 = SRGB_LINEAR_THRESHOLD as f32;
+pub(crate) const SRGB_LINEAR_THRESHOLD_F32: f32 = SRGB_LINEAR_THRESHOLD as f32;
 
 /// Linear threshold for encoding (the inverse cutoff point)
 #[allow(clippy::excessive_precision)]
 const LINEAR_THRESHOLD: f64 = 0.003_041_282_560_127_521;
-const LINEAR_THRESHOLD_F32: f32 = LINEAR_THRESHOLD as f32;
+pub(crate) const LINEAR_THRESHOLD_F32: f32 = LINEAR_THRESHOLD as f32;
 
 /// Linear scale factor (1/12.92)
 const LINEAR_SCALE: f64 = 1.0 / 12.92;
-const LINEAR_SCALE_F32: f32 = LINEAR_SCALE as f32;
+pub(crate) const LINEAR_SCALE_F32: f32 = LINEAR_SCALE as f32;
 
 /// sRGB encoding constants
 const SRGB_A: f64 = 0.055_010_718_947_586_6;
@@ -119,140 +119,41 @@ pub fn linear_to_srgb(linear: f32) -> f32 {
 }
 
 // ============================================================================
-// Fast polynomial variants (no powf — see function docs for ULP accuracy)
+// Fast rational polynomial variants (no powf — see function docs for ULP accuracy)
 // ============================================================================
 
-// Degree-11 Chebyshev polynomial coefficients for srgb_to_linear power segment.
-// Fitted to the sRGB transfer function on [0.039293, 1.0], Estrin evaluation.
-const S2L_INV_HW: f32 = 2.081_801;
-const S2L_BIAS: f32 = -1.081_800_9;
-const S2L_C0: f32 = 2.326_832_7e-1;
-const S2L_C1: f32 = 4.667_970_8e-1;
-const S2L_C2: f32 = 2.731_341e-1;
-const S2L_C3: f32 = 3.044_251_2e-2;
-const S2L_C4: f32 = -3.802_638_5e-3;
-const S2L_C5: f32 = 1.011_499_3e-3;
-const S2L_C6: f32 = -4.267_19e-4;
-const S2L_C7: f32 = 1.966_666_5e-4;
-const S2L_C8: f32 = 2.025_719_4e-5;
-const S2L_C9: f32 = -2.400_594_3e-5;
-const S2L_C10: f32 = -8.762_017e-5;
-const S2L_C11: f32 = 5.557_536_5e-5;
-
-// Degree-15 Chebyshev polynomial coefficients for linear_to_srgb power segment.
-// Uses sqrt transform: evaluate polynomial on sqrt(linear).
-const L2S_INV_HW: f32 = 2.116_733_3;
-const L2S_BIAS: f32 = -1.116_733_2;
-const L2S_C0: f32 = 5.641_828e-1;
-const L2S_C1: f32 = 4.620_569_3e-1;
-const L2S_C2: f32 = -3.450_065e-2;
-const L2S_C3: f32 = 1.202_464_2e-2;
-const L2S_C4: f32 = -5.398_721e-3;
-const L2S_C5: f32 = 2.946_610_3e-3;
-const L2S_C6: f32 = -5.274_399_6e-3;
-const L2S_C7: f32 = 4.055_202e-3;
-const L2S_C8: f32 = 1.062_489_9e-2;
-const L2S_C9: f32 = -9.012_202e-3;
-const L2S_C10: f32 = -2.186_026_6e-2;
-const L2S_C11: f32 = 1.824_478_4e-2;
-const L2S_C12: f32 = 1.958_387_2e-2;
-const L2S_C13: f32 = -1.638_288e-2;
-const L2S_C14: f32 = -7.710_282_7e-3;
-const L2S_C15: f32 = 6.419_743e-3;
-
-/// Convert sRGB gamma-encoded value to linear light using a polynomial (f32).
+/// Convert sRGB gamma-encoded value to linear light using a rational polynomial (f32).
 ///
-/// Same as [`srgb_to_linear`] but replaces `powf()` with a degree-11 Chebyshev
-/// polynomial. ~4× faster on scalar and identical to the SIMD path.
+/// Same as [`srgb_to_linear`] but replaces `powf()` with a 5/5 rational
+/// polynomial (Horner's method). Faster than powf on all platforms and
+/// identical to the SIMD path.
 ///
 /// Max error vs f64 reference (exhaustive over all f32):
-/// - Full power segment: 221 ULP max, 28 ULP avg
-/// - \[0.05, 1.0\]: 121 ULP max, 22 ULP avg
-/// - \[0.5, 1.0\]: 2 ULP max, 0.4 ULP avg
+/// - Full power segment: ~8 ULP max, ~1 ULP avg
 ///
-/// Worst case is near the linear/power threshold (~0.039) where the
-/// polynomial domain starts. For typical image values (sRGB > 0.1),
-/// accuracy is much better.
+/// Coefficients from libjxl (BSD-3-Clause).
 ///
 /// **Clamps** inputs to \[0, 1\].
 #[inline]
 pub fn srgb_to_linear_fast(gamma: f32) -> f32 {
-    if gamma < 0.0 {
-        return 0.0;
-    }
-    if gamma >= 1.0 {
-        return 1.0;
-    }
-    if gamma < SRGB_LINEAR_THRESHOLD_F32 {
-        return gamma * LINEAR_SCALE_F32;
-    }
-
-    // Degree-11 Chebyshev polynomial (Estrin evaluation in f64 for precision)
-    let u = (gamma as f64).mul_add(S2L_INV_HW as f64, S2L_BIAS as f64);
-    let u2 = u * u;
-    let u4 = u2 * u2;
-    let u_8 = u4 * u4;
-    let p01 = (S2L_C1 as f64).mul_add(u, S2L_C0 as f64);
-    let p23 = (S2L_C3 as f64).mul_add(u, S2L_C2 as f64);
-    let p45 = (S2L_C5 as f64).mul_add(u, S2L_C4 as f64);
-    let p67 = (S2L_C7 as f64).mul_add(u, S2L_C6 as f64);
-    let p89 = (S2L_C9 as f64).mul_add(u, S2L_C8 as f64);
-    let pab = (S2L_C11 as f64).mul_add(u, S2L_C10 as f64);
-    let p0123 = p23.mul_add(u2, p01);
-    let p4567 = p67.mul_add(u2, p45);
-    let p8_11 = pab.mul_add(u2, p89);
-    let p0_7 = p4567.mul_add(u4, p0123);
-    p8_11.mul_add(u_8, p0_7) as f32
+    crate::rational_poly::srgb_to_linear_fast(gamma)
 }
 
-/// Convert linear light value to sRGB gamma-encoded using a polynomial (f32).
+/// Convert linear light value to sRGB gamma-encoded using a rational polynomial (f32).
 ///
-/// Same as [`linear_to_srgb`] but replaces `powf()` with sqrt + degree-15
-/// Chebyshev polynomial. ~4× faster on scalar and identical to the SIMD path.
+/// Same as [`linear_to_srgb`] but replaces `powf()` with sqrt + 5/5 rational
+/// polynomial (Horner's method). Faster than powf on all platforms and
+/// identical to the SIMD path.
 ///
 /// Max error vs f64 reference (exhaustive over all f32):
-/// - Full power segment: 294 ULP max, 31 ULP avg
-/// - \[0.01, 1.0\]: 72 ULP max, 10 ULP avg
-/// - \[0.5, 1.0\]: 3 ULP max, 1.3 ULP avg
+/// - Full power segment: ~8 ULP max, ~1 ULP avg
 ///
-/// Worst case is near the linear/power threshold (~0.003) where the
-/// polynomial domain starts. For typical image values (linear > 0.01),
-/// accuracy is much better.
+/// Coefficients from libjxl (BSD-3-Clause).
 ///
 /// **Clamps** inputs to \[0, 1\].
 #[inline]
 pub fn linear_to_srgb_fast(linear: f32) -> f32 {
-    if linear < 0.0 {
-        return 0.0;
-    }
-    if linear >= 1.0 {
-        return 1.0;
-    }
-    if linear < LINEAR_THRESHOLD_F32 {
-        return linear * 12.92;
-    }
-
-    // sqrt transform + degree-15 Chebyshev polynomial (Estrin evaluation in f64 for precision)
-    let s = (linear as f64).sqrt();
-    let u = s.mul_add(L2S_INV_HW as f64, L2S_BIAS as f64);
-    let u2 = u * u;
-    let u4 = u2 * u2;
-    let u_8 = u4 * u4;
-    let p01 = (L2S_C1 as f64).mul_add(u, L2S_C0 as f64);
-    let p23 = (L2S_C3 as f64).mul_add(u, L2S_C2 as f64);
-    let p45 = (L2S_C5 as f64).mul_add(u, L2S_C4 as f64);
-    let p67 = (L2S_C7 as f64).mul_add(u, L2S_C6 as f64);
-    let p89 = (L2S_C9 as f64).mul_add(u, L2S_C8 as f64);
-    let pab = (L2S_C11 as f64).mul_add(u, L2S_C10 as f64);
-    let pcd = (L2S_C13 as f64).mul_add(u, L2S_C12 as f64);
-    let pef = (L2S_C15 as f64).mul_add(u, L2S_C14 as f64);
-    let p0123 = p23.mul_add(u2, p01);
-    let p4567 = p67.mul_add(u2, p45);
-    let p89ab = pab.mul_add(u2, p89);
-    let pcdef = pef.mul_add(u2, pcd);
-    let p0_7 = p4567.mul_add(u4, p0123);
-    let p8_f = pcdef.mul_add(u4, p89ab);
-    p8_f.mul_add(u_8, p0_7) as f32
+    crate::rational_poly::linear_to_srgb_fast(linear)
 }
 
 /// Convert sRGB gamma-encoded value to linear light without clamping (f32).

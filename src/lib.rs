@@ -224,6 +224,9 @@ pub mod mage;
 
 mod mlaf;
 
+// Rational polynomial sRGB approximation (shared coefficients + scalar evaluator)
+pub(crate) mod rational_poly;
+
 // Internal fast math for SIMD (not public API)
 pub(crate) mod fast_math;
 
