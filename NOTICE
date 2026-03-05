@@ -1,0 +1,5 @@
+This crate includes rational polynomial coefficients for sRGB transfer
+function approximation derived from libjxl (JPEG XL reference implementation).
+
+libjxl is Copyright (c) the JPEG XL Project Authors, licensed under the
+BSD 3-Clause License. See https://github.com/libjxl/libjxl/blob/main/LICENSE
