@@ -9,8 +9,9 @@ use linear_srgb::default::{
     srgb_to_linear, srgb_to_linear_slice, srgb_u16_to_linear_slice, srgb_u8_to_linear_slice,
 };
 use linear_srgb::precise::{
-    linear_to_srgb as precise_l2s, linear_to_srgb_f64 as precise_l2s_f64,
-    srgb_to_linear as precise_s2l, srgb_to_linear_f64 as precise_s2l_f64,
+    linear_to_srgb as precise_l2s, linear_to_srgb_extended as precise_l2s_ext,
+    linear_to_srgb_f64 as precise_l2s_f64, srgb_to_linear as precise_s2l,
+    srgb_to_linear_extended as precise_s2l_ext, srgb_to_linear_f64 as precise_s2l_f64,
 };
 
 // ============================================================================
@@ -786,4 +787,412 @@ fn clamping_behavior() {
     assert_eq!(buf2[1], 0.0);
     assert_eq!(buf2[2], 1.0);
     assert_eq!(buf2[3], 1.0);
+}
+
+// ============================================================================
+// Extended-range f64 references (unclamped)
+// ============================================================================
+
+fn ref_s2l_ext(v: f64) -> f64 {
+    if v < GAM_THRESH {
+        v / 12.92
+    } else {
+        ((v + A) / A1).powf(2.4)
+    }
+}
+
+fn ref_l2s_ext(v: f64) -> f64 {
+    if v < LIN_THRESH {
+        v * 12.92
+    } else {
+        A1 * v.powf(1.0 / 2.4) - A
+    }
+}
+
+// ============================================================================
+// Extended range: positive [1.0, 8.0] — exhaustive f32 sweep
+// ============================================================================
+
+#[test]
+fn extended_s2l_above_one_exhaustive() {
+    // Every f32 in (1.0, 8.0] through the power segment
+    let start = f32::from_bits(1.0_f32.to_bits() + 1); // just above 1.0
+    let end = 8.0_f32;
+
+    let mut v = start;
+    let mut max_ulp: u32 = 0;
+    let mut worst_input = start;
+    let mut count: u64 = 0;
+
+    while v <= end {
+        let got = precise_s2l_ext(v);
+        let expected = ref_s2l_ext(v as f64) as f32;
+        let ulp = ulp_distance(got, expected);
+        if ulp > max_ulp {
+            max_ulp = ulp;
+            worst_input = v;
+        }
+        count += 1;
+        v = next_f32_above(v);
+    }
+
+    eprintln!(
+        "s2l_extended [1+eps, 8]: {count} values, max ULP = {max_ulp} at {worst_input}"
+    );
+    // powf f32 vs f64: expect same ~6 ULP budget as [0,1]
+    assert!(
+        max_ulp <= 10,
+        "s2l_extended max ULP {max_ulp} at {worst_input} exceeds 10"
+    );
+}
+
+#[test]
+fn extended_l2s_above_one_exhaustive() {
+    let start = f32::from_bits(1.0_f32.to_bits() + 1);
+    let end = 8.0_f32;
+
+    let mut v = start;
+    let mut max_ulp: u32 = 0;
+    let mut worst_input = start;
+    let mut count: u64 = 0;
+
+    while v <= end {
+        let got = precise_l2s_ext(v);
+        let expected = ref_l2s_ext(v as f64) as f32;
+        let ulp = ulp_distance(got, expected);
+        if ulp > max_ulp {
+            max_ulp = ulp;
+            worst_input = v;
+        }
+        count += 1;
+        v = next_f32_above(v);
+    }
+
+    eprintln!(
+        "l2s_extended [1+eps, 8]: {count} values, max ULP = {max_ulp} at {worst_input}"
+    );
+    assert!(
+        max_ulp <= 10,
+        "l2s_extended max ULP {max_ulp} at {worst_input} exceeds 10"
+    );
+}
+
+// ============================================================================
+// Extended range: negative [-1.0, 0) — exhaustive f32 sweep
+// Both directions use the linear segment for negatives, so error should be
+// minimal (just f32 multiplication precision).
+// ============================================================================
+
+/// Iterate f32 values from a negative toward zero (increasing order).
+fn next_f32_toward_zero_neg(v: f32) -> f32 {
+    debug_assert!(v < 0.0);
+    // Negative f32 bit patterns decrease toward zero in sign-magnitude
+    f32::from_bits(v.to_bits() - 1)
+}
+
+#[test]
+fn extended_s2l_negative_exhaustive() {
+    // Every f32 in [-1.0, -0.0)
+    let mut v = -1.0_f32;
+    let mut max_ulp: u32 = 0;
+    let mut worst_input = v;
+    let mut count: u64 = 0;
+
+    while v < 0.0 {
+        let got = precise_s2l_ext(v);
+        let expected = ref_s2l_ext(v as f64) as f32;
+        let ulp = ulp_distance(got, expected);
+        if ulp > max_ulp {
+            max_ulp = ulp;
+            worst_input = v;
+        }
+        count += 1;
+        v = next_f32_toward_zero_neg(v);
+    }
+
+    eprintln!(
+        "s2l_extended [-1, 0): {count} values, max ULP = {max_ulp} at {worst_input}"
+    );
+    // Linear segment: v / 12.92 — single f32 division, expect ≤ 1 ULP
+    assert!(
+        max_ulp <= 1,
+        "s2l_extended negative max ULP {max_ulp} at {worst_input} exceeds 1"
+    );
+}
+
+#[test]
+fn extended_l2s_negative_exhaustive() {
+    let mut v = -1.0_f32;
+    let mut max_ulp: u32 = 0;
+    let mut worst_input = v;
+    let mut count: u64 = 0;
+
+    while v < 0.0 {
+        let got = precise_l2s_ext(v);
+        let expected = ref_l2s_ext(v as f64) as f32;
+        let ulp = ulp_distance(got, expected);
+        if ulp > max_ulp {
+            max_ulp = ulp;
+            worst_input = v;
+        }
+        count += 1;
+        v = next_f32_toward_zero_neg(v);
+    }
+
+    eprintln!(
+        "l2s_extended [-1, 0): {count} values, max ULP = {max_ulp} at {worst_input}"
+    );
+    // Linear segment: v * 12.92 — single f32 multiply, expect ≤ 1 ULP
+    assert!(
+        max_ulp <= 1,
+        "l2s_extended negative max ULP {max_ulp} at {worst_input} exceeds 1"
+    );
+}
+
+// ============================================================================
+// Extended-range roundtrip: l2s(s2l(x)) ≈ x for [0, 8] and negatives
+// ============================================================================
+
+#[test]
+fn extended_roundtrip_above_one() {
+    let start = f32::from_bits(1.0_f32.to_bits() + 1);
+    let end = 8.0_f32;
+
+    let mut v = start;
+    let mut max_ulp: u32 = 0;
+    let mut worst_input = start;
+    let mut count: u64 = 0;
+
+    while v <= end {
+        let linear = precise_s2l_ext(v);
+        let back = precise_l2s_ext(linear);
+        let ulp = ulp_distance(v, back);
+        if ulp > max_ulp {
+            max_ulp = ulp;
+            worst_input = v;
+        }
+        count += 1;
+        v = next_f32_above(v);
+    }
+
+    eprintln!(
+        "roundtrip s2l->l2s [1+eps, 8]: {count} values, max ULP = {max_ulp} at {worst_input}"
+    );
+    // Combined powf error: ~10 ULP each direction, ~16 ULP combined
+    assert!(
+        max_ulp <= 20,
+        "extended roundtrip max ULP {max_ulp} at {worst_input} exceeds 20"
+    );
+}
+
+#[test]
+fn extended_roundtrip_inverse_above_one() {
+    // linear → sRGB → linear for values > 1.0
+    let start = f32::from_bits(1.0_f32.to_bits() + 1);
+    let end = 8.0_f32;
+
+    let mut v = start;
+    let mut max_ulp: u32 = 0;
+    let mut worst_input = start;
+    let mut count: u64 = 0;
+
+    while v <= end {
+        let srgb = precise_l2s_ext(v);
+        let back = precise_s2l_ext(srgb);
+        let ulp = ulp_distance(v, back);
+        if ulp > max_ulp {
+            max_ulp = ulp;
+            worst_input = v;
+        }
+        count += 1;
+        v = next_f32_above(v);
+    }
+
+    eprintln!(
+        "roundtrip l2s->s2l [1+eps, 8]: {count} values, max ULP = {max_ulp} at {worst_input}"
+    );
+    assert!(
+        max_ulp <= 20,
+        "extended roundtrip inverse max ULP {max_ulp} at {worst_input} exceeds 20"
+    );
+}
+
+#[test]
+fn extended_roundtrip_negative() {
+    let mut v = -1.0_f32;
+    let mut max_ulp: u32 = 0;
+    let mut worst_input = v;
+    let mut count: u64 = 0;
+
+    while v < 0.0 {
+        let linear = precise_s2l_ext(v);
+        let back = precise_l2s_ext(linear);
+        let ulp = ulp_distance(v, back);
+        if ulp > max_ulp {
+            max_ulp = ulp;
+            worst_input = v;
+        }
+        count += 1;
+        v = next_f32_toward_zero_neg(v);
+    }
+
+    eprintln!(
+        "roundtrip s2l->l2s [-1, 0): {count} values, max ULP = {max_ulp} at {worst_input}"
+    );
+    // Both directions use the linear segment (multiply then divide).
+    // Near zero, subnormal f32 values lose precision in the divide→multiply
+    // chain, producing up to ~6 ULP error at the smallest subnormals.
+    assert!(
+        max_ulp <= 6,
+        "negative roundtrip max ULP {max_ulp} at {worst_input} exceeds 6"
+    );
+}
+
+// ============================================================================
+// Extended-range monotonicity
+// ============================================================================
+
+#[test]
+fn extended_monotonicity_s2l_above_one() {
+    let start = 1.0_f32;
+    let end = 8.0_f32;
+
+    let mut prev = precise_s2l_ext(start);
+    let mut v = next_f32_above(start);
+    let mut violations = 0_u64;
+    let mut max_reversal_ulp: u32 = 0;
+
+    while v <= end {
+        let result = precise_s2l_ext(v);
+        if result < prev {
+            violations += 1;
+            let rev = ulp_distance(result, prev);
+            if rev > max_reversal_ulp {
+                max_reversal_ulp = rev;
+            }
+        }
+        prev = result;
+        v = next_f32_above(v);
+    }
+
+    eprintln!(
+        "s2l_extended [1, 8] monotonicity: {violations} violations, max reversal = {max_reversal_ulp} ULP"
+    );
+    // powf should be monotonic; any violation is concerning
+    assert!(
+        max_reversal_ulp <= 2,
+        "s2l_extended monotonicity: {max_reversal_ulp}-ULP reversal ({violations} violations)"
+    );
+}
+
+#[test]
+fn extended_monotonicity_l2s_above_one() {
+    let start = 1.0_f32;
+    let end = 8.0_f32;
+
+    let mut prev = precise_l2s_ext(start);
+    let mut v = next_f32_above(start);
+    let mut violations = 0_u64;
+    let mut max_reversal_ulp: u32 = 0;
+
+    while v <= end {
+        let result = precise_l2s_ext(v);
+        if result < prev {
+            violations += 1;
+            let rev = ulp_distance(result, prev);
+            if rev > max_reversal_ulp {
+                max_reversal_ulp = rev;
+            }
+        }
+        prev = result;
+        v = next_f32_above(v);
+    }
+
+    eprintln!(
+        "l2s_extended [1, 8] monotonicity: {violations} violations, max reversal = {max_reversal_ulp} ULP"
+    );
+    assert!(
+        max_reversal_ulp <= 2,
+        "l2s_extended monotonicity: {max_reversal_ulp}-ULP reversal ({violations} violations)"
+    );
+}
+
+// ============================================================================
+// Extended-range boundary: exact 1.0 and 0.0 fixed points
+// ============================================================================
+
+#[test]
+fn extended_boundary_values() {
+    // 0.0 fixed point
+    assert_eq!(precise_s2l_ext(0.0), 0.0, "s2l_ext(0) != 0");
+    assert_eq!(precise_l2s_ext(0.0), 0.0, "l2s_ext(0) != 0");
+
+    // 1.0: s2l uses the power curve for gamma >= threshold (~0.039), so
+    // powf((1.0 + a) / (1.0 + a), 2.4) = 1.0 exactly.
+    // l2s uses powf(1.0, 1/2.4) * a1 - a — the FMA may introduce ≤1 ULP error.
+    assert_eq!(precise_s2l_ext(1.0), 1.0, "s2l_ext(1) != 1");
+    let l2s_one = precise_l2s_ext(1.0);
+    assert!(
+        ulp_distance(l2s_one, 1.0) <= 1,
+        "l2s_ext(1) = {l2s_one}, expected 1.0 within 1 ULP"
+    );
+
+    // -0.0 should map to -0.0 (sign preservation)
+    let neg_zero = -0.0_f32;
+    let s2l_nz = precise_s2l_ext(neg_zero);
+    let l2s_nz = precise_l2s_ext(neg_zero);
+    assert!(s2l_nz == 0.0, "s2l_ext(-0) not zero: {s2l_nz}");
+    assert!(l2s_nz == 0.0, "l2s_ext(-0) not zero: {l2s_nz}");
+
+    // Values just above 1.0 should produce results >= 1.0 (not clamped to 1.0)
+    let above_one = f32::from_bits(1.0_f32.to_bits() + 1);
+    assert!(
+        precise_s2l_ext(above_one) > 1.0,
+        "s2l_ext(1+eps) should be > 1.0"
+    );
+    // l2s has derivative ~0.44 at 1.0, so 1+eps_f32 maps to ~1+0.44*eps_f64
+    // which rounds to exactly 1.0 in f32. Check a larger step.
+    let above_one_10 = f32::from_bits(1.0_f32.to_bits() + 10);
+    assert!(
+        precise_l2s_ext(above_one_10) >= 1.0,
+        "l2s_ext(1+10eps) should be >= 1.0"
+    );
+
+    // Negative values should produce negative results
+    assert!(precise_s2l_ext(-0.5) < 0.0, "s2l_ext(-0.5) should be < 0");
+    assert!(precise_l2s_ext(-0.5) < 0.0, "l2s_ext(-0.5) should be < 0");
+}
+
+// ============================================================================
+// Extended range: continuity across the [0, 1] → (1, 8] boundary
+// ============================================================================
+
+#[test]
+fn extended_continuity_at_one() {
+    // Verify the extended functions smoothly continue past 1.0
+    // (no discontinuity from a clamping branch)
+    let below = f32::from_bits(1.0_f32.to_bits() - 1);
+    let at = 1.0_f32;
+    let above = f32::from_bits(1.0_f32.to_bits() + 1);
+
+    // s2l: should be monotonically increasing
+    let s2l_below = precise_s2l_ext(below);
+    let s2l_at = precise_s2l_ext(at);
+    let s2l_above = precise_s2l_ext(above);
+    assert!(s2l_below <= s2l_at, "s2l_ext not monotonic below 1.0");
+    assert!(s2l_at <= s2l_above, "s2l_ext not monotonic above 1.0");
+
+    // l2s: should be monotonically increasing
+    let l2s_below = precise_l2s_ext(below);
+    let l2s_at = precise_l2s_ext(at);
+    let l2s_above = precise_l2s_ext(above);
+    assert!(l2s_below <= l2s_at, "l2s_ext not monotonic below 1.0");
+    assert!(l2s_at <= l2s_above, "l2s_ext not monotonic above 1.0");
+
+    // The gap across 1.0 should be tiny (adjacent f32 values)
+    let s2l_gap = ulp_distance(s2l_below, s2l_above);
+    let l2s_gap = ulp_distance(l2s_below, l2s_above);
+    eprintln!("Continuity at 1.0: s2l gap = {s2l_gap} ULP, l2s gap = {l2s_gap} ULP");
+    assert!(s2l_gap <= 4, "s2l_ext gap at 1.0: {s2l_gap} ULP");
+    assert!(l2s_gap <= 4, "l2s_ext gap at 1.0: {l2s_gap} ULP");
 }
