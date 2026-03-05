@@ -11,15 +11,11 @@ Fast linear↔sRGB color space conversion with runtime CPU dispatch.
 ```rust
 use linear_srgb::default::*;
 
-// Single values
+// Single values (rational polynomial — fast, ~8 ULP max)
 let linear = srgb_to_linear(0.5f32);
 let srgb = linear_to_srgb(linear);
 
-// Fast polynomial (~4x faster than powf, 294 ULP max near black, &lt;4 ULP in upper half)
-let linear = srgb_to_linear_fast(0.5f32);
-let srgb = linear_to_srgb_fast(linear);
-
-// Slices (SIMD-accelerated, polynomial)
+// Slices (SIMD-accelerated)
 let mut values = vec![0.5f32; 10000];
 srgb_to_linear_slice(&mut values);
 linear_to_srgb_slice(&mut values);
@@ -33,14 +29,13 @@ let srgb_byte = linear_to_srgb_u8(linear);
 
 | Your situation | Use this |
 |----------------|----------|
-| One f32 value (exact) | `srgb_to_linear(x)` / `linear_to_srgb(x)` |
-| One f32 value (fast) | `srgb_to_linear_fast(x)` / `linear_to_srgb_fast(x)` |
-| One u8 value | `srgb_u8_to_linear(x)` (LUT, fastest) |
-| `&mut [f32]` slice | `srgb_to_linear_slice()` / `linear_to_srgb_slice()` |
-| `&[u8]` → `&mut [f32]` | `srgb_u8_to_linear_slice()` |
-| `&[f32]` → `&mut [u8]` | `linear_to_srgb_u8_slice()` |
-| Inside `#[arcane]` | `default::inline::*` (no dispatch) |
-| Standalone x8 call | `srgb_to_linear_x8()` (has dispatch, that's fine) |
+| One f32 value (fast) | `default::srgb_to_linear(x)` / `default::linear_to_srgb(x)` |
+| One f32 value (exact) | `precise::srgb_to_linear(x)` / `precise::linear_to_srgb(x)` |
+| One u8 value | `default::srgb_u8_to_linear(x)` (LUT, fastest) |
+| `&mut [f32]` slice | `default::srgb_to_linear_slice()` / `default::linear_to_srgb_slice()` |
+| `&[u8]` → `&mut [f32]` | `default::srgb_u8_to_linear_slice()` |
+| `&[f32]` → `&mut [u8]` | `default::linear_to_srgb_u8_slice()` |
+| Inside `#[arcane]` fn | `tokens::x8::srgb_to_linear_v3()` (inlines, no dispatch) |
 
 ## API Reference
 
@@ -49,24 +44,35 @@ let srgb_byte = linear_to_srgb_u8(linear);
 ```rust
 use linear_srgb::default::*;
 
-// f32 conversions — powf (exact reference)
+// f32 conversions — rational polynomial (~110 ULP max near threshold, <8 ULP elsewhere)
 let linear = srgb_to_linear(0.5f32);
 let srgb = linear_to_srgb(0.214f32);
 
-// f32 conversions — polynomial (~4x faster, 294 ULP max near black, &lt;4 ULP in upper half)
-let linear = srgb_to_linear_fast(0.5f32);
-let srgb = linear_to_srgb_fast(0.214f32);
+// u8 conversions (LUT-based, zero math)
+let linear = srgb_u8_to_linear(128u8);
+let srgb_byte = linear_to_srgb_u8(0.214f32);
+
+// u16 conversions (LUT-based)
+let linear = srgb_u16_to_linear(32768u16);
+let srgb_u16 = linear_to_srgb_u16(0.214f32);
+```
+
+### Precise (powf) Conversions
+
+```rust
+use linear_srgb::precise::*;
+
+// f32 — exact powf, C0-continuous (6 ULP max vs moxcms reference)
+let linear = srgb_to_linear(0.5f32);
+let srgb = linear_to_srgb(0.214f32);
 
 // f64 high-precision
 let linear = srgb_to_linear_f64(0.5f64);
 
-// u8 conversions (LUT-based)
-let linear = srgb_u8_to_linear(128u8);           // u8 → f32
-let srgb_byte = linear_to_srgb_u8(0.214f32);     // f32 → u8
-
-// u16 conversions (LUT-based)
-let linear = srgb_u16_to_linear(32768u16);        // u16 → f32
-let srgb_u16 = linear_to_srgb_u16(0.214f32);     // f32 → u16
+// Extended range (HDR/ICC — no clamping)
+use linear_srgb::precise::{srgb_to_linear_extended, linear_to_srgb_extended};
+let linear = srgb_to_linear_extended(-0.1);
+let srgb = linear_to_srgb_extended(1.5);
 ```
 
 ### Slice Processing (Recommended for Batches)
@@ -76,7 +82,7 @@ use linear_srgb::default::*;
 
 // In-place f32 conversion (SIMD-accelerated)
 let mut values = vec![0.5f32; 10000];
-srgb_to_linear_slice(&mut values);  // Modifies in-place
+srgb_to_linear_slice(&mut values);
 linear_to_srgb_slice(&mut values);
 
 // u8 → f32 (LUT-based, extremely fast)
@@ -106,19 +112,6 @@ let mut values = vec![0.5f32; 1000];
 gamma_to_linear_slice(&mut values, 2.2);
 ```
 
-### Extended Range (HDR / Wide Gamut)
-
-The standard functions clamp to \[0, 1\]. For cross-gamut pipelines (Rec. 2020 → sRGB, scRGB, HDR):
-
-```rust
-use linear_srgb::scalar::{srgb_to_linear_extended, linear_to_srgb_extended};
-
-let linear = srgb_to_linear_extended(-0.1);  // Preserves negatives
-let srgb = linear_to_srgb_extended(1.5);     // Preserves >1.0
-```
-
-See crate docs for when clamped vs extended is appropriate.
-
 ### LUT for Custom Bit Depths
 
 ```rust
@@ -126,34 +119,23 @@ use linear_srgb::lut::{LinearTable16, EncodingTable16, lut_interp_linear_float};
 
 // 16-bit linearization (65536 entries)
 let lut = LinearTable16::new();
-let linear = lut.lookup(32768);  // Direct lookup
+let linear = lut.lookup(32768);
 
 // Interpolated encoding
 let encode_lut = EncodingTable16::new();
 let srgb = lut_interp_linear_float(0.5, encode_lut.as_slice());
 ```
 
-## Advanced: Token-Based Dispatch (`mage` feature)
+### Advanced: Token-Based `#[rite]` Functions
 
-For zero-overhead SIMD when you control the dispatch point:
-
-```rust,ignore
-use linear_srgb::mage;
-
-// Obtain a token once, pass to all calls
-mage::srgb_to_linear_slice(&mut values);  // Uses archmage incant! internally
-```
-
-## Advanced: Inlineable `#[rite]` Functions (`rites` feature)
-
-For embedding inside your own `#[arcane]` code with no dispatch overhead:
+For zero-overhead SIMD when embedding inside your own `#[arcane]` code:
 
 ```rust,ignore
-use linear_srgb::rites::x8;
+use linear_srgb::tokens::x8;
 use archmage::arcane;
 
 #[arcane]
-fn my_pipeline(token: Desktop64, data: &mut [f32]) {
+fn my_pipeline(token: X64V3Token, data: &mut [f32]) {
     // x8::srgb_to_linear_v3 is #[rite] — inlines into your function
     // Available widths: x4 (NEON/WASM), x8 (AVX2), x16 (AVX-512)
 }
@@ -161,13 +143,11 @@ fn my_pipeline(token: Desktop64, data: &mut [f32]) {
 
 ## Module Organization
 
-- **`default`** — Recommended API. Re-exports optimal implementations.
-- **`default::inline`** — Dispatch-free `wide::f32x8` variants for use inside your own SIMD code.
-- **`simd`** — Full SIMD API with `_dispatch` and `_inline` variants.
-- **`scalar`** — Single-value functions. Includes `_fast` (polynomial) and `_extended` (unclamped) variants.
+- **`default`** — Recommended API. Rational polynomial for f32, LUT for integers, SIMD for slices.
+- **`precise`** — Exact `powf()` conversions. C0-continuous, f32/f64, extended range.
+- **`tokens`** — Inlineable `#[rite]` functions for x4/x8/x16 widths. For use inside `#[arcane]` code.
 - **`lut`** — Lookup tables for custom bit depths.
-- **`mage`** — Token-based dispatch via archmage (feature-gated).
-- **`rites`** — Inlineable `#[rite]` functions for x4/x8/x16 widths (feature-gated).
+- **`tf`** — Transfer functions: BT.709, PQ, HLG (feature-gated behind `transfer`).
 
 ## Feature Flags
 
@@ -178,28 +158,47 @@ linear-srgb = "0.5"  # std enabled by default
 # no_std (requires alloc for LUT generation)
 linear-srgb = { version = "0.5", default-features = false }
 
-# Token-based dispatch (zero overhead)
-linear-srgb = { version = "0.5", features = ["mage"] }
-
-# Inlineable rites for embedding in #[arcane] code
-linear-srgb = { version = "0.5", features = ["rites"] }
+# HDR transfer functions (BT.709, PQ, HLG)
+linear-srgb = { version = "0.5", features = ["transfer"] }
 ```
 
 - **`std`** (default): Required for runtime SIMD dispatch
-- **`mage`**: Token-based API using archmage
-- **`rites`**: Inlineable `#[rite]` functions for x4/x8/x16
+- **`transfer`**: BT.709, PQ, HLG transfer functions
 - **`alt`**: Alternative/experimental implementations for benchmarking
-- **`unsafe_simd`**: Union-based bit manipulation, unchecked indexing
 
 ## Accuracy
 
-Implements IEC 61966-2-1:1999 sRGB transfer functions with:
-- C0-continuous piecewise function (no discontinuity at threshold)
-- Constants derived from moxcms reference implementation
-- Scalar `powf`: exact to f32/f64 precision
-- Polynomial (`_fast`, SIMD): 294 ULP max near threshold, 2-3 ULP in upper half (exhaustive f32 sweep)
-- f32 roundtrip: ~1e-5 accuracy
-- f64 roundtrip: ~1e-10 accuracy
+### Transfer function constants
+
+The IEC 61966-2-1 sRGB spec defines a piecewise transfer function with a linear segment and a power curve. The textbook constants (threshold 0.04045 / 0.0031308, offset 0.055) create a tiny discontinuity at the boundary — the two segments don't quite meet (~2.3e-9 in f64).
+
+This crate uses two constant sets, each chosen for correctness in its context:
+
+| Code path | Constants | Threshold (gamma) | Why |
+|-----------|-----------|-------------------|-----|
+| `default` (rational poly) | IEC textbook | 0.04045 | Polynomial was fitted to the IEC power curve |
+| `precise` (powf) | moxcms C0 | 0.039293... | Eliminates the discontinuity |
+| SIMD / `tokens` | IEC textbook | 0.04045 | Same rational polynomial as `default` |
+| LUT tables | IEC textbook | 0.04045 | Identical to moxcms at u8/u16 precision |
+
+The rational polynomial (from libjxl) approximates `((x+0.055)/1.055)^2.4` — the IEC power segment. Using the IEC threshold gives 110 ULP max error. Switching to the moxcms threshold would push values into the linear segment that should be evaluated by the polynomial, causing 3100+ ULP errors. The IEC threshold is optimal for this approximation.
+
+The `precise` path uses moxcms C0-continuous constants (derived from the moxcms reference implementation) because they make the piecewise function mathematically continuous. With `powf()` computing the exact power curve, this distinction actually matters.
+
+### Accuracy summary (exhaustive f32 sweep)
+
+| Path | Reference | Max error | Avg error |
+|------|-----------|-----------|-----------|
+| `default` s→l | IEC f64 | 110 ULP | 0.55 ULP |
+| `default` l→s | IEC f64 | 31 ULP | 0.37 ULP |
+| `precise` s→l | moxcms f64 | 6 ULP | 0.11 ULP |
+| `precise` l→s | moxcms f64 | 3 ULP | 0.10 ULP |
+
+The `default` path's worst case (110 ULP for s→l) occurs at the piecewise threshold where the linear segment meets the rational polynomial. Away from the threshold, typical error is <8 ULP.
+
+### Practical impact
+
+The two constant sets produce identical results at u8 precision (the threshold falls between u8 values 10 and 11). At u16 precision, the maximum difference is ~1 LSB near the threshold. The difference only becomes measurable with raw f32 values in the narrow threshold region (0.039–0.041 gamma-space).
 
 ## License
 

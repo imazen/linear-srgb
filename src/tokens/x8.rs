@@ -8,7 +8,7 @@
 
 use archmage::rite;
 
-pub use archmage::Desktop64;
+pub use archmage::X64V3Token;
 
 use magetypes::simd::f32x8 as mt_f32x8;
 
@@ -27,9 +27,9 @@ const TWELVE_92: f32 = 12.92;
 /// # Safety
 ///
 /// Safe when called from a context with matching target features (e.g. inside
-/// an `#[arcane]` function taking `Desktop64`). The token proves CPU support.
+/// an `#[arcane]` function taking `X64V3Token`). The token proves CPU support.
 #[rite]
-pub fn srgb_to_linear_v3(token: Desktop64, srgb: [f32; 8]) -> [f32; 8] {
+pub fn srgb_to_linear_v3(token: X64V3Token, srgb: [f32; 8]) -> [f32; 8] {
     use crate::rational_poly::{S2L_P, S2L_Q};
 
     let zero = mt_f32x8::zero(token);
@@ -61,9 +61,9 @@ pub fn srgb_to_linear_v3(token: Desktop64, srgb: [f32; 8]) -> [f32; 8] {
 /// # Safety
 ///
 /// Safe when called from a context with matching target features (e.g. inside
-/// an `#[arcane]` function taking `Desktop64`). The token proves CPU support.
+/// an `#[arcane]` function taking `X64V3Token`). The token proves CPU support.
 #[rite]
-pub fn linear_to_srgb_v3(token: Desktop64, linear: [f32; 8]) -> [f32; 8] {
+pub fn linear_to_srgb_v3(token: X64V3Token, linear: [f32; 8]) -> [f32; 8] {
     use crate::rational_poly::{L2S_P, L2S_Q};
 
     let zero = mt_f32x8::zero(token);
@@ -95,9 +95,9 @@ pub fn linear_to_srgb_v3(token: Desktop64, linear: [f32; 8]) -> [f32; 8] {
 /// # Safety
 ///
 /// Safe when called from a context with matching target features (e.g. inside
-/// an `#[arcane]` function taking `Desktop64`). The token proves CPU support.
+/// an `#[arcane]` function taking `X64V3Token`). The token proves CPU support.
 #[rite]
-pub fn gamma_to_linear_v3(token: Desktop64, encoded: [f32; 8], gamma: f32) -> [f32; 8] {
+pub fn gamma_to_linear_v3(token: X64V3Token, encoded: [f32; 8], gamma: f32) -> [f32; 8] {
     let zero = mt_f32x8::zero(token);
     let one = mt_f32x8::splat(token, 1.0);
     let encoded = mt_f32x8::from_array(token, encoded).max(zero).min(one);
@@ -109,9 +109,9 @@ pub fn gamma_to_linear_v3(token: Desktop64, encoded: [f32; 8], gamma: f32) -> [f
 /// # Safety
 ///
 /// Safe when called from a context with matching target features (e.g. inside
-/// an `#[arcane]` function taking `Desktop64`). The token proves CPU support.
+/// an `#[arcane]` function taking `X64V3Token`). The token proves CPU support.
 #[rite]
-pub fn linear_to_gamma_v3(token: Desktop64, linear: [f32; 8], gamma: f32) -> [f32; 8] {
+pub fn linear_to_gamma_v3(token: X64V3Token, linear: [f32; 8], gamma: f32) -> [f32; 8] {
     let zero = mt_f32x8::zero(token);
     let one = mt_f32x8::splat(token, 1.0);
     let linear = mt_f32x8::from_array(token, linear).max(zero).min(one);
@@ -131,9 +131,9 @@ pub fn linear_to_gamma_v3(token: Desktop64, linear: [f32; 8], gamma: f32) -> [f3
 /// # Safety
 ///
 /// Safe when called from a context with matching target features (e.g. inside
-/// an `#[arcane]` function taking `Desktop64`). The token proves CPU support.
+/// an `#[arcane]` function taking `X64V3Token`). The token proves CPU support.
 #[rite]
-pub fn srgb_u8_to_linear_v3(_token: Desktop64, srgb: [u8; 8]) -> [f32; 8] {
+pub fn srgb_u8_to_linear_v3(_token: X64V3Token, srgb: [u8; 8]) -> [f32; 8] {
     let lut = &crate::const_luts::LINEAR_TABLE_8;
     [
         lut[srgb[0] as usize],
@@ -153,7 +153,7 @@ pub fn srgb_u8_to_linear_v3(_token: Desktop64, srgb: [u8; 8]) -> [f32; 8] {
 ///
 /// Safe when called from a context with matching target features.
 #[rite]
-pub fn srgb_u8_to_linear_slice_v3(_token: Desktop64, input: &[u8], output: &mut [f32]) {
+pub fn srgb_u8_to_linear_slice_v3(_token: X64V3Token, input: &[u8], output: &mut [f32]) {
     assert_eq!(input.len(), output.len());
     let lut = &crate::const_luts::LINEAR_TABLE_8;
     let (in_chunks, in_remainder) = input.as_chunks::<8>();
@@ -186,9 +186,9 @@ pub fn srgb_u8_to_linear_slice_v3(_token: Desktop64, input: &[u8], output: &mut 
 /// # Safety
 ///
 /// Safe when called from a context with matching target features (e.g. inside
-/// an `#[arcane]` function taking `Desktop64`). The token proves CPU support.
+/// an `#[arcane]` function taking `X64V3Token`). The token proves CPU support.
 #[rite]
-pub fn linear_to_srgb_u8_v3(token: Desktop64, linear: [f32; 8]) -> [u8; 8] {
+pub fn linear_to_srgb_u8_v3(token: X64V3Token, linear: [f32; 8]) -> [u8; 8] {
     let zero = mt_f32x8::zero(token);
     let one = mt_f32x8::splat(token, 1.0);
     let linear = mt_f32x8::from_array(token, linear).max(zero).min(one);
@@ -217,7 +217,7 @@ pub fn linear_to_srgb_u8_v3(token: Desktop64, linear: [f32; 8]) -> [u8; 8] {
 ///
 /// Safe when called from a context with matching target features.
 #[rite]
-pub fn srgb_to_linear_slice_v3(token: Desktop64, values: &mut [f32]) {
+pub fn srgb_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
@@ -235,7 +235,7 @@ pub fn srgb_to_linear_slice_v3(token: Desktop64, values: &mut [f32]) {
 ///
 /// Safe when called from a context with matching target features.
 #[rite]
-pub fn linear_to_srgb_slice_v3(token: Desktop64, values: &mut [f32]) {
+pub fn linear_to_srgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
@@ -253,7 +253,7 @@ pub fn linear_to_srgb_slice_v3(token: Desktop64, values: &mut [f32]) {
 ///
 /// Safe when called from a context with matching target features.
 #[rite]
-pub fn gamma_to_linear_slice_v3(token: Desktop64, values: &mut [f32], gamma: f32) {
+pub fn gamma_to_linear_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
@@ -271,7 +271,7 @@ pub fn gamma_to_linear_slice_v3(token: Desktop64, values: &mut [f32], gamma: f32
 ///
 /// Safe when called from a context with matching target features.
 #[rite]
-pub fn linear_to_gamma_slice_v3(token: Desktop64, values: &mut [f32], gamma: f32) {
+pub fn linear_to_gamma_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
 
     for chunk in chunks {
@@ -289,7 +289,7 @@ pub fn linear_to_gamma_slice_v3(token: Desktop64, values: &mut [f32], gamma: f32
 ///
 /// Safe when called from a context with matching target features.
 #[rite]
-pub fn linear_to_srgb_u8_slice_v3(token: Desktop64, input: &[f32], output: &mut [u8]) {
+pub fn linear_to_srgb_u8_slice_v3(token: X64V3Token, input: &[f32], output: &mut [u8]) {
     assert_eq!(input.len(), output.len());
     let (in_chunks, in_remainder) = input.as_chunks::<8>();
     let (out_chunks, out_remainder) = output.as_chunks_mut::<8>();
@@ -300,6 +300,154 @@ pub fn linear_to_srgb_u8_slice_v3(token: Desktop64, input: &[f32], output: &mut 
 
     for (inp, out) in in_remainder.iter().zip(out_remainder.iter_mut()) {
         *out = crate::scalar::linear_to_srgb_u8(*inp);
+    }
+}
+
+// ============================================================================
+// Transfer function rites (behind `transfer` feature)
+// ============================================================================
+
+/// Convert 8 sRGB values to linear (rational polynomial, no powf).
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn tf_srgb_to_linear_v3(token: X64V3Token, v: [f32; 8]) -> [f32; 8] {
+    crate::tf::srgb::srgb_to_linear_x8(token, mt_f32x8::from_array(token, v)).to_array()
+}
+
+/// Convert 8 linear values to sRGB (rational polynomial, no powf).
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn tf_linear_to_srgb_v3(token: X64V3Token, v: [f32; 8]) -> [f32; 8] {
+    crate::tf::srgb::linear_to_srgb_x8(token, mt_f32x8::from_array(token, v)).to_array()
+}
+
+/// Convert 8 BT.709 encoded values to linear.
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn bt709_to_linear_v3(token: X64V3Token, v: [f32; 8]) -> [f32; 8] {
+    crate::tf::bt709::bt709_to_linear_x8(token, mt_f32x8::from_array(token, v)).to_array()
+}
+
+/// Convert 8 linear values to BT.709 encoded.
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn linear_to_bt709_v3(token: X64V3Token, v: [f32; 8]) -> [f32; 8] {
+    crate::tf::bt709::linear_to_bt709_x8(token, mt_f32x8::from_array(token, v)).to_array()
+}
+
+/// Convert 8 PQ signal values to linear.
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn pq_to_linear_v3(token: X64V3Token, v: [f32; 8]) -> [f32; 8] {
+    crate::tf::pq::pq_to_linear_x8(token, mt_f32x8::from_array(token, v)).to_array()
+}
+
+/// Convert 8 linear values to PQ signal.
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn linear_to_pq_v3(token: X64V3Token, v: [f32; 8]) -> [f32; 8] {
+    crate::tf::pq::linear_to_pq_x8(token, mt_f32x8::from_array(token, v)).to_array()
+}
+
+/// Convert 8 HLG signal values to linear.
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn hlg_to_linear_v3(token: X64V3Token, v: [f32; 8]) -> [f32; 8] {
+    crate::tf::hlg::hlg_to_linear_x8(token, mt_f32x8::from_array(token, v)).to_array()
+}
+
+/// Convert 8 linear values to HLG signal.
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn linear_to_hlg_v3(token: X64V3Token, v: [f32; 8]) -> [f32; 8] {
+    crate::tf::hlg::linear_to_hlg_x8(token, mt_f32x8::from_array(token, v)).to_array()
+}
+
+/// Convert sRGB f32 values to linear in-place, 8-wide (TF module version).
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn tf_srgb_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
+    tf_slice_x8(
+        values,
+        |v| tf_srgb_to_linear_v3(token, v),
+        crate::tf::srgb_to_linear,
+    );
+}
+
+/// Convert linear f32 values to sRGB in-place, 8-wide (TF module version).
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn tf_linear_to_srgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
+    tf_slice_x8(
+        values,
+        |v| tf_linear_to_srgb_v3(token, v),
+        crate::tf::linear_to_srgb,
+    );
+}
+
+/// Convert BT.709 f32 values to linear in-place, 8-wide.
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn bt709_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
+    tf_slice_x8(
+        values,
+        |v| bt709_to_linear_v3(token, v),
+        crate::tf::bt709_to_linear,
+    );
+}
+
+/// Convert linear f32 values to BT.709 in-place, 8-wide.
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn linear_to_bt709_slice_v3(token: X64V3Token, values: &mut [f32]) {
+    tf_slice_x8(
+        values,
+        |v| linear_to_bt709_v3(token, v),
+        crate::tf::linear_to_bt709,
+    );
+}
+
+/// Convert PQ f32 values to linear in-place, 8-wide.
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn pq_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
+    tf_slice_x8(values, |v| pq_to_linear_v3(token, v), crate::tf::pq_to_linear);
+}
+
+/// Convert linear f32 values to PQ in-place, 8-wide.
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn linear_to_pq_slice_v3(token: X64V3Token, values: &mut [f32]) {
+    tf_slice_x8(values, |v| linear_to_pq_v3(token, v), crate::tf::linear_to_pq);
+}
+
+/// Convert HLG f32 values to linear in-place, 8-wide.
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn hlg_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
+    tf_slice_x8(values, |v| hlg_to_linear_v3(token, v), crate::tf::hlg_to_linear);
+}
+
+/// Convert linear f32 values to HLG in-place, 8-wide.
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn linear_to_hlg_slice_v3(token: X64V3Token, values: &mut [f32]) {
+    tf_slice_x8(values, |v| linear_to_hlg_v3(token, v), crate::tf::linear_to_hlg);
+}
+
+#[cfg(feature = "transfer")]
+#[inline(always)]
+fn tf_slice_x8(
+    values: &mut [f32],
+    tf_x8: impl Fn([f32; 8]) -> [f32; 8],
+    tf_scalar: fn(f32) -> f32,
+) {
+    let (chunks, remainder) = values.as_chunks_mut::<8>();
+    for chunk in chunks {
+        *chunk = tf_x8(*chunk);
+    }
+    for v in remainder {
+        *v = tf_scalar(*v);
     }
 }
 
@@ -315,33 +463,33 @@ mod tests {
     #[cfg(not(feature = "std"))]
     use alloc::{vec, vec::Vec};
 
-    fn get_token() -> Option<Desktop64> {
-        Desktop64::try_new()
+    fn get_token() -> Option<X64V3Token> {
+        X64V3Token::try_new()
     }
 
     // We need an #[arcane] wrapper to safely call #[rite] functions in tests.
     #[archmage::arcane]
-    fn call_srgb_to_linear(token: Desktop64, input: [f32; 8]) -> [f32; 8] {
+    fn call_srgb_to_linear(token: X64V3Token, input: [f32; 8]) -> [f32; 8] {
         srgb_to_linear_v3(token, input)
     }
 
     #[archmage::arcane]
-    fn call_linear_to_srgb(token: Desktop64, input: [f32; 8]) -> [f32; 8] {
+    fn call_linear_to_srgb(token: X64V3Token, input: [f32; 8]) -> [f32; 8] {
         linear_to_srgb_v3(token, input)
     }
 
     #[archmage::arcane]
-    fn call_srgb_to_linear_slice(token: Desktop64, values: &mut [f32]) {
+    fn call_srgb_to_linear_slice(token: X64V3Token, values: &mut [f32]) {
         srgb_to_linear_slice_v3(token, values);
     }
 
     #[archmage::arcane]
-    fn call_linear_to_srgb_slice(token: Desktop64, values: &mut [f32]) {
+    fn call_linear_to_srgb_slice(token: X64V3Token, values: &mut [f32]) {
         linear_to_srgb_slice_v3(token, values);
     }
 
     #[archmage::arcane]
-    fn call_linear_to_srgb_u8(token: Desktop64, input: [f32; 8]) -> [u8; 8] {
+    fn call_linear_to_srgb_u8(token: X64V3Token, input: [f32; 8]) -> [u8; 8] {
         linear_to_srgb_u8_v3(token, input)
     }
 

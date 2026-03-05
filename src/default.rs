@@ -2,7 +2,8 @@
 //!
 //! This module provides the optimal implementation for each use case:
 //!
-//! - **Single values**: Scalar functions (SIMD overhead not worthwhile)
+//! - **Single f32 values**: Rational polynomial (~8 ULP, no `powf`)
+//! - **Single u8/u16 values**: LUT lookup (zero math)
 //! - **Slices**: SIMD-accelerated with runtime CPU dispatch
 //!
 //! # Quick Start
@@ -10,7 +11,7 @@
 //! ```rust
 //! use linear_srgb::default::{srgb_to_linear, linear_to_srgb};
 //!
-//! // Single value conversion
+//! // Single value conversion (fast rational polynomial)
 //! let linear = srgb_to_linear(0.5);
 //! let srgb = linear_to_srgb(linear);
 //! ```
@@ -26,38 +27,23 @@
 //! ```
 
 // ============================================================================
-// Single-value functions (scalar - best for individual values)
+// Single-value sRGB f32 (rational polynomial — fast, ~8 ULP)
+// ============================================================================
+
+pub use crate::rational_poly::{
+    linear_to_srgb_fast as linear_to_srgb, srgb_to_linear_fast as srgb_to_linear,
+};
+
+// ============================================================================
+// Single-value sRGB integer (LUT lookup — zero math)
 // ============================================================================
 
 pub use crate::scalar::{
-    // Custom gamma (pure power function)
-    gamma_to_linear,
-    gamma_to_linear_f64,
-    linear_to_gamma,
-    linear_to_gamma_f64,
-    // f32 sRGB (exact powf)
-    linear_to_srgb,
-    linear_to_srgb_extended,
-    // f64 sRGB (high precision)
-    linear_to_srgb_f64,
-    // f32 sRGB (fast polynomial, no powf)
-    linear_to_srgb_fast,
-    linear_to_srgb_u8,
-    // u16 sRGB (LUT-based)
-    linear_to_srgb_u16,
-    srgb_to_linear,
-    srgb_to_linear_extended,
-    srgb_to_linear_f64,
-    // f32 sRGB (fast polynomial, no powf)
-    srgb_to_linear_fast,
-    srgb_u16_to_linear,
+    linear_to_srgb_u16, linear_to_srgb_u8, srgb_u16_to_linear, srgb_u8_to_linear,
 };
 
-// u8 → f32 uses LUT (20x faster than scalar powf)
-pub use crate::simd::srgb_u8_to_linear;
-
 // ============================================================================
-// Slice functions (SIMD with dispatch - best for batches)
+// Slice functions (SIMD-dispatched)
 // ============================================================================
 
 pub use crate::simd::{
@@ -73,6 +59,21 @@ pub use crate::simd::{
     srgb_to_linear_slice,
     srgb_u8_to_linear_slice,
     srgb_u16_to_linear_slice,
+};
+
+// ============================================================================
+// Custom gamma (scalar)
+// ============================================================================
+
+pub use crate::scalar::{gamma_to_linear, linear_to_gamma};
+
+// ============================================================================
+// Transfer functions (behind `transfer` feature)
+// ============================================================================
+
+#[cfg(feature = "transfer")]
+pub use crate::tf::{
+    bt709_to_linear, hlg_to_linear, linear_to_bt709, linear_to_hlg, linear_to_pq, pq_to_linear,
 };
 
 // ============================================================================

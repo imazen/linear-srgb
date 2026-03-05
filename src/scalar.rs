@@ -192,21 +192,6 @@ pub fn linear_to_srgb_extended(linear: f32) -> f32 {
     }
 }
 
-/// Convert 8-bit sRGB to linear (using direct computation).
-///
-/// # Deprecation
-///
-/// This function uses `powf()` which is ~20x slower than LUT lookup.
-/// Prefer [`crate::lut::SrgbConverter::srgb_u8_to_linear`] or
-/// [`crate::simd::srgb_u8_to_linear_slice`] for batches.
-#[deprecated(
-    since = "0.3.0",
-    note = "20x slower than LUT. Use lut::SrgbConverter::srgb_u8_to_linear or simd::srgb_u8_to_linear_slice instead."
-)]
-#[inline]
-pub fn srgb_u8_to_linear(value: u8) -> f32 {
-    srgb_to_linear(value as f32 / 255.0)
-}
 
 /// Convert linear to 8-bit sRGB using const LUT.
 ///
@@ -259,7 +244,7 @@ pub fn linear_to_srgb_u16(linear: f32) -> u16 {
 ///
 /// # Example
 /// ```
-/// use linear_srgb::scalar::gamma_to_linear;
+/// use linear_srgb::default::gamma_to_linear;
 ///
 /// let linear = gamma_to_linear(0.5, 2.2);
 /// assert!((linear - 0.218).abs() < 0.001);
@@ -285,7 +270,7 @@ pub fn gamma_to_linear(encoded: f32, gamma: f32) -> f32 {
 ///
 /// # Example
 /// ```
-/// use linear_srgb::scalar::linear_to_gamma;
+/// use linear_srgb::default::linear_to_gamma;
 ///
 /// let encoded = linear_to_gamma(0.218, 2.2);
 /// assert!((encoded - 0.5).abs() < 0.01);
@@ -327,6 +312,93 @@ pub fn linear_to_gamma_f64(linear: f64, gamma: f64) -> f64 {
     } else {
         linear.powf(1.0 / gamma)
     }
+}
+
+// ============================================================================
+// u8 LUT-based conversion (moved from simd.rs — pure table lookup, not SIMD)
+// ============================================================================
+
+/// Precomputed sRGB u8 → linear f32 lookup table.
+/// Uses IEC 61966-2-1 constants (0.04045 threshold, 0.055 offset).
+/// At u8 precision, these produce identical values to the C0-continuous constants.
+static SRGB_U8_TO_LINEAR_LUT: [f32; 256] = {
+    let mut lut = [0.0f32; 256];
+    let mut i = 0;
+    while i < 256 {
+        let srgb = i as f64 / 255.0;
+        let linear = if srgb <= 0.04045 {
+            srgb / 12.92
+        } else {
+            // Use manual pow via exp(ln(x)*y) since powf isn't const
+            let base = (srgb + 0.055) / 1.055;
+            // Approximate pow(base, 2.4) using the identity:
+            // We precompute these at compile time, so precision doesn't matter
+            // for the LUT - we just need f32 precision in the final value
+            // Square-and-multiply for 2.4 = 2 + 0.4
+            let sq = base * base; // base^2
+            // base^0.4 = (base^2)^0.2 = ((base^2)^(1/5))
+            // Use Newton's method: find x where x^5 = base^2
+            let target = sq; // base^2, we want target^(1/5) = base^0.4
+            let mut x = 0.5f64;
+            let mut iter = 0;
+            while iter < 100 {
+                let x4 = x * x * x * x;
+                let x5 = x4 * x;
+                x = x - (x5 - target) / (5.0 * x4);
+                iter += 1;
+            }
+            sq * x // base^2 * base^0.4 = base^2.4
+        };
+        lut[i] = linear as f32;
+        i += 1;
+    }
+    lut
+};
+
+#[inline]
+fn get_lut() -> &'static [f32; 256] {
+    &SRGB_U8_TO_LINEAR_LUT
+}
+
+/// Convert a single sRGB u8 value to linear f32 using LUT lookup.
+///
+/// This is the fastest method for u8 input as it uses a precomputed lookup table
+/// embedded in the binary. For batch conversions, use [`crate::simd::srgb_u8_to_linear_slice`].
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::srgb_u8_to_linear;
+///
+/// let linear = srgb_u8_to_linear(128);
+/// assert!((linear - 0.2158).abs() < 0.001);
+/// ```
+#[inline]
+pub fn srgb_u8_to_linear(value: u8) -> f32 {
+    get_lut()[value as usize]
+}
+
+/// Convert 8 sRGB u8 values to linear f32 using LUT lookup.
+///
+/// # Example
+/// ```ignore
+/// use linear_srgb::scalar::srgb_u8_to_linear_x8;
+///
+/// let srgb = [0u8, 64, 128, 192, 255, 32, 96, 160];
+/// let linear = srgb_u8_to_linear_x8(srgb);
+/// ```
+#[inline]
+pub fn srgb_u8_to_linear_x8(srgb: [u8; 8]) -> [f32; 8] {
+    let lut = get_lut();
+    [
+        lut[srgb[0] as usize],
+        lut[srgb[1] as usize],
+        lut[srgb[2] as usize],
+        lut[srgb[3] as usize],
+        lut[srgb[4] as usize],
+        lut[srgb[5] as usize],
+        lut[srgb[6] as usize],
+        lut[srgb[7] as usize],
+    ]
 }
 
 #[cfg(test)]

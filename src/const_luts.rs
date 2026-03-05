@@ -1,7 +1,7 @@
 //! Pre-computed lookup tables embedded in the binary.
 //!
 //! These tables are generated at compile time and avoid runtime initialization.
-//! Generated using transfer function constants from IEC 61966-2-1.
+//! Generated using C0-continuous sRGB constants (moxcms thresholds with IEC offset).
 
 // LinearTable8: sRGB u8 → linear f32 (256 entries, 1KB)
 pub(crate) const LINEAR_TABLE_8: [f32; 256] = [

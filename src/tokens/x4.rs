@@ -8,13 +8,13 @@
 //!
 //! # Suffix convention
 //!
-//! - `_neon` — requires [`Arm64`] (AArch64 NEON)
+//! - `_neon` — requires [`NeonToken`] (AArch64 NEON)
 //! - `_wasm128` — requires [`Wasm128Token`] (WebAssembly SIMD128)
 
 use archmage::rite;
 
 #[cfg(target_arch = "aarch64")]
-pub use archmage::Arm64;
+pub use archmage::NeonToken;
 
 #[cfg(target_arch = "wasm32")]
 pub use archmage::Wasm128Token;
@@ -28,7 +28,7 @@ const LINEAR_SCALE: f32 = 1.0 / 12.92;
 const TWELVE_92: f32 = 12.92;
 
 // ============================================================================
-// AArch64 NEON — 4×f32 with Arm64 token
+// AArch64 NEON — 4×f32 with NeonToken token
 // ============================================================================
 
 /// Convert 4 sRGB values to linear. Input clamped to \[0, 1\].
@@ -36,10 +36,10 @@ const TWELVE_92: f32 = 12.92;
 /// # Safety
 ///
 /// Safe when called from a context with matching target features (e.g. inside
-/// an `#[arcane]` function taking `Arm64`). The token proves CPU support.
+/// an `#[arcane]` function taking `NeonToken`). The token proves CPU support.
 #[cfg(target_arch = "aarch64")]
 #[rite]
-pub fn srgb_to_linear_neon(token: Arm64, srgb: [f32; 4]) -> [f32; 4] {
+pub fn srgb_to_linear_neon(token: NeonToken, srgb: [f32; 4]) -> [f32; 4] {
     use crate::rational_poly::{S2L_P, S2L_Q};
 
     let zero = mt_f32x4::zero(token);
@@ -73,7 +73,7 @@ pub fn srgb_to_linear_neon(token: Arm64, srgb: [f32; 4]) -> [f32; 4] {
 /// Safe when called from a context with matching target features.
 #[cfg(target_arch = "aarch64")]
 #[rite]
-pub fn linear_to_srgb_neon(token: Arm64, linear: [f32; 4]) -> [f32; 4] {
+pub fn linear_to_srgb_neon(token: NeonToken, linear: [f32; 4]) -> [f32; 4] {
     use crate::rational_poly::{L2S_P, L2S_Q};
 
     let zero = mt_f32x4::zero(token);
@@ -107,7 +107,7 @@ pub fn linear_to_srgb_neon(token: Arm64, linear: [f32; 4]) -> [f32; 4] {
 /// Safe when called from a context with matching target features.
 #[cfg(target_arch = "aarch64")]
 #[rite]
-pub fn gamma_to_linear_neon(token: Arm64, encoded: [f32; 4], gamma: f32) -> [f32; 4] {
+pub fn gamma_to_linear_neon(token: NeonToken, encoded: [f32; 4], gamma: f32) -> [f32; 4] {
     let zero = mt_f32x4::zero(token);
     let one = mt_f32x4::splat(token, 1.0);
     let encoded = mt_f32x4::from_array(token, encoded).max(zero).min(one);
@@ -121,7 +121,7 @@ pub fn gamma_to_linear_neon(token: Arm64, encoded: [f32; 4], gamma: f32) -> [f32
 /// Safe when called from a context with matching target features.
 #[cfg(target_arch = "aarch64")]
 #[rite]
-pub fn linear_to_gamma_neon(token: Arm64, linear: [f32; 4], gamma: f32) -> [f32; 4] {
+pub fn linear_to_gamma_neon(token: NeonToken, linear: [f32; 4], gamma: f32) -> [f32; 4] {
     let zero = mt_f32x4::zero(token);
     let one = mt_f32x4::splat(token, 1.0);
     let linear = mt_f32x4::from_array(token, linear).max(zero).min(one);
@@ -135,7 +135,7 @@ pub fn linear_to_gamma_neon(token: Arm64, linear: [f32; 4], gamma: f32) -> [f32;
 /// Safe when called from a context with matching target features.
 #[cfg(target_arch = "aarch64")]
 #[rite]
-pub fn srgb_to_linear_slice_neon(token: Arm64, values: &mut [f32]) {
+pub fn srgb_to_linear_slice_neon(token: NeonToken, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
 
     for chunk in chunks {
@@ -154,7 +154,7 @@ pub fn srgb_to_linear_slice_neon(token: Arm64, values: &mut [f32]) {
 /// Safe when called from a context with matching target features.
 #[cfg(target_arch = "aarch64")]
 #[rite]
-pub fn linear_to_srgb_slice_neon(token: Arm64, values: &mut [f32]) {
+pub fn linear_to_srgb_slice_neon(token: NeonToken, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
 
     for chunk in chunks {
@@ -173,7 +173,7 @@ pub fn linear_to_srgb_slice_neon(token: Arm64, values: &mut [f32]) {
 /// Safe when called from a context with matching target features.
 #[cfg(target_arch = "aarch64")]
 #[rite]
-pub fn gamma_to_linear_slice_neon(token: Arm64, values: &mut [f32], gamma: f32) {
+pub fn gamma_to_linear_slice_neon(token: NeonToken, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
 
     for chunk in chunks {
@@ -192,7 +192,7 @@ pub fn gamma_to_linear_slice_neon(token: Arm64, values: &mut [f32], gamma: f32) 
 /// Safe when called from a context with matching target features.
 #[cfg(target_arch = "aarch64")]
 #[rite]
-pub fn linear_to_gamma_slice_neon(token: Arm64, values: &mut [f32], gamma: f32) {
+pub fn linear_to_gamma_slice_neon(token: NeonToken, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
 
     for chunk in chunks {
@@ -382,6 +382,102 @@ pub fn linear_to_gamma_slice_wasm128(token: Wasm128Token, values: &mut [f32], ga
 }
 
 // ============================================================================
+// Transfer function rites — AArch64 NEON (behind `transfer` feature)
+// ============================================================================
+
+macro_rules! neon_tf_rite {
+    ($name:ident, $inner:path) => {
+        #[cfg(all(feature = "transfer", target_arch = "aarch64"))]
+        #[rite]
+        pub fn $name(token: NeonToken, v: [f32; 4]) -> [f32; 4] {
+            $inner(token, mt_f32x4::from_array(token, v)).to_array()
+        }
+    };
+}
+
+neon_tf_rite!(tf_srgb_to_linear_neon, crate::tf::srgb::srgb_to_linear_x4);
+neon_tf_rite!(tf_linear_to_srgb_neon, crate::tf::srgb::linear_to_srgb_x4);
+neon_tf_rite!(bt709_to_linear_neon, crate::tf::bt709::bt709_to_linear_x4);
+neon_tf_rite!(linear_to_bt709_neon, crate::tf::bt709::linear_to_bt709_x4);
+neon_tf_rite!(pq_to_linear_neon, crate::tf::pq::pq_to_linear_x4);
+neon_tf_rite!(linear_to_pq_neon, crate::tf::pq::linear_to_pq_x4);
+neon_tf_rite!(hlg_to_linear_neon, crate::tf::hlg::hlg_to_linear_x4);
+neon_tf_rite!(linear_to_hlg_neon, crate::tf::hlg::linear_to_hlg_x4);
+
+macro_rules! neon_tf_slice_rite {
+    ($name:ident, $rite:ident, $scalar:path) => {
+        #[cfg(all(feature = "transfer", target_arch = "aarch64"))]
+        #[rite]
+        pub fn $name(token: NeonToken, values: &mut [f32]) {
+            let (chunks, remainder) = values.as_chunks_mut::<4>();
+            for chunk in chunks {
+                *chunk = $rite(token, *chunk);
+            }
+            for v in remainder {
+                *v = $scalar(*v);
+            }
+        }
+    };
+}
+
+neon_tf_slice_rite!(tf_srgb_to_linear_slice_neon, tf_srgb_to_linear_neon, crate::tf::srgb_to_linear);
+neon_tf_slice_rite!(tf_linear_to_srgb_slice_neon, tf_linear_to_srgb_neon, crate::tf::linear_to_srgb);
+neon_tf_slice_rite!(bt709_to_linear_slice_neon, bt709_to_linear_neon, crate::tf::bt709_to_linear);
+neon_tf_slice_rite!(linear_to_bt709_slice_neon, linear_to_bt709_neon, crate::tf::linear_to_bt709);
+neon_tf_slice_rite!(pq_to_linear_slice_neon, pq_to_linear_neon, crate::tf::pq_to_linear);
+neon_tf_slice_rite!(linear_to_pq_slice_neon, linear_to_pq_neon, crate::tf::linear_to_pq);
+neon_tf_slice_rite!(hlg_to_linear_slice_neon, hlg_to_linear_neon, crate::tf::hlg_to_linear);
+neon_tf_slice_rite!(linear_to_hlg_slice_neon, linear_to_hlg_neon, crate::tf::linear_to_hlg);
+
+// ============================================================================
+// Transfer function rites — WebAssembly SIMD128 (behind `transfer` feature)
+// ============================================================================
+
+macro_rules! wasm_tf_rite {
+    ($name:ident, $inner:path) => {
+        #[cfg(all(feature = "transfer", target_arch = "wasm32"))]
+        #[rite]
+        pub fn $name(token: Wasm128Token, v: [f32; 4]) -> [f32; 4] {
+            $inner(token, mt_f32x4::from_array(token, v)).to_array()
+        }
+    };
+}
+
+wasm_tf_rite!(tf_srgb_to_linear_wasm128, crate::tf::srgb::srgb_to_linear_x4);
+wasm_tf_rite!(tf_linear_to_srgb_wasm128, crate::tf::srgb::linear_to_srgb_x4);
+wasm_tf_rite!(bt709_to_linear_wasm128, crate::tf::bt709::bt709_to_linear_x4);
+wasm_tf_rite!(linear_to_bt709_wasm128, crate::tf::bt709::linear_to_bt709_x4);
+wasm_tf_rite!(pq_to_linear_wasm128, crate::tf::pq::pq_to_linear_x4);
+wasm_tf_rite!(linear_to_pq_wasm128, crate::tf::pq::linear_to_pq_x4);
+wasm_tf_rite!(hlg_to_linear_wasm128, crate::tf::hlg::hlg_to_linear_x4);
+wasm_tf_rite!(linear_to_hlg_wasm128, crate::tf::hlg::linear_to_hlg_x4);
+
+macro_rules! wasm_tf_slice_rite {
+    ($name:ident, $rite:ident, $scalar:path) => {
+        #[cfg(all(feature = "transfer", target_arch = "wasm32"))]
+        #[rite]
+        pub fn $name(token: Wasm128Token, values: &mut [f32]) {
+            let (chunks, remainder) = values.as_chunks_mut::<4>();
+            for chunk in chunks {
+                *chunk = $rite(token, *chunk);
+            }
+            for v in remainder {
+                *v = $scalar(*v);
+            }
+        }
+    };
+}
+
+wasm_tf_slice_rite!(tf_srgb_to_linear_slice_wasm128, tf_srgb_to_linear_wasm128, crate::tf::srgb_to_linear);
+wasm_tf_slice_rite!(tf_linear_to_srgb_slice_wasm128, tf_linear_to_srgb_wasm128, crate::tf::linear_to_srgb);
+wasm_tf_slice_rite!(bt709_to_linear_slice_wasm128, bt709_to_linear_wasm128, crate::tf::bt709_to_linear);
+wasm_tf_slice_rite!(linear_to_bt709_slice_wasm128, linear_to_bt709_wasm128, crate::tf::linear_to_bt709);
+wasm_tf_slice_rite!(pq_to_linear_slice_wasm128, pq_to_linear_wasm128, crate::tf::pq_to_linear);
+wasm_tf_slice_rite!(linear_to_pq_slice_wasm128, linear_to_pq_wasm128, crate::tf::linear_to_pq);
+wasm_tf_slice_rite!(hlg_to_linear_slice_wasm128, hlg_to_linear_wasm128, crate::tf::hlg_to_linear);
+wasm_tf_slice_rite!(linear_to_hlg_slice_wasm128, linear_to_hlg_wasm128, crate::tf::linear_to_hlg);
+
+// ============================================================================
 // Tests (AArch64 only — WASM tests require wasm runtime)
 // ============================================================================
 
@@ -394,27 +490,27 @@ mod tests {
     #[cfg(not(feature = "std"))]
     use alloc::{vec, vec::Vec};
 
-    fn get_token() -> Option<Arm64> {
-        Arm64::try_new()
+    fn get_token() -> Option<NeonToken> {
+        NeonToken::try_new()
     }
 
     #[archmage::arcane]
-    fn call_srgb_to_linear(token: Arm64, input: [f32; 4]) -> [f32; 4] {
+    fn call_srgb_to_linear(token: NeonToken, input: [f32; 4]) -> [f32; 4] {
         srgb_to_linear_neon(token, input)
     }
 
     #[archmage::arcane]
-    fn call_linear_to_srgb(token: Arm64, input: [f32; 4]) -> [f32; 4] {
+    fn call_linear_to_srgb(token: NeonToken, input: [f32; 4]) -> [f32; 4] {
         linear_to_srgb_neon(token, input)
     }
 
     #[archmage::arcane]
-    fn call_srgb_to_linear_slice(token: Arm64, values: &mut [f32]) {
+    fn call_srgb_to_linear_slice(token: NeonToken, values: &mut [f32]) {
         srgb_to_linear_slice_neon(token, values);
     }
 
     #[archmage::arcane]
-    fn call_linear_to_srgb_slice(token: Arm64, values: &mut [f32]) {
+    fn call_linear_to_srgb_slice(token: NeonToken, values: &mut [f32]) {
         linear_to_srgb_slice_neon(token, values);
     }
 

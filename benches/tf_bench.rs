@@ -2,6 +2,7 @@
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use linear_srgb::tf;
+use linear_srgb::tokens;
 use std::hint::black_box;
 
 const N: usize = 10000;
@@ -94,7 +95,7 @@ fn bench_tf_scalar(c: &mut Criterion) {
 #[cfg(target_arch = "x86_64")]
 fn bench_tf_x8(c: &mut Criterion) {
     use archmage::SimdToken;
-    let Some(token) = archmage::Desktop64::summon() else {
+    let Some(token) = archmage::X64V3Token::summon() else {
         eprintln!("AVX2+FMA not available, skipping x8 benchmarks");
         return;
     };
@@ -109,7 +110,7 @@ fn bench_tf_x8(c: &mut Criterion) {
         ($name:expr, $data:expr, $fn:path) => {
             g.bench_function($name, |b| {
                 #[archmage::arcane]
-                fn call_slice(token: archmage::Desktop64, values: &mut [f32]) {
+                fn call_slice(token: archmage::X64V3Token, values: &mut [f32]) {
                     $fn(token, values);
                 }
                 let mut buf = $data.clone();
@@ -124,34 +125,34 @@ fn bench_tf_x8(c: &mut Criterion) {
     bench_x8!(
         "srgb_to_linear",
         encoded,
-        tf::rites_x8::srgb_to_linear_slice_v3
+        tokens::x8::tf_srgb_to_linear_slice_v3
     );
     bench_x8!(
         "linear_to_srgb",
         linear,
-        tf::rites_x8::linear_to_srgb_slice_v3
+        tokens::x8::tf_linear_to_srgb_slice_v3
     );
     bench_x8!(
         "bt709_to_linear",
         encoded,
-        tf::rites_x8::bt709_to_linear_slice_v3
+        tokens::x8::bt709_to_linear_slice_v3
     );
     bench_x8!(
         "linear_to_bt709",
         linear,
-        tf::rites_x8::linear_to_bt709_slice_v3
+        tokens::x8::linear_to_bt709_slice_v3
     );
-    bench_x8!("pq_to_linear", encoded, tf::rites_x8::pq_to_linear_slice_v3);
-    bench_x8!("linear_to_pq", linear, tf::rites_x8::linear_to_pq_slice_v3);
+    bench_x8!("pq_to_linear", encoded, tokens::x8::pq_to_linear_slice_v3);
+    bench_x8!("linear_to_pq", linear, tokens::x8::linear_to_pq_slice_v3);
     bench_x8!(
         "hlg_to_linear",
         encoded,
-        tf::rites_x8::hlg_to_linear_slice_v3
+        tokens::x8::hlg_to_linear_slice_v3
     );
     bench_x8!(
         "linear_to_hlg",
         linear,
-        tf::rites_x8::linear_to_hlg_slice_v3
+        tokens::x8::linear_to_hlg_slice_v3
     );
     g.finish();
 }
@@ -166,7 +167,7 @@ fn bench_tf_x8(_c: &mut Criterion) {}
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 fn bench_tf_x16(c: &mut Criterion) {
     use archmage::SimdToken;
-    let Some(token) = archmage::Server64::summon() else {
+    let Some(token) = archmage::X64V4Token::summon() else {
         eprintln!("AVX-512 not available, skipping x16 benchmarks");
         return;
     };
@@ -181,7 +182,7 @@ fn bench_tf_x16(c: &mut Criterion) {
         ($name:expr, $data:expr, $fn:path) => {
             g.bench_function($name, |b| {
                 #[archmage::arcane]
-                fn call_slice(token: archmage::Server64, values: &mut [f32]) {
+                fn call_slice(token: archmage::X64V4Token, values: &mut [f32]) {
                     $fn(token, values);
                 }
                 let mut buf = $data.clone();
@@ -196,38 +197,38 @@ fn bench_tf_x16(c: &mut Criterion) {
     bench_x16!(
         "srgb_to_linear",
         encoded,
-        tf::rites_x16::srgb_to_linear_slice_v4
+        tokens::x16::tf_srgb_to_linear_slice_v4
     );
     bench_x16!(
         "linear_to_srgb",
         linear,
-        tf::rites_x16::linear_to_srgb_slice_v4
+        tokens::x16::tf_linear_to_srgb_slice_v4
     );
     bench_x16!(
         "bt709_to_linear",
         encoded,
-        tf::rites_x16::bt709_to_linear_slice_v4
+        tokens::x16::bt709_to_linear_slice_v4
     );
     bench_x16!(
         "linear_to_bt709",
         linear,
-        tf::rites_x16::linear_to_bt709_slice_v4
+        tokens::x16::linear_to_bt709_slice_v4
     );
     bench_x16!(
         "pq_to_linear",
         encoded,
-        tf::rites_x16::pq_to_linear_slice_v4
+        tokens::x16::pq_to_linear_slice_v4
     );
-    bench_x16!("linear_to_pq", linear, tf::rites_x16::linear_to_pq_slice_v4);
+    bench_x16!("linear_to_pq", linear, tokens::x16::linear_to_pq_slice_v4);
     bench_x16!(
         "hlg_to_linear",
         encoded,
-        tf::rites_x16::hlg_to_linear_slice_v4
+        tokens::x16::hlg_to_linear_slice_v4
     );
     bench_x16!(
         "linear_to_hlg",
         linear,
-        tf::rites_x16::linear_to_hlg_slice_v4
+        tokens::x16::linear_to_hlg_slice_v4
     );
     g.finish();
 }
@@ -247,11 +248,11 @@ fn bench_tf_x8_v4_disabled(c: &mut Criterion) {
     use archmage::SimdToken;
 
     // Disable V4 to ensure x8 runs in pure AVX2+FMA mode
-    let _ = archmage::Server64::dangerously_disable_token_process_wide(true);
+    let _ = archmage::X64V4Token::dangerously_disable_token_process_wide(true);
 
-    let Some(token) = archmage::Desktop64::summon() else {
+    let Some(token) = archmage::X64V3Token::summon() else {
         eprintln!("AVX2+FMA not available, skipping x8_v4_disabled benchmarks");
-        let _ = archmage::Server64::dangerously_disable_token_process_wide(false);
+        let _ = archmage::X64V4Token::dangerously_disable_token_process_wide(false);
         return;
     };
 
@@ -265,7 +266,7 @@ fn bench_tf_x8_v4_disabled(c: &mut Criterion) {
         ($name:expr, $data:expr, $fn:path) => {
             g.bench_function($name, |b| {
                 #[archmage::arcane]
-                fn call_slice(token: archmage::Desktop64, values: &mut [f32]) {
+                fn call_slice(token: archmage::X64V3Token, values: &mut [f32]) {
                     $fn(token, values);
                 }
                 let mut buf = $data.clone();
@@ -280,38 +281,38 @@ fn bench_tf_x8_v4_disabled(c: &mut Criterion) {
     bench_x8!(
         "srgb_to_linear",
         encoded,
-        tf::rites_x8::srgb_to_linear_slice_v3
+        tokens::x8::tf_srgb_to_linear_slice_v3
     );
     bench_x8!(
         "linear_to_srgb",
         linear,
-        tf::rites_x8::linear_to_srgb_slice_v3
+        tokens::x8::tf_linear_to_srgb_slice_v3
     );
     bench_x8!(
         "bt709_to_linear",
         encoded,
-        tf::rites_x8::bt709_to_linear_slice_v3
+        tokens::x8::bt709_to_linear_slice_v3
     );
     bench_x8!(
         "linear_to_bt709",
         linear,
-        tf::rites_x8::linear_to_bt709_slice_v3
+        tokens::x8::linear_to_bt709_slice_v3
     );
-    bench_x8!("pq_to_linear", encoded, tf::rites_x8::pq_to_linear_slice_v3);
-    bench_x8!("linear_to_pq", linear, tf::rites_x8::linear_to_pq_slice_v3);
+    bench_x8!("pq_to_linear", encoded, tokens::x8::pq_to_linear_slice_v3);
+    bench_x8!("linear_to_pq", linear, tokens::x8::linear_to_pq_slice_v3);
     bench_x8!(
         "hlg_to_linear",
         encoded,
-        tf::rites_x8::hlg_to_linear_slice_v3
+        tokens::x8::hlg_to_linear_slice_v3
     );
     bench_x8!(
         "linear_to_hlg",
         linear,
-        tf::rites_x8::linear_to_hlg_slice_v3
+        tokens::x8::linear_to_hlg_slice_v3
     );
     g.finish();
 
-    let _ = archmage::Server64::dangerously_disable_token_process_wide(false);
+    let _ = archmage::X64V4Token::dangerously_disable_token_process_wide(false);
 }
 
 #[cfg(not(target_arch = "x86_64"))]
@@ -327,7 +328,7 @@ fn bench_tf_x8_v4_disabled(_c: &mut Criterion) {}
 
 #[cfg(target_arch = "x86_64")]
 fn bench_tf_scalar_via_dispatch(c: &mut Criterion) {
-    if archmage::Desktop64::dangerously_disable_token_process_wide(true).is_err() {
+    if archmage::X64V3Token::dangerously_disable_token_process_wide(true).is_err() {
         eprintln!(
             "Cannot disable V3 (compile-time guaranteed). \
              Build without -Ctarget-cpu=native or enable testable_dispatch."
@@ -401,7 +402,7 @@ fn bench_tf_scalar_via_dispatch(c: &mut Criterion) {
     });
     g.finish();
 
-    let _ = archmage::Desktop64::dangerously_disable_token_process_wide(false);
+    let _ = archmage::X64V3Token::dangerously_disable_token_process_wide(false);
 }
 
 #[cfg(not(target_arch = "x86_64"))]

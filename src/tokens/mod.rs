@@ -16,19 +16,19 @@
 //!
 //! Function suffixes match the required token type:
 //!
-//! - `_neon` — requires [`Arm64`](archmage::Arm64) (AArch64 NEON)
+//! - `_neon` — requires [`NeonToken`](archmage::NeonToken) (AArch64 NEON)
 //! - `_wasm128` — requires [`Wasm128Token`](archmage::Wasm128Token) (WebAssembly SIMD128)
-//! - `_v3` — requires [`Desktop64`](archmage::Desktop64) (x86-64-v3: AVX2+FMA)
-//! - `_v4` — requires [`Server64`](archmage::Server64) (x86-64-v4: AVX-512)
+//! - `_v3` — requires [`X64V3Token`](archmage::X64V3Token) (x86-64-v3: AVX2+FMA)
+//! - `_v4` — requires [`X64V4Token`](archmage::X64V4Token) (x86-64-v4: AVX-512)
 //!
 //! # Example
 //!
 //! ```rust,ignore
-//! use archmage::{arcane, Desktop64};
-//! use linear_srgb::rites::x8;
+//! use archmage::{arcane, X64V3Token};
+//! use linear_srgb::tokens::x8;
 //!
 //! #[arcane]
-//! fn process_pixels(token: Desktop64, data: &mut [f32]) {
+//! fn process_pixels(token: X64V3Token, data: &mut [f32]) {
 //!     // This inlines — no dispatch boundary
 //!     x8::srgb_to_linear_slice_v3(token, data);
 //! }

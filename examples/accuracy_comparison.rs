@@ -8,8 +8,6 @@
 //! - Output types: f32, u8, u16
 //! - Multiple implementations for each direction
 
-#![allow(deprecated)]
-
 #[cfg(feature = "alt")]
 use linear_srgb::alt::accuracy::{
     naive_linear_to_srgb_f64, naive_srgb_to_linear_f64, ulp_distance_f32,
@@ -20,8 +18,8 @@ use linear_srgb::lut::{
     EncodeTable12, EncodeTable16, LinearTable8, LinearTable16, SrgbConverter,
     lut_interp_linear_float,
 };
-use linear_srgb::scalar::{linear_to_srgb, linear_to_srgb_f64, srgb_to_linear, srgb_to_linear_f64};
-use linear_srgb::simd;
+use linear_srgb::default;
+use linear_srgb::precise::{linear_to_srgb, linear_to_srgb_f64, srgb_to_linear, srgb_to_linear_f64};
 use std::sync::Arc;
 
 // ============================================================================
@@ -116,7 +114,7 @@ fn create_srgb_to_linear_methods() -> Vec<SrgbToLinearMethod> {
             name: "SIMD dispatch (slice)",
             f32_to_f32: Box::new(|x| {
                 let mut v = [x];
-                simd::srgb_to_linear_slice(&mut v);
+                default::srgb_to_linear_slice(&mut v);
                 v[0]
             }),
             u8_to_f32: None,
@@ -174,7 +172,7 @@ fn create_srgb_to_linear_methods() -> Vec<SrgbToLinearMethod> {
             name: "SIMD dispatch (slice)",
             f32_to_f32: Box::new(|x| {
                 let mut v = [x];
-                simd::srgb_to_linear_slice(&mut v);
+                default::srgb_to_linear_slice(&mut v);
                 v[0]
             }),
             u8_to_f32: None,
@@ -219,13 +217,13 @@ fn create_linear_to_srgb_methods() -> Vec<LinearToSrgbMethod> {
             name: "SIMD dispatch (slice)",
             f32_to_f32: Box::new(|x| {
                 let mut v = [x];
-                simd::linear_to_srgb_slice(&mut v);
+                default::linear_to_srgb_slice(&mut v);
                 v[0]
             }),
             f32_to_u8: Some(Box::new(|x| {
                 let inp = [x];
                 let mut out = [0u8];
-                simd::linear_to_srgb_u8_slice(&inp, &mut out);
+                default::linear_to_srgb_u8_slice(&inp, &mut out);
                 out[0]
             })),
             f32_to_u16: None,
@@ -300,13 +298,13 @@ fn create_linear_to_srgb_methods() -> Vec<LinearToSrgbMethod> {
             name: "SIMD dispatch (slice)",
             f32_to_f32: Box::new(|x| {
                 let mut v = [x];
-                simd::linear_to_srgb_slice(&mut v);
+                default::linear_to_srgb_slice(&mut v);
                 v[0]
             }),
             f32_to_u8: Some(Box::new(|x| {
                 let inp = [x];
                 let mut out = [0u8];
-                simd::linear_to_srgb_u8_slice(&inp, &mut out);
+                default::linear_to_srgb_u8_slice(&inp, &mut out);
                 out[0]
             })),
             f32_to_u16: None,

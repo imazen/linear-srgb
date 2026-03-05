@@ -15,9 +15,9 @@
 //! - `srgb_u8_to_linear` - u8 → f32 via lookup table
 
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-use archmage::Server64;
+use archmage::X64V4Token;
 #[cfg(target_arch = "x86_64")]
-use archmage::{Desktop64, arcane, rite};
+use archmage::{X64V3Token, arcane, rite};
 use archmage::{ScalarToken, incant};
 
 // Alias magetypes SIMD types to avoid name clash
@@ -26,87 +26,8 @@ use magetypes::simd::f32x8 as mt_f32x8;
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 use magetypes::simd::v4::f32x16 as mt_f32x16;
 
-/// Precomputed sRGB u8 → linear f32 lookup table.
-/// Uses the same constants as the transfer module (C0-continuous IEC 61966-2-1).
-static SRGB_U8_TO_LINEAR_LUT: [f32; 256] = {
-    let mut lut = [0.0f32; 256];
-    let mut i = 0;
-    while i < 256 {
-        let srgb = i as f64 / 255.0;
-        let linear = if srgb <= 0.04045 {
-            srgb / 12.92
-        } else {
-            // Use manual pow via exp(ln(x)*y) since powf isn't const
-            let base = (srgb + 0.055) / 1.055;
-            // Approximate pow(base, 2.4) using the identity:
-            // We precompute these at compile time, so precision doesn't matter
-            // for the LUT - we just need f32 precision in the final value
-            // Square-and-multiply for 2.4 = 2 + 0.4
-            let sq = base * base; // base^2
-            // base^0.4 = (base^2)^0.2 = ((base^2)^(1/5))
-            // Use Newton's method: find x where x^5 = base^2
-            let target = sq; // base^2, we want target^(1/5) = base^0.4
-            let mut x = 0.5f64;
-            let mut iter = 0;
-            while iter < 100 {
-                let x4 = x * x * x * x;
-                let x5 = x4 * x;
-                x = x - (x5 - target) / (5.0 * x4);
-                iter += 1;
-            }
-            sq * x // base^2 * base^0.4 = base^2.4
-        };
-        lut[i] = linear as f32;
-        i += 1;
-    }
-    lut
-};
-
-#[inline]
-fn get_lut() -> &'static [f32; 256] {
-    &SRGB_U8_TO_LINEAR_LUT
-}
-
-/// Convert a single sRGB u8 value to linear f32 using LUT lookup.
-///
-/// This is the fastest method for u8 input as it uses a precomputed lookup table
-/// embedded in the binary. For batch conversions, use [`srgb_u8_to_linear_slice`].
-///
-/// # Example
-/// ```
-/// use linear_srgb::simd::srgb_u8_to_linear;
-///
-/// let linear = srgb_u8_to_linear(128);
-/// assert!((linear - 0.2158).abs() < 0.001);
-/// ```
-#[inline]
-pub fn srgb_u8_to_linear(value: u8) -> f32 {
-    get_lut()[value as usize]
-}
-
-/// Convert 8 sRGB u8 values to linear f32 using LUT lookup.
-///
-/// # Example
-/// ```
-/// use linear_srgb::simd::srgb_u8_to_linear_x8;
-///
-/// let srgb = [0u8, 64, 128, 192, 255, 32, 96, 160];
-/// let linear = srgb_u8_to_linear_x8(srgb);
-/// ```
-#[inline]
-pub fn srgb_u8_to_linear_x8(srgb: [u8; 8]) -> [f32; 8] {
-    let lut = get_lut();
-    [
-        lut[srgb[0] as usize],
-        lut[srgb[1] as usize],
-        lut[srgb[2] as usize],
-        lut[srgb[3] as usize],
-        lut[srgb[4] as usize],
-        lut[srgb[5] as usize],
-        lut[srgb[6] as usize],
-        lut[srgb[7] as usize],
-    ]
-}
+// Re-export LUT functions from scalar (they're pure table lookups, not SIMD)
+pub use crate::scalar::{srgb_u8_to_linear, srgb_u8_to_linear_x8};
 
 // ============================================================================
 // magetypes #[rite] helpers (x86-64 only) — real AVX2+FMA SIMD
@@ -114,7 +35,7 @@ pub fn srgb_u8_to_linear_x8(srgb: [u8; 8]) -> [f32; 8] {
 
 #[cfg(target_arch = "x86_64")]
 #[rite]
-fn srgb_to_linear_mt(token: Desktop64, srgb: mt_f32x8) -> mt_f32x8 {
+fn srgb_to_linear_mt(token: X64V3Token, srgb: mt_f32x8) -> mt_f32x8 {
     use crate::rational_poly::{S2L_P, S2L_Q};
 
     let zero = mt_f32x8::zero(token);
@@ -142,7 +63,7 @@ fn srgb_to_linear_mt(token: Desktop64, srgb: mt_f32x8) -> mt_f32x8 {
 
 #[cfg(target_arch = "x86_64")]
 #[rite]
-fn linear_to_srgb_mt(token: Desktop64, linear: mt_f32x8) -> mt_f32x8 {
+fn linear_to_srgb_mt(token: X64V3Token, linear: mt_f32x8) -> mt_f32x8 {
     use crate::rational_poly::{L2S_P, L2S_Q};
 
     let zero = mt_f32x8::zero(token);
@@ -170,7 +91,7 @@ fn linear_to_srgb_mt(token: Desktop64, linear: mt_f32x8) -> mt_f32x8 {
 
 #[cfg(target_arch = "x86_64")]
 #[rite]
-fn gamma_to_linear_mt(token: Desktop64, encoded: mt_f32x8, gamma: f32) -> mt_f32x8 {
+fn gamma_to_linear_mt(token: X64V3Token, encoded: mt_f32x8, gamma: f32) -> mt_f32x8 {
     let zero = mt_f32x8::zero(token);
     let one = mt_f32x8::splat(token, 1.0);
     let encoded = encoded.max(zero).min(one);
@@ -179,7 +100,7 @@ fn gamma_to_linear_mt(token: Desktop64, encoded: mt_f32x8, gamma: f32) -> mt_f32
 
 #[cfg(target_arch = "x86_64")]
 #[rite]
-fn linear_to_gamma_mt(token: Desktop64, linear: mt_f32x8, gamma: f32) -> mt_f32x8 {
+fn linear_to_gamma_mt(token: X64V3Token, linear: mt_f32x8, gamma: f32) -> mt_f32x8 {
     let zero = mt_f32x8::zero(token);
     let one = mt_f32x8::splat(token, 1.0);
     let linear = linear.max(zero).min(one);
@@ -192,7 +113,7 @@ fn linear_to_gamma_mt(token: Desktop64, linear: mt_f32x8, gamma: f32) -> mt_f32x
 
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[rite]
-fn srgb_to_linear_mt_x16(token: Server64, srgb: mt_f32x16) -> mt_f32x16 {
+fn srgb_to_linear_mt_x16(token: X64V4Token, srgb: mt_f32x16) -> mt_f32x16 {
     use crate::rational_poly::{S2L_P, S2L_Q};
 
     let zero = mt_f32x16::zero(token);
@@ -220,7 +141,7 @@ fn srgb_to_linear_mt_x16(token: Server64, srgb: mt_f32x16) -> mt_f32x16 {
 
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[rite]
-fn linear_to_srgb_mt_x16(token: Server64, linear: mt_f32x16) -> mt_f32x16 {
+fn linear_to_srgb_mt_x16(token: X64V4Token, linear: mt_f32x16) -> mt_f32x16 {
     use crate::rational_poly::{L2S_P, L2S_Q};
 
     let zero = mt_f32x16::zero(token);
@@ -249,7 +170,7 @@ fn linear_to_srgb_mt_x16(token: Server64, linear: mt_f32x16) -> mt_f32x16 {
 // gamma x16: pow_midp not available on f32x16, delegate to 2×x8 via token.v3()
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[rite]
-fn gamma_to_linear_x16_2x8(token: Server64, v: [f32; 16], gamma: f32) -> [f32; 16] {
+fn gamma_to_linear_x16_2x8(token: X64V4Token, v: [f32; 16], gamma: f32) -> [f32; 16] {
     let t3 = token.v3();
     let lo = mt_f32x8::from_array(t3, <[f32; 8]>::try_from(&v[..8]).unwrap());
     let hi = mt_f32x8::from_array(t3, <[f32; 8]>::try_from(&v[8..]).unwrap());
@@ -263,7 +184,7 @@ fn gamma_to_linear_x16_2x8(token: Server64, v: [f32; 16], gamma: f32) -> [f32; 1
 
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[rite]
-fn linear_to_gamma_x16_2x8(token: Server64, v: [f32; 16], gamma: f32) -> [f32; 16] {
+fn linear_to_gamma_x16_2x8(token: X64V4Token, v: [f32; 16], gamma: f32) -> [f32; 16] {
     let t3 = token.v3();
     let lo = mt_f32x8::from_array(t3, <[f32; 8]>::try_from(&v[..8]).unwrap());
     let hi = mt_f32x8::from_array(t3, <[f32; 8]>::try_from(&v[8..]).unwrap());
@@ -281,7 +202,7 @@ fn linear_to_gamma_x16_2x8(token: Server64, v: [f32; 16], gamma: f32) -> [f32; 1
 
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[arcane]
-fn srgb_to_linear_slice_tier_v4(token: Server64, values: &mut [f32]) {
+fn srgb_to_linear_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         let v = mt_f32x16::from_array(token, *chunk);
@@ -295,7 +216,7 @@ fn srgb_to_linear_slice_tier_v4(token: Server64, values: &mut [f32]) {
 
 #[cfg(target_arch = "x86_64")]
 #[arcane]
-fn srgb_to_linear_slice_tier_v3(token: Desktop64, values: &mut [f32]) {
+fn srgb_to_linear_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
     for chunk in chunks {
         let v = mt_f32x8::from_array(token, *chunk);
@@ -319,7 +240,7 @@ fn srgb_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
 ///
 /// # Example
 /// ```
-/// use linear_srgb::simd::srgb_to_linear_slice;
+/// use linear_srgb::default::srgb_to_linear_slice;
 ///
 /// let mut values = vec![0.0f32, 0.25, 0.5, 0.75, 1.0];
 /// srgb_to_linear_slice(&mut values);
@@ -331,7 +252,7 @@ pub fn srgb_to_linear_slice(values: &mut [f32]) {
 
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[arcane]
-fn linear_to_srgb_slice_tier_v4(token: Server64, values: &mut [f32]) {
+fn linear_to_srgb_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         let v = mt_f32x16::from_array(token, *chunk);
@@ -345,7 +266,7 @@ fn linear_to_srgb_slice_tier_v4(token: Server64, values: &mut [f32]) {
 
 #[cfg(target_arch = "x86_64")]
 #[arcane]
-fn linear_to_srgb_slice_tier_v3(token: Desktop64, values: &mut [f32]) {
+fn linear_to_srgb_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
     for chunk in chunks {
         let v = mt_f32x8::from_array(token, *chunk);
@@ -369,7 +290,7 @@ fn linear_to_srgb_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
 ///
 /// # Example
 /// ```
-/// use linear_srgb::simd::linear_to_srgb_slice;
+/// use linear_srgb::default::linear_to_srgb_slice;
 ///
 /// let mut values = vec![0.0f32, 0.1, 0.2, 0.5, 1.0];
 /// linear_to_srgb_slice(&mut values);
@@ -388,7 +309,7 @@ pub fn linear_to_srgb_slice(values: &mut [f32]) {
 ///
 /// # Example
 /// ```
-/// use linear_srgb::simd::srgb_u8_to_linear_slice;
+/// use linear_srgb::default::srgb_u8_to_linear_slice;
 ///
 /// let input: Vec<u8> = (0..=255).collect();
 /// let mut output = vec![0.0f32; 256];
@@ -397,26 +318,16 @@ pub fn linear_to_srgb_slice(values: &mut [f32]) {
 #[inline]
 pub fn srgb_u8_to_linear_slice(input: &[u8], output: &mut [f32]) {
     assert_eq!(input.len(), output.len());
-    let lut = get_lut();
 
     let (in_chunks, in_remainder) = input.as_chunks::<8>();
     let (out_chunks, out_remainder) = output.as_chunks_mut::<8>();
 
     for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
-        *out = [
-            lut[inp[0] as usize],
-            lut[inp[1] as usize],
-            lut[inp[2] as usize],
-            lut[inp[3] as usize],
-            lut[inp[4] as usize],
-            lut[inp[5] as usize],
-            lut[inp[6] as usize],
-            lut[inp[7] as usize],
-        ];
+        *out = crate::scalar::srgb_u8_to_linear_x8(*inp);
     }
 
     for (inp, out) in in_remainder.iter().zip(out_remainder.iter_mut()) {
-        *out = lut[*inp as usize];
+        *out = crate::scalar::srgb_u8_to_linear(*inp);
     }
 }
 
@@ -429,7 +340,7 @@ pub fn srgb_u8_to_linear_slice(input: &[u8], output: &mut [f32]) {
 ///
 /// # Example
 /// ```
-/// use linear_srgb::simd::linear_to_srgb_u8_slice;
+/// use linear_srgb::default::linear_to_srgb_u8_slice;
 ///
 /// let input: Vec<f32> = (0..=255).map(|i| i as f32 / 255.0).collect();
 /// let mut output = vec![0u8; 256];
@@ -486,7 +397,7 @@ pub fn linear_to_srgb_u16_slice(input: &[f32], output: &mut [u16]) {
 
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[arcane]
-fn gamma_to_linear_slice_tier_v4(token: Server64, values: &mut [f32], gamma: f32) {
+fn gamma_to_linear_slice_tier_v4(token: X64V4Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         *chunk = gamma_to_linear_x16_2x8(token, *chunk, gamma);
@@ -498,7 +409,7 @@ fn gamma_to_linear_slice_tier_v4(token: Server64, values: &mut [f32], gamma: f32
 
 #[cfg(target_arch = "x86_64")]
 #[arcane]
-fn gamma_to_linear_slice_tier_v3(token: Desktop64, values: &mut [f32], gamma: f32) {
+fn gamma_to_linear_slice_tier_v3(token: X64V3Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
     for chunk in chunks {
         let v = mt_f32x8::from_array(token, *chunk);
@@ -522,7 +433,7 @@ fn gamma_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], ga
 ///
 /// # Example
 /// ```
-/// use linear_srgb::simd::gamma_to_linear_slice;
+/// use linear_srgb::default::gamma_to_linear_slice;
 ///
 /// let mut values = vec![0.0f32, 0.25, 0.5, 0.75, 1.0];
 /// gamma_to_linear_slice(&mut values, 2.2);
@@ -534,7 +445,7 @@ pub fn gamma_to_linear_slice(values: &mut [f32], gamma: f32) {
 
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[arcane]
-fn linear_to_gamma_slice_tier_v4(token: Server64, values: &mut [f32], gamma: f32) {
+fn linear_to_gamma_slice_tier_v4(token: X64V4Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         *chunk = linear_to_gamma_x16_2x8(token, *chunk, gamma);
@@ -546,7 +457,7 @@ fn linear_to_gamma_slice_tier_v4(token: Server64, values: &mut [f32], gamma: f32
 
 #[cfg(target_arch = "x86_64")]
 #[arcane]
-fn linear_to_gamma_slice_tier_v3(token: Desktop64, values: &mut [f32], gamma: f32) {
+fn linear_to_gamma_slice_tier_v3(token: X64V3Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
     for chunk in chunks {
         let v = mt_f32x8::from_array(token, *chunk);
@@ -570,7 +481,7 @@ fn linear_to_gamma_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], ga
 ///
 /// # Example
 /// ```
-/// use linear_srgb::simd::linear_to_gamma_slice;
+/// use linear_srgb::default::linear_to_gamma_slice;
 ///
 /// let mut values = vec![0.0f32, 0.1, 0.2, 0.5, 1.0];
 /// linear_to_gamma_slice(&mut values, 2.2);

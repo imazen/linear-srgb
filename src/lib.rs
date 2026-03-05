@@ -6,8 +6,8 @@
 //! # Module Organization
 //!
 //! - [`default`] - **Recommended API** with optimal implementations for each use case
-//! - [`simd`] - SIMD-accelerated functions with full control over dispatch
-//! - [`scalar`] - Single-value conversion functions (f32/f64)
+//! - [`precise`] - Slow but exact `powf()`-based conversions (f32/f64, extended-range)
+//! - [`tokens`] - Token-gated `#[rite]` functions for embedding in `#[arcane]` code
 //! - [`lut`] - Lookup table types for custom bit depths
 //!
 //! # Quick Start
@@ -69,7 +69,7 @@
 //! | Single u8 value | [`default::srgb_u8_to_linear`] |
 //! | f32 slice (in-place) | [`default::srgb_to_linear_slice`] |
 //! | u8 slice → f32 slice | [`default::srgb_u8_to_linear_slice`] |
-//! | Inside `#[arcane]` (token) | [`rites::x8::srgb_to_linear_v3`] |
+//! | Inside `#[arcane]` (token) | [`tokens::x8::srgb_to_linear_v3`] |
 //! | Custom bit depth LUT | [`lut::LinearTable16`] |
 //!
 //! # Clamping and Extended Range
@@ -102,7 +102,7 @@
 //!
 //! ## Extended (unclamped) — use for cross-gamut pipelines
 //!
-//! [`scalar::srgb_to_linear_extended`] and [`scalar::linear_to_srgb_extended`]
+//! [`precise::srgb_to_linear_extended`] and [`precise::linear_to_srgb_extended`]
 //! do not clamp. They follow the mathematical sRGB transfer function for all
 //! inputs: negatives pass through the linear segment, values above 1.0 pass
 //! through the power segment.
@@ -134,18 +134,18 @@
 //!
 //! | Function | Range | Pipeline |
 //! |----------|-------|----------|
-//! | All `simd::*`, `mage::*`, `rites::*`, `lut::*` | \[0, 1\] | Same-gamut batch processing |
-//! | [`scalar::srgb_to_linear`] | \[0, 1\] | Same-gamut single values |
-//! | [`scalar::linear_to_srgb`] | \[0, 1\] | Same-gamut single values |
-//! | [`scalar::srgb_to_linear_extended`] | Unbounded | Cross-gamut, scRGB, HDR |
-//! | [`scalar::linear_to_srgb_extended`] | Unbounded | Cross-gamut, scRGB, HDR |
+//! | All `default::*_slice`, `tokens::*`, `lut::*` | \[0, 1\] | Same-gamut batch processing |
+//! | [`default::srgb_to_linear`] | \[0, 1\] | Same-gamut single values |
+//! | [`default::linear_to_srgb`] | \[0, 1\] | Same-gamut single values |
+//! | [`precise::srgb_to_linear_extended`] | Unbounded | Cross-gamut, scRGB, HDR |
+//! | [`precise::linear_to_srgb_extended`] | Unbounded | Cross-gamut, scRGB, HDR |
 //! | All u8/u16 paths | \[0, 1\] | Final quantization (clamp inherent) |
 //!
 //! **No SIMD extended-range variants exist yet.** The fast polynomial
 //! approximation is fitted to \[0, 1\] and produces garbage outside that
 //! domain. Extended-range SIMD would use `pow` instead of the polynomial
 //! (~3× slower, still faster than scalar for `linear_to_srgb`). For batch
-//! extended-range conversion today, loop over the scalar `_extended`
+//! extended-range conversion today, loop over the [`precise`] `_extended`
 //! functions.
 //!
 //! # Feature Flags
@@ -177,8 +177,15 @@ extern crate std;
 
 /// Recommended API with optimal implementations for each use case.
 ///
-/// See module documentation for details.
+/// Fast rational polynomial for single values, SIMD-dispatched for slices,
+/// LUT for integer types. See module documentation for details.
 pub mod default;
+
+/// Slow but exact conversion functions using `powf()`.
+///
+/// Provides f32/f64 sRGB, extended-range, and custom gamma f64 functions.
+/// For faster alternatives, use [`default`].
+pub mod precise;
 
 /// Lookup table types for sRGB conversion.
 ///
@@ -186,45 +193,31 @@ pub mod default;
 /// and runtime-generated tables for custom bit depths.
 pub mod lut;
 
-/// SIMD-accelerated conversion functions.
-///
-/// Provides SIMD-accelerated slice functions with runtime CPU dispatch.
-pub mod simd;
-
-/// Scalar (single-value) conversion functions.
-///
-/// Direct computation without SIMD. Best for individual value conversions.
-pub mod scalar;
-
-/// Inlineable `#[rite]` functions for embedding in your own `#[arcane]` code.
+/// Token-gated `#[rite]` functions for embedding in your own `#[arcane]` code.
 ///
 /// These carry `#[target_feature]` + `#[inline]` directly — no wrapper, no
 /// dispatch. When called from a matching `#[arcane]` context, LLVM inlines
 /// them fully. Organized by SIMD unit width; suffixed by required token tier.
 ///
-/// Requires the `rites` feature.
-#[cfg(feature = "rites")]
-pub mod rites;
-
-/// Token-based API using archmage for zero dispatch overhead.
-///
-/// This module provides an alternative API using archmage tokens for users who
-/// want to avoid per-call dispatch overhead. Obtain a token once at startup,
-/// then pass it to all conversion functions.
-///
-/// Requires the `mage` feature.
-#[cfg(feature = "mage")]
-pub mod mage;
+/// When the `transfer` feature is enabled, each width module also provides
+/// rites for BT.709, PQ, and HLG.
+pub mod tokens;
 
 /// Transfer functions: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).
 ///
-/// Scalar, generic SIMD, and platform-specific `#[rite]` functions for all
-/// four transfer functions. Uses rational polynomial approximations (libjxl)
-/// and bit-trick transcendentals — no `powf()` on the SIMD path.
+/// Scalar functions and `fast_math` utilities. SIMD rites for these TFs
+/// are in [`tokens`].
 ///
 /// Requires the `transfer` feature.
 #[cfg(feature = "transfer")]
 pub mod tf;
+
+// ============================================================================
+// Internal modules (pub(crate) — not part of the public API)
+// ============================================================================
+
+pub(crate) mod scalar;
+pub(crate) mod simd;
 
 // ============================================================================
 // Internal modules

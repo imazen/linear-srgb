@@ -28,10 +28,6 @@ avx512 = ["archmage/avx512", "magetypes/avx512"]
 alt = []
 # Use unsafe variants for maximum performance (union-based bit manipulation, unchecked indexing)
 unsafe_simd = []
-# Token-based API using archmage (zero dispatch overhead)
-mage = []
-# Inlineable #[rite] functions for embedding in #[arcane] code
-rites = []
 # Transfer functions: sRGB, BT.709, PQ, HLG — scalar + SIMD rites
 transfer = []
 

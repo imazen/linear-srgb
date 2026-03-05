@@ -6,19 +6,20 @@
 //!
 //! | Function | Transfer | Direction |
 //! |---|---|---|
-//! | [`srgb_to_linear`] | sRGB (rational polynomial) | encoded → linear |
-//! | [`linear_to_srgb`] | sRGB (rational polynomial) | linear → encoded |
-//! | [`bt709_to_linear`] | BT.709 (fast_powf) | encoded → linear |
-//! | [`linear_to_bt709`] | BT.709 (fast_powf) | linear → encoded |
-//! | [`pq_to_linear`] | PQ ST 2084 (rational polynomial) | signal → linear |
-//! | [`linear_to_pq`] | PQ ST 2084 (rational polynomial) | linear → signal |
-//! | [`hlg_to_linear`] | HLG ARIB STD-B67 (fast_pow2f) | signal → linear |
-//! | [`linear_to_hlg`] | HLG ARIB STD-B67 (fast_log2f) | linear → signal |
+//! | `srgb_to_linear` | sRGB (rational polynomial) | encoded → linear |
+//! | `linear_to_srgb` | sRGB (rational polynomial) | linear → encoded |
+//! | `bt709_to_linear` | BT.709 (fast_powf) | encoded → linear |
+//! | `linear_to_bt709` | BT.709 (fast_powf) | linear → encoded |
+//! | `pq_to_linear` | PQ ST 2084 (rational polynomial) | signal → linear |
+//! | `linear_to_pq` | PQ ST 2084 (rational polynomial) | linear → signal |
+//! | `hlg_to_linear` | HLG ARIB STD-B67 (fast_pow2f) | signal → linear |
+//! | `linear_to_hlg` | HLG ARIB STD-B67 (fast_log2f) | linear → signal |
 //!
 //! # SIMD `#[rite]` functions
 //!
-//! Available in [`rites_x8`] (AVX2+FMA) and [`rites_x4`] (NEON, WASM).
-//! All operate on `[f32; N]` arrays at the public boundary.
+//! Available in `crate::tokens::x8` (AVX2+FMA), `crate::tokens::x4` (NEON, WASM),
+//! and `crate::tokens::x16` (AVX-512). All operate on `[f32; N]` arrays at the
+//! public boundary.
 //!
 //! # Accuracy
 //!
@@ -36,19 +37,9 @@ pub(crate) mod bt709;
 pub mod fast_math;
 pub(crate) mod hlg;
 pub(crate) mod pq;
-mod srgb;
+pub(crate) mod srgb;
 
-/// Inlineable x8 `#[rite]` functions (AVX2+FMA).
-#[cfg(target_arch = "x86_64")]
-pub mod rites_x8;
-
-/// Inlineable x4 `#[rite]` functions (NEON, WASM128).
-#[cfg(any(target_arch = "aarch64", target_arch = "wasm32"))]
-pub mod rites_x4;
-
-/// Inlineable x16 `#[rite]` functions (AVX-512).
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-pub mod rites_x16;
+// SIMD rites for TFs are now in `crate::tokens::{x4, x8, x16}` (behind `transfer` feature).
 
 // =============================================================================
 // Scalar re-exports
@@ -365,8 +356,8 @@ mod tests {
         use super::*;
         use archmage::SimdToken;
 
-        fn get_token() -> Option<archmage::Desktop64> {
-            archmage::Desktop64::try_new()
+        fn get_token() -> Option<archmage::X64V3Token> {
+            archmage::X64V3Token::try_new()
         }
 
         macro_rules! test_x8_tf {
@@ -379,7 +370,7 @@ mod tests {
                     };
 
                     #[archmage::arcane]
-                    fn call(token: archmage::Desktop64, v: [f32; 8]) -> [f32; 8] {
+                    fn call(token: archmage::X64V3Token, v: [f32; 8]) -> [f32; 8] {
                         $x8_fn(token, v)
                     }
 
@@ -399,49 +390,49 @@ mod tests {
 
         test_x8_tf!(
             srgb_to_linear_x8,
-            rites_x8::srgb_to_linear_v3,
+            crate::tokens::x8::tf_srgb_to_linear_v3,
             srgb_to_linear,
             1e-5
         );
         test_x8_tf!(
             linear_to_srgb_x8,
-            rites_x8::linear_to_srgb_v3,
+            crate::tokens::x8::tf_linear_to_srgb_v3,
             linear_to_srgb,
             1e-5
         );
         test_x8_tf!(
             bt709_to_linear_x8,
-            rites_x8::bt709_to_linear_v3,
+            crate::tokens::x8::bt709_to_linear_v3,
             bt709_to_linear,
             1e-5
         );
         test_x8_tf!(
             linear_to_bt709_x8,
-            rites_x8::linear_to_bt709_v3,
+            crate::tokens::x8::linear_to_bt709_v3,
             linear_to_bt709,
             1e-4
         );
         test_x8_tf!(
             pq_to_linear_x8,
-            rites_x8::pq_to_linear_v3,
+            crate::tokens::x8::pq_to_linear_v3,
             pq_to_linear,
             1e-5
         );
         test_x8_tf!(
             linear_to_pq_x8,
-            rites_x8::linear_to_pq_v3,
+            crate::tokens::x8::linear_to_pq_v3,
             linear_to_pq,
             1e-5
         );
         test_x8_tf!(
             hlg_to_linear_x8,
-            rites_x8::hlg_to_linear_v3,
+            crate::tokens::x8::hlg_to_linear_v3,
             hlg_to_linear,
             1e-4
         );
         test_x8_tf!(
             linear_to_hlg_x8,
-            rites_x8::linear_to_hlg_v3,
+            crate::tokens::x8::linear_to_hlg_v3,
             linear_to_hlg,
             1e-4
         );
