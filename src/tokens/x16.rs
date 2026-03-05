@@ -24,10 +24,8 @@ const TWELVE_92: f32 = 12.92;
 
 /// Convert 16 sRGB values to linear. Input clamped to \[0, 1\].
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features (e.g. inside
-/// an `#[arcane]` function taking `X64V4Token`). The token proves CPU support.
+/// The `X64V4Token` parameter proves AVX-512 support at compile time.
+/// Call from inside an `#[arcane]` function for zero-overhead inlining.
 #[rite]
 pub fn srgb_to_linear_v4(token: X64V4Token, srgb: [f32; 16]) -> [f32; 16] {
     use crate::rational_poly::{S2L_P, S2L_Q};
@@ -58,10 +56,8 @@ pub fn srgb_to_linear_v4(token: X64V4Token, srgb: [f32; 16]) -> [f32; 16] {
 
 /// Convert 16 linear values to sRGB. Input clamped to \[0, 1\].
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features (e.g. inside
-/// an `#[arcane]` function taking `X64V4Token`). The token proves CPU support.
+/// The `X64V4Token` parameter proves AVX-512 support at compile time.
+/// Call from inside an `#[arcane]` function for zero-overhead inlining.
 #[rite]
 pub fn linear_to_srgb_v4(token: X64V4Token, linear: [f32; 16]) -> [f32; 16] {
     use crate::rational_poly::{L2S_P, L2S_Q};
@@ -92,10 +88,8 @@ pub fn linear_to_srgb_v4(token: X64V4Token, linear: [f32; 16]) -> [f32; 16] {
 
 /// Convert 16 gamma-encoded values to linear. Input clamped to \[0, 1\].
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features (e.g. inside
-/// an `#[arcane]` function taking `X64V4Token`). The token proves CPU support.
+/// The `X64V4Token` parameter proves AVX-512 support at compile time.
+/// Call from inside an `#[arcane]` function for zero-overhead inlining.
 #[rite]
 pub fn gamma_to_linear_v4(token: X64V4Token, encoded: [f32; 16], gamma: f32) -> [f32; 16] {
     // 2×x8 via rites/x8 — pow_midp not available on f32x16
@@ -112,10 +106,8 @@ pub fn gamma_to_linear_v4(token: X64V4Token, encoded: [f32; 16], gamma: f32) -> 
 
 /// Convert 16 linear values to gamma-encoded. Input clamped to \[0, 1\].
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features (e.g. inside
-/// an `#[arcane]` function taking `X64V4Token`). The token proves CPU support.
+/// The `X64V4Token` parameter proves AVX-512 support at compile time.
+/// Call from inside an `#[arcane]` function for zero-overhead inlining.
 #[rite]
 pub fn linear_to_gamma_v4(token: X64V4Token, linear: [f32; 16], gamma: f32) -> [f32; 16] {
     // 2×x8 via rites/x8 — pow_midp not available on f32x16
@@ -138,10 +130,8 @@ pub fn linear_to_gamma_v4(token: X64V4Token, linear: [f32; 16], gamma: f32) -> [
 ///
 /// Pure table lookup — no math. The 1KB table fits in L1 cache.
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features (e.g. inside
-/// an `#[arcane]` function taking `X64V4Token`). The token proves CPU support.
+/// The `X64V4Token` parameter proves AVX-512 support at compile time.
+/// Call from inside an `#[arcane]` function for zero-overhead inlining.
 #[rite]
 pub fn srgb_u8_to_linear_v4(_token: X64V4Token, srgb: [u8; 16]) -> [f32; 16] {
     let lut = &crate::const_luts::LINEAR_TABLE_8;
@@ -167,9 +157,7 @@ pub fn srgb_u8_to_linear_v4(_token: X64V4Token, srgb: [u8; 16]) -> [f32; 16] {
 
 /// Convert sRGB u8 values to linear f32 using 16-wide LUT lookup.
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[rite]
 pub fn srgb_u8_to_linear_slice_v4(_token: X64V4Token, input: &[u8], output: &mut [f32]) {
     assert_eq!(input.len(), output.len());
@@ -192,10 +180,8 @@ pub fn srgb_u8_to_linear_slice_v4(_token: X64V4Token, input: &[u8], output: &mut
 /// provably safe bounds. SIMD accelerates the clamp and scale; lookups
 /// are scalar from an L1-resident 4KB table.
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features (e.g. inside
-/// an `#[arcane]` function taking `X64V4Token`). The token proves CPU support.
+/// The `X64V4Token` parameter proves AVX-512 support at compile time.
+/// Call from inside an `#[arcane]` function for zero-overhead inlining.
 #[rite]
 pub fn linear_to_srgb_u8_v4(token: X64V4Token, linear: [f32; 16]) -> [u8; 16] {
     let zero = mt_f32x16::zero(token);
@@ -230,9 +216,7 @@ pub fn linear_to_srgb_u8_v4(token: X64V4Token, linear: [f32; 16]) -> [u8; 16] {
 
 /// Convert sRGB f32 values to linear in-place using 16-wide SIMD.
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[rite]
 pub fn srgb_to_linear_slice_v4(token: X64V4Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
@@ -248,9 +232,7 @@ pub fn srgb_to_linear_slice_v4(token: X64V4Token, values: &mut [f32]) {
 
 /// Convert linear f32 values to sRGB in-place using 16-wide SIMD.
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[rite]
 pub fn linear_to_srgb_slice_v4(token: X64V4Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
@@ -266,9 +248,7 @@ pub fn linear_to_srgb_slice_v4(token: X64V4Token, values: &mut [f32]) {
 
 /// Convert gamma-encoded f32 values to linear in-place using 16-wide SIMD.
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[rite]
 pub fn gamma_to_linear_slice_v4(token: X64V4Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
@@ -284,9 +264,7 @@ pub fn gamma_to_linear_slice_v4(token: X64V4Token, values: &mut [f32], gamma: f3
 
 /// Convert linear f32 values to gamma-encoded in-place using 16-wide SIMD.
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[rite]
 pub fn linear_to_gamma_slice_v4(token: X64V4Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
@@ -302,9 +280,7 @@ pub fn linear_to_gamma_slice_v4(token: X64V4Token, values: &mut [f32], gamma: f3
 
 /// Convert linear f32 values to sRGB u8 using 16-wide SIMD + LUT.
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[rite]
 pub fn linear_to_srgb_u8_slice_v4(token: X64V4Token, input: &[f32], output: &mut [u8]) {
     assert_eq!(input.len(), output.len());

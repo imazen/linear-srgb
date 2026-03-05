@@ -33,10 +33,8 @@ const TWELVE_92: f32 = 12.92;
 
 /// Convert 4 sRGB values to linear. Input clamped to \[0, 1\].
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features (e.g. inside
-/// an `#[arcane]` function taking `NeonToken`). The token proves CPU support.
+/// The `NeonToken` parameter proves NEON support at compile time.
+/// Call from inside an `#[arcane]` function for zero-overhead inlining.
 #[cfg(target_arch = "aarch64")]
 #[rite]
 pub fn srgb_to_linear_neon(token: NeonToken, srgb: [f32; 4]) -> [f32; 4] {
@@ -68,9 +66,7 @@ pub fn srgb_to_linear_neon(token: NeonToken, srgb: [f32; 4]) -> [f32; 4] {
 
 /// Convert 4 linear values to sRGB. Input clamped to \[0, 1\].
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "aarch64")]
 #[rite]
 pub fn linear_to_srgb_neon(token: NeonToken, linear: [f32; 4]) -> [f32; 4] {
@@ -102,9 +98,7 @@ pub fn linear_to_srgb_neon(token: NeonToken, linear: [f32; 4]) -> [f32; 4] {
 
 /// Convert 4 gamma-encoded values to linear. Input clamped to \[0, 1\].
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "aarch64")]
 #[rite]
 pub fn gamma_to_linear_neon(token: NeonToken, encoded: [f32; 4], gamma: f32) -> [f32; 4] {
@@ -116,9 +110,7 @@ pub fn gamma_to_linear_neon(token: NeonToken, encoded: [f32; 4], gamma: f32) -> 
 
 /// Convert 4 linear values to gamma-encoded. Input clamped to \[0, 1\].
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "aarch64")]
 #[rite]
 pub fn linear_to_gamma_neon(token: NeonToken, linear: [f32; 4], gamma: f32) -> [f32; 4] {
@@ -130,9 +122,7 @@ pub fn linear_to_gamma_neon(token: NeonToken, linear: [f32; 4], gamma: f32) -> [
 
 /// Convert sRGB f32 values to linear in-place using 4-wide NEON SIMD.
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "aarch64")]
 #[rite]
 pub fn srgb_to_linear_slice_neon(token: NeonToken, values: &mut [f32]) {
@@ -149,9 +139,7 @@ pub fn srgb_to_linear_slice_neon(token: NeonToken, values: &mut [f32]) {
 
 /// Convert linear f32 values to sRGB in-place using 4-wide NEON SIMD.
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "aarch64")]
 #[rite]
 pub fn linear_to_srgb_slice_neon(token: NeonToken, values: &mut [f32]) {
@@ -168,9 +156,7 @@ pub fn linear_to_srgb_slice_neon(token: NeonToken, values: &mut [f32]) {
 
 /// Convert gamma-encoded f32 values to linear in-place using 4-wide NEON SIMD.
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "aarch64")]
 #[rite]
 pub fn gamma_to_linear_slice_neon(token: NeonToken, values: &mut [f32], gamma: f32) {
@@ -187,9 +173,7 @@ pub fn gamma_to_linear_slice_neon(token: NeonToken, values: &mut [f32], gamma: f
 
 /// Convert linear f32 values to gamma-encoded in-place using 4-wide NEON SIMD.
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "aarch64")]
 #[rite]
 pub fn linear_to_gamma_slice_neon(token: NeonToken, values: &mut [f32], gamma: f32) {
@@ -210,10 +194,8 @@ pub fn linear_to_gamma_slice_neon(token: NeonToken, values: &mut [f32], gamma: f
 
 /// Convert 4 sRGB values to linear. Input clamped to \[0, 1\].
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features (e.g. inside
-/// an `#[arcane]` function taking `Wasm128Token`).
+/// The `Wasm128Token` parameter proves SIMD128 support at compile time.
+/// Call from inside an `#[arcane]` function for zero-overhead inlining.
 #[cfg(target_arch = "wasm32")]
 #[rite]
 pub fn srgb_to_linear_wasm128(token: Wasm128Token, srgb: [f32; 4]) -> [f32; 4] {
@@ -245,9 +227,7 @@ pub fn srgb_to_linear_wasm128(token: Wasm128Token, srgb: [f32; 4]) -> [f32; 4] {
 
 /// Convert 4 linear values to sRGB. Input clamped to \[0, 1\].
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "wasm32")]
 #[rite]
 pub fn linear_to_srgb_wasm128(token: Wasm128Token, linear: [f32; 4]) -> [f32; 4] {
@@ -279,9 +259,7 @@ pub fn linear_to_srgb_wasm128(token: Wasm128Token, linear: [f32; 4]) -> [f32; 4]
 
 /// Convert 4 gamma-encoded values to linear. Input clamped to \[0, 1\].
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "wasm32")]
 #[rite]
 pub fn gamma_to_linear_wasm128(token: Wasm128Token, encoded: [f32; 4], gamma: f32) -> [f32; 4] {
@@ -293,9 +271,7 @@ pub fn gamma_to_linear_wasm128(token: Wasm128Token, encoded: [f32; 4], gamma: f3
 
 /// Convert 4 linear values to gamma-encoded. Input clamped to \[0, 1\].
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "wasm32")]
 #[rite]
 pub fn linear_to_gamma_wasm128(token: Wasm128Token, linear: [f32; 4], gamma: f32) -> [f32; 4] {
@@ -307,9 +283,7 @@ pub fn linear_to_gamma_wasm128(token: Wasm128Token, linear: [f32; 4], gamma: f32
 
 /// Convert sRGB f32 values to linear in-place using 4-wide WASM SIMD.
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "wasm32")]
 #[rite]
 pub fn srgb_to_linear_slice_wasm128(token: Wasm128Token, values: &mut [f32]) {
@@ -326,9 +300,7 @@ pub fn srgb_to_linear_slice_wasm128(token: Wasm128Token, values: &mut [f32]) {
 
 /// Convert linear f32 values to sRGB in-place using 4-wide WASM SIMD.
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "wasm32")]
 #[rite]
 pub fn linear_to_srgb_slice_wasm128(token: Wasm128Token, values: &mut [f32]) {
@@ -345,9 +317,7 @@ pub fn linear_to_srgb_slice_wasm128(token: Wasm128Token, values: &mut [f32]) {
 
 /// Convert gamma-encoded f32 values to linear in-place using 4-wide WASM SIMD.
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "wasm32")]
 #[rite]
 pub fn gamma_to_linear_slice_wasm128(token: Wasm128Token, values: &mut [f32], gamma: f32) {
@@ -364,9 +334,7 @@ pub fn gamma_to_linear_slice_wasm128(token: Wasm128Token, values: &mut [f32], ga
 
 /// Convert linear f32 values to gamma-encoded in-place using 4-wide WASM SIMD.
 ///
-/// # Safety
-///
-/// Safe when called from a context with matching target features.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "wasm32")]
 #[rite]
 pub fn linear_to_gamma_slice_wasm128(token: Wasm128Token, values: &mut [f32], gamma: f32) {

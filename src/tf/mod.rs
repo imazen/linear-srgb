@@ -1,25 +1,20 @@
 //! Transfer function implementations for sRGB, BT.709, PQ, and HLG.
 //!
-//! Provides scalar, generic SIMD (x4/x8), and platform-specific `#[rite]` functions.
+//! This module provides scalar functions for all four transfer curves.
+//! SIMD `#[rite]` versions are in [`crate::tokens`] (x4/x8/x16).
 //!
 //! # Scalar functions
 //!
-//! | Function | Transfer | Direction |
+//! | Function | Transfer | Method |
 //! |---|---|---|
-//! | `srgb_to_linear` | sRGB (rational polynomial) | encoded → linear |
-//! | `linear_to_srgb` | sRGB (rational polynomial) | linear → encoded |
-//! | `bt709_to_linear` | BT.709 (fast_powf) | encoded → linear |
-//! | `linear_to_bt709` | BT.709 (fast_powf) | linear → encoded |
-//! | `pq_to_linear` | PQ ST 2084 (rational polynomial) | signal → linear |
-//! | `linear_to_pq` | PQ ST 2084 (rational polynomial) | linear → signal |
-//! | `hlg_to_linear` | HLG ARIB STD-B67 (fast_pow2f) | signal → linear |
-//! | `linear_to_hlg` | HLG ARIB STD-B67 (fast_log2f) | linear → signal |
-//!
-//! # SIMD `#[rite]` functions
-//!
-//! Available in `crate::tokens::x8` (AVX2+FMA), `crate::tokens::x4` (NEON, WASM),
-//! and `crate::tokens::x16` (AVX-512). All operate on `[f32; N]` arrays at the
-//! public boundary.
+//! | `srgb_to_linear` | sRGB | rational polynomial |
+//! | `linear_to_srgb` | sRGB | rational polynomial |
+//! | `bt709_to_linear` | BT.709 | fast_powf approximation |
+//! | `linear_to_bt709` | BT.709 | fast_powf approximation |
+//! | `pq_to_linear` | PQ ST 2084 | rational polynomial |
+//! | `linear_to_pq` | PQ ST 2084 | rational polynomial |
+//! | `hlg_to_linear` | HLG ARIB STD-B67 | fast_pow2f approximation |
+//! | `linear_to_hlg` | HLG ARIB STD-B67 | fast_log2f approximation |
 //!
 //! # Accuracy
 //!

@@ -241,7 +241,7 @@ impl SrgbConverter {
 
     /// Batch convert linear f32 values to sRGB u8.
     ///
-    /// Uses [`crate::simd::linear_to_srgb_u8_slice`] for SIMD-accelerated
+    /// Uses [`crate::default::linear_to_srgb_u8_slice`] for SIMD-accelerated
     /// index computation with LUT lookup.
     #[inline]
     pub fn batch_linear_to_srgb(&self, input: &[f32], output: &mut [u8]) {

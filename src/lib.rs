@@ -1,14 +1,16 @@
 //! Fast linear↔sRGB color space conversion.
 //!
 //! This crate provides efficient conversion between linear light values and
-//! sRGB gamma-encoded values following the IEC 61966-2-1:1999 standard.
+//! sRGB gamma-encoded values, with multiple implementation strategies for
+//! different accuracy/performance tradeoffs.
 //!
 //! # Module Organization
 //!
-//! - [`default`] - **Recommended API** with optimal implementations for each use case
-//! - [`precise`] - Exact `powf()`-based conversions with C0-continuous constants (f32/f64, extended-range)
-//! - [`tokens`] - Token-gated `#[rite]` functions for embedding in `#[arcane]` code
-//! - [`lut`] - Lookup table types for custom bit depths
+//! - [`default`] — **Start here.** Rational polynomial for f32, LUT for integers, SIMD for slices.
+//! - [`precise`] — Exact `powf()` with C0-continuous constants. f32/f64, extended range. Slower.
+//! - [`tokens`] — Inlineable `#[rite]` functions for embedding in your own `#[arcane]` SIMD code.
+//! - [`lut`] — Lookup tables for custom bit depths (10-bit, 12-bit, 16-bit).
+//! - [`tf`] — Transfer functions beyond sRGB: BT.709, PQ, HLG. Requires `transfer` feature.
 //!
 //! # Quick Start
 //!
@@ -69,7 +71,9 @@
 //! | Single u8 value | [`default::srgb_u8_to_linear`] |
 //! | f32 slice (in-place) | [`default::srgb_to_linear_slice`] |
 //! | u8 slice → f32 slice | [`default::srgb_u8_to_linear_slice`] |
-//! | Inside `#[arcane]` (token) | [`tokens::x8::srgb_to_linear_v3`] |
+//! | Exact f32/f64 (powf) | [`precise::srgb_to_linear`] |
+//! | Extended range (HDR) | [`precise::srgb_to_linear_extended`] |
+//! | Inside `#[arcane]` | `tokens::x8::srgb_to_linear_v3` |
 //! | Custom bit depth LUT | [`lut::LinearTable16`] |
 //!
 //! # Clamping and Extended Range
@@ -150,15 +154,19 @@
 //!
 //! # Feature Flags
 //!
-//! - `std` (default): Enable std library support
-//! - `unsafe_simd`: Enable unsafe optimizations for maximum performance
+//! - **`std`** (default) — Enable runtime SIMD dispatch. Required for slice functions.
+//! - **`avx512`** (default) — Enable AVX-512 code paths and `tokens::x16` module.
+//! - **`transfer`** — BT.709, PQ, and HLG transfer functions in [`tf`] and [`tokens`].
+//! - **`alt`** — Alternative implementations for benchmarking (not stable API).
+//! - **`unsafe_simd`** — Union-based bit manipulation in SIMD paths.
 //!
 //! # `no_std` Support
 //!
-//! This crate is `no_std` compatible. Disable the `std` feature:
+//! This crate is `no_std` compatible (requires `alloc` for LUT generation).
+//! Disable the `std` feature:
 //!
 //! ```toml
-//! linear-srgb = { version = "0.2", default-features = false }
+//! linear-srgb = { version = "0.5", default-features = false }
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -177,55 +185,56 @@ extern crate std;
 
 /// Recommended API with optimal implementations for each use case.
 ///
-/// Fast rational polynomial for single values, SIMD-dispatched for slices,
-/// LUT for integer types. See module documentation for details.
+/// Uses a libjxl rational polynomial for single f32 values (~110 ULP max at
+/// the piecewise threshold, <8 ULP elsewhere), LUT for integer types, and
+/// SIMD-dispatched batch processing for slices.
 pub mod default;
 
-/// Exact conversion functions using `powf()` with C0-continuous constants.
+/// Exact `powf()`-based conversions with C0-continuous constants.
 ///
 /// Uses adjusted constants (from the moxcms reference implementation) that
-/// eliminate the IEC 61966-2-1 piecewise discontinuity. See the module docs
-/// for the constant comparison table.
+/// eliminate the IEC 61966-2-1 piecewise discontinuity. ~6 ULP max error
+/// vs f64 reference. See the module docs for the constant comparison table.
 ///
-/// Provides f32/f64 sRGB, extended-range, and custom gamma f64 functions.
+/// Also provides f64, extended-range (unclamped), and custom gamma functions.
 /// For faster alternatives, use [`default`].
 pub mod precise;
 
 /// Lookup table types for sRGB conversion.
 ///
 /// Provides both build-time const tables ([`SrgbConverter`](lut::SrgbConverter))
-/// and runtime-generated tables for custom bit depths.
+/// and runtime-generated tables for custom bit depths (10-bit, 12-bit, 16-bit).
 pub mod lut;
 
-/// Token-gated `#[rite]` functions for embedding in your own `#[arcane]` code.
+/// Inlineable `#[rite]` functions for embedding in your own `#[arcane]` code.
 ///
 /// These carry `#[target_feature]` + `#[inline]` directly — no wrapper, no
 /// dispatch. When called from a matching `#[arcane]` context, LLVM inlines
-/// them fully. Organized by SIMD unit width; suffixed by required token tier.
+/// them fully. Organized by SIMD width; suffixed by required token tier.
+///
+/// Also re-exports token types for convenience: `X64V3Token`, `X64V4Token`,
+/// `NeonToken`, `Wasm128Token` (each gated to its target architecture).
 ///
 /// When the `transfer` feature is enabled, each width module also provides
-/// rites for BT.709, PQ, and HLG.
+/// rites for BT.709, PQ, and HLG (prefixed with `tf_` for sRGB to avoid
+/// name collisions with the rational polynomial sRGB rites).
 pub mod tokens;
 
 /// Transfer functions: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).
 ///
-/// Scalar functions and `fast_math` utilities. SIMD rites for these TFs
-/// are in [`tokens`].
+/// Provides scalar functions for all four transfer curves. SIMD `#[rite]`
+/// versions live in [`tokens`] (x4/x8/x16).
 ///
 /// Requires the `transfer` feature.
 #[cfg(feature = "transfer")]
 pub mod tf;
 
 // ============================================================================
-// Internal modules (pub(crate) — not part of the public API)
+// Internal modules
 // ============================================================================
 
 pub(crate) mod scalar;
 pub(crate) mod simd;
-
-// ============================================================================
-// Internal modules
-// ============================================================================
 
 mod mlaf;
 

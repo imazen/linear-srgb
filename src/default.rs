@@ -1,17 +1,20 @@
 //! Recommended API for sRGB ↔ linear conversion.
 //!
-//! This module provides the optimal implementation for each use case:
+//! This module re-exports the optimal implementation for each use case:
 //!
-//! - **Single f32 values**: Rational polynomial (~8 ULP, no `powf`)
+//! - **Single f32 values**: Rational polynomial (~110 ULP max at the piecewise
+//!   threshold, <8 ULP elsewhere — no `powf`)
 //! - **Single u8/u16 values**: LUT lookup (zero math)
 //! - **Slices**: SIMD-accelerated with runtime CPU dispatch
+//! - **Custom gamma**: Pure power function (f32, slices)
+//!
+//! For exact `powf()` conversions with C0-continuous constants, see [`crate::precise`].
 //!
 //! # Quick Start
 //!
 //! ```rust
 //! use linear_srgb::default::{srgb_to_linear, linear_to_srgb};
 //!
-//! // Single value conversion (fast rational polynomial)
 //! let linear = srgb_to_linear(0.5);
 //! let srgb = linear_to_srgb(linear);
 //! ```
@@ -27,7 +30,7 @@
 //! ```
 
 // ============================================================================
-// Single-value sRGB f32 (rational polynomial — fast, ~8 ULP)
+// Single-value sRGB f32 (rational polynomial — fast, ~110 ULP max at threshold)
 // ============================================================================
 
 pub use crate::rational_poly::{

@@ -7,12 +7,15 @@
 //! method: 4 `mul_add` + 1 `div` per direction. Much faster and more accurate
 //! than the degree-11/15 Chebyshev polynomials they replace.
 //!
-//! # Accuracy
+//! # Accuracy (exhaustive f32 sweep)
 //!
-//! | Direction | Max ULP vs f64 | Avg ULP |
-//! |---|---|---|
-//! | sRGB → linear | ~8 | ~1 |
-//! | linear → sRGB | ~8 | ~1 |
+//! | Direction | Max ULP (power segment) | Max ULP (overall) | Avg ULP |
+//! |---|---|---|---|
+//! | sRGB → linear | ~8 | 110 (at threshold) | 0.55 |
+//! | linear → sRGB | ~8 | 31 (at threshold) | 0.37 |
+//!
+//! The overall max occurs at the piecewise threshold where the linear segment
+//! meets the polynomial. Away from the threshold, error is <8 ULP.
 
 // =============================================================================
 // Coefficients (lowest-degree-first: p[0] + p[1]*x + p[2]*x^2 + ...)
@@ -98,11 +101,11 @@ fn eval_rational_poly_5(x: f32, p: [f32; 5], q: [f32; 5]) -> f32 {
 
 /// Convert sRGB gamma-encoded value to linear light using a rational polynomial (f32).
 ///
-/// Same as [`crate::scalar::srgb_to_linear`] but replaces `powf()` with a 5/5
-/// rational polynomial. Faster than both powf and the old Chebyshev polynomial,
-/// and more accurate (~8 ULP max vs ~221 ULP).
+/// Replaces `powf()` with a 5/5 rational polynomial (Horner's method).
+/// Max error: 110 ULP at the piecewise threshold, <8 ULP elsewhere.
+/// Uses IEC 61966-2-1 thresholds (the polynomial was fitted to the IEC power curve).
 ///
-/// **Clamps** inputs to \[0, 1\].
+/// **Clamps** inputs to \[0, 1\]. For exact `powf()`, see [`crate::precise::srgb_to_linear`].
 #[inline]
 pub fn srgb_to_linear_fast(gamma: f32) -> f32 {
     if gamma < 0.0 {
@@ -119,10 +122,11 @@ pub fn srgb_to_linear_fast(gamma: f32) -> f32 {
 
 /// Convert linear light value to sRGB gamma-encoded using a rational polynomial (f32).
 ///
-/// Same as [`crate::scalar::linear_to_srgb`] but replaces `powf()` with sqrt +
-/// 5/5 rational polynomial. Faster and more accurate (~8 ULP max vs ~294 ULP).
+/// Uses sqrt + 5/5 rational polynomial (Horner's method).
+/// Max error: 31 ULP at the piecewise threshold, <8 ULP elsewhere.
+/// Uses IEC 61966-2-1 thresholds (the polynomial was fitted to the IEC power curve).
 ///
-/// **Clamps** inputs to \[0, 1\].
+/// **Clamps** inputs to \[0, 1\]. For exact `powf()`, see [`crate::precise::linear_to_srgb`].
 #[inline]
 pub fn linear_to_srgb_fast(linear: f32) -> f32 {
     if linear < 0.0 {
