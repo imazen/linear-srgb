@@ -872,6 +872,136 @@ fn bench_mage(_c: &mut Criterion) {
     // No-op when mage feature is disabled
 }
 
+// ============================================================================
+// Tier Isolation Benchmarks
+// ============================================================================
+//
+// Tests all incant!-dispatched slice functions at each token tier by using
+// dangerously_disable_token_process_wide to force dispatch fallback.
+// This verifies real-world perf through the actual dispatch path, not just
+// direct rite calls.
+
+fn bench_dispatched_at_tier(c: &mut Criterion, tier: &str) {
+    #[cfg(target_arch = "x86_64")]
+    {
+        use archmage::SimdToken;
+        match tier {
+            "scalar" => {
+                if archmage::Desktop64::dangerously_disable_token_process_wide(true).is_err() {
+                    eprintln!(
+                        "Cannot disable V3 (compile-time guaranteed). \
+                         Build without -Ctarget-cpu=native or enable testable_dispatch."
+                    );
+                    return;
+                }
+            }
+            "v3" => {
+                let _ = archmage::Desktop64::dangerously_disable_token_process_wide(false);
+                if archmage::Desktop64::summon().is_none() {
+                    eprintln!("V3 (AVX2+FMA) not available on this CPU. Skipping.");
+                    return;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let group_name = format!("tier_{tier}");
+    let mut group = c.benchmark_group(&group_name);
+    group.throughput(Throughput::Elements(BATCH_SIZE as u64));
+
+    let f32_srgb = create_f32_srgb();
+    let f32_linear = create_f32_linear();
+    let u8_data = create_u8_srgb();
+    let u16_data = create_u16_srgb();
+    let lut8 = LinearTable8::new();
+    let linear_from_u8: Vec<f32> = u8_data.iter().map(|&v| lut8.lookup(v as usize)).collect();
+
+    // --- Dispatched f32 in-place (incant! → v3 or scalar) ---
+
+    group.bench_function("srgb_to_linear_slice", |b| {
+        let mut buf = f32_srgb.clone();
+        b.iter(|| {
+            buf.copy_from_slice(&f32_srgb);
+            simd::srgb_to_linear_slice(black_box(&mut buf));
+        })
+    });
+
+    group.bench_function("linear_to_srgb_slice", |b| {
+        let mut buf = f32_linear.clone();
+        b.iter(|| {
+            buf.copy_from_slice(&f32_linear);
+            simd::linear_to_srgb_slice(black_box(&mut buf));
+        })
+    });
+
+    group.bench_function("gamma_to_linear_slice_2.2", |b| {
+        let mut buf = f32_srgb.clone();
+        b.iter(|| {
+            buf.copy_from_slice(&f32_srgb);
+            simd::gamma_to_linear_slice(black_box(&mut buf), 2.2);
+        })
+    });
+
+    group.bench_function("linear_to_gamma_slice_2.2", |b| {
+        let mut buf = f32_linear.clone();
+        b.iter(|| {
+            buf.copy_from_slice(&f32_linear);
+            simd::linear_to_gamma_slice(black_box(&mut buf), 2.2);
+        })
+    });
+
+    // --- LUT-based (no dispatch, should be identical across tiers) ---
+
+    group.bench_function("srgb_u8_to_linear_slice", |b| {
+        let mut output = vec![0.0f32; BATCH_SIZE];
+        b.iter(|| {
+            simd::srgb_u8_to_linear_slice(black_box(&u8_data), &mut output);
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("linear_to_srgb_u8_slice", |b| {
+        let mut output = vec![0u8; BATCH_SIZE];
+        b.iter(|| {
+            simd::linear_to_srgb_u8_slice(black_box(&linear_from_u8), &mut output);
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("srgb_u16_to_linear_slice", |b| {
+        let mut output = vec![0.0f32; BATCH_SIZE];
+        b.iter(|| {
+            simd::srgb_u16_to_linear_slice(black_box(&u16_data), &mut output);
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("linear_to_srgb_u16_slice", |b| {
+        let mut output = vec![0u16; BATCH_SIZE];
+        b.iter(|| {
+            simd::linear_to_srgb_u16_slice(black_box(&f32_linear), &mut output);
+            black_box(&output);
+        })
+    });
+
+    group.finish();
+
+    // Restore all tokens
+    #[cfg(target_arch = "x86_64")]
+    {
+        let _ = archmage::Desktop64::dangerously_disable_token_process_wide(false);
+    }
+}
+
+fn bench_tier_v3(c: &mut Criterion) {
+    bench_dispatched_at_tier(c, "v3");
+}
+
+fn bench_tier_scalar(c: &mut Criterion) {
+    bench_dispatched_at_tier(c, "scalar");
+}
+
 criterion_group!(
     benches,
     bench_srgb_to_linear,
@@ -880,6 +1010,8 @@ criterion_group!(
     bench_scaling,
     bench_dispatch_overhead,
     bench_mage,
+    bench_tier_v3,
+    bench_tier_scalar,
 );
 
 criterion_main!(benches);
