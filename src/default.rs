@@ -2,8 +2,8 @@
 //!
 //! This module re-exports the optimal implementation for each use case:
 //!
-//! - **Single f32 values**: Rational polynomial (~110 ULP max at the piecewise
-//!   threshold, <8 ULP elsewhere — no `powf`)
+//! - **Single f32 values**: Rational polynomial (~14 ULP max, perfectly
+//!   monotonic — no `powf`)
 //! - **Single u8/u16 values**: LUT lookup (zero math)
 //! - **Slices**: SIMD-accelerated with runtime CPU dispatch
 //! - **Custom gamma**: Pure power function (f32, slices)
@@ -30,7 +30,7 @@
 //! ```
 
 // ============================================================================
-// Single-value sRGB f32 (rational polynomial — fast, ~110 ULP max at threshold)
+// Single-value sRGB f32 (rational polynomial — fast, ≤14 ULP, monotonic)
 // ============================================================================
 
 pub use crate::rational_poly::{

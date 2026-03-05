@@ -11,6 +11,7 @@
 //! - [`tokens`] — Inlineable `#[rite]` functions for embedding in your own `#[arcane]` SIMD code.
 //! - [`lut`] — Lookup tables for custom bit depths (10-bit, 12-bit, 16-bit).
 //! - **`tf`** — Transfer functions beyond sRGB: BT.709, PQ, HLG. Requires `transfer` feature.
+//! - **`iec`** — IEC 61966-2-1 textbook constants (legacy interop). Requires `iec` feature.
 //!
 //! # Quick Start
 //!
@@ -160,6 +161,7 @@
 //! - **`std`** (default) — Enable runtime SIMD dispatch. Required for slice functions.
 //! - **`avx512`** (default) — Enable AVX-512 code paths and `tokens::x16` module.
 //! - **`transfer`** — BT.709, PQ, and HLG transfer functions in `tf` and [`tokens`].
+//! - **`iec`** — IEC 61966-2-1 textbook sRGB functions for legacy interop.
 //! - **`alt`** — Alternative implementations for benchmarking (not stable API).
 //! - **`unsafe_simd`** — Union-based bit manipulation in SIMD paths.
 //!
@@ -188,14 +190,14 @@ extern crate std;
 
 /// Recommended API with optimal implementations for each use case.
 ///
-/// Uses a libjxl rational polynomial for single f32 values (~110 ULP max at
-/// the piecewise threshold, <8 ULP elsewhere), LUT for integer types, and
-/// SIMD-dispatched batch processing for slices.
+/// Uses a rational polynomial for single f32 values (≤14 ULP, perfectly
+/// monotonic), LUT for integer types, and SIMD-dispatched batch processing
+/// for slices.
 pub mod default;
 
 /// Exact `powf()`-based conversions with C0-continuous constants.
 ///
-/// Uses adjusted constants (from the moxcms reference implementation) that
+/// Uses C0-continuous constants (from the moxcms reference implementation) that
 /// eliminate the IEC 61966-2-1 piecewise discontinuity. ~6 ULP max error
 /// vs f64 reference. See the module docs for the constant comparison table.
 ///
@@ -231,6 +233,17 @@ pub mod tokens;
 /// Requires the `transfer` feature.
 #[cfg(feature = "transfer")]
 pub mod tf;
+
+/// IEC 61966-2-1:1999 textbook sRGB transfer functions.
+///
+/// Provides the original specification constants (threshold 0.04045, offset 0.055)
+/// for interoperability with software that implements IEC 61966-2-1 verbatim.
+/// The default module uses C0-continuous constants that eliminate the spec's
+/// ~2.3e-9 piecewise discontinuity.
+///
+/// Requires the `iec` feature.
+#[cfg(feature = "iec")]
+pub mod iec;
 
 // ============================================================================
 // Internal modules

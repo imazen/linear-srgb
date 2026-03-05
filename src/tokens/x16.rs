@@ -12,7 +12,7 @@ pub use archmage::X64V4Token;
 
 use magetypes::simd::v4::f32x16 as mt_f32x16;
 
-// sRGB transfer function constants (IEC 61966-2-1, matching rational polynomial)
+// sRGB transfer function constants (C0-continuous moxcms, matching rational polynomial)
 const SRGB_LINEAR_THRESHOLD: f32 = 0.039_293_37;
 const LINEAR_THRESHOLD: f32 = 0.003_041_282_6;
 const LINEAR_SCALE: f32 = 1.0 / 12.92;

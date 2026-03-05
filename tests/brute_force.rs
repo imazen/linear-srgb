@@ -5,8 +5,8 @@
 //! value, and roundtrip through all paths.
 
 use linear_srgb::default::{
-    linear_to_srgb, linear_to_srgb_slice, linear_to_srgb_u16_slice, linear_to_srgb_u8_slice,
-    srgb_to_linear, srgb_to_linear_slice, srgb_u16_to_linear_slice, srgb_u8_to_linear_slice,
+    linear_to_srgb, linear_to_srgb_slice, linear_to_srgb_u8_slice, linear_to_srgb_u16_slice,
+    srgb_to_linear, srgb_to_linear_slice, srgb_u8_to_linear_slice, srgb_u16_to_linear_slice,
 };
 use linear_srgb::precise::{
     linear_to_srgb as precise_l2s, linear_to_srgb_extended as precise_l2s_ext,
@@ -469,8 +469,7 @@ fn every_u16_roundtrip() {
         }
     }
 
-    let pct_exact =
-        100.0 * (65536 - off_by_one - off_by_more) as f64 / 65536.0;
+    let pct_exact = 100.0 * (65536 - off_by_one - off_by_more) as f64 / 65536.0;
     eprintln!(
         "u16 roundtrip: max diff = {max_diff}, off-by-1 = {off_by_one}, \
          off-by-more = {off_by_more}, exact = {pct_exact:.1}%"
@@ -580,9 +579,7 @@ fn simd_slice_roundtrip_exhaustive_u16_range() {
         if err > u16_step {
             over_u16 += 1;
             if over_u16 <= 5 {
-                eprintln!(
-                    "  SIMD roundtrip over U16 at {i}: {orig} → {back}, err={err:.2e}"
-                );
+                eprintln!("  SIMD roundtrip over U16 at {i}: {orig} → {back}, err={err:.2e}");
             }
         }
     }
@@ -835,9 +832,7 @@ fn extended_s2l_above_one_exhaustive() {
         v = next_f32_above(v);
     }
 
-    eprintln!(
-        "s2l_extended [1+eps, 8]: {count} values, max ULP = {max_ulp} at {worst_input}"
-    );
+    eprintln!("s2l_extended [1+eps, 8]: {count} values, max ULP = {max_ulp} at {worst_input}");
     // powf f32 vs f64: expect same ~6 ULP budget as [0,1]
     assert!(
         max_ulp <= 10,
@@ -867,9 +862,7 @@ fn extended_l2s_above_one_exhaustive() {
         v = next_f32_above(v);
     }
 
-    eprintln!(
-        "l2s_extended [1+eps, 8]: {count} values, max ULP = {max_ulp} at {worst_input}"
-    );
+    eprintln!("l2s_extended [1+eps, 8]: {count} values, max ULP = {max_ulp} at {worst_input}");
     assert!(
         max_ulp <= 10,
         "l2s_extended max ULP {max_ulp} at {worst_input} exceeds 10"
@@ -909,9 +902,7 @@ fn extended_s2l_negative_exhaustive() {
         v = next_f32_toward_zero_neg(v);
     }
 
-    eprintln!(
-        "s2l_extended [-1, 0): {count} values, max ULP = {max_ulp} at {worst_input}"
-    );
+    eprintln!("s2l_extended [-1, 0): {count} values, max ULP = {max_ulp} at {worst_input}");
     // Linear segment: v / 12.92 — single f32 division, expect ≤ 1 ULP
     assert!(
         max_ulp <= 1,
@@ -938,9 +929,7 @@ fn extended_l2s_negative_exhaustive() {
         v = next_f32_toward_zero_neg(v);
     }
 
-    eprintln!(
-        "l2s_extended [-1, 0): {count} values, max ULP = {max_ulp} at {worst_input}"
-    );
+    eprintln!("l2s_extended [-1, 0): {count} values, max ULP = {max_ulp} at {worst_input}");
     // Linear segment: v * 12.92 — single f32 multiply, expect ≤ 1 ULP
     assert!(
         max_ulp <= 1,
@@ -1035,9 +1024,7 @@ fn extended_roundtrip_negative() {
         v = next_f32_toward_zero_neg(v);
     }
 
-    eprintln!(
-        "roundtrip s2l->l2s [-1, 0): {count} values, max ULP = {max_ulp} at {worst_input}"
-    );
+    eprintln!("roundtrip s2l->l2s [-1, 0): {count} values, max ULP = {max_ulp} at {worst_input}");
     // Both directions use the linear segment (multiply then divide).
     // Near zero, subnormal f32 values lose precision in the divide→multiply
     // chain, producing up to ~6 ULP error at the smallest subnormals.
@@ -1194,4 +1181,373 @@ fn extended_continuity_at_one() {
     eprintln!("Continuity at 1.0: s2l gap = {s2l_gap} ULP, l2s gap = {l2s_gap} ULP");
     assert!(s2l_gap <= 4, "s2l_ext gap at 1.0: {s2l_gap} ULP");
     assert!(l2s_gap <= 4, "l2s_ext gap at 1.0: {l2s_gap} ULP");
+}
+
+// ============================================================================
+// NaN, Infinity, and special float handling
+// ============================================================================
+
+#[test]
+fn nan_handling() {
+    let nan = f32::NAN;
+
+    // Clamped functions: NaN should produce 0.0 (NaN < 0.0 is false,
+    // NaN >= 1.0 is false, so it falls through to the power segment.
+    // We don't require specific NaN handling — just verify no panic.
+    let s2l = srgb_to_linear(nan);
+    let l2s = linear_to_srgb(nan);
+    // The result is implementation-defined (NaN through polynomial),
+    // but the function must not panic.
+    let _ = (s2l, l2s);
+
+    // Precise (powf) clamped: same — NaN falls through to powf(NaN) = NaN
+    let ps2l = precise_s2l(nan);
+    let pl2s = precise_l2s(nan);
+    let _ = (ps2l, pl2s);
+
+    // Extended: NaN through the linear segment or power segment
+    let es2l = precise_s2l_ext(nan);
+    let el2s = precise_l2s_ext(nan);
+    let _ = (es2l, el2s);
+
+    // SIMD slice: NaN in a slice must not panic or corrupt other values
+    let mut buf = [0.5_f32, nan, 0.5, nan];
+    srgb_to_linear_slice(&mut buf);
+    // Non-NaN values should be correctly converted
+    assert!(!buf[0].is_nan(), "SIMD s2l corrupted non-NaN value");
+    assert!(!buf[2].is_nan(), "SIMD s2l corrupted non-NaN value");
+
+    let mut buf2 = [0.5_f32, nan, 0.5, nan];
+    linear_to_srgb_slice(&mut buf2);
+    assert!(!buf2[0].is_nan(), "SIMD l2s corrupted non-NaN value");
+    assert!(!buf2[2].is_nan(), "SIMD l2s corrupted non-NaN value");
+}
+
+#[test]
+fn infinity_handling() {
+    let inf = f32::INFINITY;
+    let neg_inf = f32::NEG_INFINITY;
+
+    // Clamped: +inf should clamp to 1.0, -inf to 0.0
+    assert_eq!(srgb_to_linear(inf), 1.0, "s2l(+inf) should clamp to 1.0");
+    assert_eq!(
+        srgb_to_linear(neg_inf),
+        0.0,
+        "s2l(-inf) should clamp to 0.0"
+    );
+    assert_eq!(linear_to_srgb(inf), 1.0, "l2s(+inf) should clamp to 1.0");
+    assert_eq!(
+        linear_to_srgb(neg_inf),
+        0.0,
+        "l2s(-inf) should clamp to 0.0"
+    );
+
+    // Precise clamped
+    assert_eq!(
+        precise_s2l(inf),
+        1.0,
+        "precise s2l(+inf) should clamp to 1.0"
+    );
+    assert_eq!(
+        precise_s2l(neg_inf),
+        0.0,
+        "precise s2l(-inf) should clamp to 0.0"
+    );
+    assert_eq!(
+        precise_l2s(inf),
+        1.0,
+        "precise l2s(+inf) should clamp to 1.0"
+    );
+    assert_eq!(
+        precise_l2s(neg_inf),
+        0.0,
+        "precise l2s(-inf) should clamp to 0.0"
+    );
+
+    // SIMD slice: inf values should clamp, not corrupt neighbors
+    let mut buf = [0.5_f32, inf, 0.5, neg_inf];
+    srgb_to_linear_slice(&mut buf);
+    assert!(
+        buf[0] > 0.0 && buf[0] < 1.0,
+        "SIMD s2l corrupted non-inf value"
+    );
+    assert_eq!(buf[1], 1.0, "SIMD s2l(+inf) should be 1.0");
+    assert!(
+        buf[2] > 0.0 && buf[2] < 1.0,
+        "SIMD s2l corrupted non-inf value"
+    );
+    assert_eq!(buf[3], 0.0, "SIMD s2l(-inf) should be 0.0");
+}
+
+#[test]
+fn negative_zero_handling() {
+    let neg_zero = -0.0_f32;
+
+    // All functions should treat -0.0 like 0.0
+    assert_eq!(srgb_to_linear(neg_zero), 0.0, "s2l(-0) should be 0.0");
+    assert_eq!(linear_to_srgb(neg_zero), 0.0, "l2s(-0) should be 0.0");
+    assert_eq!(precise_s2l(neg_zero), 0.0, "precise s2l(-0) should be 0.0");
+    assert_eq!(precise_l2s(neg_zero), 0.0, "precise l2s(-0) should be 0.0");
+
+    let mut buf = [-0.0_f32, -0.0, -0.0, -0.0];
+    srgb_to_linear_slice(&mut buf);
+    assert!(
+        buf.iter().all(|&x| x == 0.0),
+        "SIMD s2l(-0) should all be 0.0"
+    );
+}
+
+// ============================================================================
+// Const LUT verification: ensure embedded tables match runtime computation
+// ============================================================================
+
+#[test]
+fn const_lut_u8_matches_precise() {
+    use linear_srgb::lut::SrgbConverter;
+
+    let conv = SrgbConverter::new();
+
+    // Every u8 entry in the const LUT must match precise f64 computation
+    for i in 0..=255u8 {
+        let lut_val = conv.srgb_u8_to_linear(i);
+        let precise_val = precise_s2l_f64(i as f64 / 255.0) as f32;
+        let ulp = ulp_distance(lut_val, precise_val);
+        assert!(
+            ulp <= 1,
+            "u8 LUT[{i}] = {lut_val}, precise = {precise_val}, ULP = {ulp}"
+        );
+    }
+}
+
+#[test]
+fn const_lut_u8_cross_check() {
+    use linear_srgb::default::srgb_u8_to_linear;
+    use linear_srgb::lut::SrgbConverter;
+
+    let conv = SrgbConverter::new();
+
+    // The two u8→linear paths (scalar LUT and SrgbConverter const LUT)
+    // must produce identical results for all 256 values.
+    for i in 0..=255u8 {
+        let scalar = srgb_u8_to_linear(i);
+        let converter = conv.srgb_u8_to_linear(i);
+        assert_eq!(
+            scalar.to_bits(),
+            converter.to_bits(),
+            "u8→linear mismatch at {i}: scalar={scalar}, converter={converter}"
+        );
+    }
+}
+
+#[test]
+fn const_lut_u16_linearization_matches_precise() {
+    use linear_srgb::default::srgb_u16_to_linear;
+
+    // Verify every u16 entry against f64 reference
+    let mut max_ulp = 0u32;
+    let mut worst = 0u16;
+    for i in 0..=65535u16 {
+        let lut_val = srgb_u16_to_linear(i);
+        let precise_val = precise_s2l_f64(i as f64 / 65535.0) as f32;
+        let ulp = ulp_distance(lut_val, precise_val);
+        if ulp > max_ulp {
+            max_ulp = ulp;
+            worst = i;
+        }
+    }
+    eprintln!("u16 linearization LUT: max ULP = {max_ulp} at {worst}");
+    // Const LUT was generated with f64, so should be ≤1 ULP
+    assert!(
+        max_ulp <= 1,
+        "u16 linearization LUT max ULP {max_ulp} at {worst} exceeds 1"
+    );
+}
+
+#[test]
+fn const_lut_u16_encoding_matches_precise() {
+    use linear_srgb::default::linear_to_srgb_u16;
+
+    // Verify encoding LUT for uniformly spaced linear values
+    let mut max_diff = 0u32;
+    let mut worst = 0u16;
+    for i in 0..=65535u16 {
+        let linear = i as f32 / 65535.0;
+        let lut_val = linear_to_srgb_u16(linear);
+        let precise_val = (precise_l2s_f64(linear as f64) * 65535.0 + 0.5) as u16;
+        let diff = (lut_val as i32 - precise_val as i32).unsigned_abs();
+        if diff > max_diff {
+            max_diff = diff;
+            worst = i;
+        }
+    }
+    eprintln!("u16 encoding LUT: max diff = {max_diff} at {worst}");
+    // LUT uses index quantization, so allow small error
+    assert!(
+        max_diff <= 2,
+        "u16 encoding LUT max diff {max_diff} at {worst} exceeds 2"
+    );
+}
+
+// ============================================================================
+// Custom gamma identity and edge cases
+// ============================================================================
+
+#[test]
+fn gamma_identity() {
+    use linear_srgb::default::{gamma_to_linear, linear_to_gamma};
+
+    // gamma = 1.0 should be identity (pure power x^1 = x)
+    for i in 0..=100 {
+        let v = i as f32 / 100.0;
+        assert_eq!(
+            gamma_to_linear(v, 1.0),
+            v,
+            "gamma_to_linear({v}, 1.0) != {v}"
+        );
+        assert_eq!(
+            linear_to_gamma(v, 1.0),
+            v,
+            "linear_to_gamma({v}, 1.0) != {v}"
+        );
+    }
+}
+
+#[test]
+fn gamma_various_exponents() {
+    use linear_srgb::default::{gamma_to_linear, linear_to_gamma};
+
+    for gamma in [1.0_f32, 1.8, 2.0, 2.2, 2.4, 2.6, 3.0] {
+        for i in 1..=99 {
+            let v = i as f32 / 100.0;
+            let lin = gamma_to_linear(v, gamma);
+            let back = linear_to_gamma(lin, gamma);
+            assert!(
+                (v - back).abs() < 1e-5,
+                "gamma {gamma} roundtrip at {v}: {v} -> {lin} -> {back}"
+            );
+        }
+    }
+}
+
+// ============================================================================
+// BT.709 roundtrip (was missing)
+// ============================================================================
+
+#[cfg(feature = "transfer")]
+#[test]
+fn bt709_roundtrip() {
+    use linear_srgb::default::{bt709_to_linear, linear_to_bt709};
+
+    let u16_step = 1.0 / 65535.0_f32;
+    for i in 0..=10000 {
+        let v = i as f32 / 10000.0;
+        let linear = bt709_to_linear(v);
+        let back = linear_to_bt709(linear);
+        let err = (back - v).abs();
+        assert!(
+            err < u16_step * 2.0,
+            "BT.709 roundtrip at {v}: -> {linear} -> {back} (err={err})"
+        );
+    }
+}
+
+// ============================================================================
+// mlaf / fmla coverage for f64 and neg_mlaf
+// ============================================================================
+
+#[test]
+fn fmla_f64() {
+    // fmla(a, b, c) = a * b + c
+    let result: f64 = linear_srgb::precise::gamma_to_linear_f64(0.5, 2.2);
+    // Just verify it doesn't panic and produces a sane value
+    assert!(result > 0.0 && result < 1.0);
+}
+
+// ============================================================================
+// SrgbConverter accuracy
+// ============================================================================
+
+#[test]
+fn srgb_converter_accuracy() {
+    use linear_srgb::lut::SrgbConverter;
+
+    let conv = SrgbConverter::new();
+
+    // linear_to_srgb via LUT interpolation should be close to precise
+    let mut max_err: f32 = 0.0;
+    for i in 0..=10000 {
+        let linear = i as f32 / 10000.0;
+        let lut = conv.linear_to_srgb(linear);
+        let precise = precise_l2s_f64(linear as f64) as f32;
+        let err = (lut - precise).abs();
+        if err > max_err {
+            max_err = err;
+        }
+    }
+    eprintln!("SrgbConverter linear_to_srgb: max err = {max_err:.2e}");
+    assert!(
+        max_err < 5e-4,
+        "SrgbConverter max error {max_err:.2e} exceeds 5e-4"
+    );
+}
+
+// ============================================================================
+// LUT interpolation edge cases
+// ============================================================================
+
+#[test]
+fn lut_interp_edge_cases() {
+    use linear_srgb::lut::lut_interp_linear_float;
+
+    let table = [0.0_f32, 0.5, 1.0];
+
+    // Exact endpoints
+    assert_eq!(lut_interp_linear_float(0.0, &table), 0.0);
+    assert_eq!(lut_interp_linear_float(1.0, &table), 1.0);
+
+    // Midpoint
+    let mid = lut_interp_linear_float(0.5, &table);
+    assert!((mid - 0.5).abs() < 1e-6, "midpoint = {mid}");
+
+    // Clamping: out-of-range inputs
+    assert_eq!(lut_interp_linear_float(-1.0, &table), 0.0);
+    assert_eq!(lut_interp_linear_float(2.0, &table), 1.0);
+}
+
+// ============================================================================
+// Runtime LUT table sizes beyond 8/12-bit
+// ============================================================================
+
+#[test]
+fn lut_table_16bit() {
+    use linear_srgb::lut::LinearTable16;
+
+    let table = LinearTable16::new();
+    assert_eq!(table.lookup(0), 0.0);
+    assert!((table.lookup(65535) - 1.0).abs() < 1e-6);
+
+    // Monotonicity
+    let mut prev = 0.0_f32;
+    for i in 0..=65535 {
+        let val = table.lookup(i);
+        assert!(val >= prev, "16-bit LUT not monotonic at {i}");
+        prev = val;
+    }
+}
+
+#[test]
+fn lut_table_10bit() {
+    use linear_srgb::lut::LinearTable10;
+
+    let table = LinearTable10::new();
+    assert_eq!(table.lookup(0), 0.0);
+    assert!((table.lookup(1023) - 1.0).abs() < 1e-6);
+
+    // Spot check against precise
+    let val = table.lookup(512);
+    let precise = precise_s2l_f64(512.0 / 1023.0) as f32;
+    assert!(
+        (val - precise).abs() < 1e-6,
+        "10-bit LUT[512] = {val}, precise = {precise}"
+    );
 }

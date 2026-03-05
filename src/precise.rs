@@ -3,20 +3,16 @@
 //! These functions use the mathematical sRGB transfer function with `powf()`,
 //! providing maximum accuracy at the cost of speed (~6 ULP max vs f64 reference).
 //! For faster alternatives, use [`crate::default`] which provides rational
-//! polynomial approximations (~110 ULP max at threshold, <8 ULP elsewhere).
+//! polynomial approximations (~14 ULP max, ~0.5 ULP avg, perfectly monotonic).
 //!
-//! # Constants: C0-continuous vs IEC textbook
+//! # Constants: C0-continuous (moxcms)
 //!
-//! The IEC 61966-2-1 sRGB specification defines a piecewise transfer function
-//! with a linear segment and a power curve. The textbook constants
-//! (threshold 0.04045, offset 0.055) create a tiny discontinuity at the
-//! segment boundary — the two pieces don't quite meet (~2.3×10⁻⁹ in f64).
+//! Both this module and [`crate::default`] use C0-continuous constants (from the
+//! moxcms reference implementation) that eliminate the ~2.3×10⁻⁹ discontinuity
+//! present in the IEC 61966-2-1 textbook constants:
 //!
-//! This module uses adjusted C0-continuous constants (from the moxcms reference
-//! implementation) that eliminate the discontinuity:
-//!
-//! | Constant | IEC textbook | This module |
-//! |----------|-------------|-------------|
+//! | Constant | IEC textbook | This crate |
+//! |----------|-------------|------------|
 //! | Gamma threshold | 0.04045 | 0.039293... |
 //! | Linear threshold | 0.0031308 | 0.003041... |
 //! | Offset (*a*) | 0.055 | 0.055011... |
@@ -24,10 +20,6 @@
 //! The adjusted constants solve `12.92 × threshold = (1+a) × threshold^(1/2.4) − a`
 //! exactly, making the piecewise function mathematically continuous. The difference
 //! is unmeasurable at u8 precision and within 1 LSB at u16.
-//!
-//! The [`crate::default`] module uses IEC textbook thresholds because its rational
-//! polynomial was fitted to the IEC power curve — see the crate-level docs for
-//! the full comparison.
 //!
 //! # Extended-range variants
 //!

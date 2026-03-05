@@ -1,6 +1,8 @@
 //! Scalar (single-value) sRGB conversion functions.
 //!
-//! Implements the IEC 61966-2-1:1999 sRGB transfer functions with optimizations:
+//! Implements the sRGB transfer function with C0-continuous (moxcms) constants
+//! that eliminate the tiny discontinuity in the IEC 61966-2-1 textbook version.
+//! Optimizations:
 //! - Piecewise function avoids pow() for ~1.2% of values in the linear segment
 //! - Early exit for out-of-range values (0 and 1) avoids transcendentals
 //! - FMA instructions for the encoding formula
@@ -9,11 +11,11 @@ use crate::mlaf::fmla;
 #[allow(unused_imports)]
 use num_traits::Float; // provides powf/sqrt/mul_add via libm in no_std
 
-// sRGB constants (IEC 61966-2-1:1999)
-// These are the exact values for the continuous piecewise function.
-// Precision is intentional - these come from the moxcms reference implementation.
+// sRGB C0-continuous constants (moxcms reference).
+// These eliminate the ~2.3e-9 discontinuity in the IEC 61966-2-1 textbook values.
+// At u8 precision both constant sets are indistinguishable.
 
-/// Linear threshold for linearization: 12.92 * 0.0030412825601275209 ≈ 0.04045
+/// Linear threshold for linearization: 12.92 * 0.0030412825601275209 ≈ 0.03929
 #[allow(clippy::excessive_precision)]
 const SRGB_LINEAR_THRESHOLD: f64 = 12.92 * 0.003_041_282_560_127_521;
 pub(crate) const SRGB_LINEAR_THRESHOLD_F32: f32 = SRGB_LINEAR_THRESHOLD as f32;
@@ -322,26 +324,26 @@ pub fn linear_to_gamma_f64(linear: f64, gamma: f64) -> f64 {
 // ============================================================================
 
 /// Precomputed sRGB u8 → linear f32 lookup table.
-/// Uses IEC 61966-2-1 constants (0.04045 threshold, 0.055 offset).
-/// At u8 precision, these produce identical values to the C0-continuous constants.
+/// Uses C0-continuous (moxcms) constants for the compile-time Newton's method computation.
 static SRGB_U8_TO_LINEAR_LUT: [f32; 256] = {
+    // C0-continuous constants (must match the module-level constants)
+    const THRESHOLD: f64 = 12.92 * 0.003_041_282_560_127_521; // ≈ 0.03929
+    const A: f64 = 0.055_010_718_947_586_6;
+    const A_PLUS_1: f64 = 1.055_010_718_947_586_6;
+
     let mut lut = [0.0f32; 256];
     let mut i = 0;
     while i < 256 {
         let srgb = i as f64 / 255.0;
-        let linear = if srgb <= 0.04045 {
+        let linear = if srgb <= THRESHOLD {
             srgb / 12.92
         } else {
-            // Use manual pow via exp(ln(x)*y) since powf isn't const
-            let base = (srgb + 0.055) / 1.055;
-            // Approximate pow(base, 2.4) using the identity:
-            // We precompute these at compile time, so precision doesn't matter
-            // for the LUT - we just need f32 precision in the final value
+            // pow(base, 2.4) via Newton's method since powf isn't const
+            let base = (srgb + A) / A_PLUS_1;
             // Square-and-multiply for 2.4 = 2 + 0.4
             let sq = base * base; // base^2
-            // base^0.4 = (base^2)^0.2 = ((base^2)^(1/5))
-            // Use Newton's method: find x where x^5 = base^2
-            let target = sq; // base^2, we want target^(1/5) = base^0.4
+            // base^0.4 = (base^2)^(1/5) via Newton: find x where x^5 = base^2
+            let target = sq;
             let mut x = 0.5f64;
             let mut iter = 0;
             while iter < 100 {

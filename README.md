@@ -11,7 +11,7 @@ Fast linear↔sRGB color space conversion with runtime CPU dispatch.
 ```rust
 use linear_srgb::default::*;
 
-// Single values (rational polynomial — fast, <8 ULP typical)
+// Single values (rational polynomial — fast, ≤14 ULP, perfectly monotonic)
 let linear = srgb_to_linear(0.5f32);
 let srgb = linear_to_srgb(linear);
 
@@ -47,7 +47,7 @@ let srgb_byte = linear_to_srgb_u8(linear);
 ```rust
 use linear_srgb::default::*;
 
-// f32 conversions — rational polynomial (~110 ULP max near threshold, <8 ULP elsewhere)
+// f32 conversions — rational polynomial (≤14 ULP max, perfectly monotonic)
 let linear = srgb_to_linear(0.5f32);
 let srgb = linear_to_srgb(0.214f32);
 
@@ -164,6 +164,7 @@ fn my_pipeline(token: X64V3Token, data: &mut [f32]) {
 - **`tokens`** — Inlineable `#[rite]` functions for x4/x8/x16 widths. For use inside `#[arcane]` code.
 - **`lut`** — Lookup tables for custom bit depths.
 - **`tf`** — Transfer functions: BT.709, PQ, HLG (feature-gated behind `transfer`).
+- **`iec`** — IEC 61966-2-1 textbook constants for legacy interop (feature-gated).
 
 ## Feature Flags
 
@@ -180,41 +181,29 @@ linear-srgb = { version = "0.6", features = ["transfer"] }
 
 - **`std`** (default): Required for runtime SIMD dispatch
 - **`transfer`**: BT.709, PQ, HLG transfer functions
+- **`iec`**: IEC 61966-2-1 textbook sRGB functions for legacy interop
 - **`alt`**: Alternative/experimental implementations for benchmarking
 
 ## Accuracy
 
 ### Transfer function constants
 
-The IEC 61966-2-1 sRGB spec defines a piecewise transfer function with a linear segment and a power curve. The textbook constants (threshold 0.04045 / 0.0031308, offset 0.055) create a tiny discontinuity at the boundary — the two segments don't quite meet (~2.3e-9 in f64).
+All code paths use C0-continuous constants derived from the [moxcms](https://github.com/niclasberg/moxcms) reference implementation. These adjust the IEC 61966-2-1 offset from 0.055 to 0.055011 and the threshold from 0.04045 to 0.03929, making the piecewise transfer function mathematically continuous (~2.3e-9 gap eliminated).
 
-This crate uses two constant sets, each chosen for correctness in its context:
+At u8 precision the two constant sets produce identical values. At u16, the max difference is ~1 LSB near the threshold. See [docs/iec.md](docs/iec.md) for a detailed comparison.
 
-| Code path | Constants | Threshold (gamma) | Why |
-|-----------|-----------|-------------------|-----|
-| `default` (rational poly) | IEC textbook | 0.04045 | Polynomial was fitted to the IEC power curve |
-| `precise` (powf) | moxcms C0 | 0.039293... | Eliminates the discontinuity |
-| SIMD / `tokens` | IEC textbook | 0.04045 | Same rational polynomial as `default` |
-| LUT tables | IEC textbook | 0.04045 | Identical to moxcms at u8/u16 precision |
-
-The rational polynomial (from libjxl) approximates `((x+0.055)/1.055)^2.4` — the IEC power segment. Using the IEC threshold gives 110 ULP max error. Switching to the moxcms threshold would push values into the linear segment that should be evaluated by the polynomial, causing 3100+ ULP errors. The IEC threshold is optimal for this approximation.
-
-The `precise` path uses moxcms C0-continuous constants (derived from the moxcms reference implementation) because they make the piecewise function mathematically continuous. With `powf()` computing the exact power curve, this distinction actually matters.
+For interop with software that uses the original IEC textbook constants, enable the `iec` feature for `linear_srgb::iec::srgb_to_linear` / `linear_srgb::iec::linear_to_srgb`.
 
 ### Accuracy summary (exhaustive f32 sweep)
 
-| Path | Reference | Max error | Avg error |
-|------|-----------|-----------|-----------|
-| `default` s→l | IEC f64 | 110 ULP | 0.55 ULP |
-| `default` l→s | IEC f64 | 31 ULP | 0.37 ULP |
-| `precise` s→l | moxcms f64 | 6 ULP | 0.11 ULP |
-| `precise` l→s | moxcms f64 | 3 ULP | 0.10 ULP |
+| Path | Max ULP | Avg ULP | Monotonic |
+|------|---------|---------|-----------|
+| `default` s→l (rational poly) | 11 | ~0.5 | yes |
+| `default` l→s (rational poly) | 14 | ~0.4 | yes |
+| `precise` s→l (powf) | 6 | ~0.1 | yes |
+| `precise` l→s (powf) | 3 | ~0.1 | yes |
 
-The `default` path's worst case (110 ULP for s→l) occurs at the piecewise threshold where the linear segment meets the rational polynomial. Away from the threshold, typical error is <8 ULP.
-
-### Practical impact
-
-The two constant sets produce identical results at u8 precision (the threshold falls between u8 values 10 and 11). At u16 precision, the maximum difference is ~1 LSB near the threshold. The difference only becomes measurable with raw f32 values in the narrow threshold region (0.039–0.041 gamma-space).
+Reference: C0-continuous f64 powf. The scalar rational polynomial evaluates in f64 intermediate precision, guaranteeing perfect monotonicity (zero reversals across all ~1B f32 values in [0, 1]). SIMD paths use f32 evaluation for throughput and are also monotonic within each segment.
 
 ## License
 

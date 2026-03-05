@@ -54,8 +54,9 @@ jobs:
           - "std"                       # std only, no avx512
           - "std,avx512"               # default feature set
           - "std,transfer"             # transfer without avx512
+          - "std,iec"                  # IEC legacy constants
           - "std,avx512,transfer"      # all runtime features
-          - "std,avx512,transfer,alt"  # everything
+          - "std,avx512,transfer,alt,iec"  # everything
 
     steps:
       - uses: actions/checkout@v6
