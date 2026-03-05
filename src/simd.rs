@@ -621,8 +621,14 @@ mod tests {
         // Current behavior: alpha IS modified (this is the bug).
         // Alpha 0.0 and 1.0 are fixed points of srgb_to_linear, so they survive.
         // But 0.5 and 0.75 will be changed.
-        assert_eq!(alphas_before[0], alphas_after[0], "alpha=1.0 is a fixed point");
-        assert_eq!(alphas_before[2], alphas_after[2], "alpha=0.0 is a fixed point");
+        assert_eq!(
+            alphas_before[0], alphas_after[0],
+            "alpha=1.0 is a fixed point"
+        );
+        assert_eq!(
+            alphas_before[2], alphas_after[2],
+            "alpha=0.0 is a fixed point"
+        );
         // These SHOULD be equal but aren't — documenting the bug:
         assert_ne!(
             alphas_before[1], alphas_after[1],
@@ -650,7 +656,10 @@ mod tests {
         let alphas_after: Vec<f32> = rgba.iter().skip(3).step_by(4).copied().collect();
 
         // 0.0 is exact fixed point, 1.0 has minor rounding in rational poly
-        assert_eq!(alphas_before[2], alphas_after[2], "alpha=0.0 is a fixed point");
+        assert_eq!(
+            alphas_before[2], alphas_after[2],
+            "alpha=0.0 is a fixed point"
+        );
         // Non-trivial alpha values are definitely modified:
         assert_ne!(
             alphas_before[1], alphas_after[1],
