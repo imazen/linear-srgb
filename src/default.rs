@@ -53,14 +53,25 @@ pub use crate::simd::{
     // Custom gamma slices
     gamma_to_linear_slice,
     linear_to_gamma_slice,
+    // f32 RGBA slices (alpha-preserving)
+    linear_to_srgb_rgba_slice,
     // f32 slices (in-place)
     linear_to_srgb_slice,
-    // u8 ↔ f32 slices
+    linear_to_srgb_u8_rgba_slice,
+    // u8 slices
     linear_to_srgb_u8_slice,
+    linear_to_srgb_u16_rgba_slice,
     // u16 slices
     linear_to_srgb_u16_slice,
+    // f32 RGBA slices (alpha-preserving)
+    srgb_to_linear_rgba_slice,
+    // f32 slices (in-place)
     srgb_to_linear_slice,
+    srgb_u8_to_linear_rgba_slice,
+    // u8 slices
     srgb_u8_to_linear_slice,
+    srgb_u16_to_linear_rgba_slice,
+    // u16 slices
     srgb_u16_to_linear_slice,
 };
 
