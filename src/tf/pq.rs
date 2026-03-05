@@ -114,6 +114,7 @@ pub(crate) const PQ_INV_Q_SMALL: [f32; 5] =
 use magetypes::simd::backends::F32x4Convert;
 use magetypes::simd::generic::f32x4;
 
+#[allow(dead_code)]
 #[inline(always)]
 pub(crate) fn pq_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let zero = f32x4::zero(t);
@@ -124,6 +125,7 @@ pub(crate) fn pq_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     result & mask
 }
 
+#[allow(dead_code)]
 #[inline(always)]
 pub(crate) fn linear_to_pq_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let zero = f32x4::zero(t);

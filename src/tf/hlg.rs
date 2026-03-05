@@ -43,6 +43,7 @@ pub fn linear_to_hlg(v: f32) -> f32 {
 use magetypes::simd::backends::F32x4Convert;
 use magetypes::simd::generic::f32x4;
 
+#[allow(dead_code)]
 #[inline(always)]
 pub(crate) fn hlg_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let zero = f32x4::zero(t);
@@ -68,6 +69,7 @@ pub(crate) fn hlg_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     result & pos_mask
 }
 
+#[allow(dead_code)]
 #[inline(always)]
 pub(crate) fn linear_to_hlg_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let zero = f32x4::zero(t);

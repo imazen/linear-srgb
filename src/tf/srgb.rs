@@ -8,6 +8,7 @@ use crate::rational_poly;
 use magetypes::simd::backends::F32x4Convert;
 use magetypes::simd::generic::f32x4;
 
+#[allow(dead_code)]
 #[inline(always)]
 pub(crate) fn srgb_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let threshold = f32x4::splat(t, rational_poly::SRGB_THRESHOLD);
@@ -21,6 +22,7 @@ pub(crate) fn srgb_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> 
     f32x4::blend(mask, linear, poly)
 }
 
+#[allow(dead_code)]
 #[inline(always)]
 pub(crate) fn linear_to_srgb_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let threshold = f32x4::splat(t, rational_poly::LINEAR_THRESHOLD);

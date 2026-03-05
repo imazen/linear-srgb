@@ -97,6 +97,7 @@ use magetypes::simd::backends::F32x4Convert;
 use magetypes::simd::generic::{f32x4, i32x4};
 
 /// Evaluate degree-4 rational polynomial P(x)/Q(x) on 4 f32 values via FMA.
+#[allow(dead_code)]
 #[inline(always)]
 pub(crate) fn eval_rational_poly_x4<T: F32x4Convert>(
     t: T,
@@ -120,6 +121,7 @@ pub(crate) fn eval_rational_poly_x4<T: F32x4Convert>(
 }
 
 /// fast_log2f on 4 f32 values — bit manipulation + rational polynomial.
+#[allow(dead_code)]
 #[inline(always)]
 pub(crate) fn fast_log2f_x4<T: F32x4Convert>(t: T, x: f32x4<T>) -> f32x4<T> {
     let x_bits = x.bitcast_to_i32();
@@ -148,6 +150,7 @@ pub(crate) fn fast_log2f_x4<T: F32x4Convert>(t: T, x: f32x4<T>) -> f32x4<T> {
 }
 
 /// fast_pow2f on 4 f32 values — integer bit manipulation + polynomial.
+#[allow(dead_code)]
 #[inline(always)]
 pub(crate) fn fast_pow2f_x4<T: F32x4Convert>(t: T, x: f32x4<T>) -> f32x4<T> {
     let x_floor = x.floor();
@@ -171,6 +174,7 @@ pub(crate) fn fast_pow2f_x4<T: F32x4Convert>(t: T, x: f32x4<T>) -> f32x4<T> {
 }
 
 /// fast_powf(base, exp) on 4 f32 values: pow2f(exp * log2f(base)).
+#[allow(dead_code)]
 #[inline(always)]
 pub(crate) fn fast_powf_x4<T: F32x4Convert>(t: T, base: f32x4<T>, exponent: f32) -> f32x4<T> {
     let log2 = fast_log2f_x4(t, base);

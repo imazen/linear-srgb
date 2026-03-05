@@ -38,6 +38,11 @@ transfer = []
 name = "benchmarks"
 harness = false
 
+[[bench]]
+name = "tf_bench"
+harness = false
+required-features = ["transfer"]
+
 [[example]]
 name = "accuracy_comparison"
 required-features = ["std", "alt"]

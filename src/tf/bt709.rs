@@ -32,6 +32,7 @@ pub fn linear_to_bt709(v: f32) -> f32 {
 use magetypes::simd::backends::F32x4Convert;
 use magetypes::simd::generic::f32x4;
 
+#[allow(dead_code)]
 #[inline(always)]
 pub(crate) fn bt709_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let threshold = f32x4::splat(t, 4.5 * BT709_BETA);
@@ -49,6 +50,7 @@ pub(crate) fn bt709_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T>
     f32x4::blend(mask, linear, power)
 }
 
+#[allow(dead_code)]
 #[inline(always)]
 pub(crate) fn linear_to_bt709_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let threshold = f32x4::splat(t, BT709_BETA);

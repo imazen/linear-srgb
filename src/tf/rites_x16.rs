@@ -168,6 +168,7 @@ pub fn linear_to_hlg_v4(token: Server64, v: [f32; 16]) -> [f32; 16] {
 
 macro_rules! tf_slice_v4 {
     ($name:ident, $rite:ident, $scalar:path) => {
+        /// Apply transfer function to a slice using x16 AVX-512 rites with scalar remainder.
         #[cfg(target_arch = "x86_64")]
         #[rite]
         pub fn $name(token: Server64, values: &mut [f32]) {
