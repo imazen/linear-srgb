@@ -6,7 +6,7 @@
 //! # Module Organization
 //!
 //! - [`default`] - **Recommended API** with optimal implementations for each use case
-//! - [`precise`] - Slow but exact `powf()`-based conversions (f32/f64, extended-range)
+//! - [`precise`] - Exact `powf()`-based conversions with C0-continuous constants (f32/f64, extended-range)
 //! - [`tokens`] - Token-gated `#[rite]` functions for embedding in `#[arcane]` code
 //! - [`lut`] - Lookup table types for custom bit depths
 //!
@@ -181,7 +181,11 @@ extern crate std;
 /// LUT for integer types. See module documentation for details.
 pub mod default;
 
-/// Slow but exact conversion functions using `powf()`.
+/// Exact conversion functions using `powf()` with C0-continuous constants.
+///
+/// Uses adjusted constants (from the moxcms reference implementation) that
+/// eliminate the IEC 61966-2-1 piecewise discontinuity. See the module docs
+/// for the constant comparison table.
 ///
 /// Provides f32/f64 sRGB, extended-range, and custom gamma f64 functions.
 /// For faster alternatives, use [`default`].

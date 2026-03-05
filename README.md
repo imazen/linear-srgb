@@ -59,10 +59,13 @@ let srgb_u16 = linear_to_srgb_u16(0.214f32);
 
 ### Precise (powf) Conversions
 
+Uses C0-continuous constants that eliminate the IEC spec's piecewise discontinuity.
+See the [Accuracy](#accuracy) section for details on how these differ from the IEC textbook values.
+
 ```rust
 use linear_srgb::precise::*;
 
-// f32 — exact powf, C0-continuous (6 ULP max vs moxcms reference)
+// f32 — exact powf, C0-continuous (6 ULP max)
 let linear = srgb_to_linear(0.5f32);
 let srgb = linear_to_srgb(0.214f32);
 
@@ -144,7 +147,7 @@ fn my_pipeline(token: X64V3Token, data: &mut [f32]) {
 ## Module Organization
 
 - **`default`** — Recommended API. Rational polynomial for f32, LUT for integers, SIMD for slices.
-- **`precise`** — Exact `powf()` conversions. C0-continuous, f32/f64, extended range.
+- **`precise`** — Exact `powf()` conversions with C0-continuous constants (not IEC textbook). f32/f64, extended range.
 - **`tokens`** — Inlineable `#[rite]` functions for x4/x8/x16 widths. For use inside `#[arcane]` code.
 - **`lut`** — Lookup tables for custom bit depths.
 - **`tf`** — Transfer functions: BT.709, PQ, HLG (feature-gated behind `transfer`).
