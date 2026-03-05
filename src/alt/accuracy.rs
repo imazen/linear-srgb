@@ -289,53 +289,50 @@ mod tests {
     fn test_srgb_to_linear_fast_exhaustive_ulp() {
         use crate::scalar::srgb_to_linear_fast;
 
-        // The rational polynomial (libjxl coefficients) approximates the standard
-        // IEC 61966-2-1 sRGB curve, so compare against the standard reference.
-        // (The `_exact` powf functions use moxcms C0-continuous constants, which
-        // differ slightly near the threshold — ~1e-6 absolute, invisible at u8/u16.)
-        let iec_ref = |v: f64| -> f64 {
-            if v <= 0.04045 {
+        // The rational polynomial is fitted to the C0-continuous (moxcms) sRGB curve,
+        // so compare against that reference (not IEC 61966-2-1).
+        let a = 0.0550107189475866_f64;
+        let a1 = 1.0 + a;
+        let linear_thresh = 0.003041282560127521_f64;
+        let gamma_thresh = 12.92 * linear_thresh;
+        let c0_ref = |v: f64| -> f64 {
+            if v <= gamma_thresh {
                 v / 12.92
             } else {
-                ((v + 0.055) / 1.055).powf(2.4)
+                ((v + a) / a1).powf(2.4)
             }
         };
 
         // Sweep every f32 in the power segment [threshold, 1.0]
-        // Use the IEC threshold (0.04045) as the sweep start since values below
-        // that are handled by the linear segment in both variants.
-        let threshold = 0.04045_f32;
+        let threshold = gamma_thresh as f32;
 
         // Full range
         let (max_ulp, avg_ulp, worst, count) =
-            exhaustive_ulp_sweep(srgb_to_linear_fast, iec_ref, threshold, 1.0);
-        let ref_val = iec_ref(worst as f64);
+            exhaustive_ulp_sweep(srgb_to_linear_fast, c0_ref, threshold, 1.0);
+        let ref_val = c0_ref(worst as f64);
         let fast_val = srgb_to_linear_fast(worst);
         println!("srgb_to_linear_fast exhaustive ({count} values):");
         println!("  Max ULP: {max_ulp} at input {worst:.10}");
-        println!("  IEC ref: {ref_val:.12}, fast: {fast_val:.12}");
+        println!("  C0 ref: {ref_val:.12}, fast: {fast_val:.12}");
         println!("  Avg ULP: {avg_ulp:.4}");
 
         // Away from threshold: [0.05, 1.0]
         let (max_ulp_mid, avg_ulp_mid, worst_mid, count_mid) =
-            exhaustive_ulp_sweep(srgb_to_linear_fast, iec_ref, 0.05, 1.0);
+            exhaustive_ulp_sweep(srgb_to_linear_fast, c0_ref, 0.05, 1.0);
         println!(
             "  [0.05, 1.0] ({count_mid} values): max={max_ulp_mid}, avg={avg_ulp_mid:.4}, worst={worst_mid:.10}"
         );
 
         // Upper half: [0.5, 1.0]
         let (max_ulp_hi, avg_ulp_hi, _, count_hi) =
-            exhaustive_ulp_sweep(srgb_to_linear_fast, iec_ref, 0.5, 1.0);
+            exhaustive_ulp_sweep(srgb_to_linear_fast, c0_ref, 0.5, 1.0);
         println!("  [0.5, 1.0] ({count_hi} values): max={max_ulp_hi}, avg={avg_ulp_hi:.4}");
 
-        // Rational polynomial vs IEC reference: max ~102 ULP near threshold where
-        // output values are tiny (~0.003) and f32 ULPs are ~2.3e-10. Even 102 ULP is
-        // only 2.4e-8 absolute error — invisible at u16 (1 LSB = 1.5e-5).
-        // [0.05, 1.0]: max ~52 ULP, [0.5, 1.0]: max ~5 ULP.
-        // Still 2× better than old Chebyshev (221 ULP).
+        // C0-continuous polynomial vs C0-continuous reference: boundary ULP ~1,
+        // power segment max ~8 ULP. Much better than old libjxl vs IEC (110 ULP at boundary).
         assert!(
-            max_ulp <= 110,
-            "srgb_to_linear_fast max ULP {max_ulp} exceeds 110"
+            max_ulp <= 15,
+            "srgb_to_linear_fast max ULP {max_ulp} exceeds 15"
         );
     }
 
@@ -343,46 +340,48 @@ mod tests {
     fn test_linear_to_srgb_fast_exhaustive_ulp() {
         use crate::scalar::linear_to_srgb_fast;
 
-        // Compare against standard IEC 61966-2-1 reference (see above).
-        let iec_ref = |v: f64| -> f64 {
-            if v <= 0.0031308 {
+        // Compare against C0-continuous (moxcms) reference.
+        let a = 0.0550107189475866_f64;
+        let a1 = 1.0 + a;
+        let linear_thresh = 0.003041282560127521_f64;
+        let c0_ref = |v: f64| -> f64 {
+            if v <= linear_thresh {
                 v * 12.92
             } else {
-                1.055 * v.powf(1.0 / 2.4) - 0.055
+                a1 * v.powf(1.0 / 2.4) - a
             }
         };
 
         // Sweep every f32 in the power segment [threshold, 1.0]
-        let threshold = 0.0031308_f32;
+        let threshold = linear_thresh as f32;
 
         // Full range
         let (max_ulp, avg_ulp, worst, count) =
-            exhaustive_ulp_sweep(linear_to_srgb_fast, iec_ref, threshold, 1.0);
-        let ref_val = iec_ref(worst as f64);
+            exhaustive_ulp_sweep(linear_to_srgb_fast, c0_ref, threshold, 1.0);
+        let ref_val = c0_ref(worst as f64);
         let fast_val = linear_to_srgb_fast(worst);
         println!("linear_to_srgb_fast exhaustive ({count} values):");
         println!("  Max ULP: {max_ulp} at input {worst:.10}");
-        println!("  IEC ref: {ref_val:.12}, fast: {fast_val:.12}");
+        println!("  C0 ref: {ref_val:.12}, fast: {fast_val:.12}");
         println!("  Avg ULP: {avg_ulp:.4}");
 
         // Away from threshold: [0.01, 1.0]
         let (max_ulp_mid, avg_ulp_mid, worst_mid, count_mid) =
-            exhaustive_ulp_sweep(linear_to_srgb_fast, iec_ref, 0.01, 1.0);
+            exhaustive_ulp_sweep(linear_to_srgb_fast, c0_ref, 0.01, 1.0);
         println!(
             "  [0.01, 1.0] ({count_mid} values): max={max_ulp_mid}, avg={avg_ulp_mid:.4}, worst={worst_mid:.10}"
         );
 
         // Upper half: [0.5, 1.0]
         let (max_ulp_hi, avg_ulp_hi, _, count_hi) =
-            exhaustive_ulp_sweep(linear_to_srgb_fast, iec_ref, 0.5, 1.0);
+            exhaustive_ulp_sweep(linear_to_srgb_fast, c0_ref, 0.5, 1.0);
         println!("  [0.5, 1.0] ({count_hi} values): max={max_ulp_hi}, avg={avg_ulp_hi:.4}");
 
-        // Rational polynomial vs IEC reference: max ~31 ULP near the threshold.
-        // Away from threshold [0.01, 1.0]: max ~13 ULP. Still 9× better than
-        // old Chebyshev (294 ULP).
+        // C0-continuous polynomial vs C0-continuous reference: boundary ULP ~0,
+        // power segment max ~16 ULP.
         assert!(
-            max_ulp <= 40,
-            "linear_to_srgb_fast max ULP {max_ulp} exceeds 40"
+            max_ulp <= 16,
+            "linear_to_srgb_fast max ULP {max_ulp} exceeds 16"
         );
     }
 

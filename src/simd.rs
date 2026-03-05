@@ -33,15 +33,15 @@ use magetypes::simd::v4::f32x16 as mt_f32x16;
 #[cfg(target_arch = "x86_64")]
 #[rite]
 fn srgb_to_linear_mt(token: X64V3Token, srgb: mt_f32x8) -> mt_f32x8 {
-    use crate::rational_poly::{S2L_P, S2L_Q};
+    use crate::rational_poly::{S2L_P, S2L_Q, SRGB_THRESHOLD};
 
     let zero = mt_f32x8::zero(token);
     let one = mt_f32x8::splat(token, 1.0);
-    let srgb = srgb.max(zero).min(one);
+    let clamped = srgb.max(zero).min(one);
 
-    let linear_result = srgb * mt_f32x8::splat(token, 1.0 / 12.92);
+    let linear_result = clamped * mt_f32x8::splat(token, 1.0 / 12.92);
 
-    let x = srgb;
+    let x = clamped;
     let yp = mt_f32x8::splat(token, S2L_P[4]).mul_add(x, mt_f32x8::splat(token, S2L_P[3]));
     let yp = yp.mul_add(x, mt_f32x8::splat(token, S2L_P[2]));
     let yp = yp.mul_add(x, mt_f32x8::splat(token, S2L_P[1]));
@@ -54,22 +54,25 @@ fn srgb_to_linear_mt(token: X64V3Token, srgb: mt_f32x8) -> mt_f32x8 {
 
     let power_result = yp / yq;
 
-    let mask = srgb.simd_lt(mt_f32x8::splat(token, 0.04045));
-    mt_f32x8::blend(mask, linear_result, power_result)
+    let mask = clamped.simd_lt(mt_f32x8::splat(token, SRGB_THRESHOLD));
+    let result = mt_f32x8::blend(mask, linear_result, power_result);
+    // Force exact 1.0 for inputs >= 1.0 (polynomial may undershoot)
+    let ge_one = srgb.simd_ge(one);
+    mt_f32x8::blend(ge_one, one, result)
 }
 
 #[cfg(target_arch = "x86_64")]
 #[rite]
 fn linear_to_srgb_mt(token: X64V3Token, linear: mt_f32x8) -> mt_f32x8 {
-    use crate::rational_poly::{L2S_P, L2S_Q};
+    use crate::rational_poly::{L2S_P, L2S_Q, LINEAR_THRESHOLD};
 
     let zero = mt_f32x8::zero(token);
     let one = mt_f32x8::splat(token, 1.0);
-    let linear = linear.max(zero).min(one);
+    let clamped = linear.max(zero).min(one);
 
-    let linear_result = linear * mt_f32x8::splat(token, 12.92);
+    let linear_result = clamped * mt_f32x8::splat(token, 12.92);
 
-    let x = linear.sqrt();
+    let x = clamped.sqrt();
     let yp = mt_f32x8::splat(token, L2S_P[4]).mul_add(x, mt_f32x8::splat(token, L2S_P[3]));
     let yp = yp.mul_add(x, mt_f32x8::splat(token, L2S_P[2]));
     let yp = yp.mul_add(x, mt_f32x8::splat(token, L2S_P[1]));
@@ -82,8 +85,10 @@ fn linear_to_srgb_mt(token: X64V3Token, linear: mt_f32x8) -> mt_f32x8 {
 
     let power_result = yp / yq;
 
-    let mask = linear.simd_lt(mt_f32x8::splat(token, 0.003_130_8));
-    mt_f32x8::blend(mask, linear_result, power_result)
+    let mask = clamped.simd_lt(mt_f32x8::splat(token, LINEAR_THRESHOLD));
+    let result = mt_f32x8::blend(mask, linear_result, power_result);
+    let ge_one = linear.simd_ge(one);
+    mt_f32x8::blend(ge_one, one, result)
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -111,15 +116,15 @@ fn linear_to_gamma_mt(token: X64V3Token, linear: mt_f32x8, gamma: f32) -> mt_f32
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[rite]
 fn srgb_to_linear_mt_x16(token: X64V4Token, srgb: mt_f32x16) -> mt_f32x16 {
-    use crate::rational_poly::{S2L_P, S2L_Q};
+    use crate::rational_poly::{S2L_P, S2L_Q, SRGB_THRESHOLD};
 
     let zero = mt_f32x16::zero(token);
     let one = mt_f32x16::splat(token, 1.0);
-    let srgb = srgb.max(zero).min(one);
+    let clamped = srgb.max(zero).min(one);
 
-    let linear_result = srgb * mt_f32x16::splat(token, 1.0 / 12.92);
+    let linear_result = clamped * mt_f32x16::splat(token, 1.0 / 12.92);
 
-    let x = srgb;
+    let x = clamped;
     let yp = mt_f32x16::splat(token, S2L_P[4]).mul_add(x, mt_f32x16::splat(token, S2L_P[3]));
     let yp = yp.mul_add(x, mt_f32x16::splat(token, S2L_P[2]));
     let yp = yp.mul_add(x, mt_f32x16::splat(token, S2L_P[1]));
@@ -132,22 +137,24 @@ fn srgb_to_linear_mt_x16(token: X64V4Token, srgb: mt_f32x16) -> mt_f32x16 {
 
     let power_result = yp / yq;
 
-    let mask = srgb.simd_lt(mt_f32x16::splat(token, 0.04045));
-    mt_f32x16::blend(mask, linear_result, power_result)
+    let mask = clamped.simd_lt(mt_f32x16::splat(token, SRGB_THRESHOLD));
+    let result = mt_f32x16::blend(mask, linear_result, power_result);
+    let ge_one = srgb.simd_ge(one);
+    mt_f32x16::blend(ge_one, one, result)
 }
 
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 #[rite]
 fn linear_to_srgb_mt_x16(token: X64V4Token, linear: mt_f32x16) -> mt_f32x16 {
-    use crate::rational_poly::{L2S_P, L2S_Q};
+    use crate::rational_poly::{L2S_P, L2S_Q, LINEAR_THRESHOLD};
 
     let zero = mt_f32x16::zero(token);
     let one = mt_f32x16::splat(token, 1.0);
-    let linear = linear.max(zero).min(one);
+    let clamped = linear.max(zero).min(one);
 
-    let linear_result = linear * mt_f32x16::splat(token, 12.92);
+    let linear_result = clamped * mt_f32x16::splat(token, 12.92);
 
-    let x = linear.sqrt();
+    let x = clamped.sqrt();
     let yp = mt_f32x16::splat(token, L2S_P[4]).mul_add(x, mt_f32x16::splat(token, L2S_P[3]));
     let yp = yp.mul_add(x, mt_f32x16::splat(token, L2S_P[2]));
     let yp = yp.mul_add(x, mt_f32x16::splat(token, L2S_P[1]));
@@ -160,8 +167,10 @@ fn linear_to_srgb_mt_x16(token: X64V4Token, linear: mt_f32x16) -> mt_f32x16 {
 
     let power_result = yp / yq;
 
-    let mask = linear.simd_lt(mt_f32x16::splat(token, 0.003_130_8));
-    mt_f32x16::blend(mask, linear_result, power_result)
+    let mask = clamped.simd_lt(mt_f32x16::splat(token, LINEAR_THRESHOLD));
+    let result = mt_f32x16::blend(mask, linear_result, power_result);
+    let ge_one = linear.simd_ge(one);
+    mt_f32x16::blend(ge_one, one, result)
 }
 
 // gamma x16: pow_midp not available on f32x16, delegate to 2×x8 via token.v3()

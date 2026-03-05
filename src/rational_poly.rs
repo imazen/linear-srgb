@@ -3,76 +3,68 @@
 //! Single source of truth for all polynomial constants used across scalar,
 //! SIMD, magetypes rites (x4/x8/x16), and mage implementations.
 //!
-//! Coefficients from libjxl (BSD-3-Clause). Evaluates P(x)/Q(x) via Horner's
-//! method: 4 `mul_add` + 1 `div` per direction. Much faster and more accurate
-//! than the degree-11/15 Chebyshev polynomials they replace.
+//! Evaluates P(x)/Q(x) via Horner's method: 4 `mul_add` + 1 `div` per
+//! direction. Much faster and more accurate than Chebyshev polynomials.
+//!
+//! Uses C0-continuous thresholds (moxcms) that eliminate the ~2.3e-9
+//! discontinuity present in the IEC 61966-2-1 textbook constants. The
+//! polynomials are fitted to the C0-continuous curve with a boundary
+//! constraint ensuring exact continuity at the piecewise threshold.
 //!
 //! # Accuracy (exhaustive f32 sweep)
 //!
-//! | Direction | Max ULP (power segment) | Max ULP (overall) | Avg ULP |
+//! | Direction | Max ULP (power segment) | Max ULP (boundary) | Avg ULP |
 //! |---|---|---|---|
-//! | sRGB → linear | ~8 | 110 (at threshold) | 0.55 |
-//! | linear → sRGB | ~8 | 31 (at threshold) | 0.37 |
+//! | sRGB → linear | ~8 | 1 | ~0.5 |
+//! | linear → sRGB | ~8 | 0 | ~0.4 |
 //!
-//! The overall max occurs at the piecewise threshold where the linear segment
-//! meets the polynomial. Away from the threshold, error is <8 ULP.
+//! Roundtrip error is sub-U16 (< 1/65535) across the full [0, 1] range.
 
 #[allow(unused_imports)]
 use num_traits::Float; // provides mul_add/sqrt via libm in no_std
 
 // =============================================================================
 // Coefficients (lowest-degree-first: p[0] + p[1]*x + p[2]*x^2 + ...)
+// Fitted to the C0-continuous (moxcms) sRGB curve with boundary constraints.
 // =============================================================================
 
 /// sRGB EOTF (encoded → linear) numerator coefficients.
 pub(crate) const S2L_P: [f32; 5] = [
-    2.200_248_3e-4,
-    1.043_637_6e-2,
-    1.624_820_4e-1,
-    7.961_565e-1,
-    8.210_153e-1,
+    1.724_942_4e-2,
+    8.335_514_7e-1,
+    1.326_215_8e1,
+    7.033_073_4e1,
+    8.387_046e1,
 ];
 
 /// sRGB EOTF (encoded → linear) denominator coefficients.
-pub(crate) const S2L_Q: [f32; 5] = [
-    2.631_847e-1,
-    1.076_976_5,
-    4.987_528_3e-1,
-    -5.512_498_3e-2,
-    6.521_209e-3,
-];
+pub(crate) const S2L_Q: [f32; 5] = [2.066_183e1, 9.917_607e1, 5.466_011e1, -7.183_806, 1.0];
 
 /// sRGB inverse EOTF (linear → encoded) numerator coefficients.
 /// Evaluated on `sqrt(linear)`.
 pub(crate) const L2S_P: [f32; 5] = [
-    -5.135_152_6e-4,
-    5.287_254_7e-3,
-    3.903_843e-1,
-    1.474_205_3,
-    7.352_63e-1,
+    -1.513_885e-2,
+    1.167_372_8e-1,
+    1.257_921_2e1,
+    5.259_309_8e1,
+    2.852_907_6e1,
 ];
 
 /// sRGB inverse EOTF (linear → encoded) denominator coefficients.
 /// Evaluated on `sqrt(linear)`.
-pub(crate) const L2S_Q: [f32; 5] = [
-    1.004_519_6e-2,
-    3.036_675_5e-1,
-    1.340_817,
-    9.258_482e-1,
-    2.424_867_8e-2,
-];
+pub(crate) const L2S_Q: [f32; 5] = [2.943_901_4e-1, 9.779_103, 4.726_487_7e1, 3.546_463_8e1, 1.0];
 
 // =============================================================================
-// IEC 61966-2-1 thresholds (matching the curve the polynomial approximates)
+// C0-continuous thresholds (moxcms) — exact continuity at the piecewise join
 // =============================================================================
 
-/// sRGB linearization threshold in gamma domain (IEC 61966-2-1).
+/// sRGB linearization threshold in gamma domain (C0-continuous).
 /// Values below this use the linear segment `v / 12.92`.
-pub(crate) const SRGB_THRESHOLD: f32 = 0.04045;
+pub(crate) const SRGB_THRESHOLD: f32 = 0.039_293_37;
 
-/// sRGB linearization threshold in linear domain (IEC 61966-2-1).
+/// sRGB linearization threshold in linear domain (C0-continuous).
 /// Values below this use the linear segment `v * 12.92`.
-pub(crate) const LINEAR_THRESHOLD: f32 = 0.003_130_8;
+pub(crate) const LINEAR_THRESHOLD: f32 = 0.003_041_282_6;
 
 /// Scale factor for the linear segment (1 / 12.92).
 pub(crate) const LINEAR_SCALE: f32 = 1.0 / 12.92;
@@ -105,8 +97,8 @@ fn eval_rational_poly_5(x: f32, p: [f32; 5], q: [f32; 5]) -> f32 {
 /// Convert sRGB gamma-encoded value to linear light using a rational polynomial (f32).
 ///
 /// Replaces `powf()` with a 5/5 rational polynomial (Horner's method).
-/// Max error: 110 ULP at the piecewise threshold, <8 ULP elsewhere.
-/// Uses IEC 61966-2-1 thresholds (the polynomial was fitted to the IEC power curve).
+/// Max error: ~8 ULP in the power segment, 1 ULP at the piecewise threshold.
+/// Uses C0-continuous (moxcms) thresholds for exact continuity.
 ///
 /// **Clamps** inputs to \[0, 1\]. For exact `powf()`, see [`crate::precise::srgb_to_linear`].
 #[inline]
@@ -126,8 +118,8 @@ pub fn srgb_to_linear_fast(gamma: f32) -> f32 {
 /// Convert linear light value to sRGB gamma-encoded using a rational polynomial (f32).
 ///
 /// Uses sqrt + 5/5 rational polynomial (Horner's method).
-/// Max error: 31 ULP at the piecewise threshold, <8 ULP elsewhere.
-/// Uses IEC 61966-2-1 thresholds (the polynomial was fitted to the IEC power curve).
+/// Max error: ~8 ULP in the power segment, 0 ULP at the piecewise threshold.
+/// Uses C0-continuous (moxcms) thresholds for exact continuity.
 ///
 /// **Clamps** inputs to \[0, 1\]. For exact `powf()`, see [`crate::precise::linear_to_srgb`].
 #[inline]

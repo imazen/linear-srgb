@@ -46,7 +46,7 @@ pub(crate) mod srgb;
 
 /// sRGB EOTF: encoded → linear. Rational polynomial, max error ~5e-7.
 ///
-/// Uses libjxl rational polynomial — no `powf()` calls.
+/// Uses rational polynomial fitted to C0-continuous sRGB — no `powf()` calls.
 /// Equivalent to `crate::rational_poly::srgb_to_linear_fast`.
 #[inline(always)]
 pub fn srgb_to_linear(v: f32) -> f32 {
@@ -74,19 +74,25 @@ pub use pq::{linear_to_pq, pq_to_linear};
 mod tests {
     use super::*;
 
+    // C0-continuous (moxcms) constants matching the polynomial approximation.
+    const TEST_SRGB_A: f64 = 0.0550107189475866;
+    const TEST_SRGB_A1: f64 = 1.0 + TEST_SRGB_A;
+    const TEST_SRGB_LINEAR_THRESH: f64 = 0.003041282560127521;
+    const TEST_SRGB_GAMMA_THRESH: f64 = 12.92 * TEST_SRGB_LINEAR_THRESH;
+
     fn srgb_to_linear_f64(v: f64) -> f64 {
-        if v <= 0.04045 {
+        if v <= TEST_SRGB_GAMMA_THRESH {
             v / 12.92
         } else {
-            ((v + 0.055) / 1.055).powf(2.4)
+            ((v + TEST_SRGB_A) / TEST_SRGB_A1).powf(2.4)
         }
     }
 
     fn srgb_from_linear_f64(v: f64) -> f64 {
-        if v <= 0.0031308 {
+        if v <= TEST_SRGB_LINEAR_THRESH {
             v * 12.92
         } else {
-            1.055 * v.powf(1.0 / 2.4) - 0.055
+            TEST_SRGB_A1 * v.powf(1.0 / 2.4) - TEST_SRGB_A
         }
     }
 
@@ -276,13 +282,14 @@ mod tests {
 
     #[test]
     fn srgb_roundtrip() {
-        for i in 0..=255 {
-            let encoded = i as f32 / 255.0;
+        let u16_step = 1.0 / 65535.0_f32;
+        for i in 0..=10000 {
+            let encoded = i as f32 / 10000.0;
             let linear = srgb_to_linear(encoded);
             let back = linear_to_srgb(linear);
             let err = (back - encoded).abs();
             assert!(
-                err < 1.0 / 255.0,
+                err < u16_step,
                 "sRGB roundtrip failed at {i}: {encoded} -> {linear} -> {back} (err={err})"
             );
         }

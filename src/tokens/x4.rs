@@ -35,8 +35,8 @@ use magetypes::simd::f32x4 as mt_f32x4;
 use magetypes::simd::generic::f32x4 as gen_f32x4;
 
 // sRGB transfer function constants (IEC 61966-2-1, matching rational polynomial)
-const SRGB_LINEAR_THRESHOLD: f32 = 0.04045;
-const LINEAR_THRESHOLD: f32 = 0.003_130_8;
+const SRGB_LINEAR_THRESHOLD: f32 = 0.039_293_37;
+const LINEAR_THRESHOLD: f32 = 0.003_041_282_6;
 const LINEAR_SCALE: f32 = 1.0 / 12.92;
 const TWELVE_92: f32 = 12.92;
 
@@ -72,7 +72,7 @@ pub fn srgb_to_linear_v3(token: X64V3Token, srgb: [f32; 4]) -> [f32; 4] {
     let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[1]));
     let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[0]));
 
-    let power_result = yp / yq;
+    let power_result = (yp / yq).min(one);
 
     let mask = srgb.simd_lt(mt_f32x4::splat(token, SRGB_LINEAR_THRESHOLD));
     mt_f32x4::blend(mask, linear_result, power_result).to_array()
@@ -104,7 +104,7 @@ pub fn linear_to_srgb_v3(token: X64V3Token, linear: [f32; 4]) -> [f32; 4] {
     let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[1]));
     let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[0]));
 
-    let power_result = yp / yq;
+    let power_result = (yp / yq).min(one);
 
     let mask = linear.simd_lt(mt_f32x4::splat(token, LINEAR_THRESHOLD));
     mt_f32x4::blend(mask, linear_result, power_result).to_array()
@@ -233,7 +233,7 @@ pub fn srgb_to_linear_neon(token: NeonToken, srgb: [f32; 4]) -> [f32; 4] {
     let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[1]));
     let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[0]));
 
-    let power_result = yp / yq;
+    let power_result = (yp / yq).min(one);
 
     let mask = srgb.simd_lt(mt_f32x4::splat(token, SRGB_LINEAR_THRESHOLD));
     mt_f32x4::blend(mask, linear_result, power_result).to_array()
@@ -265,7 +265,7 @@ pub fn linear_to_srgb_neon(token: NeonToken, linear: [f32; 4]) -> [f32; 4] {
     let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[1]));
     let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[0]));
 
-    let power_result = yp / yq;
+    let power_result = (yp / yq).min(one);
 
     let mask = linear.simd_lt(mt_f32x4::splat(token, LINEAR_THRESHOLD));
     mt_f32x4::blend(mask, linear_result, power_result).to_array()
@@ -394,7 +394,7 @@ pub fn srgb_to_linear_wasm128(token: Wasm128Token, srgb: [f32; 4]) -> [f32; 4] {
     let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[1]));
     let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[0]));
 
-    let power_result = yp / yq;
+    let power_result = (yp / yq).min(one);
 
     let mask = srgb.simd_lt(mt_f32x4::splat(token, SRGB_LINEAR_THRESHOLD));
     mt_f32x4::blend(mask, linear_result, power_result).to_array()
@@ -426,7 +426,7 @@ pub fn linear_to_srgb_wasm128(token: Wasm128Token, linear: [f32; 4]) -> [f32; 4]
     let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[1]));
     let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[0]));
 
-    let power_result = yp / yq;
+    let power_result = (yp / yq).min(one);
 
     let mask = linear.simd_lt(mt_f32x4::splat(token, LINEAR_THRESHOLD));
     mt_f32x4::blend(mask, linear_result, power_result).to_array()

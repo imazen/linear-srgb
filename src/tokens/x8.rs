@@ -13,8 +13,8 @@ pub use archmage::X64V3Token;
 use magetypes::simd::f32x8 as mt_f32x8;
 
 // sRGB transfer function constants (IEC 61966-2-1, matching rational polynomial)
-const SRGB_LINEAR_THRESHOLD: f32 = 0.04045;
-const LINEAR_THRESHOLD: f32 = 0.003_130_8;
+const SRGB_LINEAR_THRESHOLD: f32 = 0.039_293_37;
+const LINEAR_THRESHOLD: f32 = 0.003_041_282_6;
 const LINEAR_SCALE: f32 = 1.0 / 12.92;
 const TWELVE_92: f32 = 12.92;
 
@@ -48,7 +48,7 @@ pub fn srgb_to_linear_v3(token: X64V3Token, srgb: [f32; 8]) -> [f32; 8] {
     let yq = yq.mul_add(x, mt_f32x8::splat(token, S2L_Q[1]));
     let yq = yq.mul_add(x, mt_f32x8::splat(token, S2L_Q[0]));
 
-    let power_result = yp / yq;
+    let power_result = (yp / yq).min(one);
 
     let mask = srgb.simd_lt(mt_f32x8::splat(token, SRGB_LINEAR_THRESHOLD));
     mt_f32x8::blend(mask, linear_result, power_result).to_array()
@@ -80,7 +80,7 @@ pub fn linear_to_srgb_v3(token: X64V3Token, linear: [f32; 8]) -> [f32; 8] {
     let yq = yq.mul_add(x, mt_f32x8::splat(token, L2S_Q[1]));
     let yq = yq.mul_add(x, mt_f32x8::splat(token, L2S_Q[0]));
 
-    let power_result = yp / yq;
+    let power_result = (yp / yq).min(one);
 
     let mask = linear.simd_lt(mt_f32x8::splat(token, LINEAR_THRESHOLD));
     mt_f32x8::blend(mask, linear_result, power_result).to_array()

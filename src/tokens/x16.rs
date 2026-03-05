@@ -13,8 +13,8 @@ pub use archmage::X64V4Token;
 use magetypes::simd::v4::f32x16 as mt_f32x16;
 
 // sRGB transfer function constants (IEC 61966-2-1, matching rational polynomial)
-const SRGB_LINEAR_THRESHOLD: f32 = 0.04045;
-const LINEAR_THRESHOLD: f32 = 0.003_130_8;
+const SRGB_LINEAR_THRESHOLD: f32 = 0.039_293_37;
+const LINEAR_THRESHOLD: f32 = 0.003_041_282_6;
 const LINEAR_SCALE: f32 = 1.0 / 12.92;
 const TWELVE_92: f32 = 12.92;
 
@@ -48,7 +48,7 @@ pub fn srgb_to_linear_v4(token: X64V4Token, srgb: [f32; 16]) -> [f32; 16] {
     let yq = yq.mul_add(x, mt_f32x16::splat(token, S2L_Q[1]));
     let yq = yq.mul_add(x, mt_f32x16::splat(token, S2L_Q[0]));
 
-    let power_result = yp / yq;
+    let power_result = (yp / yq).min(one);
 
     let mask = srgb.simd_lt(mt_f32x16::splat(token, SRGB_LINEAR_THRESHOLD));
     mt_f32x16::blend(mask, linear_result, power_result).to_array()
@@ -80,7 +80,7 @@ pub fn linear_to_srgb_v4(token: X64V4Token, linear: [f32; 16]) -> [f32; 16] {
     let yq = yq.mul_add(x, mt_f32x16::splat(token, L2S_Q[1]));
     let yq = yq.mul_add(x, mt_f32x16::splat(token, L2S_Q[0]));
 
-    let power_result = yp / yq;
+    let power_result = (yp / yq).min(one);
 
     let mask = linear.simd_lt(mt_f32x16::splat(token, LINEAR_THRESHOLD));
     mt_f32x16::blend(mask, linear_result, power_result).to_array()
@@ -307,11 +307,12 @@ pub fn tf_srgb_to_linear_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
     use crate::rational_poly::{LINEAR_SCALE, S2L_P, S2L_Q, SRGB_THRESHOLD};
 
     let v = mt_f32x16::from_array(token, v);
+    let one = mt_f32x16::splat(token, 1.0);
     let threshold = mt_f32x16::splat(token, SRGB_THRESHOLD);
     let inv_12_92 = mt_f32x16::splat(token, LINEAR_SCALE);
 
     let linear = v * inv_12_92;
-    let poly = eval_rational_poly_x16(token, v, S2L_P, S2L_Q);
+    let poly = eval_rational_poly_x16(token, v, S2L_P, S2L_Q).min(one);
 
     let mask = v.simd_le(threshold);
     mt_f32x16::blend(mask, linear, poly).to_array()
@@ -324,12 +325,13 @@ pub fn tf_linear_to_srgb_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
     use crate::rational_poly::{L2S_P, L2S_Q, LINEAR_THRESHOLD, TWELVE_92};
 
     let v = mt_f32x16::from_array(token, v);
+    let one = mt_f32x16::splat(token, 1.0);
     let threshold = mt_f32x16::splat(token, LINEAR_THRESHOLD);
     let scale = mt_f32x16::splat(token, TWELVE_92);
 
     let linear = v * scale;
     let s = v.sqrt();
-    let poly = eval_rational_poly_x16(token, s, L2S_P, L2S_Q);
+    let poly = eval_rational_poly_x16(token, s, L2S_P, L2S_Q).min(one);
 
     let mask = v.simd_le(threshold);
     mt_f32x16::blend(mask, linear, poly).to_array()
