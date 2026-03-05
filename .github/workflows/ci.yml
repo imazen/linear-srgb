@@ -67,7 +67,7 @@ jobs:
           RUSTFLAGS: -C target-feature=+simd128
 
       - name: Test WASM (wasm32-wasip1)
-        run: cargo test --target wasm32-wasip1 --all-features --release
+        run: cargo test --target wasm32-wasip1 --all-features --release --lib --tests
         env:
           RUSTFLAGS: -C target-feature=+simd128
           CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime --dir=.
