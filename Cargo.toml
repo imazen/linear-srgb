@@ -15,7 +15,7 @@ bytemuck = "1.21"
 archmage = { version = "0.9.2", default-features = false, features = ["macros"] }
 magetypes = { version = "0.9.2", default-features = false }
 
-[dev-dependencies]
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 criterion = "0.8"
 
 [features]
