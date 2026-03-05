@@ -31,6 +31,7 @@ pub use archmage::NeonToken;
 pub use archmage::Wasm128Token;
 
 use magetypes::simd::f32x4 as mt_f32x4;
+use magetypes::simd::generic::f32x4 as gen_f32x4;
 
 // sRGB transfer function constants (IEC 61966-2-1, matching rational polynomial)
 const SRGB_LINEAR_THRESHOLD: f32 = 0.04045;
@@ -536,7 +537,7 @@ macro_rules! x86_tf_rite {
         #[cfg(all(feature = "transfer", target_arch = "x86_64"))]
         #[rite]
         pub fn $name(token: X64V3Token, v: [f32; 4]) -> [f32; 4] {
-            $inner(token, mt_f32x4::from_array(token, v)).to_array()
+            $inner(token, gen_f32x4::from_array(token, v)).to_array()
         }
     };
 }
@@ -618,10 +619,11 @@ x86_tf_slice_rite!(
 
 macro_rules! neon_tf_rite {
     ($name:ident, $inner:path) => {
+        /// Transfer function rite (4×f32, AArch64 NEON). Requires `transfer` feature.
         #[cfg(all(feature = "transfer", target_arch = "aarch64"))]
         #[rite]
         pub fn $name(token: NeonToken, v: [f32; 4]) -> [f32; 4] {
-            $inner(token, mt_f32x4::from_array(token, v)).to_array()
+            $inner(token, gen_f32x4::from_array(token, v)).to_array()
         }
     };
 }
@@ -637,6 +639,7 @@ neon_tf_rite!(linear_to_hlg_neon, crate::tf::hlg::linear_to_hlg_x4);
 
 macro_rules! neon_tf_slice_rite {
     ($name:ident, $rite:ident, $scalar:path) => {
+        /// Transfer function slice rite (4×f32, AArch64 NEON). Requires `transfer` feature.
         #[cfg(all(feature = "transfer", target_arch = "aarch64"))]
         #[rite]
         pub fn $name(token: NeonToken, values: &mut [f32]) {
@@ -698,10 +701,11 @@ neon_tf_slice_rite!(
 
 macro_rules! wasm_tf_rite {
     ($name:ident, $inner:path) => {
+        /// Transfer function rite (4×f32, WASM SIMD128). Requires `transfer` feature.
         #[cfg(all(feature = "transfer", target_arch = "wasm32"))]
         #[rite]
         pub fn $name(token: Wasm128Token, v: [f32; 4]) -> [f32; 4] {
-            $inner(token, mt_f32x4::from_array(token, v)).to_array()
+            $inner(token, gen_f32x4::from_array(token, v)).to_array()
         }
     };
 }
@@ -729,6 +733,7 @@ wasm_tf_rite!(linear_to_hlg_wasm128, crate::tf::hlg::linear_to_hlg_x4);
 
 macro_rules! wasm_tf_slice_rite {
     ($name:ident, $rite:ident, $scalar:path) => {
+        /// Transfer function slice rite (4×f32, WASM SIMD128). Requires `transfer` feature.
         #[cfg(all(feature = "transfer", target_arch = "wasm32"))]
         #[rite]
         pub fn $name(token: Wasm128Token, values: &mut [f32]) {
