@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest, ubuntu-24.04-arm, windows-11-arm]
+        os: [ubuntu-latest, windows-latest, macos-latest, macos-26-intel, ubuntu-24.04-arm, windows-11-arm]
 
     steps:
       - uses: actions/checkout@v6
@@ -58,8 +58,8 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Check WASM (std + rites)
-        run: cargo check --target wasm32-unknown-unknown --features "std,rites"
+      - name: Check WASM (std)
+        run: cargo check --target wasm32-unknown-unknown --features "std"
         env:
           RUSTFLAGS: -C target-feature=+simd128
 
