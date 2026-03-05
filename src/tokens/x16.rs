@@ -339,15 +339,22 @@ pub fn tf_linear_to_srgb_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
 #[cfg(feature = "transfer")]
 #[rite]
 pub fn pq_to_linear_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
-    use crate::tf::pq::{PQ_EOTF_P, PQ_EOTF_Q};
+    use crate::tf::pq::{PQ_EOTF_P_LARGE, PQ_EOTF_P_SMALL, PQ_EOTF_Q_LARGE, PQ_EOTF_Q_SMALL};
 
     let v = mt_f32x16::from_array(token, v);
     let zero = mt_f32x16::zero(token);
     let a = v.max(zero);
     let x = a.mul_add(a, a); // x = a + a*a
-    let result = eval_rational_poly_x16(token, x, PQ_EOTF_P, PQ_EOTF_Q);
-    let mask = v.simd_gt(zero);
-    (result & mask).to_array()
+
+    let threshold = mt_f32x16::splat(token, 0.25);
+    let large = eval_rational_poly_x16(token, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE);
+    let small = eval_rational_poly_x16(token, x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL);
+
+    let mask = a.simd_lt(threshold);
+    let result = mt_f32x16::blend(mask, small, large);
+
+    let pos_mask = v.simd_gt(zero);
+    (result & pos_mask).to_array()
 }
 
 /// Convert 16 linear values to PQ signal.

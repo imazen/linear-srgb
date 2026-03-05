@@ -8,11 +8,11 @@ use num_traits::Float; // provides powf/sqrt via libm in no_std
 // Scalar
 // =============================================================================
 
-/// PQ EOTF: signal → linear. Rational polynomial, max error ~7e-7.
+/// PQ EOTF: signal → linear. Two-range rational polynomial, sub-U16 roundtrip.
 ///
 /// Zero `powf()` calls for signal > 0.02 — uses `x + x*x` input transformation
-/// and rational polynomial. Very small signal values use exact formula.
-/// Coefficients from libjxl.
+/// with separate polynomial fits for low and high signal ranges.
+/// Very small signal values use exact formula.
 #[inline(always)]
 pub fn pq_to_linear(v: f32) -> f32 {
     if v <= 0.0 {
@@ -21,9 +21,12 @@ pub fn pq_to_linear(v: f32) -> f32 {
     if v < 0.02 {
         return pq_to_linear_exact(v);
     }
-    let a = v;
-    let x = a + a * a;
-    fast_math::eval_rational_poly(x, PQ_EOTF_P, PQ_EOTF_Q)
+    let x = v + v * v;
+    if v < 0.25 {
+        fast_math::eval_rational_poly(x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL)
+    } else {
+        fast_math::eval_rational_poly(x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE)
+    }
 }
 
 /// PQ inverse EOTF: linear → signal. Rational polynomial on x^(1/4), max error ~3e-6.
@@ -79,19 +82,35 @@ fn pq_from_linear_exact(v: f32) -> f32 {
 // Coefficients
 // =============================================================================
 
-pub(crate) const PQ_EOTF_P: [f32; 5] = [
-    2.6297566e-4,
-    -6.235531e-3,
-    7.386023e-1,
-    2.6455317,
-    5.500349e-1,
+// Two-range EOTF: split at signal = 0.25 for sub-U16-step roundtrip accuracy.
+// Fitted with relative-error weighting (minimax in signal-space roundtrip).
+pub(crate) const PQ_EOTF_P_SMALL: [f32; 5] = [
+    4.36033203e-10,
+    -1.53651077e-07,
+    2.06864196e-06,
+    2.80304711e-03,
+    1.47809948e-02,
 ];
-pub(crate) const PQ_EOTF_Q: [f32; 5] = [
-    4.213501e2,
-    -4.2873682e2,
-    1.7436467e2,
-    -3.3907887e1,
-    2.6771877,
+pub(crate) const PQ_EOTF_Q_SMALL: [f32; 5] = [
+    -9.89955022e-03,
+    1.89911767e+00,
+    -1.34828020e+00,
+    -7.10547502e-01,
+    1.00000000e+00,
+];
+pub(crate) const PQ_EOTF_P_LARGE: [f32; 5] = [
+    5.43046166e-04,
+    -6.31017431e-03,
+    2.90480734e-01,
+    9.80363032e-01,
+    2.22819483e-01,
+];
+pub(crate) const PQ_EOTF_Q_LARGE: [f32; 5] = [
+    1.58688561e+02,
+    -1.60764060e+02,
+    6.51370372e+01,
+    -1.26438391e+01,
+    1.00000000e+00,
 ];
 
 pub(crate) const PQ_INV_P_LARGE: [f32; 5] =
@@ -122,9 +141,16 @@ pub(crate) fn pq_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let zero = f32x4::zero(t);
     let a = v.max(zero);
     let x = a.mul_add(a, a);
-    let result = fast_math::eval_rational_poly_x4(t, x, PQ_EOTF_P, PQ_EOTF_Q);
-    let mask = v.simd_gt(zero);
-    result & mask
+
+    let threshold = f32x4::splat(t, 0.25);
+    let large = fast_math::eval_rational_poly_x4(t, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE);
+    let small = fast_math::eval_rational_poly_x4(t, x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL);
+
+    let mask = a.simd_lt(threshold);
+    let result = f32x4::blend(mask, small, large);
+
+    let pos_mask = v.simd_gt(zero);
+    result & pos_mask
 }
 
 #[allow(dead_code)]
@@ -157,9 +183,16 @@ pub(crate) fn pq_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let zero = f32x8::zero(t);
     let a = v.max(zero);
     let x = a.mul_add(a, a);
-    let result = fast_math::eval_rational_poly_x8(t, x, PQ_EOTF_P, PQ_EOTF_Q);
-    let mask = v.simd_gt(zero);
-    result & mask
+
+    let threshold = f32x8::splat(t, 0.25);
+    let large = fast_math::eval_rational_poly_x8(t, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE);
+    let small = fast_math::eval_rational_poly_x8(t, x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL);
+
+    let mask = a.simd_lt(threshold);
+    let result = f32x8::blend(mask, small, large);
+
+    let pos_mask = v.simd_gt(zero);
+    result & pos_mask
 }
 
 #[inline(always)]

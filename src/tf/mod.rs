@@ -290,14 +290,16 @@ mod tests {
 
     #[test]
     fn pq_roundtrip() {
-        for i in 50..=1000 {
-            let v = i as f32 / 1000.0;
+        let u16_step = 1.0 / 65535.0_f32;
+        for i in 20..=10000 {
+            let v = i as f32 / 10000.0;
             let linear = pq_to_linear(v);
             let back = linear_to_pq(linear);
             let err = (back - v).abs();
             assert!(
-                err < 0.001,
-                "PQ roundtrip failed at {v}: -> {linear} -> {back} (err={err})"
+                err < u16_step,
+                "PQ roundtrip failed at {v}: -> {linear} -> {back} (err={err}, {:.1} U16 steps)",
+                err / u16_step
             );
         }
     }
