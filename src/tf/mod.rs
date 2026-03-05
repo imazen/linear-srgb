@@ -46,6 +46,10 @@ pub mod rites_x8;
 #[cfg(any(target_arch = "aarch64", target_arch = "wasm32"))]
 pub mod rites_x4;
 
+/// Inlineable x16 `#[rite]` functions (AVX-512).
+#[cfg(target_arch = "x86_64")]
+pub mod rites_x16;
+
 // =============================================================================
 // Scalar re-exports
 // =============================================================================
