@@ -24,8 +24,8 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use archmage::{arcane, X64V3Token};
-//! use linear_srgb::tokens::x8;
+//! use archmage::arcane;
+//! use linear_srgb::tokens::{X64V3Token, x8};
 //!
 //! #[arcane]
 //! fn process_pixels(token: X64V3Token, data: &mut [f32]) {
@@ -42,3 +42,13 @@ pub mod x8;
 
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 pub mod x16;
+
+// Re-export token types so users can `use linear_srgb::tokens::X64V3Token` etc.
+#[cfg(target_arch = "aarch64")]
+pub use archmage::NeonToken;
+#[cfg(target_arch = "wasm32")]
+pub use archmage::Wasm128Token;
+#[cfg(target_arch = "x86_64")]
+pub use archmage::X64V3Token;
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+pub use archmage::X64V4Token;

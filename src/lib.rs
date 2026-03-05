@@ -236,8 +236,9 @@ pub(crate) mod rational_poly;
 mod const_luts;
 mod const_luts_u16;
 
-// Alternative/experimental implementations (for benchmarking)
+// Alternative/experimental implementations (for benchmarking, not stable API)
 #[cfg(feature = "alt")]
+#[doc(hidden)]
 pub mod alt;
 
 // ============================================================================
