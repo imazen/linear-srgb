@@ -218,6 +218,16 @@ pub mod rites;
 #[cfg(feature = "mage")]
 pub mod mage;
 
+/// Transfer functions: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).
+///
+/// Scalar, generic SIMD, and platform-specific `#[rite]` functions for all
+/// four transfer functions. Uses rational polynomial approximations (libjxl)
+/// and bit-trick transcendentals — no `powf()` on the SIMD path.
+///
+/// Requires the `transfer` feature.
+#[cfg(feature = "transfer")]
+pub mod tf;
+
 // ============================================================================
 // Internal modules
 // ============================================================================

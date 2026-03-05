@@ -31,6 +31,8 @@ unsafe_simd = []
 mage = []
 # Inlineable #[rite] functions for embedding in #[arcane] code
 rites = []
+# Transfer functions: sRGB, BT.709, PQ, HLG — scalar + SIMD rites
+transfer = []
 
 [[bench]]
 name = "benchmarks"
