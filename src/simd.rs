@@ -14,13 +14,17 @@
 //! ## Single-value LUT Functions
 //! - `srgb_u8_to_linear` - u8 → f32 via lookup table
 
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+use archmage::Server64;
 #[cfg(target_arch = "x86_64")]
 use archmage::{Desktop64, arcane, rite};
 use archmage::{ScalarToken, incant};
 
-// Alias magetypes f32x8 to avoid name clash
+// Alias magetypes SIMD types to avoid name clash
 #[cfg(target_arch = "x86_64")]
 use magetypes::simd::f32x8 as mt_f32x8;
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+use magetypes::simd::v4::f32x16 as mt_f32x16;
 
 /// Precomputed sRGB u8 → linear f32 lookup table.
 /// Uses the same constants as the transfer module (C0-continuous IEC 61966-2-1).
@@ -183,20 +187,121 @@ fn linear_to_gamma_mt(token: Desktop64, linear: mt_f32x8, gamma: f32) -> mt_f32x
 }
 
 // ============================================================================
+// magetypes #[rite] helpers (x86-64 V4/AVX-512) — native 512-bit SIMD
+// ============================================================================
+
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[rite]
+fn srgb_to_linear_mt_x16(token: Server64, srgb: mt_f32x16) -> mt_f32x16 {
+    use crate::rational_poly::{S2L_P, S2L_Q};
+
+    let zero = mt_f32x16::zero(token);
+    let one = mt_f32x16::splat(token, 1.0);
+    let srgb = srgb.max(zero).min(one);
+
+    let linear_result = srgb * mt_f32x16::splat(token, 1.0 / 12.92);
+
+    let x = srgb;
+    let yp = mt_f32x16::splat(token, S2L_P[4]).mul_add(x, mt_f32x16::splat(token, S2L_P[3]));
+    let yp = yp.mul_add(x, mt_f32x16::splat(token, S2L_P[2]));
+    let yp = yp.mul_add(x, mt_f32x16::splat(token, S2L_P[1]));
+    let yp = yp.mul_add(x, mt_f32x16::splat(token, S2L_P[0]));
+
+    let yq = mt_f32x16::splat(token, S2L_Q[4]).mul_add(x, mt_f32x16::splat(token, S2L_Q[3]));
+    let yq = yq.mul_add(x, mt_f32x16::splat(token, S2L_Q[2]));
+    let yq = yq.mul_add(x, mt_f32x16::splat(token, S2L_Q[1]));
+    let yq = yq.mul_add(x, mt_f32x16::splat(token, S2L_Q[0]));
+
+    let power_result = yp / yq;
+
+    let mask = srgb.simd_lt(mt_f32x16::splat(token, 0.04045));
+    mt_f32x16::blend(mask, linear_result, power_result)
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[rite]
+fn linear_to_srgb_mt_x16(token: Server64, linear: mt_f32x16) -> mt_f32x16 {
+    use crate::rational_poly::{L2S_P, L2S_Q};
+
+    let zero = mt_f32x16::zero(token);
+    let one = mt_f32x16::splat(token, 1.0);
+    let linear = linear.max(zero).min(one);
+
+    let linear_result = linear * mt_f32x16::splat(token, 12.92);
+
+    let x = linear.sqrt();
+    let yp = mt_f32x16::splat(token, L2S_P[4]).mul_add(x, mt_f32x16::splat(token, L2S_P[3]));
+    let yp = yp.mul_add(x, mt_f32x16::splat(token, L2S_P[2]));
+    let yp = yp.mul_add(x, mt_f32x16::splat(token, L2S_P[1]));
+    let yp = yp.mul_add(x, mt_f32x16::splat(token, L2S_P[0]));
+
+    let yq = mt_f32x16::splat(token, L2S_Q[4]).mul_add(x, mt_f32x16::splat(token, L2S_Q[3]));
+    let yq = yq.mul_add(x, mt_f32x16::splat(token, L2S_Q[2]));
+    let yq = yq.mul_add(x, mt_f32x16::splat(token, L2S_Q[1]));
+    let yq = yq.mul_add(x, mt_f32x16::splat(token, L2S_Q[0]));
+
+    let power_result = yp / yq;
+
+    let mask = linear.simd_lt(mt_f32x16::splat(token, 0.003_130_8));
+    mt_f32x16::blend(mask, linear_result, power_result)
+}
+
+// gamma x16: pow_midp not available on f32x16, delegate to 2×x8 via token.v3()
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[rite]
+fn gamma_to_linear_x16_2x8(token: Server64, v: [f32; 16], gamma: f32) -> [f32; 16] {
+    let t3 = token.v3();
+    let lo = mt_f32x8::from_array(t3, <[f32; 8]>::try_from(&v[..8]).unwrap());
+    let hi = mt_f32x8::from_array(t3, <[f32; 8]>::try_from(&v[8..]).unwrap());
+    let lo = gamma_to_linear_mt(t3, lo, gamma).to_array();
+    let hi = gamma_to_linear_mt(t3, hi, gamma).to_array();
+    let mut out = [0.0f32; 16];
+    out[..8].copy_from_slice(&lo);
+    out[8..].copy_from_slice(&hi);
+    out
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[rite]
+fn linear_to_gamma_x16_2x8(token: Server64, v: [f32; 16], gamma: f32) -> [f32; 16] {
+    let t3 = token.v3();
+    let lo = mt_f32x8::from_array(t3, <[f32; 8]>::try_from(&v[..8]).unwrap());
+    let hi = mt_f32x8::from_array(t3, <[f32; 8]>::try_from(&v[8..]).unwrap());
+    let lo = linear_to_gamma_mt(t3, lo, gamma).to_array();
+    let hi = linear_to_gamma_mt(t3, hi, gamma).to_array();
+    let mut out = [0.0f32; 16];
+    out[..8].copy_from_slice(&lo);
+    out[8..].copy_from_slice(&hi);
+    out
+}
+
+// ============================================================================
 // Slice Functions with dispatch
 // ============================================================================
+
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[arcane]
+fn srgb_to_linear_slice_tier_v4(token: Server64, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
+    for chunk in chunks {
+        let v = mt_f32x16::from_array(token, *chunk);
+        let result = srgb_to_linear_mt_x16(token, v);
+        *chunk = result.to_array();
+    }
+    for v in remainder {
+        *v = crate::scalar::srgb_to_linear(*v);
+    }
+}
 
 #[cfg(target_arch = "x86_64")]
 #[arcane]
 fn srgb_to_linear_slice_tier_v3(token: Desktop64, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
-
     for chunk in chunks {
         let v = mt_f32x8::from_array(token, *chunk);
         let result = srgb_to_linear_mt(token, v);
         *chunk = result.to_array();
     }
-
     for v in remainder {
         *v = crate::scalar::srgb_to_linear(*v);
     }
@@ -210,7 +315,7 @@ fn srgb_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
 
 /// Convert sRGB f32 values to linear in-place.
 ///
-/// Processes 8 values at a time using SIMD, with scalar fallback for remainder.
+/// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), or scalar depending on CPU.
 ///
 /// # Example
 /// ```
@@ -221,20 +326,32 @@ fn srgb_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
 /// ```
 #[inline]
 pub fn srgb_to_linear_slice(values: &mut [f32]) {
-    incant!(srgb_to_linear_slice_tier(values), [v3])
+    incant!(srgb_to_linear_slice_tier(values), [v4, v3])
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[arcane]
+fn linear_to_srgb_slice_tier_v4(token: Server64, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
+    for chunk in chunks {
+        let v = mt_f32x16::from_array(token, *chunk);
+        let result = linear_to_srgb_mt_x16(token, v);
+        *chunk = result.to_array();
+    }
+    for v in remainder {
+        *v = crate::scalar::linear_to_srgb(*v);
+    }
 }
 
 #[cfg(target_arch = "x86_64")]
 #[arcane]
 fn linear_to_srgb_slice_tier_v3(token: Desktop64, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
-
     for chunk in chunks {
         let v = mt_f32x8::from_array(token, *chunk);
         let result = linear_to_srgb_mt(token, v);
         *chunk = result.to_array();
     }
-
     for v in remainder {
         *v = crate::scalar::linear_to_srgb(*v);
     }
@@ -248,7 +365,7 @@ fn linear_to_srgb_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
 
 /// Convert linear f32 values to sRGB in-place.
 ///
-/// Processes 8 values at a time using SIMD, with scalar fallback for remainder.
+/// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), or scalar depending on CPU.
 ///
 /// # Example
 /// ```
@@ -259,7 +376,7 @@ fn linear_to_srgb_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
 /// ```
 #[inline]
 pub fn linear_to_srgb_slice(values: &mut [f32]) {
-    incant!(linear_to_srgb_slice_tier(values), [v3])
+    incant!(linear_to_srgb_slice_tier(values), [v4, v3])
 }
 
 /// Convert sRGB u8 values to linear f32.
@@ -367,17 +484,27 @@ pub fn linear_to_srgb_u16_slice(input: &[f32], output: &mut [u16]) {
 // Custom Gamma Slice Functions
 // ============================================================================
 
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[arcane]
+fn gamma_to_linear_slice_tier_v4(token: Server64, values: &mut [f32], gamma: f32) {
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
+    for chunk in chunks {
+        *chunk = gamma_to_linear_x16_2x8(token, *chunk, gamma);
+    }
+    for v in remainder {
+        *v = crate::scalar::gamma_to_linear(*v, gamma);
+    }
+}
+
 #[cfg(target_arch = "x86_64")]
 #[arcane]
 fn gamma_to_linear_slice_tier_v3(token: Desktop64, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
-
     for chunk in chunks {
         let v = mt_f32x8::from_array(token, *chunk);
         let result = gamma_to_linear_mt(token, v, gamma);
         *chunk = result.to_array();
     }
-
     for v in remainder {
         *v = crate::scalar::gamma_to_linear(*v, gamma);
     }
@@ -391,7 +518,7 @@ fn gamma_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], ga
 
 /// Convert gamma-encoded f32 values to linear in-place using a custom gamma.
 ///
-/// Processes 8 values at a time using SIMD, with scalar fallback for remainder.
+/// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), or scalar depending on CPU.
 ///
 /// # Example
 /// ```
@@ -402,20 +529,30 @@ fn gamma_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], ga
 /// ```
 #[inline]
 pub fn gamma_to_linear_slice(values: &mut [f32], gamma: f32) {
-    incant!(gamma_to_linear_slice_tier(values, gamma), [v3])
+    incant!(gamma_to_linear_slice_tier(values, gamma), [v4, v3])
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[arcane]
+fn linear_to_gamma_slice_tier_v4(token: Server64, values: &mut [f32], gamma: f32) {
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
+    for chunk in chunks {
+        *chunk = linear_to_gamma_x16_2x8(token, *chunk, gamma);
+    }
+    for v in remainder {
+        *v = crate::scalar::linear_to_gamma(*v, gamma);
+    }
 }
 
 #[cfg(target_arch = "x86_64")]
 #[arcane]
 fn linear_to_gamma_slice_tier_v3(token: Desktop64, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
-
     for chunk in chunks {
         let v = mt_f32x8::from_array(token, *chunk);
         let result = linear_to_gamma_mt(token, v, gamma);
         *chunk = result.to_array();
     }
-
     for v in remainder {
         *v = crate::scalar::linear_to_gamma(*v, gamma);
     }
@@ -429,7 +566,7 @@ fn linear_to_gamma_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], ga
 
 /// Convert linear f32 values to gamma-encoded in-place using a custom gamma.
 ///
-/// Processes 8 values at a time using SIMD, with scalar fallback for remainder.
+/// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), or scalar depending on CPU.
 ///
 /// # Example
 /// ```
@@ -440,7 +577,7 @@ fn linear_to_gamma_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], ga
 /// ```
 #[inline]
 pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
-    incant!(linear_to_gamma_slice_tier(values, gamma), [v3])
+    incant!(linear_to_gamma_slice_tier(values, gamma), [v4, v3])
 }
 
 // ============================================================================
@@ -464,7 +601,9 @@ mod tests {
             assert!(
                 (r - expected).abs() < 1e-4,
                 "srgb_u8_to_linear_x8 mismatch at {}: got {}, expected {}",
-                i, r, expected
+                i,
+                r,
+                expected
             );
         }
     }
@@ -481,7 +620,9 @@ mod tests {
             assert!(
                 (orig - conv).abs() < 1e-5,
                 "Slice roundtrip failed at {}: {} -> {}",
-                i, orig, conv
+                i,
+                orig,
+                conv
             );
         }
     }
@@ -497,7 +638,9 @@ mod tests {
             assert!(
                 (output[i] - expected).abs() < 1e-4,
                 "u8_to_linear mismatch at {}: got {}, expected {}",
-                i, output[i], expected
+                i,
+                output[i],
+                expected
             );
         }
     }
@@ -521,7 +664,9 @@ mod tests {
             assert!(
                 diff <= 1,
                 "linear_to_srgb_u8 at {}: got {}, expected {}",
-                i, output[i], i
+                i,
+                output[i],
+                i
             );
         }
     }
@@ -538,7 +683,9 @@ mod tests {
             assert!(
                 (orig - conv).abs() < 1e-3,
                 "Gamma roundtrip failed at {}: {} -> {}",
-                i, orig, conv
+                i,
+                orig,
+                conv
             );
         }
     }

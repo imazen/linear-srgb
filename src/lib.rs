@@ -235,7 +235,6 @@ mod mlaf;
 // Rational polynomial sRGB approximation (shared coefficients + scalar evaluator)
 pub(crate) mod rational_poly;
 
-
 // Pre-computed const lookup tables (embedded in binary)
 mod const_luts;
 mod const_luts_u16;

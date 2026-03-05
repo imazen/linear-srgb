@@ -519,17 +519,13 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
         // === sRGB → Linear ===
 
         // Slice function: dispatch once, process entire slice
-        group.bench_with_input(
-            BenchmarkId::new("s2l_slice", size),
-            &f32_data,
-            |b, data| {
-                let mut output = data.clone();
-                b.iter(|| {
-                    simd::srgb_to_linear_slice(&mut output);
-                    black_box(&output);
-                })
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("s2l_slice", size), &f32_data, |b, data| {
+            let mut output = data.clone();
+            b.iter(|| {
+                simd::srgb_to_linear_slice(&mut output);
+                black_box(&output);
+            })
+        });
 
         // Pure scalar (no SIMD, no dispatch)
         group.bench_with_input(
@@ -885,8 +881,13 @@ fn bench_dispatched_at_tier(c: &mut Criterion, tier: &str) {
     #[cfg(target_arch = "x86_64")]
     {
         use archmage::SimdToken;
+        // First restore all tokens to a clean state
+        let _ = archmage::Desktop64::dangerously_disable_token_process_wide(false);
+        let _ = archmage::Server64::dangerously_disable_token_process_wide(false);
+
         match tier {
             "scalar" => {
+                // Disable V3 (cascades to V4/V4x) to force scalar fallback
                 if archmage::Desktop64::dangerously_disable_token_process_wide(true).is_err() {
                     eprintln!(
                         "Cannot disable V3 (compile-time guaranteed). \
@@ -896,14 +897,27 @@ fn bench_dispatched_at_tier(c: &mut Criterion, tier: &str) {
                 }
             }
             "v3" => {
-                let _ = archmage::Desktop64::dangerously_disable_token_process_wide(false);
+                // Disable V4 to isolate V3 (AVX2+FMA only)
+                let _ = archmage::Server64::dangerously_disable_token_process_wide(true);
                 if archmage::Desktop64::summon().is_none() {
                     eprintln!("V3 (AVX2+FMA) not available on this CPU. Skipping.");
                     return;
                 }
             }
+            "v4" => {
+                // Leave everything enabled — V4 (AVX-512) takes priority
+                if archmage::Server64::summon().is_none() {
+                    eprintln!("V4 (AVX-512) not available on this CPU. Skipping.");
+                    return;
+                }
+            }
             _ => {}
         }
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    if tier != "scalar" {
+        eprintln!("Non-x86_64: only scalar tier available. Skipping {tier}.");
+        return;
     }
 
     let group_name = format!("tier_{tier}");
@@ -991,7 +1005,12 @@ fn bench_dispatched_at_tier(c: &mut Criterion, tier: &str) {
     #[cfg(target_arch = "x86_64")]
     {
         let _ = archmage::Desktop64::dangerously_disable_token_process_wide(false);
+        let _ = archmage::Server64::dangerously_disable_token_process_wide(false);
     }
+}
+
+fn bench_tier_v4(c: &mut Criterion) {
+    bench_dispatched_at_tier(c, "v4");
 }
 
 fn bench_tier_v3(c: &mut Criterion) {
@@ -1010,6 +1029,7 @@ criterion_group!(
     bench_scaling,
     bench_dispatch_overhead,
     bench_mage,
+    bench_tier_v4,
     bench_tier_v3,
     bench_tier_scalar,
 );

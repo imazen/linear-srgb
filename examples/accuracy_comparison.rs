@@ -23,7 +23,6 @@ use linear_srgb::lut::{
 use linear_srgb::scalar::{linear_to_srgb, linear_to_srgb_f64, srgb_to_linear, srgb_to_linear_f64};
 use linear_srgb::simd;
 use std::sync::Arc;
-use wide::f32x8;
 
 // ============================================================================
 // Converter Abstractions
@@ -114,11 +113,11 @@ fn create_srgb_to_linear_methods() -> Vec<SrgbToLinearMethod> {
             u16_to_f32: None,
         },
         SrgbToLinearMethod {
-            name: "SIMD wide::f32x8 dirty_pow",
+            name: "SIMD dispatch (slice)",
             f32_to_f32: Box::new(|x| {
-                let v = f32x8::splat(x);
-                let result: [f32; 8] = simd::srgb_to_linear_x8(v).into();
-                result[0]
+                let mut v = [x];
+                simd::srgb_to_linear_slice(&mut v);
+                v[0]
             }),
             u8_to_f32: None,
             u16_to_f32: None,
@@ -172,11 +171,11 @@ fn create_srgb_to_linear_methods() -> Vec<SrgbToLinearMethod> {
             u16_to_f32: None,
         },
         SrgbToLinearMethod {
-            name: "SIMD wide::f32x8 dirty_pow",
+            name: "SIMD dispatch (slice)",
             f32_to_f32: Box::new(|x| {
-                let v = f32x8::splat(x);
-                let result: [f32; 8] = simd::srgb_to_linear_x8(v).into();
-                result[0]
+                let mut v = [x];
+                simd::srgb_to_linear_slice(&mut v);
+                v[0]
             }),
             u8_to_f32: None,
             u16_to_f32: None,
@@ -217,15 +216,17 @@ fn create_linear_to_srgb_methods() -> Vec<LinearToSrgbMethod> {
             f32_to_u16: None,
         },
         LinearToSrgbMethod {
-            name: "SIMD wide::f32x8 dirty_pow",
+            name: "SIMD dispatch (slice)",
             f32_to_f32: Box::new(|x| {
-                let v = f32x8::splat(x);
-                let result: [f32; 8] = simd::linear_to_srgb_x8(v).into();
-                result[0]
+                let mut v = [x];
+                simd::linear_to_srgb_slice(&mut v);
+                v[0]
             }),
             f32_to_u8: Some(Box::new(|x| {
-                let v = f32x8::splat(x);
-                simd::linear_to_srgb_u8_x8(v)[0]
+                let inp = [x];
+                let mut out = [0u8];
+                simd::linear_to_srgb_u8_slice(&inp, &mut out);
+                out[0]
             })),
             f32_to_u16: None,
         },
@@ -296,15 +297,17 @@ fn create_linear_to_srgb_methods() -> Vec<LinearToSrgbMethod> {
             f32_to_u16: None,
         },
         LinearToSrgbMethod {
-            name: "SIMD wide::f32x8 dirty_pow",
+            name: "SIMD dispatch (slice)",
             f32_to_f32: Box::new(|x| {
-                let v = f32x8::splat(x);
-                let result: [f32; 8] = simd::linear_to_srgb_x8(v).into();
-                result[0]
+                let mut v = [x];
+                simd::linear_to_srgb_slice(&mut v);
+                v[0]
             }),
             f32_to_u8: Some(Box::new(|x| {
-                let v = f32x8::splat(x);
-                simd::linear_to_srgb_u8_x8(v)[0]
+                let inp = [x];
+                let mut out = [0u8];
+                simd::linear_to_srgb_u8_slice(&inp, &mut out);
+                out[0]
             })),
             f32_to_u16: None,
         },

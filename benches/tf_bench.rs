@@ -121,14 +121,38 @@ fn bench_tf_x8(c: &mut Criterion) {
         };
     }
 
-    bench_x8!("srgb_to_linear", encoded, tf::rites_x8::srgb_to_linear_slice_v3);
-    bench_x8!("linear_to_srgb", linear, tf::rites_x8::linear_to_srgb_slice_v3);
-    bench_x8!("bt709_to_linear", encoded, tf::rites_x8::bt709_to_linear_slice_v3);
-    bench_x8!("linear_to_bt709", linear, tf::rites_x8::linear_to_bt709_slice_v3);
+    bench_x8!(
+        "srgb_to_linear",
+        encoded,
+        tf::rites_x8::srgb_to_linear_slice_v3
+    );
+    bench_x8!(
+        "linear_to_srgb",
+        linear,
+        tf::rites_x8::linear_to_srgb_slice_v3
+    );
+    bench_x8!(
+        "bt709_to_linear",
+        encoded,
+        tf::rites_x8::bt709_to_linear_slice_v3
+    );
+    bench_x8!(
+        "linear_to_bt709",
+        linear,
+        tf::rites_x8::linear_to_bt709_slice_v3
+    );
     bench_x8!("pq_to_linear", encoded, tf::rites_x8::pq_to_linear_slice_v3);
     bench_x8!("linear_to_pq", linear, tf::rites_x8::linear_to_pq_slice_v3);
-    bench_x8!("hlg_to_linear", encoded, tf::rites_x8::hlg_to_linear_slice_v3);
-    bench_x8!("linear_to_hlg", linear, tf::rites_x8::linear_to_hlg_slice_v3);
+    bench_x8!(
+        "hlg_to_linear",
+        encoded,
+        tf::rites_x8::hlg_to_linear_slice_v3
+    );
+    bench_x8!(
+        "linear_to_hlg",
+        linear,
+        tf::rites_x8::linear_to_hlg_slice_v3
+    );
     g.finish();
 }
 
@@ -139,7 +163,7 @@ fn bench_tf_x8(_c: &mut Criterion) {}
 // x16 rites (AVX-512)
 // =============================================================================
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 fn bench_tf_x16(c: &mut Criterion) {
     use archmage::SimdToken;
     let Some(token) = archmage::Server64::summon() else {
@@ -169,18 +193,46 @@ fn bench_tf_x16(c: &mut Criterion) {
         };
     }
 
-    bench_x16!("srgb_to_linear", encoded, tf::rites_x16::srgb_to_linear_slice_v4);
-    bench_x16!("linear_to_srgb", linear, tf::rites_x16::linear_to_srgb_slice_v4);
-    bench_x16!("bt709_to_linear", encoded, tf::rites_x16::bt709_to_linear_slice_v4);
-    bench_x16!("linear_to_bt709", linear, tf::rites_x16::linear_to_bt709_slice_v4);
-    bench_x16!("pq_to_linear", encoded, tf::rites_x16::pq_to_linear_slice_v4);
+    bench_x16!(
+        "srgb_to_linear",
+        encoded,
+        tf::rites_x16::srgb_to_linear_slice_v4
+    );
+    bench_x16!(
+        "linear_to_srgb",
+        linear,
+        tf::rites_x16::linear_to_srgb_slice_v4
+    );
+    bench_x16!(
+        "bt709_to_linear",
+        encoded,
+        tf::rites_x16::bt709_to_linear_slice_v4
+    );
+    bench_x16!(
+        "linear_to_bt709",
+        linear,
+        tf::rites_x16::linear_to_bt709_slice_v4
+    );
+    bench_x16!(
+        "pq_to_linear",
+        encoded,
+        tf::rites_x16::pq_to_linear_slice_v4
+    );
     bench_x16!("linear_to_pq", linear, tf::rites_x16::linear_to_pq_slice_v4);
-    bench_x16!("hlg_to_linear", encoded, tf::rites_x16::hlg_to_linear_slice_v4);
-    bench_x16!("linear_to_hlg", linear, tf::rites_x16::linear_to_hlg_slice_v4);
+    bench_x16!(
+        "hlg_to_linear",
+        encoded,
+        tf::rites_x16::hlg_to_linear_slice_v4
+    );
+    bench_x16!(
+        "linear_to_hlg",
+        linear,
+        tf::rites_x16::linear_to_hlg_slice_v4
+    );
     g.finish();
 }
 
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(not(all(target_arch = "x86_64", feature = "avx512")))]
 fn bench_tf_x16(_c: &mut Criterion) {}
 
 // =============================================================================
@@ -225,14 +277,38 @@ fn bench_tf_x8_v4_disabled(c: &mut Criterion) {
         };
     }
 
-    bench_x8!("srgb_to_linear", encoded, tf::rites_x8::srgb_to_linear_slice_v3);
-    bench_x8!("linear_to_srgb", linear, tf::rites_x8::linear_to_srgb_slice_v3);
-    bench_x8!("bt709_to_linear", encoded, tf::rites_x8::bt709_to_linear_slice_v3);
-    bench_x8!("linear_to_bt709", linear, tf::rites_x8::linear_to_bt709_slice_v3);
+    bench_x8!(
+        "srgb_to_linear",
+        encoded,
+        tf::rites_x8::srgb_to_linear_slice_v3
+    );
+    bench_x8!(
+        "linear_to_srgb",
+        linear,
+        tf::rites_x8::linear_to_srgb_slice_v3
+    );
+    bench_x8!(
+        "bt709_to_linear",
+        encoded,
+        tf::rites_x8::bt709_to_linear_slice_v3
+    );
+    bench_x8!(
+        "linear_to_bt709",
+        linear,
+        tf::rites_x8::linear_to_bt709_slice_v3
+    );
     bench_x8!("pq_to_linear", encoded, tf::rites_x8::pq_to_linear_slice_v3);
     bench_x8!("linear_to_pq", linear, tf::rites_x8::linear_to_pq_slice_v3);
-    bench_x8!("hlg_to_linear", encoded, tf::rites_x8::hlg_to_linear_slice_v3);
-    bench_x8!("linear_to_hlg", linear, tf::rites_x8::linear_to_hlg_slice_v3);
+    bench_x8!(
+        "hlg_to_linear",
+        encoded,
+        tf::rites_x8::hlg_to_linear_slice_v3
+    );
+    bench_x8!(
+        "linear_to_hlg",
+        linear,
+        tf::rites_x8::linear_to_hlg_slice_v3
+    );
     g.finish();
 
     let _ = archmage::Server64::dangerously_disable_token_process_wide(false);

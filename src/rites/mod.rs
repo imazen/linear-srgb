@@ -40,5 +40,5 @@ pub mod x4;
 #[cfg(target_arch = "x86_64")]
 pub mod x8;
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 pub mod x16;

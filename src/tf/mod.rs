@@ -47,7 +47,7 @@ pub mod rites_x8;
 pub mod rites_x4;
 
 /// Inlineable x16 `#[rite]` functions (AVX-512).
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 pub mod rites_x16;
 
 // =============================================================================

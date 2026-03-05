@@ -12,16 +12,18 @@ categories = ["graphics", "multimedia::images", "no-std"]
 [dependencies]
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 bytemuck = "1.21"
-archmage = { version = "0.9", default-features = false, features = ["macros", "avx512"] }
-magetypes = { version = "0.9", default-features = false, features = ["avx512"] }
+archmage = { version = "0.9", default-features = false, features = ["macros"] }
+magetypes = { version = "0.9", default-features = false }
 
 [dev-dependencies]
 criterion = "0.8"
 
 [features]
-default = ["std"]
+default = ["std", "avx512"]
 # Enable std library (required for runtime SIMD dispatch)
 std = ["num-traits/std", "archmage/std", "magetypes/std"]
+# AVX-512 support (V4/V4x tiers for incant! dispatch and rites)
+avx512 = ["archmage/avx512", "magetypes/avx512"]
 # Include alternative/experimental implementations for benchmarking
 alt = []
 # Use unsafe variants for maximum performance (union-based bit manipulation, unchecked indexing)
