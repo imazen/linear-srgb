@@ -14,12 +14,14 @@ use linear_srgb::alt::accuracy::{
 };
 #[cfg(feature = "alt")]
 use linear_srgb::alt::imageflow;
+use linear_srgb::default;
 use linear_srgb::lut::{
     EncodeTable12, EncodeTable16, LinearTable8, LinearTable16, SrgbConverter,
     lut_interp_linear_float,
 };
-use linear_srgb::default;
-use linear_srgb::precise::{linear_to_srgb, linear_to_srgb_f64, srgb_to_linear, srgb_to_linear_f64};
+use linear_srgb::precise::{
+    linear_to_srgb, linear_to_srgb_f64, srgb_to_linear, srgb_to_linear_f64,
+};
 use std::sync::Arc;
 
 // ============================================================================

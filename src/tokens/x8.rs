@@ -387,28 +387,44 @@ pub fn linear_to_bt709_slice_v3(token: X64V3Token, values: &mut [f32]) {
 #[cfg(feature = "transfer")]
 #[rite]
 pub fn pq_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    tf_slice_x8(values, |v| pq_to_linear_v3(token, v), crate::tf::pq_to_linear);
+    tf_slice_x8(
+        values,
+        |v| pq_to_linear_v3(token, v),
+        crate::tf::pq_to_linear,
+    );
 }
 
 /// Convert linear f32 values to PQ in-place, 8-wide.
 #[cfg(feature = "transfer")]
 #[rite]
 pub fn linear_to_pq_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    tf_slice_x8(values, |v| linear_to_pq_v3(token, v), crate::tf::linear_to_pq);
+    tf_slice_x8(
+        values,
+        |v| linear_to_pq_v3(token, v),
+        crate::tf::linear_to_pq,
+    );
 }
 
 /// Convert HLG f32 values to linear in-place, 8-wide.
 #[cfg(feature = "transfer")]
 #[rite]
 pub fn hlg_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    tf_slice_x8(values, |v| hlg_to_linear_v3(token, v), crate::tf::hlg_to_linear);
+    tf_slice_x8(
+        values,
+        |v| hlg_to_linear_v3(token, v),
+        crate::tf::hlg_to_linear,
+    );
 }
 
 /// Convert linear f32 values to HLG in-place, 8-wide.
 #[cfg(feature = "transfer")]
 #[rite]
 pub fn linear_to_hlg_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    tf_slice_x8(values, |v| linear_to_hlg_v3(token, v), crate::tf::linear_to_hlg);
+    tf_slice_x8(
+        values,
+        |v| linear_to_hlg_v3(token, v),
+        crate::tf::linear_to_hlg,
+    );
 }
 
 #[cfg(feature = "transfer")]

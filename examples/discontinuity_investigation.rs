@@ -26,7 +26,10 @@ fn main() {
     println!("Constant comparison:");
     println!("  {:30} {:>22} {:>22}", "", "IEC textbook", "moxcms C0");
     println!("  {:30} {:>22.15} {:>22.15}", "a (offset)", iec_a, mox_a);
-    println!("  {:30} {:>22.15} {:>22.15}", "1+a (scale)", iec_scale, mox_scale);
+    println!(
+        "  {:30} {:>22.15} {:>22.15}",
+        "1+a (scale)", iec_scale, mox_scale
+    );
     println!(
         "  {:30} {:>22.15} {:>22.15}",
         "gamma threshold", iec_gamma_thresh, mox_gamma_thresh
@@ -125,8 +128,10 @@ fn main() {
 
     // sRGB → Linear: sweep around gamma = 0.04045
     println!("  sRGB → Linear around gamma threshold (0.04045):");
-    println!("  {:>10} {:>14} {:>14} {:>14} {:>14}",
-        "offset", "gamma", "linear_seg", "rat_poly", "delta");
+    println!(
+        "  {:>10} {:>14} {:>14} {:>14} {:>14}",
+        "offset", "gamma", "linear_seg", "rat_poly", "delta"
+    );
     let base = 0.04045_f32;
     for offset in -5..=5 {
         let gamma = f32_offset(base, offset);
@@ -134,14 +139,18 @@ fn main() {
         let poly = eval_s2l_rational_poly(gamma);
         let delta = poly - lin;
         let which = if gamma <= base { "L" } else { "P" };
-        println!("  {:>+10} {:>14.10} {:>14.10e} {:>14.10e} {:>+14.6e} {}",
-            offset, gamma, lin, poly, delta, which);
+        println!(
+            "  {:>+10} {:>14.10} {:>14.10e} {:>14.10e} {:>+14.6e} {}",
+            offset, gamma, lin, poly, delta, which
+        );
     }
 
     // Linear → sRGB: sweep around linear = 0.0031308
     println!("\n  Linear → sRGB around linear threshold (0.0031308):");
-    println!("  {:>10} {:>14} {:>14} {:>14} {:>14}",
-        "offset", "linear", "linear_seg", "rat_poly", "delta");
+    println!(
+        "  {:>10} {:>14} {:>14} {:>14} {:>14}",
+        "offset", "linear", "linear_seg", "rat_poly", "delta"
+    );
     let base = 0.003_130_8_f32;
     for offset in -5..=5 {
         let linear = f32_offset(base, offset);
@@ -149,8 +158,10 @@ fn main() {
         let poly = eval_l2s_rational_poly(linear);
         let delta = poly - lin_seg;
         let which = if linear <= base { "L" } else { "P" };
-        println!("  {:>+10} {:>14.10} {:>14.10e} {:>14.10e} {:>+14.6e} {}",
-            offset, linear, lin_seg, poly, delta, which);
+        println!(
+            "  {:>+10} {:>14.10} {:>14.10e} {:>14.10e} {:>+14.6e} {}",
+            offset, linear, lin_seg, poly, delta, which
+        );
     }
 
     // =========================================================================
@@ -164,14 +175,24 @@ fn main() {
     let iec_gamma_f32 = 0.04045_f32;
     let mox_gamma_f32 = mox_gamma_thresh as f32;
     let gamma_ulps = ulp_distance(iec_gamma_f32, mox_gamma_f32);
-    println!("  gamma threshold: IEC={:.10}, moxcms={:.10}, distance={} ULP ({:.6e} abs)",
-        iec_gamma_f32, mox_gamma_f32, gamma_ulps, (iec_gamma_f32 - mox_gamma_f32).abs());
+    println!(
+        "  gamma threshold: IEC={:.10}, moxcms={:.10}, distance={} ULP ({:.6e} abs)",
+        iec_gamma_f32,
+        mox_gamma_f32,
+        gamma_ulps,
+        (iec_gamma_f32 - mox_gamma_f32).abs()
+    );
 
     let iec_linear_f32 = 0.003_130_8_f32;
     let mox_linear_f32 = mox_linear_thresh as f32;
     let linear_ulps = ulp_distance(iec_linear_f32, mox_linear_f32);
-    println!("  linear threshold: IEC={:.10}, moxcms={:.10}, distance={} ULP ({:.6e} abs)",
-        iec_linear_f32, mox_linear_f32, linear_ulps, (iec_linear_f32 - mox_linear_f32).abs());
+    println!(
+        "  linear threshold: IEC={:.10}, moxcms={:.10}, distance={} ULP ({:.6e} abs)",
+        iec_linear_f32,
+        mox_linear_f32,
+        linear_ulps,
+        (iec_linear_f32 - mox_linear_f32).abs()
+    );
 
     // =========================================================================
     // Practical impact: u8 and u16 quantization
@@ -184,7 +205,10 @@ fn main() {
     // What sRGB u8 values are near the threshold?
     // threshold ~= 0.04045, * 255 = 10.3
     // So u8 values 10 and 11 straddle the threshold
-    println!("  sRGB u8 values near gamma threshold (0.04045 * 255 = {:.1}):", 0.04045 * 255.0);
+    println!(
+        "  sRGB u8 values near gamma threshold (0.04045 * 255 = {:.1}):",
+        0.04045 * 255.0
+    );
     for u8val in 9..=12 {
         let gamma = u8val as f64 / 255.0;
         let iec_result = if gamma <= iec_gamma_thresh {
@@ -198,15 +222,27 @@ fn main() {
             ((gamma + mox_a) / mox_scale).powf(2.4)
         };
         let diff = (iec_result - mox_result).abs();
-        let iec_path = if gamma <= iec_gamma_thresh { "linear" } else { "power" };
-        let mox_path = if gamma <= mox_gamma_thresh { "linear" } else { "power" };
-        println!("    u8={:3} (gamma={:.6}): IEC={:.10e} [{}], mox={:.10e} [{}], diff={:.2e}",
-            u8val, gamma, iec_result, iec_path, mox_result, mox_path, diff);
+        let iec_path = if gamma <= iec_gamma_thresh {
+            "linear"
+        } else {
+            "power"
+        };
+        let mox_path = if gamma <= mox_gamma_thresh {
+            "linear"
+        } else {
+            "power"
+        };
+        println!(
+            "    u8={:3} (gamma={:.6}): IEC={:.10e} [{}], mox={:.10e} [{}], diff={:.2e}",
+            u8val, gamma, iec_result, iec_path, mox_result, mox_path, diff
+        );
     }
 
     // Linear threshold in u16 space
-    println!("\n  Linear values near encoding threshold (0.0031308 * 65535 = {:.1}):",
-        0.0031308 * 65535.0);
+    println!(
+        "\n  Linear values near encoding threshold (0.0031308 * 65535 = {:.1}):",
+        0.0031308 * 65535.0
+    );
     for u16val in [204u16, 205, 206, 207] {
         let linear = u16val as f64 / 65535.0;
         let iec_result = if linear <= iec_linear_thresh {
@@ -220,8 +256,10 @@ fn main() {
             mox_scale * linear.powf(1.0 / 2.4) - mox_a
         };
         let diff = (iec_result - mox_result).abs();
-        println!("    u16={:5} (linear={:.8}): IEC={:.10e}, mox={:.10e}, diff={:.2e}",
-            u16val, linear, iec_result, mox_result, diff);
+        println!(
+            "    u16={:5} (linear={:.8}): IEC={:.10e}, mox={:.10e}, diff={:.2e}",
+            u16val, linear, iec_result, mox_result, diff
+        );
     }
 
     // =========================================================================
@@ -232,16 +270,48 @@ fn main() {
     println!("  Summary: constants used by each code path");
     println!("═══════════════════════════════════════════════════════════════════════\n");
 
-    println!("  {:40} {:>15} {:>15}", "Code path", "Threshold", "Offset (a)");
-    println!("  {:40} {:>15} {:>15}", "─".repeat(40), "─".repeat(15), "─".repeat(15));
-    println!("  {:40} {:>15} {:>15}", "precise:: (scalar powf)", "moxcms C0", "0.055011...");
-    println!("  {:40} {:>15} {:>15}", "default:: (rational poly)", "IEC 0.04045", "(no powf)");
-    println!("  {:40} {:>15} {:>15}", "tokens::x8 (SIMD rational poly)", "IEC 0.04045", "(no powf)");
-    println!("  {:40} {:>15} {:>15}", "tokens::x4 (SIMD rational poly)", "IEC 0.04045", "(no powf)");
-    println!("  {:40} {:>15} {:>15}", "tokens::x16 (SIMD rational poly)", "IEC 0.04045", "(no powf)");
-    println!("  {:40} {:>15} {:>15}", "tf::srgb (TF module scalar)", "IEC 0.04045", "(no powf)");
-    println!("  {:40} {:>15} {:>15}", "tf::srgb SIMD rites", "IEC 0.04045", "(no powf)");
-    println!("  {:40} {:>15} {:>15}", "LUT tables (const_luts)", "moxcms C0", "0.055011...");
+    println!(
+        "  {:40} {:>15} {:>15}",
+        "Code path", "Threshold", "Offset (a)"
+    );
+    println!(
+        "  {:40} {:>15} {:>15}",
+        "─".repeat(40),
+        "─".repeat(15),
+        "─".repeat(15)
+    );
+    println!(
+        "  {:40} {:>15} {:>15}",
+        "precise:: (scalar powf)", "moxcms C0", "0.055011..."
+    );
+    println!(
+        "  {:40} {:>15} {:>15}",
+        "default:: (rational poly)", "IEC 0.04045", "(no powf)"
+    );
+    println!(
+        "  {:40} {:>15} {:>15}",
+        "tokens::x8 (SIMD rational poly)", "IEC 0.04045", "(no powf)"
+    );
+    println!(
+        "  {:40} {:>15} {:>15}",
+        "tokens::x4 (SIMD rational poly)", "IEC 0.04045", "(no powf)"
+    );
+    println!(
+        "  {:40} {:>15} {:>15}",
+        "tokens::x16 (SIMD rational poly)", "IEC 0.04045", "(no powf)"
+    );
+    println!(
+        "  {:40} {:>15} {:>15}",
+        "tf::srgb (TF module scalar)", "IEC 0.04045", "(no powf)"
+    );
+    println!(
+        "  {:40} {:>15} {:>15}",
+        "tf::srgb SIMD rites", "IEC 0.04045", "(no powf)"
+    );
+    println!(
+        "  {:40} {:>15} {:>15}",
+        "LUT tables (const_luts)", "moxcms C0", "0.055011..."
+    );
 
     println!("\n  Note: The rational polynomial replaces the power segment entirely,");
     println!("  so the 'a' constant (0.055 vs 0.055011) is irrelevant for those paths.");
@@ -274,8 +344,10 @@ fn main() {
     }
 
     println!("  Swept {} f32 values in [0.035, 0.050]", count);
-    println!("  Max |default - precise| = {:.6e} at gamma = {:.10}",
-        max_diff_default_vs_precise, max_diff_at);
+    println!(
+        "  Max |default - precise| = {:.6e} at gamma = {:.10}",
+        max_diff_default_vs_precise, max_diff_at
+    );
 
     let default_at = eval_s2l_full(max_diff_at);
     let precise_at = eval_s2l_precise(max_diff_at);
@@ -302,9 +374,14 @@ fn main() {
         v = next_f32(v);
     }
 
-    println!("\n  Swept {} f32 values in [0.002, 0.004] for l2s", count_l2s);
-    println!("  Max |default - precise| = {:.6e} at linear = {:.10}",
-        max_diff_l2s, max_diff_l2s_at);
+    println!(
+        "\n  Swept {} f32 values in [0.002, 0.004] for l2s",
+        count_l2s
+    );
+    println!(
+        "  Max |default - precise| = {:.6e} at linear = {:.10}",
+        max_diff_l2s, max_diff_l2s_at
+    );
 
     let default_at = eval_l2s_full(max_diff_l2s_at);
     let precise_at = eval_l2s_precise(max_diff_l2s_at);
@@ -322,10 +399,18 @@ fn main() {
 
 fn eval_s2l_rational_poly(gamma: f32) -> f32 {
     const S2L_P: [f32; 5] = [
-        2.200_248_3e-4, 1.043_637_6e-2, 1.624_820_4e-1, 7.961_565e-1, 8.210_153e-1,
+        2.200_248_3e-4,
+        1.043_637_6e-2,
+        1.624_820_4e-1,
+        7.961_565e-1,
+        8.210_153e-1,
     ];
     const S2L_Q: [f32; 5] = [
-        2.631_847e-1, 1.076_976_5, 4.987_528_3e-1, -5.512_498_3e-2, 6.521_209e-3,
+        2.631_847e-1,
+        1.076_976_5,
+        4.987_528_3e-1,
+        -5.512_498_3e-2,
+        6.521_209e-3,
     ];
     let x = gamma;
     let yp = S2L_P[4].mul_add(x, S2L_P[3]);
@@ -343,10 +428,18 @@ fn eval_s2l_rational_poly(gamma: f32) -> f32 {
 
 fn eval_l2s_rational_poly(linear: f32) -> f32 {
     const L2S_P: [f32; 5] = [
-        -5.135_152_6e-4, 5.287_254_7e-3, 3.903_843e-1, 1.474_205_3, 7.352_63e-1,
+        -5.135_152_6e-4,
+        5.287_254_7e-3,
+        3.903_843e-1,
+        1.474_205_3,
+        7.352_63e-1,
     ];
     const L2S_Q: [f32; 5] = [
-        1.004_519_6e-2, 3.036_675_5e-1, 1.340_817, 9.258_482e-1, 2.424_867_8e-2,
+        1.004_519_6e-2,
+        3.036_675_5e-1,
+        1.340_817,
+        9.258_482e-1,
+        2.424_867_8e-2,
     ];
     let x = linear.sqrt();
     let yp = L2S_P[4].mul_add(x, L2S_P[3]);

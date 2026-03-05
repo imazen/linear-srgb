@@ -194,7 +194,6 @@ pub fn linear_to_srgb_extended(linear: f32) -> f32 {
     }
 }
 
-
 /// Convert linear to 8-bit sRGB using const LUT.
 ///
 /// Uses a 4096-entry lookup table (4KB, fits L1 cache). No transcendental math.

@@ -454,21 +454,53 @@ macro_rules! tf_slice_v4 {
 }
 
 #[cfg(feature = "transfer")]
-tf_slice_v4!(tf_srgb_to_linear_slice_v4, tf_srgb_to_linear_v4, crate::tf::srgb_to_linear);
+tf_slice_v4!(
+    tf_srgb_to_linear_slice_v4,
+    tf_srgb_to_linear_v4,
+    crate::tf::srgb_to_linear
+);
 #[cfg(feature = "transfer")]
-tf_slice_v4!(tf_linear_to_srgb_slice_v4, tf_linear_to_srgb_v4, crate::tf::linear_to_srgb);
+tf_slice_v4!(
+    tf_linear_to_srgb_slice_v4,
+    tf_linear_to_srgb_v4,
+    crate::tf::linear_to_srgb
+);
 #[cfg(feature = "transfer")]
-tf_slice_v4!(bt709_to_linear_slice_v4, bt709_to_linear_v4, crate::tf::bt709_to_linear);
+tf_slice_v4!(
+    bt709_to_linear_slice_v4,
+    bt709_to_linear_v4,
+    crate::tf::bt709_to_linear
+);
 #[cfg(feature = "transfer")]
-tf_slice_v4!(linear_to_bt709_slice_v4, linear_to_bt709_v4, crate::tf::linear_to_bt709);
+tf_slice_v4!(
+    linear_to_bt709_slice_v4,
+    linear_to_bt709_v4,
+    crate::tf::linear_to_bt709
+);
 #[cfg(feature = "transfer")]
-tf_slice_v4!(pq_to_linear_slice_v4, pq_to_linear_v4, crate::tf::pq_to_linear);
+tf_slice_v4!(
+    pq_to_linear_slice_v4,
+    pq_to_linear_v4,
+    crate::tf::pq_to_linear
+);
 #[cfg(feature = "transfer")]
-tf_slice_v4!(linear_to_pq_slice_v4, linear_to_pq_v4, crate::tf::linear_to_pq);
+tf_slice_v4!(
+    linear_to_pq_slice_v4,
+    linear_to_pq_v4,
+    crate::tf::linear_to_pq
+);
 #[cfg(feature = "transfer")]
-tf_slice_v4!(hlg_to_linear_slice_v4, hlg_to_linear_v4, crate::tf::hlg_to_linear);
+tf_slice_v4!(
+    hlg_to_linear_slice_v4,
+    hlg_to_linear_v4,
+    crate::tf::hlg_to_linear
+);
 #[cfg(feature = "transfer")]
-tf_slice_v4!(linear_to_hlg_slice_v4, linear_to_hlg_v4, crate::tf::linear_to_hlg);
+tf_slice_v4!(
+    linear_to_hlg_slice_v4,
+    linear_to_hlg_v4,
+    crate::tf::linear_to_hlg
+);
 
 #[cfg(feature = "transfer")]
 #[inline(always)]

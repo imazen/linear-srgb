@@ -16,16 +16,15 @@
 
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 use archmage::X64V4Token;
+use archmage::{ScalarToken, incant};
 #[cfg(target_arch = "x86_64")]
 use archmage::{X64V3Token, arcane, rite};
-use archmage::{ScalarToken, incant};
 
 // Alias magetypes SIMD types to avoid name clash
 #[cfg(target_arch = "x86_64")]
 use magetypes::simd::f32x8 as mt_f32x8;
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 use magetypes::simd::v4::f32x16 as mt_f32x16;
-
 
 // ============================================================================
 // magetypes #[rite] helpers (x86-64 only) — real AVX2+FMA SIMD
@@ -542,13 +541,13 @@ mod tests {
         let mut output = vec![0.0f32; 256];
         srgb_u8_to_linear_slice(&input, &mut output);
 
-        for i in 0..256 {
+        for (i, &val) in output.iter().enumerate() {
             let expected = crate::scalar::srgb_to_linear(i as f32 / 255.0);
             assert!(
-                (output[i] - expected).abs() < 1e-4,
+                (val - expected).abs() < 1e-4,
                 "u8_to_linear mismatch at {}: got {}, expected {}",
                 i,
-                output[i],
+                val,
                 expected
             );
         }
@@ -568,13 +567,13 @@ mod tests {
         linear_to_srgb_u8_slice(&direct, &mut output);
 
         // Should roundtrip within 1 level
-        for i in 0..256 {
-            let diff = (output[i] as i32 - i as i32).unsigned_abs();
+        for (i, &val) in output.iter().enumerate() {
+            let diff = (val as i32 - i as i32).unsigned_abs();
             assert!(
                 diff <= 1,
                 "linear_to_srgb_u8 at {}: got {}, expected {}",
                 i,
-                output[i],
+                val,
                 i
             );
         }

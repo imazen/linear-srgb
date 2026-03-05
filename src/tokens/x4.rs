@@ -571,14 +571,46 @@ macro_rules! x86_tf_slice_rite {
     };
 }
 
-x86_tf_slice_rite!(tf_srgb_to_linear_slice_v3, tf_srgb_to_linear_v3, crate::tf::srgb_to_linear);
-x86_tf_slice_rite!(tf_linear_to_srgb_slice_v3, tf_linear_to_srgb_v3, crate::tf::linear_to_srgb);
-x86_tf_slice_rite!(bt709_to_linear_slice_v3, bt709_to_linear_v3, crate::tf::bt709_to_linear);
-x86_tf_slice_rite!(linear_to_bt709_slice_v3, linear_to_bt709_v3, crate::tf::linear_to_bt709);
-x86_tf_slice_rite!(pq_to_linear_slice_v3, pq_to_linear_v3, crate::tf::pq_to_linear);
-x86_tf_slice_rite!(linear_to_pq_slice_v3, linear_to_pq_v3, crate::tf::linear_to_pq);
-x86_tf_slice_rite!(hlg_to_linear_slice_v3, hlg_to_linear_v3, crate::tf::hlg_to_linear);
-x86_tf_slice_rite!(linear_to_hlg_slice_v3, linear_to_hlg_v3, crate::tf::linear_to_hlg);
+x86_tf_slice_rite!(
+    tf_srgb_to_linear_slice_v3,
+    tf_srgb_to_linear_v3,
+    crate::tf::srgb_to_linear
+);
+x86_tf_slice_rite!(
+    tf_linear_to_srgb_slice_v3,
+    tf_linear_to_srgb_v3,
+    crate::tf::linear_to_srgb
+);
+x86_tf_slice_rite!(
+    bt709_to_linear_slice_v3,
+    bt709_to_linear_v3,
+    crate::tf::bt709_to_linear
+);
+x86_tf_slice_rite!(
+    linear_to_bt709_slice_v3,
+    linear_to_bt709_v3,
+    crate::tf::linear_to_bt709
+);
+x86_tf_slice_rite!(
+    pq_to_linear_slice_v3,
+    pq_to_linear_v3,
+    crate::tf::pq_to_linear
+);
+x86_tf_slice_rite!(
+    linear_to_pq_slice_v3,
+    linear_to_pq_v3,
+    crate::tf::linear_to_pq
+);
+x86_tf_slice_rite!(
+    hlg_to_linear_slice_v3,
+    hlg_to_linear_v3,
+    crate::tf::hlg_to_linear
+);
+x86_tf_slice_rite!(
+    linear_to_hlg_slice_v3,
+    linear_to_hlg_v3,
+    crate::tf::linear_to_hlg
+);
 
 // ============================================================================
 // Transfer function rites — AArch64 NEON (behind `transfer` feature)
@@ -619,14 +651,46 @@ macro_rules! neon_tf_slice_rite {
     };
 }
 
-neon_tf_slice_rite!(tf_srgb_to_linear_slice_neon, tf_srgb_to_linear_neon, crate::tf::srgb_to_linear);
-neon_tf_slice_rite!(tf_linear_to_srgb_slice_neon, tf_linear_to_srgb_neon, crate::tf::linear_to_srgb);
-neon_tf_slice_rite!(bt709_to_linear_slice_neon, bt709_to_linear_neon, crate::tf::bt709_to_linear);
-neon_tf_slice_rite!(linear_to_bt709_slice_neon, linear_to_bt709_neon, crate::tf::linear_to_bt709);
-neon_tf_slice_rite!(pq_to_linear_slice_neon, pq_to_linear_neon, crate::tf::pq_to_linear);
-neon_tf_slice_rite!(linear_to_pq_slice_neon, linear_to_pq_neon, crate::tf::linear_to_pq);
-neon_tf_slice_rite!(hlg_to_linear_slice_neon, hlg_to_linear_neon, crate::tf::hlg_to_linear);
-neon_tf_slice_rite!(linear_to_hlg_slice_neon, linear_to_hlg_neon, crate::tf::linear_to_hlg);
+neon_tf_slice_rite!(
+    tf_srgb_to_linear_slice_neon,
+    tf_srgb_to_linear_neon,
+    crate::tf::srgb_to_linear
+);
+neon_tf_slice_rite!(
+    tf_linear_to_srgb_slice_neon,
+    tf_linear_to_srgb_neon,
+    crate::tf::linear_to_srgb
+);
+neon_tf_slice_rite!(
+    bt709_to_linear_slice_neon,
+    bt709_to_linear_neon,
+    crate::tf::bt709_to_linear
+);
+neon_tf_slice_rite!(
+    linear_to_bt709_slice_neon,
+    linear_to_bt709_neon,
+    crate::tf::linear_to_bt709
+);
+neon_tf_slice_rite!(
+    pq_to_linear_slice_neon,
+    pq_to_linear_neon,
+    crate::tf::pq_to_linear
+);
+neon_tf_slice_rite!(
+    linear_to_pq_slice_neon,
+    linear_to_pq_neon,
+    crate::tf::linear_to_pq
+);
+neon_tf_slice_rite!(
+    hlg_to_linear_slice_neon,
+    hlg_to_linear_neon,
+    crate::tf::hlg_to_linear
+);
+neon_tf_slice_rite!(
+    linear_to_hlg_slice_neon,
+    linear_to_hlg_neon,
+    crate::tf::linear_to_hlg
+);
 
 // ============================================================================
 // Transfer function rites — WebAssembly SIMD128 (behind `transfer` feature)
@@ -642,10 +706,22 @@ macro_rules! wasm_tf_rite {
     };
 }
 
-wasm_tf_rite!(tf_srgb_to_linear_wasm128, crate::tf::srgb::srgb_to_linear_x4);
-wasm_tf_rite!(tf_linear_to_srgb_wasm128, crate::tf::srgb::linear_to_srgb_x4);
-wasm_tf_rite!(bt709_to_linear_wasm128, crate::tf::bt709::bt709_to_linear_x4);
-wasm_tf_rite!(linear_to_bt709_wasm128, crate::tf::bt709::linear_to_bt709_x4);
+wasm_tf_rite!(
+    tf_srgb_to_linear_wasm128,
+    crate::tf::srgb::srgb_to_linear_x4
+);
+wasm_tf_rite!(
+    tf_linear_to_srgb_wasm128,
+    crate::tf::srgb::linear_to_srgb_x4
+);
+wasm_tf_rite!(
+    bt709_to_linear_wasm128,
+    crate::tf::bt709::bt709_to_linear_x4
+);
+wasm_tf_rite!(
+    linear_to_bt709_wasm128,
+    crate::tf::bt709::linear_to_bt709_x4
+);
 wasm_tf_rite!(pq_to_linear_wasm128, crate::tf::pq::pq_to_linear_x4);
 wasm_tf_rite!(linear_to_pq_wasm128, crate::tf::pq::linear_to_pq_x4);
 wasm_tf_rite!(hlg_to_linear_wasm128, crate::tf::hlg::hlg_to_linear_x4);
@@ -667,14 +743,46 @@ macro_rules! wasm_tf_slice_rite {
     };
 }
 
-wasm_tf_slice_rite!(tf_srgb_to_linear_slice_wasm128, tf_srgb_to_linear_wasm128, crate::tf::srgb_to_linear);
-wasm_tf_slice_rite!(tf_linear_to_srgb_slice_wasm128, tf_linear_to_srgb_wasm128, crate::tf::linear_to_srgb);
-wasm_tf_slice_rite!(bt709_to_linear_slice_wasm128, bt709_to_linear_wasm128, crate::tf::bt709_to_linear);
-wasm_tf_slice_rite!(linear_to_bt709_slice_wasm128, linear_to_bt709_wasm128, crate::tf::linear_to_bt709);
-wasm_tf_slice_rite!(pq_to_linear_slice_wasm128, pq_to_linear_wasm128, crate::tf::pq_to_linear);
-wasm_tf_slice_rite!(linear_to_pq_slice_wasm128, linear_to_pq_wasm128, crate::tf::linear_to_pq);
-wasm_tf_slice_rite!(hlg_to_linear_slice_wasm128, hlg_to_linear_wasm128, crate::tf::hlg_to_linear);
-wasm_tf_slice_rite!(linear_to_hlg_slice_wasm128, linear_to_hlg_wasm128, crate::tf::linear_to_hlg);
+wasm_tf_slice_rite!(
+    tf_srgb_to_linear_slice_wasm128,
+    tf_srgb_to_linear_wasm128,
+    crate::tf::srgb_to_linear
+);
+wasm_tf_slice_rite!(
+    tf_linear_to_srgb_slice_wasm128,
+    tf_linear_to_srgb_wasm128,
+    crate::tf::linear_to_srgb
+);
+wasm_tf_slice_rite!(
+    bt709_to_linear_slice_wasm128,
+    bt709_to_linear_wasm128,
+    crate::tf::bt709_to_linear
+);
+wasm_tf_slice_rite!(
+    linear_to_bt709_slice_wasm128,
+    linear_to_bt709_wasm128,
+    crate::tf::linear_to_bt709
+);
+wasm_tf_slice_rite!(
+    pq_to_linear_slice_wasm128,
+    pq_to_linear_wasm128,
+    crate::tf::pq_to_linear
+);
+wasm_tf_slice_rite!(
+    linear_to_pq_slice_wasm128,
+    linear_to_pq_wasm128,
+    crate::tf::linear_to_pq
+);
+wasm_tf_slice_rite!(
+    hlg_to_linear_slice_wasm128,
+    hlg_to_linear_wasm128,
+    crate::tf::hlg_to_linear
+);
+wasm_tf_slice_rite!(
+    linear_to_hlg_slice_wasm128,
+    linear_to_hlg_wasm128,
+    crate::tf::linear_to_hlg
+);
 
 // ============================================================================
 // Tests

@@ -10,7 +10,10 @@ fn main() {
     // Test s2l with different thresholds
     let _thresholds: &[(&str, f32)] = &[
         ("IEC (0.04045)", 0.04045),
-        ("moxcms (0.039293...)", (12.92 * 0.003_041_282_560_127_521_f64) as f32),
+        (
+            "moxcms (0.039293...)",
+            (12.92 * 0.003_041_282_560_127_521_f64) as f32,
+        ),
         ("optimal (see below)", 0.0), // placeholder
     ];
 
@@ -29,7 +32,10 @@ fn main() {
         }
         v = next_f32(v);
     }
-    println!("    Optimal s2l threshold: {:.15} (diff={:.6e})", best_thresh, best_diff);
+    println!(
+        "    Optimal s2l threshold: {:.15} (diff={:.6e})",
+        best_thresh, best_diff
+    );
 
     // Similarly for l2s
     let mut best_l2s_thresh = 0.0_f32;
@@ -45,7 +51,10 @@ fn main() {
         }
         v = next_f32(v);
     }
-    println!("    Optimal l2s threshold: {:.15} (diff={:.6e})\n", best_l2s_thresh, best_l2s_diff);
+    println!(
+        "    Optimal l2s threshold: {:.15} (diff={:.6e})\n",
+        best_l2s_thresh, best_l2s_diff
+    );
 
     // Now sweep with each threshold choice
     println!("───────────────────────────────────────────────────────────────────────");
@@ -106,8 +115,10 @@ fn main() {
         let avg_ulp = total_ulp as f64 / count as f64;
         let disc_ulp = ulp_distance(disc_below, disc_above);
         let disc_abs = (disc_above - disc_below).abs();
-        println!("  threshold={:20}: max={:4} ULP, avg={:.2}, disc={:4} ULP ({:.2e}), max_abs={:.6e} at {:.10}",
-            name, max_ulp, avg_ulp, disc_ulp, disc_abs, max_abs_err, max_ulp_at);
+        println!(
+            "  threshold={:20}: max={:4} ULP, avg={:.2}, disc={:4} ULP ({:.2e}), max_abs={:.6e} at {:.10}",
+            name, max_ulp, avg_ulp, disc_ulp, disc_abs, max_abs_err, max_ulp_at
+        );
     }
 
     println!("\n───────────────────────────────────────────────────────────────────────");
@@ -167,50 +178,94 @@ fn main() {
         let avg_ulp = total_ulp as f64 / count as f64;
         let disc_ulp = ulp_distance(disc_below, disc_above);
         let disc_abs = (disc_above - disc_below).abs();
-        println!("  threshold={:20}: max={:4} ULP, avg={:.2}, disc={:4} ULP ({:.2e}), max_abs={:.6e} at {:.10}",
-            name, max_ulp, avg_ulp, disc_ulp, disc_abs, max_abs_err, max_ulp_at);
+        println!(
+            "  threshold={:20}: max={:4} ULP, avg={:.2}, disc={:4} ULP ({:.2e}), max_abs={:.6e} at {:.10}",
+            name, max_ulp, avg_ulp, disc_ulp, disc_abs, max_abs_err, max_ulp_at
+        );
     }
 
     println!();
 }
 
 fn s2l_iec_f64(gamma: f64) -> f64 {
-    if gamma <= 0.0 { 0.0 }
-    else if gamma < 0.04045 { gamma / 12.92 }
-    else if gamma < 1.0 { ((gamma + 0.055) / 1.055).powf(2.4) }
-    else { 1.0 }
+    if gamma <= 0.0 {
+        0.0
+    } else if gamma < 0.04045 {
+        gamma / 12.92
+    } else if gamma < 1.0 {
+        ((gamma + 0.055) / 1.055).powf(2.4)
+    } else {
+        1.0
+    }
 }
 
 fn l2s_iec_f64(linear: f64) -> f64 {
-    if linear <= 0.0 { 0.0 }
-    else if linear < 0.003_130_8 { linear * 12.92 }
-    else if linear < 1.0 { 1.055 * linear.powf(1.0 / 2.4) - 0.055 }
-    else { 1.0 }
+    if linear <= 0.0 {
+        0.0
+    } else if linear < 0.003_130_8 {
+        linear * 12.92
+    } else if linear < 1.0 {
+        1.055 * linear.powf(1.0 / 2.4) - 0.055
+    } else {
+        1.0
+    }
 }
 
 fn s2l_rational_poly(gamma: f32) -> f32 {
     const P: [f32; 5] = [
-        2.200_248_3e-4, 1.043_637_6e-2, 1.624_820_4e-1, 7.961_565e-1, 8.210_153e-1,
+        2.200_248_3e-4,
+        1.043_637_6e-2,
+        1.624_820_4e-1,
+        7.961_565e-1,
+        8.210_153e-1,
     ];
     const Q: [f32; 5] = [
-        2.631_847e-1, 1.076_976_5, 4.987_528_3e-1, -5.512_498_3e-2, 6.521_209e-3,
+        2.631_847e-1,
+        1.076_976_5,
+        4.987_528_3e-1,
+        -5.512_498_3e-2,
+        6.521_209e-3,
     ];
     let x = gamma;
-    let yp = P[4].mul_add(x, P[3]).mul_add(x, P[2]).mul_add(x, P[1]).mul_add(x, P[0]);
-    let yq = Q[4].mul_add(x, Q[3]).mul_add(x, Q[2]).mul_add(x, Q[1]).mul_add(x, Q[0]);
+    let yp = P[4]
+        .mul_add(x, P[3])
+        .mul_add(x, P[2])
+        .mul_add(x, P[1])
+        .mul_add(x, P[0]);
+    let yq = Q[4]
+        .mul_add(x, Q[3])
+        .mul_add(x, Q[2])
+        .mul_add(x, Q[1])
+        .mul_add(x, Q[0]);
     yp / yq
 }
 
 fn l2s_rational_poly(linear: f32) -> f32 {
     const P: [f32; 5] = [
-        -5.135_152_6e-4, 5.287_254_7e-3, 3.903_843e-1, 1.474_205_3, 7.352_63e-1,
+        -5.135_152_6e-4,
+        5.287_254_7e-3,
+        3.903_843e-1,
+        1.474_205_3,
+        7.352_63e-1,
     ];
     const Q: [f32; 5] = [
-        1.004_519_6e-2, 3.036_675_5e-1, 1.340_817, 9.258_482e-1, 2.424_867_8e-2,
+        1.004_519_6e-2,
+        3.036_675_5e-1,
+        1.340_817,
+        9.258_482e-1,
+        2.424_867_8e-2,
     ];
     let x = linear.sqrt();
-    let yp = P[4].mul_add(x, P[3]).mul_add(x, P[2]).mul_add(x, P[1]).mul_add(x, P[0]);
-    let yq = Q[4].mul_add(x, Q[3]).mul_add(x, Q[2]).mul_add(x, Q[1]).mul_add(x, Q[0]);
+    let yp = P[4]
+        .mul_add(x, P[3])
+        .mul_add(x, P[2])
+        .mul_add(x, P[1])
+        .mul_add(x, P[0]);
+    let yq = Q[4]
+        .mul_add(x, Q[3])
+        .mul_add(x, Q[2])
+        .mul_add(x, Q[1])
+        .mul_add(x, Q[0]);
     yp / yq
 }
 
@@ -219,7 +274,9 @@ fn next_f32(v: f32) -> f32 {
 }
 
 fn ulp_distance(a: f32, b: f32) -> u32 {
-    if a.is_nan() || b.is_nan() { return u32::MAX; }
+    if a.is_nan() || b.is_nan() {
+        return u32::MAX;
+    }
     let a_bits = a.to_bits() as i32;
     let b_bits = b.to_bits() as i32;
     (a_bits - b_bits).unsigned_abs()

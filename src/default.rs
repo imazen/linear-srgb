@@ -42,7 +42,7 @@ pub use crate::rational_poly::{
 // ============================================================================
 
 pub use crate::scalar::{
-    linear_to_srgb_u16, linear_to_srgb_u8, srgb_u16_to_linear, srgb_u8_to_linear,
+    linear_to_srgb_u8, linear_to_srgb_u16, srgb_u8_to_linear, srgb_u16_to_linear,
 };
 
 // ============================================================================

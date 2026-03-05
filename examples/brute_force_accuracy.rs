@@ -68,8 +68,17 @@ fn main() {
     println!("  Swept {} f32 values.\n", count);
 
     println!("  Accuracy vs f64 reference (full [0,1] range):");
-    println!("  {:50} {:>12} {:>12} {:>14}", "", "max ULP", "avg ULP", "max abs err");
-    println!("  {:50} {:>12} {:>12} {:>14}", "─".repeat(50), "─".repeat(12), "─".repeat(12), "─".repeat(14));
+    println!(
+        "  {:50} {:>12} {:>12} {:>14}",
+        "", "max ULP", "avg ULP", "max abs err"
+    );
+    println!(
+        "  {:50} {:>12} {:>12} {:>14}",
+        "─".repeat(50),
+        "─".repeat(12),
+        "─".repeat(12),
+        "─".repeat(14)
+    );
     s2l_default_vs_iec.print_summary();
     s2l_default_vs_mox.print_summary();
     s2l_precise_vs_iec.print_summary();
@@ -136,8 +145,17 @@ fn main() {
     println!("  Swept {} f32 values.\n", count);
 
     println!("  Accuracy vs f64 reference (full [0,1] range):");
-    println!("  {:50} {:>12} {:>12} {:>14}", "", "max ULP", "avg ULP", "max abs err");
-    println!("  {:50} {:>12} {:>12} {:>14}", "─".repeat(50), "─".repeat(12), "─".repeat(12), "─".repeat(14));
+    println!(
+        "  {:50} {:>12} {:>12} {:>14}",
+        "", "max ULP", "avg ULP", "max abs err"
+    );
+    println!(
+        "  {:50} {:>12} {:>12} {:>14}",
+        "─".repeat(50),
+        "─".repeat(12),
+        "─".repeat(12),
+        "─".repeat(14)
+    );
     l2s_default_vs_iec.print_summary();
     l2s_default_vs_mox.print_summary();
     l2s_precise_vs_iec.print_summary();
@@ -168,16 +186,40 @@ fn main() {
     println!("  moxcms C0 constants, so it should be measured against the moxcms ref.");
     println!();
     println!("  Key numbers:");
-    println!("    s2l default vs IEC:    max {} ULP  (correct reference)", s2l_default_vs_iec.max_ulp);
-    println!("    s2l precise vs moxcms: max {} ULP  (correct reference)", s2l_precise_vs_mox.max_ulp);
-    println!("    l2s default vs IEC:    max {} ULP  (correct reference)", l2s_default_vs_iec.max_ulp);
-    println!("    l2s precise vs moxcms: max {} ULP  (correct reference)", l2s_precise_vs_mox.max_ulp);
+    println!(
+        "    s2l default vs IEC:    max {} ULP  (correct reference)",
+        s2l_default_vs_iec.max_ulp
+    );
+    println!(
+        "    s2l precise vs moxcms: max {} ULP  (correct reference)",
+        s2l_precise_vs_mox.max_ulp
+    );
+    println!(
+        "    l2s default vs IEC:    max {} ULP  (correct reference)",
+        l2s_default_vs_iec.max_ulp
+    );
+    println!(
+        "    l2s precise vs moxcms: max {} ULP  (correct reference)",
+        l2s_precise_vs_mox.max_ulp
+    );
     println!();
     println!("  Cross-reference (mismatched constants — not bugs, just different curves):");
-    println!("    s2l default vs moxcms: max {} ULP", s2l_default_vs_mox.max_ulp);
-    println!("    s2l precise vs IEC:    max {} ULP", s2l_precise_vs_iec.max_ulp);
-    println!("    l2s default vs moxcms: max {} ULP", l2s_default_vs_mox.max_ulp);
-    println!("    l2s precise vs IEC:    max {} ULP", l2s_precise_vs_iec.max_ulp);
+    println!(
+        "    s2l default vs moxcms: max {} ULP",
+        s2l_default_vs_mox.max_ulp
+    );
+    println!(
+        "    s2l precise vs IEC:    max {} ULP",
+        s2l_precise_vs_iec.max_ulp
+    );
+    println!(
+        "    l2s default vs moxcms: max {} ULP",
+        l2s_default_vs_mox.max_ulp
+    );
+    println!(
+        "    l2s precise vs IEC:    max {} ULP",
+        l2s_precise_vs_iec.max_ulp
+    );
     println!();
 }
 
@@ -303,27 +345,59 @@ fn l2s_precise(linear: f32) -> f32 {
 
 fn s2l_rational_poly(gamma: f32) -> f32 {
     const P: [f32; 5] = [
-        2.200_248_3e-4, 1.043_637_6e-2, 1.624_820_4e-1, 7.961_565e-1, 8.210_153e-1,
+        2.200_248_3e-4,
+        1.043_637_6e-2,
+        1.624_820_4e-1,
+        7.961_565e-1,
+        8.210_153e-1,
     ];
     const Q: [f32; 5] = [
-        2.631_847e-1, 1.076_976_5, 4.987_528_3e-1, -5.512_498_3e-2, 6.521_209e-3,
+        2.631_847e-1,
+        1.076_976_5,
+        4.987_528_3e-1,
+        -5.512_498_3e-2,
+        6.521_209e-3,
     ];
     let x = gamma;
-    let yp = P[4].mul_add(x, P[3]).mul_add(x, P[2]).mul_add(x, P[1]).mul_add(x, P[0]);
-    let yq = Q[4].mul_add(x, Q[3]).mul_add(x, Q[2]).mul_add(x, Q[1]).mul_add(x, Q[0]);
+    let yp = P[4]
+        .mul_add(x, P[3])
+        .mul_add(x, P[2])
+        .mul_add(x, P[1])
+        .mul_add(x, P[0]);
+    let yq = Q[4]
+        .mul_add(x, Q[3])
+        .mul_add(x, Q[2])
+        .mul_add(x, Q[1])
+        .mul_add(x, Q[0]);
     yp / yq
 }
 
 fn l2s_rational_poly(linear: f32) -> f32 {
     const P: [f32; 5] = [
-        -5.135_152_6e-4, 5.287_254_7e-3, 3.903_843e-1, 1.474_205_3, 7.352_63e-1,
+        -5.135_152_6e-4,
+        5.287_254_7e-3,
+        3.903_843e-1,
+        1.474_205_3,
+        7.352_63e-1,
     ];
     const Q: [f32; 5] = [
-        1.004_519_6e-2, 3.036_675_5e-1, 1.340_817, 9.258_482e-1, 2.424_867_8e-2,
+        1.004_519_6e-2,
+        3.036_675_5e-1,
+        1.340_817,
+        9.258_482e-1,
+        2.424_867_8e-2,
     ];
     let x = linear.sqrt();
-    let yp = P[4].mul_add(x, P[3]).mul_add(x, P[2]).mul_add(x, P[1]).mul_add(x, P[0]);
-    let yq = Q[4].mul_add(x, Q[3]).mul_add(x, Q[2]).mul_add(x, Q[1]).mul_add(x, Q[0]);
+    let yp = P[4]
+        .mul_add(x, P[3])
+        .mul_add(x, P[2])
+        .mul_add(x, P[1])
+        .mul_add(x, P[0]);
+    let yq = Q[4]
+        .mul_add(x, Q[3])
+        .mul_add(x, Q[2])
+        .mul_add(x, Q[1])
+        .mul_add(x, Q[0]);
     yp / yq
 }
 
