@@ -1,7 +1,7 @@
 //! Rational polynomial sRGB transfer function approximation.
 //!
 //! Single source of truth for all polynomial constants used across scalar,
-//! SIMD (wide), magetypes rites (x4/x8/x16), and mage implementations.
+//! SIMD, magetypes rites (x4/x8/x16), and mage implementations.
 //!
 //! Coefficients from libjxl (BSD-3-Clause). Evaluates P(x)/Q(x) via Horner's
 //! method: 4 `mul_add` + 1 `div` per direction. Much faster and more accurate

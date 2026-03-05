@@ -69,8 +69,6 @@
 //! | Single u8 value | [`default::srgb_u8_to_linear`] |
 //! | f32 slice (in-place) | [`default::srgb_to_linear_slice`] |
 //! | u8 slice → f32 slice | [`default::srgb_u8_to_linear_slice`] |
-//! | Manual SIMD (8 values) | [`default::srgb_to_linear_x8`] |
-//! | Inside `#[magetypes]` | [`default::inline::srgb_to_linear_x8`] |
 //! | Inside `#[arcane]` (token) | [`rites::x8::srgb_to_linear_v3`] |
 //! | Custom bit depth LUT | [`lut::LinearTable16`] |
 //!
@@ -190,7 +188,7 @@ pub mod lut;
 
 /// SIMD-accelerated conversion functions.
 ///
-/// Provides full control over CPU dispatch with `_dispatch` and `_inline` variants.
+/// Provides SIMD-accelerated slice functions with runtime CPU dispatch.
 pub mod simd;
 
 /// Scalar (single-value) conversion functions.
@@ -237,8 +235,6 @@ mod mlaf;
 // Rational polynomial sRGB approximation (shared coefficients + scalar evaluator)
 pub(crate) mod rational_poly;
 
-// Internal fast math for SIMD (not public API)
-pub(crate) mod fast_math;
 
 // Pre-computed const lookup tables (embedded in binary)
 mod const_luts;

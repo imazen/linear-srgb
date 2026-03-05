@@ -8,5 +8,4 @@
 #![allow(missing_docs, dead_code)]
 
 pub mod accuracy;
-pub mod fast_math;
 pub mod imageflow;

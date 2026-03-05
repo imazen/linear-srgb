@@ -1,8 +1,7 @@
 //! x86-64 AVX2+FMA implementation using magetypes for real SIMD.
 //!
 //! Uses `magetypes::simd::f32x8` with `#[arcane]`/`#[rite]` for FMA-enabled
-//! target features. Unlike `wide::f32x8` (which only uses AVX when compiled
-//! with `+avx`), magetypes applies `#[target_feature]` at function level,
+//! target features. magetypes applies `#[target_feature]` at function level,
 //! producing real AVX2+FMA instructions regardless of compile flags.
 
 use archmage::Avx2FmaToken;

@@ -16,7 +16,6 @@ use linear_srgb::mage;
 use linear_srgb::scalar::{linear_to_srgb, srgb_to_linear};
 use linear_srgb::simd;
 use std::hint::black_box;
-use wide::f32x8;
 
 const BATCH_SIZE: usize = 10000;
 
@@ -47,25 +46,6 @@ fn create_u16_srgb() -> Vec<u16> {
         .collect()
 }
 
-fn create_f32x8_srgb() -> Vec<f32x8> {
-    let f32_data = create_f32_srgb();
-    f32_data
-        .chunks(8)
-        .map(|chunk| {
-            let mut arr = [0.0f32; 8];
-            arr[..chunk.len()].copy_from_slice(chunk);
-            f32x8::from(arr)
-        })
-        .collect()
-}
-
-fn create_f32x8_linear() -> Vec<f32x8> {
-    create_f32x8_srgb()
-        .iter()
-        .map(|&v| simd::srgb_to_linear_x8(v))
-        .collect()
-}
-
 // ============================================================================
 // sRGB → Linear Benchmarks
 // ============================================================================
@@ -82,11 +62,10 @@ fn bench_srgb_to_linear(c: &mut Criterion) {
     let f32_data = create_f32_srgb();
     let u8_data = create_u8_srgb();
     let u16_data = create_u16_srgb();
-    let _f32x8_data = create_f32x8_srgb();
 
     // === f32 → f32 ===
 
-    group.bench_function("f32_f32/simd_dirty_pow", |b| {
+    group.bench_function("f32_f32/simd_slice", |b| {
         let mut output = f32_data.clone();
         b.iter(|| {
             simd::srgb_to_linear_slice(&mut output);
@@ -217,7 +196,6 @@ fn bench_linear_to_srgb(c: &mut Criterion) {
     let lut8 = LinearTable8::new();
 
     let f32_linear = create_f32_linear();
-    let _f32x8_linear = create_f32x8_linear();
 
     // Create u8-derived linear values for fair u8 output comparison
     let u8_srgb = create_u8_srgb();
@@ -225,7 +203,7 @@ fn bench_linear_to_srgb(c: &mut Criterion) {
 
     // === f32 → f32 ===
 
-    group.bench_function("f32_f32/simd_dirty_pow", |b| {
+    group.bench_function("f32_f32/simd_slice", |b| {
         let mut output = f32_linear.clone();
         b.iter(|| {
             simd::linear_to_srgb_slice(&mut output);
@@ -276,7 +254,7 @@ fn bench_linear_to_srgb(c: &mut Criterion) {
 
     // === f32 → u8 ===
 
-    group.bench_function("f32_u8/simd_dirty_pow", |b| {
+    group.bench_function("f32_u8/simd_slice", |b| {
         let mut output = vec![0u8; BATCH_SIZE];
         b.iter(|| {
             simd::linear_to_srgb_u8_slice(black_box(&linear_from_u8), &mut output);
@@ -346,19 +324,10 @@ fn bench_linear_to_srgb(c: &mut Criterion) {
         })
     });
 
-    group.bench_function("f32_u16/simd_dirty_pow", |b| {
+    group.bench_function("f32_u16/simd_slice", |b| {
         let mut output = vec![0u16; BATCH_SIZE];
         b.iter(|| {
-            for (chunk, out_chunk) in f32_linear.chunks(8).zip(output.chunks_mut(8)) {
-                let mut arr = [0.0f32; 8];
-                arr[..chunk.len()].copy_from_slice(chunk);
-                let v = f32x8::from(arr);
-                let srgb = simd::linear_to_srgb_x8(v);
-                let srgb_arr: [f32; 8] = srgb.into();
-                for (s, o) in srgb_arr.iter().zip(out_chunk.iter_mut()) {
-                    *o = (*s * 65535.0 + 0.5) as u16;
-                }
-            }
+            simd::linear_to_srgb_u16_slice(&f32_linear, &mut output);
             black_box(&output);
         })
     });
@@ -394,7 +363,7 @@ fn bench_roundtrip(c: &mut Criterion) {
 
     // === u8 → f32 → u8 ===
 
-    group.bench_function("u8_f32_u8/simd_lut_dirty_pow", |b| {
+    group.bench_function("u8_f32_u8/simd_lut_slice", |b| {
         let mut linear = vec![0.0f32; BATCH_SIZE];
         let mut output = vec![0u8; BATCH_SIZE];
         b.iter(|| {
@@ -547,58 +516,16 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
 
         group.throughput(Throughput::Elements(size as u64));
 
-        // === sRGB → Linear (LLVM optimizes powf(2.4) well, so scalar often wins) ===
+        // === sRGB → Linear ===
 
-        // Slice function: dispatch once, inline x8 inside
+        // Slice function: dispatch once, process entire slice
         group.bench_with_input(
-            BenchmarkId::new("s2l_slice_dispatch_once", size),
+            BenchmarkId::new("s2l_slice", size),
             &f32_data,
             |b, data| {
                 let mut output = data.clone();
                 b.iter(|| {
                     simd::srgb_to_linear_slice(&mut output);
-                    black_box(&output);
-                })
-            },
-        );
-
-        // Dispatch per chunk: worst case, dispatch every 8 elements
-        group.bench_with_input(
-            BenchmarkId::new("s2l_dispatch_per_chunk", size),
-            &f32_data,
-            |b, data| {
-                let mut output = data.clone();
-                b.iter(|| {
-                    for chunk in output.chunks_exact_mut(8) {
-                        let v = f32x8::from([
-                            chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6],
-                            chunk[7],
-                        ]);
-                        let result = simd::srgb_to_linear_x8_dispatch(v);
-                        let arr: [f32; 8] = result.into();
-                        chunk.copy_from_slice(&arr);
-                    }
-                    black_box(&output);
-                })
-            },
-        );
-
-        // Inline x8 (no dispatch, called directly - baseline SIMD cost)
-        group.bench_with_input(
-            BenchmarkId::new("s2l_inline_no_dispatch", size),
-            &f32_data,
-            |b, data| {
-                let mut output = data.clone();
-                b.iter(|| {
-                    for chunk in output.chunks_exact_mut(8) {
-                        let v = f32x8::from([
-                            chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6],
-                            chunk[7],
-                        ]);
-                        let result = simd::srgb_to_linear_x8_inline(v);
-                        let arr: [f32; 8] = result.into();
-                        chunk.copy_from_slice(&arr);
-                    }
                     black_box(&output);
                 })
             },
@@ -619,61 +546,18 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
             },
         );
 
-        // === Linear → sRGB (SIMD typically wins here) ===
+        // === Linear → sRGB ===
 
-        // Convert to linear first for l2s tests
         let linear_data: Vec<f32> = f32_data.iter().map(|&v| srgb_to_linear(v)).collect();
 
         // Slice function: dispatch once
         group.bench_with_input(
-            BenchmarkId::new("l2s_slice_dispatch_once", size),
+            BenchmarkId::new("l2s_slice", size),
             &linear_data,
             |b, data| {
                 let mut output = data.clone();
                 b.iter(|| {
                     simd::linear_to_srgb_slice(&mut output);
-                    black_box(&output);
-                })
-            },
-        );
-
-        // Dispatch per chunk
-        group.bench_with_input(
-            BenchmarkId::new("l2s_dispatch_per_chunk", size),
-            &linear_data,
-            |b, data| {
-                let mut output = data.clone();
-                b.iter(|| {
-                    for chunk in output.chunks_exact_mut(8) {
-                        let v = f32x8::from([
-                            chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6],
-                            chunk[7],
-                        ]);
-                        let result = simd::linear_to_srgb_x8_dispatch(v);
-                        let arr: [f32; 8] = result.into();
-                        chunk.copy_from_slice(&arr);
-                    }
-                    black_box(&output);
-                })
-            },
-        );
-
-        // Inline x8 (no dispatch)
-        group.bench_with_input(
-            BenchmarkId::new("l2s_inline_no_dispatch", size),
-            &linear_data,
-            |b, data| {
-                let mut output = data.clone();
-                b.iter(|| {
-                    for chunk in output.chunks_exact_mut(8) {
-                        let v = f32x8::from([
-                            chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6],
-                            chunk[7],
-                        ]);
-                        let result = simd::linear_to_srgb_x8_inline(v);
-                        let arr: [f32; 8] = result.into();
-                        chunk.copy_from_slice(&arr);
-                    }
                     black_box(&output);
                 })
             },
@@ -694,9 +578,8 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
             },
         );
 
-        // === LUT-based approaches (interpolated for f32→f32) ===
+        // === LUT-based approaches ===
 
-        // LUT12 for sRGB → Linear (interpolated)
         group.bench_with_input(
             BenchmarkId::new("s2l_lut12_interp", size),
             &f32_data,
@@ -712,7 +595,6 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
             },
         );
 
-        // LUT12 for Linear → sRGB (interpolated)
         group.bench_with_input(
             BenchmarkId::new("l2s_lut12_interp", size),
             &linear_data,
@@ -728,12 +610,11 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
             },
         );
 
-        // === u8 input (direct LUT lookup - no interpolation needed) ===
+        // === u8 input ===
 
         let u8_data: Vec<u8> = (0..size).map(|i| (i * 255 / size) as u8).collect();
         let converter = SrgbConverter::new();
 
-        // u8→f32 via direct LUT lookup (const table)
         group.bench_with_input(
             BenchmarkId::new("s2l_u8_lut8_direct", size),
             &u8_data,
@@ -748,7 +629,6 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
             },
         );
 
-        // u8→f32 via scalar powf
         group.bench_with_input(
             BenchmarkId::new("s2l_u8_scalar", size),
             &u8_data,
@@ -763,8 +643,6 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
             },
         );
 
-        // u8→f32 via slice function (uses static LUT, no SIMD dispatch)
-        // Note: srgb_u8_to_linear_slice uses LUT lookups, NOT SIMD powf
         group.bench_with_input(
             BenchmarkId::new("s2l_u8_lut_slice", size),
             &u8_data,
@@ -779,7 +657,6 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
 
         // === f32→u8 output ===
 
-        // f32→u8 via LUT interp + quantize (SrgbConverter)
         group.bench_with_input(
             BenchmarkId::new("l2s_u8_lut12", size),
             &linear_data,
@@ -794,7 +671,6 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
             },
         );
 
-        // f32→u8 via scalar powf
         group.bench_with_input(
             BenchmarkId::new("l2s_u8_scalar", size),
             &linear_data,
@@ -809,52 +685,13 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
             },
         );
 
-        // f32→u8 via SIMD slice with dispatch (archmage incant!)
         group.bench_with_input(
-            BenchmarkId::new("l2s_u8_simd_dispatch_slice", size),
+            BenchmarkId::new("l2s_u8_simd_slice", size),
             &linear_data,
             |b, data| {
                 let mut output = vec![0u8; data.len()];
                 b.iter(|| {
                     simd::linear_to_srgb_u8_slice(data, &mut output);
-                    black_box(&output);
-                })
-            },
-        );
-
-        // f32→u8 via x8 dispatch per chunk (worst case dispatch overhead)
-        group.bench_with_input(
-            BenchmarkId::new("l2s_u8_x8_dispatch_per_chunk", size),
-            &linear_data,
-            |b, data| {
-                let mut output = vec![0u8; data.len()];
-                b.iter(|| {
-                    for (inp, out) in data.chunks_exact(8).zip(output.chunks_exact_mut(8)) {
-                        let v = f32x8::from([
-                            inp[0], inp[1], inp[2], inp[3], inp[4], inp[5], inp[6], inp[7],
-                        ]);
-                        let result = simd::linear_to_srgb_u8_x8_dispatch(v);
-                        out.copy_from_slice(&result);
-                    }
-                    black_box(&output);
-                })
-            },
-        );
-
-        // f32→u8 via x8 inline per chunk (no dispatch - baseline SIMD)
-        group.bench_with_input(
-            BenchmarkId::new("l2s_u8_x8_inline_per_chunk", size),
-            &linear_data,
-            |b, data| {
-                let mut output = vec![0u8; data.len()];
-                b.iter(|| {
-                    for (inp, out) in data.chunks_exact(8).zip(output.chunks_exact_mut(8)) {
-                        let v = f32x8::from([
-                            inp[0], inp[1], inp[2], inp[3], inp[4], inp[5], inp[6], inp[7],
-                        ]);
-                        let result = simd::linear_to_srgb_u8_x8_inline(v);
-                        out.copy_from_slice(&result);
-                    }
                     black_box(&output);
                 })
             },
@@ -866,7 +703,6 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
         let lut16 = LinearTable16::new();
         let encode16 = EncodeTable16::new();
 
-        // u16→f32 via direct LUT16 lookup
         group.bench_with_input(
             BenchmarkId::new("s2l_u16_lut16_direct", size),
             &u16_data,
@@ -881,7 +717,6 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
             },
         );
 
-        // u16→f32 via scalar powf
         group.bench_with_input(
             BenchmarkId::new("s2l_u16_scalar", size),
             &u16_data,
@@ -896,13 +731,11 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
             },
         );
 
-        // Linear f32 data for u16 output tests
         let linear_from_u16: Vec<f32> = u16_data
             .iter()
             .map(|&v| srgb_to_linear(v as f32 / 65535.0))
             .collect();
 
-        // f32→u16 via LUT16 interp
         group.bench_with_input(
             BenchmarkId::new("l2s_u16_lut16_interp", size),
             &linear_from_u16,
@@ -918,7 +751,6 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
             },
         );
 
-        // f32→u16 via scalar powf
         group.bench_with_input(
             BenchmarkId::new("l2s_u16_scalar", size),
             &linear_from_u16,
@@ -974,7 +806,7 @@ fn bench_mage(c: &mut Criterion) {
         })
     });
 
-    // === Compare with simd module (wide-based) ===
+    // === Compare with simd module ===
 
     group.bench_function("f32_f32/simd_srgb_to_linear_slice", |b| {
         let mut output = f32_srgb.clone();

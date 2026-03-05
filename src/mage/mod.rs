@@ -28,7 +28,7 @@
 //! # Performance
 //!
 //! Uses archmage's native SIMD types with true FMA instructions, providing
-//! ~1.7x speedup over the `simd` module's wide-based implementation.
+//! ~1.7x speedup over scalar implementation.
 
 // Platform-specific implementations
 #[cfg(target_arch = "x86_64")]
