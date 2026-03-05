@@ -11,7 +11,7 @@ Fast linear↔sRGB color space conversion with runtime CPU dispatch.
 ```rust
 use linear_srgb::default::*;
 
-// Single values (rational polynomial — fast, ~8 ULP max)
+// Single values (rational polynomial — fast, <8 ULP typical)
 let linear = srgb_to_linear(0.5f32);
 let srgb = linear_to_srgb(linear);
 
@@ -140,7 +140,7 @@ use archmage::arcane;
 #[arcane]
 fn my_pipeline(token: X64V3Token, data: &mut [f32]) {
     // x8::srgb_to_linear_v3 is #[rite] — inlines into your function
-    // Available widths: x4 (NEON/WASM), x8 (AVX2), x16 (AVX-512)
+    // Available widths: x4 (SSE/NEON/WASM), x8 (AVX2), x16 (AVX-512)
 }
 ```
 
@@ -156,13 +156,13 @@ fn my_pipeline(token: X64V3Token, data: &mut [f32]) {
 
 ```toml
 [dependencies]
-linear-srgb = "0.5"  # std enabled by default
+linear-srgb = "0.6"  # std enabled by default
 
 # no_std (requires alloc for LUT generation)
-linear-srgb = { version = "0.5", default-features = false }
+linear-srgb = { version = "0.6", default-features = false }
 
 # HDR transfer functions (BT.709, PQ, HLG)
-linear-srgb = { version = "0.5", features = ["transfer"] }
+linear-srgb = { version = "0.6", features = ["transfer"] }
 ```
 
 - **`std`** (default): Required for runtime SIMD dispatch
