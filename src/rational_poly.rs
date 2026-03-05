@@ -15,8 +15,11 @@
 //!
 //! | Direction | Max ULP (power segment) | Max ULP (boundary) | Avg ULP |
 //! |---|---|---|---|
-//! | sRGB → linear | ~8 | 1 | ~0.5 |
-//! | linear → sRGB | ~8 | 0 | ~0.4 |
+//! | sRGB → linear | 11 | 1 | ~0.5 |
+//! | linear → sRGB | 14 | 0 | ~0.4 |
+//!
+//! The scalar evaluator uses f64 intermediate precision, which guarantees
+//! perfect monotonicity (zero reversals across all ~1B f32 values in \[0, 1\]).
 //!
 //! Roundtrip error is sub-U16 (< 1/65535) across the full [0, 1] range.
 
@@ -78,20 +81,26 @@ pub(crate) const TWELVE_92: f32 = 12.92;
 
 /// Evaluate a degree-4 rational polynomial P(x)/Q(x) using Horner's method.
 ///
+/// Evaluates in f64 to eliminate monotonicity violations from f32 rounding.
+/// The f64→f32 cast (round-to-nearest-even) preserves monotonicity because
+/// the f64 result has far more precision than needed for f32 output.
+///
 /// Coefficients are lowest-degree-first: `p[0] + p[1]*x + p[2]*x^2 + ...`
 #[inline(always)]
 fn eval_rational_poly_5(x: f32, p: [f32; 5], q: [f32; 5]) -> f32 {
-    let yp = p[4].mul_add(x, p[3]);
-    let yp = yp.mul_add(x, p[2]);
-    let yp = yp.mul_add(x, p[1]);
-    let yp = yp.mul_add(x, p[0]);
+    let x = x as f64;
 
-    let yq = q[4].mul_add(x, q[3]);
-    let yq = yq.mul_add(x, q[2]);
-    let yq = yq.mul_add(x, q[1]);
-    let yq = yq.mul_add(x, q[0]);
+    let yp = (p[4] as f64).mul_add(x, p[3] as f64);
+    let yp = yp.mul_add(x, p[2] as f64);
+    let yp = yp.mul_add(x, p[1] as f64);
+    let yp = yp.mul_add(x, p[0] as f64);
 
-    yp / yq
+    let yq = (q[4] as f64).mul_add(x, q[3] as f64);
+    let yq = yq.mul_add(x, q[2] as f64);
+    let yq = yq.mul_add(x, q[1] as f64);
+    let yq = yq.mul_add(x, q[0] as f64);
+
+    (yp / yq) as f32
 }
 
 /// Convert sRGB gamma-encoded value to linear light using a rational polynomial (f32).

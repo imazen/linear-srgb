@@ -626,13 +626,12 @@ fn exhaustive_monotonicity_s2l() {
     }
 
     eprintln!("s2l monotonicity: {violations} violations, max reversal = {max_reversal_ulp} ULP");
-    // Near the piecewise threshold, the linear segment and polynomial produce
-    // interleaved f32 values (both approximate the same smooth curve). Reversals
-    // up to ~5 ULP occur in a narrow band around the threshold and are harmless
-    // — the output values differ by < 1e-9 absolute.
-    assert!(
-        max_reversal_ulp <= 5,
-        "s2l has {max_reversal_ulp}-ULP reversal (violations={violations})"
+    // The scalar polynomial evaluates in f64 and rounds to f32, which
+    // guarantees monotonicity (the f64 result is monotonic and round-to-nearest
+    // preserves ordering).
+    assert_eq!(
+        violations, 0,
+        "s2l has {violations} monotonicity violations (max {max_reversal_ulp} ULP)"
     );
 }
 
@@ -664,9 +663,9 @@ fn exhaustive_monotonicity_l2s() {
     }
 
     eprintln!("l2s monotonicity: {violations} violations, max reversal = {max_reversal_ulp} ULP");
-    assert!(
-        max_reversal_ulp <= 5,
-        "l2s has {max_reversal_ulp}-ULP reversal (violations={violations})"
+    assert_eq!(
+        violations, 0,
+        "l2s has {violations} monotonicity violations (max {max_reversal_ulp} ULP)"
     );
 }
 
