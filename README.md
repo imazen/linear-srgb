@@ -33,7 +33,10 @@ let srgb_byte = linear_to_srgb_u8(linear);
 | One f32 value (exact) | `precise::srgb_to_linear(x)` / `precise::linear_to_srgb(x)` |
 | One u8 value | `default::srgb_u8_to_linear(x)` (LUT, fastest) |
 | `&mut [f32]` slice | `default::srgb_to_linear_slice()` / `default::linear_to_srgb_slice()` |
+| RGBA `&mut [f32]` (keep alpha) | `default::srgb_to_linear_rgba_slice()` / `default::linear_to_srgb_rgba_slice()` |
 | `&[u8]` → `&mut [f32]` | `default::srgb_u8_to_linear_slice()` |
+| RGBA `&[u8]` → `&mut [f32]` | `default::srgb_u8_to_linear_rgba_slice()` / `linear_to_srgb_u8_rgba_slice()` |
+| `&[u16]` ↔ `&mut [f32]` | `default::srgb_u16_to_linear_slice()` / `default::linear_to_srgb_u16_slice()` |
 | `&[f32]` → `&mut [u8]` | `default::linear_to_srgb_u8_slice()` |
 | Inside `#[arcane]` fn | `tokens::x8::srgb_to_linear_v3()` (inlines, no dispatch) |
 
@@ -88,10 +91,20 @@ let mut values = vec![0.5f32; 10000];
 srgb_to_linear_slice(&mut values);
 linear_to_srgb_slice(&mut values);
 
+// RGBA slices — alpha channel is preserved, only RGB converted
+let mut rgba = vec![0.5f32, 0.5, 0.5, 0.75, 1.0, 1.0, 1.0, 1.0];
+srgb_to_linear_rgba_slice(&mut rgba);
+assert_eq!(rgba[3], 0.75); // alpha untouched
+
 // u8 → f32 (LUT-based, extremely fast)
 let srgb_bytes: Vec<u8> = (0..=255).collect();
 let mut linear = vec![0.0f32; 256];
 srgb_u8_to_linear_slice(&srgb_bytes, &mut linear);
+
+// RGBA u8 → f32 (alpha passed through as a/255, not sRGB-decoded)
+let rgba_bytes = vec![128u8, 128, 128, 200, 64, 64, 64, 128];
+let mut rgba_linear = vec![0.0f32; 8];
+srgb_u8_to_linear_rgba_slice(&rgba_bytes, &mut rgba_linear);
 
 // f32 → u8 (SIMD-accelerated)
 let linear_values: Vec<f32> = (0..256).map(|i| i as f32 / 255.0).collect();

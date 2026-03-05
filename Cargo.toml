@@ -9,6 +9,9 @@ repository = "https://github.com/imazen/linear-srgb"
 keywords = ["color", "srgb", "linear", "gamma", "conversion"]
 categories = ["graphics", "multimedia::images", "no-std"]
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 bytemuck = "1.21"
@@ -39,6 +42,10 @@ harness = false
 name = "tf_bench"
 harness = false
 required-features = ["transfer"]
+
+[[bench]]
+name = "rgba_approach"
+harness = false
 
 [[example]]
 name = "accuracy_comparison"

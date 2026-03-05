@@ -10,7 +10,7 @@
 //! - [`precise`] — Exact `powf()` with C0-continuous constants. f32/f64, extended range. Slower.
 //! - [`tokens`] — Inlineable `#[rite]` functions for embedding in your own `#[arcane]` SIMD code.
 //! - [`lut`] — Lookup tables for custom bit depths (10-bit, 12-bit, 16-bit).
-//! - [`tf`] — Transfer functions beyond sRGB: BT.709, PQ, HLG. Requires `transfer` feature.
+//! - **`tf`** — Transfer functions beyond sRGB: BT.709, PQ, HLG. Requires `transfer` feature.
 //!
 //! # Quick Start
 //!
@@ -70,7 +70,10 @@
 //! | Single f32 value | [`default::srgb_to_linear`] |
 //! | Single u8 value | [`default::srgb_u8_to_linear`] |
 //! | f32 slice (in-place) | [`default::srgb_to_linear_slice`] |
+//! | RGBA f32 slice (alpha-preserving) | [`default::srgb_to_linear_rgba_slice`] |
 //! | u8 slice → f32 slice | [`default::srgb_u8_to_linear_slice`] |
+//! | RGBA u8 → f32 (alpha-preserving) | [`default::srgb_u8_to_linear_rgba_slice`] |
+//! | u16 slice → f32 slice | [`default::srgb_u16_to_linear_slice`] |
 //! | Exact f32/f64 (powf) | [`precise::srgb_to_linear`] |
 //! | Extended range (HDR) | [`precise::srgb_to_linear_extended`] |
 //! | Inside `#[arcane]` | `tokens::x8::srgb_to_linear_v3` |
@@ -156,7 +159,7 @@
 //!
 //! - **`std`** (default) — Enable runtime SIMD dispatch. Required for slice functions.
 //! - **`avx512`** (default) — Enable AVX-512 code paths and `tokens::x16` module.
-//! - **`transfer`** — BT.709, PQ, and HLG transfer functions in [`tf`] and [`tokens`].
+//! - **`transfer`** — BT.709, PQ, and HLG transfer functions in `tf` and [`tokens`].
 //! - **`alt`** — Alternative implementations for benchmarking (not stable API).
 //! - **`unsafe_simd`** — Union-based bit manipulation in SIMD paths.
 //!
@@ -166,7 +169,7 @@
 //! Disable the `std` feature:
 //!
 //! ```toml
-//! linear-srgb = { version = "0.5", default-features = false }
+//! linear-srgb = { version = "0.6", default-features = false }
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
