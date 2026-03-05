@@ -43,6 +43,42 @@ jobs:
   #   cargo test --no-default-features --release
   #   cargo test --no-default-features --features alt --release
 
+  feature-combos:
+    name: Features (${{ matrix.features }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        features:
+          - ""                          # no features (no_std, no avx512)
+          - "std"                       # std only, no avx512
+          - "std,avx512"               # default feature set
+          - "std,transfer"             # transfer without avx512
+          - "std,avx512,transfer"      # all runtime features
+          - "std,avx512,transfer,alt"  # everything
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --no-default-features --features "${{ matrix.features }}"
+
+      - name: Test
+        run: cargo test --no-default-features --features "${{ matrix.features }}" --release
+        # no_std builds may fail tests if magetypes lacks libm fallbacks;
+        # skip test for the empty-features case until that's resolved
+        if: matrix.features != ''
+
+      - name: Check (no_std build only)
+        run: cargo check --no-default-features
+        if: matrix.features == ''
+
   wasm:
     name: WASM SIMD128
     runs-on: ubuntu-latest
