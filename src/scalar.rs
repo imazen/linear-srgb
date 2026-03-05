@@ -135,6 +135,7 @@ pub fn linear_to_srgb(linear: f32) -> f32 {
 ///
 /// **Clamps** inputs to \[0, 1\].
 #[inline]
+#[allow(dead_code)] // used by tests and alt::accuracy
 pub fn srgb_to_linear_fast(gamma: f32) -> f32 {
     crate::rational_poly::srgb_to_linear_fast(gamma)
 }
@@ -152,6 +153,7 @@ pub fn srgb_to_linear_fast(gamma: f32) -> f32 {
 ///
 /// **Clamps** inputs to \[0, 1\].
 #[inline]
+#[allow(dead_code)] // used by tests and alt::accuracy
 pub fn linear_to_srgb_fast(linear: f32) -> f32 {
     crate::rational_poly::linear_to_srgb_fast(linear)
 }
@@ -363,7 +365,7 @@ fn get_lut() -> &'static [f32; 256] {
 /// Convert a single sRGB u8 value to linear f32 using LUT lookup.
 ///
 /// This is the fastest method for u8 input as it uses a precomputed lookup table
-/// embedded in the binary. For batch conversions, use [`crate::simd::srgb_u8_to_linear_slice`].
+/// embedded in the binary. For batch conversions, use [`crate::default::srgb_u8_to_linear_slice`].
 ///
 /// # Example
 /// ```

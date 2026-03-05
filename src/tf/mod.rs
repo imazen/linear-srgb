@@ -34,7 +34,7 @@
 
 // Submodules with implementations
 pub(crate) mod bt709;
-pub mod fast_math;
+pub(crate) mod fast_math;
 pub(crate) mod hlg;
 pub(crate) mod pq;
 pub(crate) mod srgb;

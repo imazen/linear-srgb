@@ -26,8 +26,6 @@ use magetypes::simd::f32x8 as mt_f32x8;
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 use magetypes::simd::v4::f32x16 as mt_f32x16;
 
-// Re-export LUT functions from scalar (they're pure table lookups, not SIMD)
-pub use crate::scalar::{srgb_u8_to_linear, srgb_u8_to_linear_x8};
 
 // ============================================================================
 // magetypes #[rite] helpers (x86-64 only) — real AVX2+FMA SIMD
@@ -505,7 +503,7 @@ mod tests {
     #[test]
     fn test_srgb_u8_to_linear_x8() {
         let input = [0u8, 64, 128, 192, 255, 32, 96, 160];
-        let result = srgb_u8_to_linear_x8(input);
+        let result = crate::scalar::srgb_u8_to_linear_x8(input);
 
         for (i, (&r, &inp)) in result.iter().zip(input.iter()).enumerate() {
             let expected = crate::scalar::srgb_to_linear(inp as f32 / 255.0);

@@ -8,7 +8,7 @@ fn main() {
     println!("═══════════════════════════════════════════════════════════════════════\n");
 
     // Test s2l with different thresholds
-    let thresholds: &[(&str, f32)] = &[
+    let _thresholds: &[(&str, f32)] = &[
         ("IEC (0.04045)", 0.04045),
         ("moxcms (0.039293...)", (12.92 * 0.003_041_282_560_127_521_f64) as f32),
         ("optimal (see below)", 0.0), // placeholder
