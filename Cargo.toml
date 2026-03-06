@@ -29,7 +29,8 @@ std = ["num-traits/std", "archmage/std", "magetypes/std"]
 avx512 = ["archmage/avx512", "magetypes/avx512"]
 # Include alternative/experimental implementations for benchmarking
 alt = []
-# Use unsafe variants for maximum performance (union-based bit manipulation, unchecked indexing)
+# No-op since 0.6.2 — all paths are now safe Rust. Kept for backward compatibility.
+# TODO: remove in 0.7
 unsafe_simd = []
 # Transfer functions: sRGB, BT.709, PQ, HLG — scalar + SIMD rites
 transfer = []

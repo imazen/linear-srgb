@@ -163,7 +163,7 @@
 //! - **`transfer`** — BT.709, PQ, and HLG transfer functions in `tf` and [`tokens`].
 //! - **`iec`** — IEC 61966-2-1 textbook sRGB functions for legacy interop.
 //! - **`alt`** — Alternative implementations for benchmarking (not stable API).
-//! - **`unsafe_simd`** — Union-based bit manipulation in SIMD paths.
+//! - **`unsafe_simd`** — No-op (kept for backward compatibility, will be removed in 0.7).
 //!
 //! # `no_std` Support
 //!
@@ -175,7 +175,7 @@
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "unsafe_simd"), deny(unsafe_code))]
+#![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 #[cfg(not(feature = "std"))]
