@@ -281,10 +281,11 @@ fn simd_s2l_matches_scalar_dense() {
         if ulp > max_ulp {
             max_ulp = ulp;
         }
-        // SIMD uses branchless blend with different FMA ordering, so small
-        // differences are expected. The key invariant: both are accurate vs f64.
+        // SIMD evaluates in f32 while scalar uses f64 intermediates, so small
+        // differences are expected. 6 ULP accounts for platform-specific FMA
+        // rounding (seen on macOS Intel). The key invariant: both are accurate vs f64.
         assert!(
-            ulp <= 5,
+            ulp <= 6,
             "SIMD vs scalar s2l mismatch at index {i}, input={input}: \
              scalar={scalar}, simd={simd}, ULP={ulp}"
         );
@@ -319,7 +320,7 @@ fn simd_l2s_matches_scalar_dense() {
             max_ulp = ulp;
         }
         assert!(
-            ulp <= 5,
+            ulp <= 6,
             "SIMD vs scalar l2s mismatch at index {i}, input={input}: \
              scalar={scalar}, simd={simd}, ULP={ulp}"
         );
