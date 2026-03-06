@@ -158,7 +158,6 @@ impl SrgbToLinearLut {
         // Safe: u8 is always in bounds for a 256-element array
         self.table[value as usize]
     }
-
 }
 
 impl Default for SrgbToLinearLut {
@@ -379,8 +378,10 @@ mod tests {
         println!("imageflow fastpow vs scalar linear_to_srgb_u8 ({count} values):");
         println!("  Max diff: {max_diff} at input {worst_input:.10}");
         println!("  imageflow: {iflow}, scalar: {crate_val}");
-        println!("  Agree: {agree}, Disagree: {disagree} ({:.2}%)",
-            disagree as f64 / count as f64 * 100.0);
+        println!(
+            "  Agree: {agree}, Disagree: {disagree} ({:.2}%)",
+            disagree as f64 / count as f64 * 100.0
+        );
     }
 
     #[test]
@@ -423,8 +424,10 @@ mod tests {
         println!("imageflow LUT vs scalar linear_to_srgb_u8 ({count} values):");
         println!("  Max diff: {max_diff} at input {worst_input:.10}");
         println!("  imageflow LUT: {iflow}, scalar: {crate_val}");
-        println!("  Agree: {agree}, Disagree: {disagree} ({:.2}%)",
-            disagree as f64 / count as f64 * 100.0);
+        println!(
+            "  Agree: {agree}, Disagree: {disagree} ({:.2}%)",
+            disagree as f64 / count as f64 * 100.0
+        );
     }
 
     #[test]
