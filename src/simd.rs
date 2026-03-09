@@ -406,75 +406,17 @@ pub fn linear_to_srgb_rgba_slice(values: &mut [f32]) {
 }
 
 // ============================================================================
-// Fused sRGB→Linear + Premultiply (RGBA f32, SIMD-dispatched)
+// sRGB→Linear + Premultiply (RGBA f32)
 // ============================================================================
-
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[arcane]
-fn srgb_to_linear_premultiply_rgba_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<16>();
-    for chunk in chunks {
-        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
-        let v = mt_f32x16::from_array(token, *chunk);
-        let linear = srgb_to_linear_mt_x16(token, v);
-        let alpha_vec = mt_f32x16::from_array(
-            token,
-            [
-                a[0], a[0], a[0], 1.0, a[1], a[1], a[1], 1.0, a[2], a[2], a[2], 1.0, a[3], a[3],
-                a[3], 1.0,
-            ],
-        );
-        *chunk = (linear * alpha_vec).to_array();
-        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
-    }
-    for pixel in remainder.chunks_exact_mut(4) {
-        let a = pixel[3];
-        pixel[0] = crate::scalar::srgb_to_linear(pixel[0]) * a;
-        pixel[1] = crate::scalar::srgb_to_linear(pixel[1]) * a;
-        pixel[2] = crate::scalar::srgb_to_linear(pixel[2]) * a;
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-#[arcane]
-fn srgb_to_linear_premultiply_rgba_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<8>();
-    for chunk in chunks {
-        let a = [chunk[3], chunk[7]];
-        let v = mt_f32x8::from_array(token, *chunk);
-        let linear = srgb_to_linear_mt(token, v);
-        let alpha_vec = mt_f32x8::from_array(token, [a[0], a[0], a[0], 1.0, a[1], a[1], a[1], 1.0]);
-        *chunk = (linear * alpha_vec).to_array();
-        [chunk[3], chunk[7]] = a;
-    }
-    for pixel in remainder.chunks_exact_mut(4) {
-        let a = pixel[3];
-        pixel[0] = crate::scalar::srgb_to_linear(pixel[0]) * a;
-        pixel[1] = crate::scalar::srgb_to_linear(pixel[1]) * a;
-        pixel[2] = crate::scalar::srgb_to_linear(pixel[2]) * a;
-    }
-}
-
-fn srgb_to_linear_premultiply_rgba_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
-    for pixel in values.chunks_exact_mut(4) {
-        let a = pixel[3];
-        pixel[0] = crate::scalar::srgb_to_linear(pixel[0]) * a;
-        pixel[1] = crate::scalar::srgb_to_linear(pixel[1]) * a;
-        pixel[2] = crate::scalar::srgb_to_linear(pixel[2]) * a;
-    }
-}
 
 /// Convert sRGB RGBA to linear premultiplied RGBA in-place.
 ///
-/// Fused operation: each RGB channel is converted from sRGB to linear light,
-/// then multiplied by the alpha channel. Alpha is left unchanged.
+/// Each RGB channel is converted from sRGB to linear light via
+/// [`srgb_to_linear_rgba_slice`], then multiplied by the alpha channel.
+/// Alpha is left unchanged.
 ///
 /// Input: `[R_srgb, G_srgb, B_srgb, A, ...]` (straight alpha)
 /// Output: `[R_linear*A, G_linear*A, B_linear*A, A, ...]` (premultiplied alpha)
-///
-/// This is faster than calling [`srgb_to_linear_rgba_slice`] followed by a
-/// separate premultiply loop — the multiply happens while data is still in
-/// SIMD registers, avoiding a second memory pass.
 ///
 /// Trailing elements that don't form a complete RGBA pixel are ignored.
 ///
@@ -490,106 +432,24 @@ fn srgb_to_linear_premultiply_rgba_slice_tier_scalar(_token: ScalarToken, values
 /// ```
 #[inline]
 pub fn srgb_to_linear_premultiply_rgba_slice(values: &mut [f32]) {
-    incant!(srgb_to_linear_premultiply_rgba_slice_tier(values), [v4, v3])
-}
-
-// ============================================================================
-// Fused Unpremultiply + Linear→sRGB (RGBA f32, SIMD-dispatched)
-// ============================================================================
-
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-#[arcane]
-fn unpremultiply_linear_to_srgb_rgba_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<16>();
-    for chunk in chunks {
-        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
-        let inv = [
-            if a[0] > 0.0 { 1.0 / a[0] } else { 0.0 },
-            if a[1] > 0.0 { 1.0 / a[1] } else { 0.0 },
-            if a[2] > 0.0 { 1.0 / a[2] } else { 0.0 },
-            if a[3] > 0.0 { 1.0 / a[3] } else { 0.0 },
-        ];
-        let inv_alpha = mt_f32x16::from_array(
-            token,
-            [
-                inv[0], inv[0], inv[0], 1.0, inv[1], inv[1], inv[1], 1.0, inv[2], inv[2], inv[2],
-                1.0, inv[3], inv[3], inv[3], 1.0,
-            ],
-        );
-        let v = mt_f32x16::from_array(token, *chunk);
-        let unpremul = v * inv_alpha;
-        *chunk = linear_to_srgb_mt_x16(token, unpremul).to_array();
-        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
-    }
-    for pixel in remainder.chunks_exact_mut(4) {
-        let a = pixel[3];
-        if a > 0.0 {
-            let inv_a = 1.0 / a;
-            pixel[0] = crate::scalar::linear_to_srgb(pixel[0] * inv_a);
-            pixel[1] = crate::scalar::linear_to_srgb(pixel[1] * inv_a);
-            pixel[2] = crate::scalar::linear_to_srgb(pixel[2] * inv_a);
-        } else {
-            pixel[0] = 0.0;
-            pixel[1] = 0.0;
-            pixel[2] = 0.0;
-        }
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-#[arcane]
-fn unpremultiply_linear_to_srgb_rgba_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<8>();
-    for chunk in chunks {
-        let a = [chunk[3], chunk[7]];
-        let inv = [
-            if a[0] > 0.0 { 1.0 / a[0] } else { 0.0 },
-            if a[1] > 0.0 { 1.0 / a[1] } else { 0.0 },
-        ];
-        let inv_alpha = mt_f32x8::from_array(
-            token,
-            [inv[0], inv[0], inv[0], 1.0, inv[1], inv[1], inv[1], 1.0],
-        );
-        let v = mt_f32x8::from_array(token, *chunk);
-        let unpremul = v * inv_alpha;
-        *chunk = linear_to_srgb_mt(token, unpremul).to_array();
-        [chunk[3], chunk[7]] = a;
-    }
-    for pixel in remainder.chunks_exact_mut(4) {
-        let a = pixel[3];
-        if a > 0.0 {
-            let inv_a = 1.0 / a;
-            pixel[0] = crate::scalar::linear_to_srgb(pixel[0] * inv_a);
-            pixel[1] = crate::scalar::linear_to_srgb(pixel[1] * inv_a);
-            pixel[2] = crate::scalar::linear_to_srgb(pixel[2] * inv_a);
-        } else {
-            pixel[0] = 0.0;
-            pixel[1] = 0.0;
-            pixel[2] = 0.0;
-        }
-    }
-}
-
-fn unpremultiply_linear_to_srgb_rgba_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+    srgb_to_linear_rgba_slice(values);
     for pixel in values.chunks_exact_mut(4) {
         let a = pixel[3];
-        if a > 0.0 {
-            let inv_a = 1.0 / a;
-            pixel[0] = crate::scalar::linear_to_srgb(pixel[0] * inv_a);
-            pixel[1] = crate::scalar::linear_to_srgb(pixel[1] * inv_a);
-            pixel[2] = crate::scalar::linear_to_srgb(pixel[2] * inv_a);
-        } else {
-            pixel[0] = 0.0;
-            pixel[1] = 0.0;
-            pixel[2] = 0.0;
-        }
+        pixel[0] *= a;
+        pixel[1] *= a;
+        pixel[2] *= a;
     }
 }
+
+// ============================================================================
+// Unpremultiply + Linear→sRGB (RGBA f32)
+// ============================================================================
 
 /// Convert linear premultiplied RGBA to sRGB straight-alpha RGBA in-place.
 ///
-/// Fused operation: each RGB channel is divided by alpha (unpremultiplied),
-/// then converted from linear light to sRGB. Alpha is left unchanged.
+/// Each RGB channel is divided by alpha (unpremultiplied), then converted
+/// from linear light to sRGB via [`linear_to_srgb_rgba_slice`]. Alpha is
+/// left unchanged.
 ///
 /// Input: `[R_linear*A, G_linear*A, B_linear*A, A, ...]` (premultiplied)
 /// Output: `[R_srgb, G_srgb, B_srgb, A, ...]` (straight alpha)
@@ -613,10 +473,16 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier_scalar(_token: ScalarToken, valu
 /// ```
 #[inline]
 pub fn unpremultiply_linear_to_srgb_rgba_slice(values: &mut [f32]) {
-    incant!(
-        unpremultiply_linear_to_srgb_rgba_slice_tier(values),
-        [v4, v3]
-    )
+    for pixel in values.chunks_exact_mut(4) {
+        let a = pixel[3];
+        if a > 0.0 {
+            let inv_a = 1.0 / a;
+            pixel[0] *= inv_a;
+            pixel[1] *= inv_a;
+            pixel[2] *= inv_a;
+        }
+    }
+    linear_to_srgb_rgba_slice(values);
 }
 
 // ============================================================================

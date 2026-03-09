@@ -305,6 +305,104 @@ fn bench_rgba_linear_to_srgb(c: &mut Criterion) {
     group.finish();
 }
 
+// ============================================================================
+// Fused premultiply vs separate (srgb_to_linear_rgba + manual premul loop)
+// ============================================================================
+
+fn premultiply_loop(values: &mut [f32]) {
+    for pixel in values.chunks_exact_mut(4) {
+        let a = pixel[3];
+        pixel[0] *= a;
+        pixel[1] *= a;
+        pixel[2] *= a;
+    }
+}
+
+fn unpremultiply_loop(values: &mut [f32]) {
+    for pixel in values.chunks_exact_mut(4) {
+        let a = pixel[3];
+        if a > 0.0 {
+            let inv_a = 1.0 / a;
+            pixel[0] *= inv_a;
+            pixel[1] *= inv_a;
+            pixel[2] *= inv_a;
+        }
+    }
+}
+
+fn bench_premultiply(c: &mut Criterion) {
+    let mut group = c.benchmark_group("premultiply_s2l");
+
+    let pixel_counts = [64, 256, 1024, 4096, 16384];
+
+    for &num_pixels in &pixel_counts {
+        let data = create_rgba_srgb(num_pixels);
+        group.throughput(Throughput::Elements(num_pixels as u64));
+
+        // Separate: srgb_to_linear_rgba_slice + premultiply loop
+        group.bench_with_input(
+            BenchmarkId::new("separate", num_pixels),
+            &data,
+            |b, data| {
+                let mut buf = data.clone();
+                b.iter(|| {
+                    buf.copy_from_slice(data);
+                    default::srgb_to_linear_rgba_slice(black_box(&mut buf));
+                    premultiply_loop(black_box(&mut buf));
+                })
+            },
+        );
+
+        // Fused: single pass
+        group.bench_with_input(BenchmarkId::new("fused", num_pixels), &data, |b, data| {
+            let mut buf = data.clone();
+            b.iter(|| {
+                buf.copy_from_slice(data);
+                default::srgb_to_linear_premultiply_rgba_slice(black_box(&mut buf));
+            })
+        });
+    }
+    group.finish();
+}
+
+fn bench_unpremultiply(c: &mut Criterion) {
+    let mut group = c.benchmark_group("unpremultiply_l2s");
+
+    let pixel_counts = [64, 256, 1024, 4096, 16384];
+
+    for &num_pixels in &pixel_counts {
+        // Create premultiplied linear data
+        let mut data = create_rgba_srgb(num_pixels);
+        default::srgb_to_linear_premultiply_rgba_slice(&mut data);
+
+        group.throughput(Throughput::Elements(num_pixels as u64));
+
+        // Separate: unpremultiply loop + linear_to_srgb_rgba_slice
+        group.bench_with_input(
+            BenchmarkId::new("separate", num_pixels),
+            &data,
+            |b, data| {
+                let mut buf = data.clone();
+                b.iter(|| {
+                    buf.copy_from_slice(data);
+                    unpremultiply_loop(black_box(&mut buf));
+                    default::linear_to_srgb_rgba_slice(black_box(&mut buf));
+                })
+            },
+        );
+
+        // Fused: single pass
+        group.bench_with_input(BenchmarkId::new("fused", num_pixels), &data, |b, data| {
+            let mut buf = data.clone();
+            b.iter(|| {
+                buf.copy_from_slice(data);
+                default::unpremultiply_linear_to_srgb_rgba_slice(black_box(&mut buf));
+            })
+        });
+    }
+    group.finish();
+}
+
 // Quick accuracy check for the inverse_fixup approach
 fn bench_inverse_accuracy(c: &mut Criterion) {
     let mut group = c.benchmark_group("rgba_inverse_accuracy");
@@ -353,6 +451,8 @@ criterion_group!(
     benches,
     bench_rgba_srgb_to_linear,
     bench_rgba_linear_to_srgb,
+    bench_premultiply,
+    bench_unpremultiply,
     bench_inverse_accuracy,
 );
 criterion_main!(benches);
