@@ -2001,8 +2001,7 @@ mod tests {
             );
 
             // RGB should be premultiplied: rgb_premul = srgb_to_linear(rgb) * alpha
-            for px in 0..num_pixels {
-                let a = alphas[px];
+            for (px, &a) in alphas.iter().enumerate().take(num_pixels) {
                 for ch in 0..3 {
                     let idx = px * 4 + ch;
                     let expected = crate::scalar::srgb_to_linear(data[idx]) * a;
@@ -2017,8 +2016,7 @@ mod tests {
 
             // Roundtrip
             unpremultiply_linear_to_srgb_rgba_slice(&mut rgba);
-            for px in 0..num_pixels {
-                let a = alphas[px];
+            for (px, &a) in alphas.iter().enumerate().take(num_pixels) {
                 if a > 0.0 {
                     for ch in 0..3 {
                         let idx = px * 4 + ch;
