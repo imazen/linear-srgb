@@ -78,6 +78,8 @@
 //! | RGBA u8 sRGB → linear premul f32 | [`default::srgb_u8_to_linear_premultiply_rgba_slice`] |
 //! | RGBA f32 linear premul → sRGB | [`default::unpremultiply_linear_to_srgb_rgba_slice`] |
 //! | RGBA f32 linear premul → sRGB u8 | [`default::unpremultiply_linear_to_srgb_u8_rgba_slice`] |
+//! | RGBA f32 gamma → linear premul | [`default::gamma_to_linear_premultiply_rgba_slice`] |
+//! | RGBA f32 linear premul → gamma | [`default::unpremultiply_linear_to_gamma_rgba_slice`] |
 //! | u16 slice → f32 slice | [`default::srgb_u16_to_linear_slice`] |
 //! | Exact f32/f64 (powf) | [`precise::srgb_to_linear`] |
 //! | Extended range (HDR) | [`precise::srgb_to_linear_extended`] |

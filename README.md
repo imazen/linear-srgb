@@ -40,6 +40,8 @@ let srgb_byte = linear_to_srgb_u8(linear);
 | RGBA `&[u8]` → `&mut [f32]` | `default::srgb_u8_to_linear_rgba_slice()` / `linear_to_srgb_u8_rgba_slice()` |
 | RGBA u8 sRGB → linear premul f32 | `default::srgb_u8_to_linear_premultiply_rgba_slice()` |
 | RGBA f32 linear premul → sRGB u8 | `default::unpremultiply_linear_to_srgb_u8_rgba_slice()` |
+| RGBA gamma → linear premultiplied | `default::gamma_to_linear_premultiply_rgba_slice()` |
+| RGBA linear premul → gamma | `default::unpremultiply_linear_to_gamma_rgba_slice()` |
 | `&[u16]` ↔ `&mut [f32]` | `default::srgb_u16_to_linear_slice()` / `default::linear_to_srgb_u16_slice()` |
 | `&[f32]` → `&mut [u8]` | `default::linear_to_srgb_u8_slice()` |
 | Inside `#[arcane]` fn | `tokens::x8::srgb_to_linear_v3()` (inlines, no dispatch) |

@@ -10,6 +10,9 @@
 - **u8 premultiply round-trips** — `srgb_u8_to_linear_premultiply_rgba_slice` converts u8 sRGB
   straight-alpha directly to linear premultiplied f32. `unpremultiply_linear_to_srgb_u8_rgba_slice`
   converts back.
+- **Custom gamma premultiply/unpremultiply** — `gamma_to_linear_premultiply_rgba_slice` and
+  `unpremultiply_linear_to_gamma_rgba_slice` for arbitrary gamma (2.2, 1.8, etc.) with the same
+  fused single-pass SIMD treatment.
 - Benchmark suite for RGBA premultiply approaches (`rgba_approach`).
 
 ### Changed
