@@ -31,13 +31,13 @@ let srgb_byte = linear_to_srgb_u8(linear);
 |----------------|----------|
 | One f32 value (fast) | `default::srgb_to_linear(x)` / `default::linear_to_srgb(x)` |
 | One f32 value (exact) | `precise::srgb_to_linear(x)` / `precise::linear_to_srgb(x)` |
-| One u8 value | `default::srgb_u8_to_linear(x)` (LUT, fastest) |
+| One u8 value | `default::srgb_u8_to_linear(x)` / `default::linear_to_srgb_u8(x)` |
 | `&mut [f32]` slice | `default::srgb_to_linear_slice()` / `default::linear_to_srgb_slice()` |
 | RGBA `&mut [f32]` (keep alpha) | `default::srgb_to_linear_rgba_slice()` / `default::linear_to_srgb_rgba_slice()` |
 | RGBA sRGB → linear premultiplied | `default::srgb_to_linear_premultiply_rgba_slice()` |
 | RGBA linear premultiplied → sRGB | `default::unpremultiply_linear_to_srgb_rgba_slice()` |
 | `&[u8]` → `&mut [f32]` | `default::srgb_u8_to_linear_slice()` |
-| RGBA `&[u8]` → `&mut [f32]` | `default::srgb_u8_to_linear_rgba_slice()` / `linear_to_srgb_u8_rgba_slice()` |
+| RGBA `&[u8]` ↔ `&mut [f32]` | `default::srgb_u8_to_linear_rgba_slice()` / `default::linear_to_srgb_u8_rgba_slice()` |
 | RGBA u8 sRGB → linear premul f32 | `default::srgb_u8_to_linear_premultiply_rgba_slice()` |
 | RGBA f32 linear premul → sRGB u8 | `default::unpremultiply_linear_to_srgb_u8_rgba_slice()` |
 | RGBA gamma → linear premultiplied | `default::gamma_to_linear_premultiply_rgba_slice()` |
