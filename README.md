@@ -34,8 +34,12 @@ let srgb_byte = linear_to_srgb_u8(linear);
 | One u8 value | `default::srgb_u8_to_linear(x)` (LUT, fastest) |
 | `&mut [f32]` slice | `default::srgb_to_linear_slice()` / `default::linear_to_srgb_slice()` |
 | RGBA `&mut [f32]` (keep alpha) | `default::srgb_to_linear_rgba_slice()` / `default::linear_to_srgb_rgba_slice()` |
+| RGBA sRGB → linear premultiplied | `default::srgb_to_linear_premultiply_rgba_slice()` |
+| RGBA linear premultiplied → sRGB | `default::unpremultiply_linear_to_srgb_rgba_slice()` |
 | `&[u8]` → `&mut [f32]` | `default::srgb_u8_to_linear_slice()` |
 | RGBA `&[u8]` → `&mut [f32]` | `default::srgb_u8_to_linear_rgba_slice()` / `linear_to_srgb_u8_rgba_slice()` |
+| RGBA u8 sRGB → linear premul f32 | `default::srgb_u8_to_linear_premultiply_rgba_slice()` |
+| RGBA f32 linear premul → sRGB u8 | `default::unpremultiply_linear_to_srgb_u8_rgba_slice()` |
 | `&[u16]` ↔ `&mut [f32]` | `default::srgb_u16_to_linear_slice()` / `default::linear_to_srgb_u16_slice()` |
 | `&[f32]` → `&mut [u8]` | `default::linear_to_srgb_u8_slice()` |
 | Inside `#[arcane]` fn | `tokens::x8::srgb_to_linear_v3()` (inlines, no dispatch) |
@@ -110,6 +114,31 @@ srgb_u8_to_linear_rgba_slice(&rgba_bytes, &mut rgba_linear);
 let linear_values: Vec<f32> = (0..256).map(|i| i as f32 / 255.0).collect();
 let mut srgb_bytes = vec![0u8; 256];
 linear_to_srgb_u8_slice(&linear_values, &mut srgb_bytes);
+```
+
+### Premultiplied Alpha (Fused, Single-Pass)
+
+Convert between sRGB straight-alpha and linear premultiplied alpha in one
+SIMD pass — no intermediate buffer, no second memory traversal.
+
+```rust
+use linear_srgb::default::*;
+
+// sRGB straight → linear premultiplied (f32 in-place)
+let mut rgba = vec![0.8f32, 0.5, 0.2, 0.75, 1.0, 1.0, 1.0, 1.0];
+srgb_to_linear_premultiply_rgba_slice(&mut rgba);
+
+// linear premultiplied → sRGB straight (f32 in-place)
+unpremultiply_linear_to_srgb_rgba_slice(&mut rgba);
+
+// u8 sRGB → linear premultiplied f32
+let srgb_bytes = vec![200u8, 128, 64, 192, 255, 255, 255, 255];
+let mut linear_premul = vec![0.0f32; 8];
+srgb_u8_to_linear_premultiply_rgba_slice(&srgb_bytes, &mut linear_premul);
+
+// linear premultiplied f32 → sRGB u8
+let mut srgb_out = vec![0u8; 8];
+unpremultiply_linear_to_srgb_u8_rgba_slice(&linear_premul, &mut srgb_out);
 ```
 
 ### Custom Gamma (Non-sRGB)
