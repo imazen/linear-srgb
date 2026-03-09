@@ -1063,7 +1063,17 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_v4(
             }
         }
         *chunk = linear_to_gamma_x16_2x8(token, *chunk, gamma);
-        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
+        // Restore alpha; zero RGB for fully-transparent pixels (pow_midp may
+        // not return exact 0.0 for input 0.0).
+        for (i, &ai) in a.iter().enumerate() {
+            let off = i * 4;
+            chunk[off + 3] = ai;
+            if ai == 0.0 {
+                chunk[off] = 0.0;
+                chunk[off + 1] = 0.0;
+                chunk[off + 2] = 0.0;
+            }
+        }
     }
     for pixel in remainder.chunks_exact_mut(4) {
         let a = pixel[3];
@@ -1107,6 +1117,18 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_v3(
         *chunk = linear_to_gamma_mt(token, v, gamma).to_array();
         chunk[3] = a0;
         chunk[7] = a1;
+        // Zero RGB for fully-transparent pixels (pow_midp may not return
+        // exact 0.0 for input 0.0).
+        if a0 == 0.0 {
+            chunk[0] = 0.0;
+            chunk[1] = 0.0;
+            chunk[2] = 0.0;
+        }
+        if a1 == 0.0 {
+            chunk[4] = 0.0;
+            chunk[5] = 0.0;
+            chunk[6] = 0.0;
+        }
     }
     for pixel in remainder.chunks_exact_mut(4) {
         let a = pixel[3];
