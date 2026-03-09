@@ -2199,4 +2199,69 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn gamma_premultiply_roundtrip() {
+        // Exercise SIMD tiers with various pixel counts (1..=17 covers
+        // scalar remainder, V3 8-wide, and V4 16-wide paths)
+        for num_pixels in 1..=17 {
+            let mut rgba: Vec<f32> = (0..num_pixels)
+                .flat_map(|i| {
+                    let v = i as f32 / num_pixels as f32;
+                    [v, v * 0.5, v * 0.8, 0.75]
+                })
+                .collect();
+            let original = rgba.clone();
+
+            gamma_to_linear_premultiply_rgba_slice(&mut rgba, 2.2);
+            unpremultiply_linear_to_gamma_rgba_slice(&mut rgba, 2.2);
+
+            for (i, (&orig, &conv)) in original.iter().zip(rgba.iter()).enumerate() {
+                if i % 4 == 3 {
+                    assert_eq!(orig, conv, "alpha changed at {i}/{num_pixels}");
+                } else {
+                    assert!(
+                        (orig - conv).abs() < 2e-3,
+                        "gamma premul roundtrip at {i}/{num_pixels}: {orig} -> {conv}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn gamma_premultiply_zero_alpha() {
+        let mut rgba = vec![0.5f32, 0.5, 0.5, 0.0, 0.8, 0.8, 0.8, 1.0];
+        gamma_to_linear_premultiply_rgba_slice(&mut rgba, 2.2);
+        // Zero alpha: RGB should be 0
+        assert_eq!(rgba[0], 0.0);
+        assert_eq!(rgba[1], 0.0);
+        assert_eq!(rgba[2], 0.0);
+        assert_eq!(rgba[3], 0.0);
+        // Full alpha: gamma_to_linear(0.8, 2.2)
+        assert!(rgba[4] > 0.0);
+        assert_eq!(rgba[7], 1.0);
+
+        unpremultiply_linear_to_gamma_rgba_slice(&mut rgba, 2.2);
+        assert_eq!(rgba[0], 0.0);
+        assert_eq!(rgba[3], 0.0);
+        assert!((rgba[4] - 0.8).abs() < 2e-3);
+    }
+
+    #[test]
+    fn gamma_rgba_slice_basic() {
+        // Separate from premultiply — test plain gamma slice with RGBA-like data
+        let mut values: Vec<f32> = (0..100).map(|i| i as f32 / 99.0).collect();
+        let original = values.clone();
+
+        gamma_to_linear_slice(&mut values, 1.8);
+        linear_to_gamma_slice(&mut values, 1.8);
+
+        for (i, (&orig, &conv)) in original.iter().zip(values.iter()).enumerate() {
+            assert!(
+                (orig - conv).abs() < 1e-3,
+                "gamma 1.8 roundtrip at {i}: {orig} -> {conv}"
+            );
+        }
+    }
 }

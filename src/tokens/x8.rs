@@ -601,4 +601,255 @@ mod tests {
             );
         }
     }
+
+    #[archmage::arcane]
+    fn call_gamma_to_linear(token: X64V3Token, input: [f32; 8], gamma: f32) -> [f32; 8] {
+        gamma_to_linear_v3(token, input, gamma)
+    }
+
+    #[archmage::arcane]
+    fn call_linear_to_gamma(token: X64V3Token, input: [f32; 8], gamma: f32) -> [f32; 8] {
+        linear_to_gamma_v3(token, input, gamma)
+    }
+
+    #[archmage::arcane]
+    fn call_srgb_u8_to_linear(token: X64V3Token, input: [u8; 8]) -> [f32; 8] {
+        srgb_u8_to_linear_v3(token, input)
+    }
+
+    #[archmage::arcane]
+    fn call_srgb_u8_to_linear_slice(token: X64V3Token, input: &[u8], output: &mut [f32]) {
+        srgb_u8_to_linear_slice_v3(token, input, output);
+    }
+
+    #[archmage::arcane]
+    fn call_gamma_to_linear_slice(token: X64V3Token, values: &mut [f32], gamma: f32) {
+        gamma_to_linear_slice_v3(token, values, gamma);
+    }
+
+    #[archmage::arcane]
+    fn call_linear_to_gamma_slice(token: X64V3Token, values: &mut [f32], gamma: f32) {
+        linear_to_gamma_slice_v3(token, values, gamma);
+    }
+
+    #[archmage::arcane]
+    fn call_linear_to_srgb_u8_slice(token: X64V3Token, input: &[f32], output: &mut [u8]) {
+        linear_to_srgb_u8_slice_v3(token, input, output);
+    }
+
+    #[test]
+    fn test_gamma_roundtrip() {
+        let Some(token) = get_token() else { return };
+
+        let input = [0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9, 1.0];
+        let linear = call_gamma_to_linear(token, input, 2.2);
+        let roundtrip = call_linear_to_gamma(token, linear, 2.2);
+
+        for (i, (&orig, &rt)) in input.iter().zip(roundtrip.iter()).enumerate() {
+            assert!(
+                (orig - rt).abs() < 1e-3,
+                "gamma roundtrip failed at {}: {} -> {}",
+                i,
+                orig,
+                rt
+            );
+        }
+    }
+
+    #[test]
+    fn test_u8_to_linear_v3() {
+        let Some(token) = get_token() else { return };
+
+        let input = [0, 64, 128, 192, 255, 1, 127, 200];
+        let result = call_srgb_u8_to_linear(token, input);
+
+        for (i, (&got, &inp)) in result.iter().zip(input.iter()).enumerate() {
+            let expected = crate::scalar::srgb_u8_to_linear(inp);
+            assert!(
+                (got - expected).abs() < 1e-6,
+                "u8 mismatch at {}: got {}, expected {}",
+                i,
+                got,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_u8_to_linear_slice_v3() {
+        let Some(token) = get_token() else { return };
+
+        // Use 11 elements to exercise the remainder path
+        let input: Vec<u8> = (0..11).map(|i| (i * 25) as u8).collect();
+        let mut output = vec![0.0f32; 11];
+        call_srgb_u8_to_linear_slice(token, &input, &mut output);
+
+        for (i, (&got, &inp)) in output.iter().zip(input.iter()).enumerate() {
+            let expected = crate::scalar::srgb_u8_to_linear(inp);
+            assert!(
+                (got - expected).abs() < 1e-6,
+                "slice mismatch at {}: got {}, expected {}",
+                i,
+                got,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_gamma_slice_roundtrip() {
+        let Some(token) = get_token() else { return };
+
+        // 11 elements to exercise remainder
+        let mut values: Vec<f32> = (0..11).map(|i| i as f32 / 10.0).collect();
+        let original = values.clone();
+
+        call_gamma_to_linear_slice(token, &mut values, 2.2);
+        call_linear_to_gamma_slice(token, &mut values, 2.2);
+
+        for (i, (&orig, &conv)) in original.iter().zip(values.iter()).enumerate() {
+            assert!(
+                (orig - conv).abs() < 1e-3,
+                "gamma slice roundtrip failed at {}: {} -> {}",
+                i,
+                orig,
+                conv
+            );
+        }
+    }
+
+    #[test]
+    fn test_linear_to_srgb_u8_slice_v3() {
+        let Some(token) = get_token() else { return };
+
+        // 11 elements to exercise remainder
+        let input: Vec<f32> = (0..11).map(|i| i as f32 / 10.0).collect();
+        let mut output = vec![0u8; 11];
+        call_linear_to_srgb_u8_slice(token, &input, &mut output);
+
+        for (i, (&got, &inp)) in output.iter().zip(input.iter()).enumerate() {
+            let expected = crate::scalar::linear_to_srgb_u8(inp);
+            assert!(
+                (got as i32 - expected as i32).abs() <= 1,
+                "u8 slice mismatch at {}: got {}, expected {} (input={})",
+                i,
+                got,
+                expected,
+                inp
+            );
+        }
+    }
+
+    #[cfg(feature = "transfer")]
+    mod tf_tests {
+        use super::*;
+
+        #[archmage::arcane]
+        fn call_tf_srgb_to_linear_slice(token: X64V3Token, values: &mut [f32]) {
+            tf_srgb_to_linear_slice_v3(token, values);
+        }
+
+        #[archmage::arcane]
+        fn call_tf_linear_to_srgb_slice(token: X64V3Token, values: &mut [f32]) {
+            tf_linear_to_srgb_slice_v3(token, values);
+        }
+
+        #[archmage::arcane]
+        fn call_bt709_to_linear_slice(token: X64V3Token, values: &mut [f32]) {
+            bt709_to_linear_slice_v3(token, values);
+        }
+
+        #[archmage::arcane]
+        fn call_linear_to_bt709_slice(token: X64V3Token, values: &mut [f32]) {
+            linear_to_bt709_slice_v3(token, values);
+        }
+
+        #[archmage::arcane]
+        fn call_pq_to_linear_slice(token: X64V3Token, values: &mut [f32]) {
+            pq_to_linear_slice_v3(token, values);
+        }
+
+        #[archmage::arcane]
+        fn call_linear_to_pq_slice(token: X64V3Token, values: &mut [f32]) {
+            linear_to_pq_slice_v3(token, values);
+        }
+
+        #[archmage::arcane]
+        fn call_hlg_to_linear_slice(token: X64V3Token, values: &mut [f32]) {
+            hlg_to_linear_slice_v3(token, values);
+        }
+
+        #[archmage::arcane]
+        fn call_linear_to_hlg_slice(token: X64V3Token, values: &mut [f32]) {
+            linear_to_hlg_slice_v3(token, values);
+        }
+
+        #[test]
+        fn test_tf_srgb_slice_roundtrip() {
+            let Some(token) = get_token() else { return };
+
+            let mut values: Vec<f32> = (0..11).map(|i| i as f32 / 10.0).collect();
+            let original = values.clone();
+
+            call_tf_srgb_to_linear_slice(token, &mut values);
+            call_tf_linear_to_srgb_slice(token, &mut values);
+
+            for (i, (&orig, &conv)) in original.iter().zip(values.iter()).enumerate() {
+                assert!(
+                    (orig - conv).abs() < 1e-4,
+                    "tf sRGB roundtrip failed at {}",
+                    i
+                );
+            }
+        }
+
+        #[test]
+        fn test_bt709_slice_roundtrip() {
+            let Some(token) = get_token() else { return };
+
+            let mut values: Vec<f32> = (0..11).map(|i| i as f32 / 10.0).collect();
+            let original = values.clone();
+
+            call_bt709_to_linear_slice(token, &mut values);
+            call_linear_to_bt709_slice(token, &mut values);
+
+            for (i, (&orig, &conv)) in original.iter().zip(values.iter()).enumerate() {
+                assert!(
+                    (orig - conv).abs() < 1e-3,
+                    "BT.709 roundtrip failed at {}",
+                    i
+                );
+            }
+        }
+
+        #[test]
+        fn test_pq_slice_roundtrip() {
+            let Some(token) = get_token() else { return };
+
+            let mut values: Vec<f32> = (1..11).map(|i| i as f32 / 10.0).collect();
+            let original = values.clone();
+
+            call_pq_to_linear_slice(token, &mut values);
+            call_linear_to_pq_slice(token, &mut values);
+
+            for (i, (&orig, &conv)) in original.iter().zip(values.iter()).enumerate() {
+                assert!((orig - conv).abs() < 1e-3, "PQ roundtrip failed at {}", i);
+            }
+        }
+
+        #[test]
+        fn test_hlg_slice_roundtrip() {
+            let Some(token) = get_token() else { return };
+
+            let mut values: Vec<f32> = (0..11).map(|i| i as f32 / 10.0).collect();
+            let original = values.clone();
+
+            call_hlg_to_linear_slice(token, &mut values);
+            call_linear_to_hlg_slice(token, &mut values);
+
+            for (i, (&orig, &conv)) in original.iter().zip(values.iter()).enumerate() {
+                assert!((orig - conv).abs() < 1e-3, "HLG roundtrip failed at {}", i);
+            }
+        }
+    }
 }
