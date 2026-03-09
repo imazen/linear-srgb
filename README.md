@@ -7,7 +7,7 @@ preservation, fused premultiply/unpremultiply, custom gamma, and extended range.
 `no_std` compatible.
 
 [![Crates.io](https://img.shields.io/crates/v/linear-srgb.svg?style=for-the-badge)](https://crates.io/crates/linear-srgb)
-[![Docs.rs](https://docs.rs/linear-srgb/badge.svg?style=for-the-badge)](https://docs.rs/linear-srgb)
+[![Docs.rs](https://img.shields.io/docsrs/linear-srgb?style=for-the-badge)](https://docs.rs/linear-srgb)
 [![License](https://img.shields.io/crates/l/linear-srgb.svg?style=for-the-badge)](LICENSE)
 
 ```toml
