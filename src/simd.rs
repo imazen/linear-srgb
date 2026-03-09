@@ -1050,30 +1050,34 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_v4(
     values: &mut [f32],
     gamma: f32,
 ) {
+    let t3 = token.v3();
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
-        for (i, &ai) in a.iter().enumerate() {
-            let off = i * 4;
-            if ai > 0.0 {
-                let inv = 1.0 / ai;
-                chunk[off] *= inv;
-                chunk[off + 1] *= inv;
-                chunk[off + 2] *= inv;
-            }
+        // Process as 2×8 (pow_midp has no native x16)
+        for half in 0..2 {
+            let off = half * 8;
+            let a0 = a[half * 2];
+            let a1 = a[half * 2 + 1];
+            let inv_alpha = mt_f32x8::from_array(
+                t3,
+                [
+                    if a0 > 0.0 { 1.0 / a0 } else { 0.0 },
+                    if a0 > 0.0 { 1.0 / a0 } else { 0.0 },
+                    if a0 > 0.0 { 1.0 / a0 } else { 0.0 },
+                    1.0,
+                    if a1 > 0.0 { 1.0 / a1 } else { 0.0 },
+                    if a1 > 0.0 { 1.0 / a1 } else { 0.0 },
+                    if a1 > 0.0 { 1.0 / a1 } else { 0.0 },
+                    1.0,
+                ],
+            );
+            let v = mt_f32x8::from_array(t3, <[f32; 8]>::try_from(&chunk[off..off + 8]).unwrap());
+            let unpremul = v * inv_alpha;
+            let converted = linear_to_gamma_mt(t3, unpremul, gamma).to_array();
+            chunk[off..off + 8].copy_from_slice(&converted);
         }
-        *chunk = linear_to_gamma_x16_2x8(token, *chunk, gamma);
-        // Restore alpha; zero RGB for fully-transparent pixels (pow_midp may
-        // not return exact 0.0 for input 0.0).
-        for (i, &ai) in a.iter().enumerate() {
-            let off = i * 4;
-            chunk[off + 3] = ai;
-            if ai == 0.0 {
-                chunk[off] = 0.0;
-                chunk[off + 1] = 0.0;
-                chunk[off + 2] = 0.0;
-            }
-        }
+        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
     }
     for pixel in remainder.chunks_exact_mut(4) {
         let a = pixel[3];
@@ -1101,34 +1105,23 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_v3(
     for chunk in chunks {
         let a0 = chunk[3];
         let a1 = chunk[7];
-        if a0 > 0.0 {
-            let inv = 1.0 / a0;
-            chunk[0] *= inv;
-            chunk[1] *= inv;
-            chunk[2] *= inv;
-        }
-        if a1 > 0.0 {
-            let inv = 1.0 / a1;
-            chunk[4] *= inv;
-            chunk[5] *= inv;
-            chunk[6] *= inv;
-        }
+        let inv_alpha = mt_f32x8::from_array(
+            token,
+            [
+                if a0 > 0.0 { 1.0 / a0 } else { 0.0 },
+                if a0 > 0.0 { 1.0 / a0 } else { 0.0 },
+                if a0 > 0.0 { 1.0 / a0 } else { 0.0 },
+                1.0,
+                if a1 > 0.0 { 1.0 / a1 } else { 0.0 },
+                if a1 > 0.0 { 1.0 / a1 } else { 0.0 },
+                if a1 > 0.0 { 1.0 / a1 } else { 0.0 },
+                1.0,
+            ],
+        );
         let v = mt_f32x8::from_array(token, *chunk);
-        *chunk = linear_to_gamma_mt(token, v, gamma).to_array();
+        *chunk = linear_to_gamma_mt(token, v * inv_alpha, gamma).to_array();
         chunk[3] = a0;
         chunk[7] = a1;
-        // Zero RGB for fully-transparent pixels (pow_midp may not return
-        // exact 0.0 for input 0.0).
-        if a0 == 0.0 {
-            chunk[0] = 0.0;
-            chunk[1] = 0.0;
-            chunk[2] = 0.0;
-        }
-        if a1 == 0.0 {
-            chunk[4] = 0.0;
-            chunk[5] = 0.0;
-            chunk[6] = 0.0;
-        }
     }
     for pixel in remainder.chunks_exact_mut(4) {
         let a = pixel[3];
