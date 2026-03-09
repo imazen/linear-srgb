@@ -63,16 +63,21 @@ pub use crate::simd::{
     linear_to_srgb_u16_rgba_slice,
     // u16 slices
     linear_to_srgb_u16_slice,
+    // Fused premultiply/unpremultiply
+    srgb_to_linear_premultiply_rgba_slice,
     // f32 RGBA slices (alpha-preserving)
     srgb_to_linear_rgba_slice,
     // f32 slices (in-place)
     srgb_to_linear_slice,
+    srgb_u8_to_linear_premultiply_rgba_slice,
     srgb_u8_to_linear_rgba_slice,
     // u8 slices
     srgb_u8_to_linear_slice,
     srgb_u16_to_linear_rgba_slice,
     // u16 slices
     srgb_u16_to_linear_slice,
+    unpremultiply_linear_to_srgb_rgba_slice,
+    unpremultiply_linear_to_srgb_u8_rgba_slice,
 };
 
 // ============================================================================
