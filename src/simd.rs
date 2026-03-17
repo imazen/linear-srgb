@@ -110,6 +110,38 @@ fn linear_to_gamma_mt(token: X64V3Token, linear: mt_f32x8, gamma: f32) -> mt_f32
 }
 
 // ============================================================================
+// PQ transfer function rites (x8, AVX2+FMA)
+// ============================================================================
+
+#[cfg(all(target_arch = "x86_64", feature = "transfer"))]
+#[rite]
+fn pq_to_linear_mt(token: X64V3Token, v: mt_f32x8) -> mt_f32x8 {
+    crate::tf::pq::pq_to_linear_x8(token, v)
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "transfer"))]
+#[rite]
+fn linear_to_pq_mt(token: X64V3Token, v: mt_f32x8) -> mt_f32x8 {
+    crate::tf::pq::linear_to_pq_x8(token, v)
+}
+
+// ============================================================================
+// HLG transfer function rites (x8, AVX2+FMA)
+// ============================================================================
+
+#[cfg(all(target_arch = "x86_64", feature = "transfer"))]
+#[rite]
+fn hlg_to_linear_mt(token: X64V3Token, v: mt_f32x8) -> mt_f32x8 {
+    crate::tf::hlg::hlg_to_linear_x8(token, v)
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "transfer"))]
+#[rite]
+fn linear_to_hlg_mt(token: X64V3Token, v: mt_f32x8) -> mt_f32x8 {
+    crate::tf::hlg::linear_to_hlg_x8(token, v)
+}
+
+// ============================================================================
 // magetypes #[rite] helpers (x86-64 V4/AVX-512) — native 512-bit SIMD
 // ============================================================================
 
@@ -926,6 +958,154 @@ fn linear_to_gamma_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], ga
 #[inline]
 pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
     incant!(linear_to_gamma_slice_tier(values, gamma), [v4, v3])
+}
+
+// ============================================================================
+// PQ ↔ Linear Slice Functions (behind `transfer` feature)
+// ============================================================================
+
+#[cfg(feature = "transfer")]
+x8_slice_tiers!(
+    pq_to_linear_slice_tier_v3,
+    pq_to_linear_rgba_slice_tier_v3,
+    pq_to_linear_mt,
+    crate::tf::pq_to_linear
+);
+#[cfg(feature = "transfer")]
+scalar_slice_tiers!(
+    pq_to_linear_slice_tier_scalar,
+    pq_to_linear_rgba_slice_tier_scalar,
+    crate::tf::pq_to_linear
+);
+
+#[cfg(feature = "transfer")]
+x8_slice_tiers!(
+    linear_to_pq_slice_tier_v3,
+    linear_to_pq_rgba_slice_tier_v3,
+    linear_to_pq_mt,
+    crate::tf::linear_to_pq
+);
+#[cfg(feature = "transfer")]
+scalar_slice_tiers!(
+    linear_to_pq_slice_tier_scalar,
+    linear_to_pq_rgba_slice_tier_scalar,
+    crate::tf::linear_to_pq
+);
+
+/// Convert PQ-encoded f32 values to linear in-place (SIMD-dispatched).
+///
+/// Uses AVX2+FMA (8-wide) or scalar depending on CPU.
+/// Requires the `transfer` feature.
+#[cfg(feature = "transfer")]
+#[inline]
+pub fn pq_to_linear_slice(values: &mut [f32]) {
+    incant!(pq_to_linear_slice_tier(values), [v3])
+}
+
+/// Convert PQ-encoded RGBA f32 values to linear in-place, preserving alpha.
+///
+/// Expects interleaved RGBA data (`[R, G, B, A, R, G, B, A, ...]`).
+/// Every 4th element (alpha) is left unchanged.
+/// Requires the `transfer` feature.
+#[cfg(feature = "transfer")]
+#[inline]
+pub fn pq_to_linear_rgba_slice(values: &mut [f32]) {
+    incant!(pq_to_linear_rgba_slice_tier(values), [v3])
+}
+
+/// Convert linear f32 values to PQ-encoded in-place (SIMD-dispatched).
+///
+/// Uses AVX2+FMA (8-wide) or scalar depending on CPU.
+/// Requires the `transfer` feature.
+#[cfg(feature = "transfer")]
+#[inline]
+pub fn linear_to_pq_slice(values: &mut [f32]) {
+    incant!(linear_to_pq_slice_tier(values), [v3])
+}
+
+/// Convert linear RGBA f32 values to PQ-encoded in-place, preserving alpha.
+///
+/// Expects interleaved RGBA data (`[R, G, B, A, R, G, B, A, ...]`).
+/// Every 4th element (alpha) is left unchanged.
+/// Requires the `transfer` feature.
+#[cfg(feature = "transfer")]
+#[inline]
+pub fn linear_to_pq_rgba_slice(values: &mut [f32]) {
+    incant!(linear_to_pq_rgba_slice_tier(values), [v3])
+}
+
+// ============================================================================
+// HLG ↔ Linear Slice Functions (behind `transfer` feature)
+// ============================================================================
+
+#[cfg(feature = "transfer")]
+x8_slice_tiers!(
+    hlg_to_linear_slice_tier_v3,
+    hlg_to_linear_rgba_slice_tier_v3,
+    hlg_to_linear_mt,
+    crate::tf::hlg_to_linear
+);
+#[cfg(feature = "transfer")]
+scalar_slice_tiers!(
+    hlg_to_linear_slice_tier_scalar,
+    hlg_to_linear_rgba_slice_tier_scalar,
+    crate::tf::hlg_to_linear
+);
+
+#[cfg(feature = "transfer")]
+x8_slice_tiers!(
+    linear_to_hlg_slice_tier_v3,
+    linear_to_hlg_rgba_slice_tier_v3,
+    linear_to_hlg_mt,
+    crate::tf::linear_to_hlg
+);
+#[cfg(feature = "transfer")]
+scalar_slice_tiers!(
+    linear_to_hlg_slice_tier_scalar,
+    linear_to_hlg_rgba_slice_tier_scalar,
+    crate::tf::linear_to_hlg
+);
+
+/// Convert HLG-encoded f32 values to linear in-place (SIMD-dispatched).
+///
+/// Uses AVX2+FMA (8-wide) or scalar depending on CPU.
+/// Requires the `transfer` feature.
+#[cfg(feature = "transfer")]
+#[inline]
+pub fn hlg_to_linear_slice(values: &mut [f32]) {
+    incant!(hlg_to_linear_slice_tier(values), [v3])
+}
+
+/// Convert HLG-encoded RGBA f32 values to linear in-place, preserving alpha.
+///
+/// Expects interleaved RGBA data (`[R, G, B, A, R, G, B, A, ...]`).
+/// Every 4th element (alpha) is left unchanged.
+/// Requires the `transfer` feature.
+#[cfg(feature = "transfer")]
+#[inline]
+pub fn hlg_to_linear_rgba_slice(values: &mut [f32]) {
+    incant!(hlg_to_linear_rgba_slice_tier(values), [v3])
+}
+
+/// Convert linear f32 values to HLG-encoded in-place (SIMD-dispatched).
+///
+/// Uses AVX2+FMA (8-wide) or scalar depending on CPU.
+/// Requires the `transfer` feature.
+#[cfg(feature = "transfer")]
+#[inline]
+pub fn linear_to_hlg_slice(values: &mut [f32]) {
+    incant!(linear_to_hlg_slice_tier(values), [v3])
+}
+
+/// Convert linear RGBA f32 values to HLG-encoded in-place, preserving alpha.
+///
+/// Expects interleaved RGBA data (`[R, G, B, A, R, G, B, A, ...]`).
+/// Every 4th element (alpha) is left unchanged.
+/// Requires the `transfer` feature.
+#[cfg(feature = "transfer")]
+#[inline]
+pub fn linear_to_hlg_rgba_slice(values: &mut [f32]) {
+    incant!(linear_to_hlg_rgba_slice_tier(values), [v3])
 }
 
 // ============================================================================
@@ -2259,6 +2439,90 @@ mod tests {
             assert!(
                 (orig - conv).abs() < 1e-3,
                 "gamma 1.8 roundtrip at {i}: {orig} -> {conv}"
+            );
+        }
+    }
+
+    // ====================================================================
+    // PQ and HLG slice tests (behind `transfer` feature)
+    // ====================================================================
+
+    #[cfg(feature = "transfer")]
+    #[test]
+    fn test_pq_slice_roundtrip() {
+        let mut values: Vec<f32> = (0..=100).map(|i| i as f32 / 100.0).collect();
+        let original = values.clone();
+
+        pq_to_linear_slice(&mut values);
+        linear_to_pq_slice(&mut values);
+
+        for (i, (orig, conv)) in original.iter().zip(values.iter()).enumerate() {
+            assert!(
+                (orig - conv).abs() < 1e-4,
+                "PQ roundtrip failed at {}: {} -> {}",
+                i,
+                orig,
+                conv
+            );
+        }
+    }
+
+    #[cfg(feature = "transfer")]
+    #[test]
+    fn test_hlg_slice_roundtrip() {
+        let mut values: Vec<f32> = (1..=100).map(|i| i as f32 / 100.0).collect();
+        let original = values.clone();
+
+        hlg_to_linear_slice(&mut values);
+        linear_to_hlg_slice(&mut values);
+
+        for (i, (orig, conv)) in original.iter().zip(values.iter()).enumerate() {
+            assert!(
+                (orig - conv).abs() < 1e-3,
+                "HLG roundtrip failed at {}: {} -> {}",
+                i,
+                orig,
+                conv
+            );
+        }
+    }
+
+    #[cfg(feature = "transfer")]
+    #[test]
+    fn test_pq_slice_matches_scalar() {
+        let input: Vec<f32> = (0..=255).map(|i| i as f32 / 255.0).collect();
+        let expected: Vec<f32> = input.iter().map(|&v| crate::tf::pq_to_linear(v)).collect();
+
+        let mut actual = input.clone();
+        pq_to_linear_slice(&mut actual);
+
+        for (i, (&exp, &act)) in expected.iter().zip(actual.iter()).enumerate() {
+            assert!(
+                (exp - act).abs() < 1e-6,
+                "PQ slice mismatch at {}: scalar={}, simd={}",
+                i,
+                exp,
+                act
+            );
+        }
+    }
+
+    #[cfg(feature = "transfer")]
+    #[test]
+    fn test_hlg_slice_matches_scalar() {
+        let input: Vec<f32> = (0..=255).map(|i| i as f32 / 255.0).collect();
+        let expected: Vec<f32> = input.iter().map(|&v| crate::tf::hlg_to_linear(v)).collect();
+
+        let mut actual = input.clone();
+        hlg_to_linear_slice(&mut actual);
+
+        for (i, (&exp, &act)) in expected.iter().zip(actual.iter()).enumerate() {
+            assert!(
+                (exp - act).abs() < 1e-5,
+                "HLG slice mismatch at {}: scalar={}, simd={}",
+                i,
+                exp,
+                act
             );
         }
     }

@@ -97,6 +97,12 @@ pub use crate::tf::{
     bt709_to_linear, hlg_to_linear, linear_to_bt709, linear_to_hlg, linear_to_pq, pq_to_linear,
 };
 
+#[cfg(feature = "transfer")]
+pub use crate::simd::{
+    hlg_to_linear_rgba_slice, hlg_to_linear_slice, linear_to_hlg_rgba_slice, linear_to_hlg_slice,
+    linear_to_pq_rgba_slice, linear_to_pq_slice, pq_to_linear_rgba_slice, pq_to_linear_slice,
+};
+
 // ============================================================================
 // LUT converter (zero-cost const tables)
 // ============================================================================
