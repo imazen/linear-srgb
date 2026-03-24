@@ -15,8 +15,8 @@ all-features = true
 [dependencies]
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 bytemuck = "1.21"
-archmage = { version = "0.9.7", default-features = false, features = ["macros"] }
-magetypes = { version = "0.9.7", default-features = false }
+archmage = { version = "0.9.8", default-features = false, features = ["macros"] }
+magetypes = { version = "0.9.8", default-features = false }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 criterion = "0.8"
