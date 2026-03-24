@@ -51,7 +51,6 @@ pub use crate::scalar::{
 
 pub use crate::simd::{
     // Custom gamma slices
-    gamma_to_linear_premultiply_rgba_slice,
     gamma_to_linear_slice,
     linear_to_gamma_slice,
     // f32 RGBA slices (alpha-preserving)
@@ -77,7 +76,6 @@ pub use crate::simd::{
     srgb_u16_to_linear_rgba_slice,
     // u16 slices
     srgb_u16_to_linear_slice,
-    unpremultiply_linear_to_gamma_rgba_slice,
     unpremultiply_linear_to_srgb_rgba_slice,
     unpremultiply_linear_to_srgb_u8_rgba_slice,
 };
@@ -95,12 +93,6 @@ pub use crate::scalar::{gamma_to_linear, linear_to_gamma};
 #[cfg(feature = "transfer")]
 pub use crate::tf::{
     bt709_to_linear, hlg_to_linear, linear_to_bt709, linear_to_hlg, linear_to_pq, pq_to_linear,
-};
-
-#[cfg(feature = "transfer")]
-pub use crate::simd::{
-    hlg_to_linear_rgba_slice, hlg_to_linear_slice, linear_to_hlg_rgba_slice, linear_to_hlg_slice,
-    linear_to_pq_rgba_slice, linear_to_pq_slice, pq_to_linear_rgba_slice, pq_to_linear_slice,
 };
 
 // ============================================================================
