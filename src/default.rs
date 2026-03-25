@@ -42,7 +42,8 @@ pub use crate::rational_poly::{
 // ============================================================================
 
 pub use crate::scalar::{
-    linear_to_srgb_u8, linear_to_srgb_u16, srgb_u8_to_linear, srgb_u16_to_linear,
+    linear_to_srgb_u8, linear_to_srgb_u16, linear_to_srgb_u16_fast, srgb_u8_to_linear,
+    srgb_u16_to_linear,
 };
 
 // ============================================================================
@@ -61,8 +62,10 @@ pub use crate::simd::{
     // u8 slices
     linear_to_srgb_u8_slice,
     linear_to_srgb_u16_rgba_slice,
+    linear_to_srgb_u16_rgba_slice_fast,
     // u16 slices
     linear_to_srgb_u16_slice,
+    linear_to_srgb_u16_slice_fast,
     // Fused premultiply/unpremultiply
     srgb_to_linear_premultiply_rgba_slice,
     // f32 RGBA slices (alpha-preserving)

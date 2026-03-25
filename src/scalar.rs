@@ -231,18 +231,35 @@ pub fn srgb_u16_to_linear(value: u16) -> f32 {
     }
 }
 
-/// Convert linear f32 to 16-bit sRGB using a 65537-entry LUT.
+/// Convert linear f32 to 16-bit sRGB via rational polynomial.
 ///
-/// The LUT is lazily initialized on first call via `OnceLock`
-/// (~128KB heap, SIMD-generated in ~130µs).
-///
-/// Without `std`, falls back to the rational polynomial.
+/// Perfect roundtrip with any decode method (LUT, polynomial, or precise).
+/// ~89 Mops/s. For 10× faster encode with ±1 max roundtrip error, use
+/// [`linear_to_srgb_u16_fast`].
 #[inline]
 pub fn linear_to_srgb_u16(linear: f32) -> u16 {
+    let srgb = crate::rational_poly::linear_to_srgb_fast(linear);
+    (srgb * 65535.0 + 0.5).clamp(0.0, 65535.0) as u16
+}
+
+/// Convert linear f32 to 16-bit sRGB using a sqrt-indexed LUT (~10× faster).
+///
+/// The sqrt indexing concentrates table resolution where the sRGB curve is
+/// steepest (near black), giving max ±1 u16 roundtrip error with 94.2%
+/// exact. The LUT is lazily initialized on first call via `OnceLock`.
+///
+/// Use this in image pipelines where encode throughput matters more than
+/// bit-perfect roundtrip. Use [`linear_to_srgb_u16`] for lossless roundtrip.
+///
+/// Without `std`, falls back to the rational polynomial (same as
+/// [`linear_to_srgb_u16`]).
+#[inline]
+pub fn linear_to_srgb_u16_fast(linear: f32) -> u16 {
     #[cfg(feature = "std")]
     {
-        let idx = (linear.clamp(0.0, 1.0) * 65536.0 + 0.5) as usize;
-        crate::u16_lut::encode_lut()[idx.min(65536)]
+        let idx =
+            (linear.clamp(0.0, 1.0).sqrt() * crate::u16_lut::ENCODE_SQRT_SCALE + 0.5) as usize;
+        crate::u16_lut::encode_lut()[idx.min(crate::u16_lut::ENCODE_LUT_N - 1)]
     }
     #[cfg(not(feature = "std"))]
     {
@@ -544,22 +561,26 @@ mod tests {
             prev = linear;
         }
 
-        // Roundtrip at 257-spaced values (equivalent to u8 levels scaled to u16).
-        // Encode LUT uses uniform index spacing which loses precision in
-        // the steep dark region — max ±6 at very low sRGB values.
+        // Roundtrip: polynomial encode is exact (100% roundtrip with LUT decode)
         for i in 0..=255u16 {
             let val = i * 257; // 0, 257, 514, ..., 65535
             let linear = srgb_u16_to_linear(val);
             let back = linear_to_srgb_u16(linear);
+            assert_eq!(
+                val, back,
+                "u16 roundtrip failed for {val}: {val} -> {linear} -> {back}",
+            );
+        }
+
+        // Fast encode roundtrip: sqrt LUT, max ±1
+        for i in 0..=255u16 {
+            let val = i * 257;
+            let linear = srgb_u16_to_linear(val);
+            let back = linear_to_srgb_u16_fast(linear);
             let diff = (val as i32 - back as i32).unsigned_abs();
             assert!(
-                diff <= 6,
-                "u16 roundtrip failed for {}: {} -> {} -> {} (diff {})",
-                i,
-                val,
-                linear,
-                back,
-                diff
+                diff <= 1,
+                "u16 fast roundtrip failed for {val}: {val} -> {linear} -> {back} (diff {diff})",
             );
         }
         // High values should roundtrip exactly

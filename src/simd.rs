@@ -695,7 +695,10 @@ pub fn srgb_u16_to_linear_slice(input: &[u16], output: &mut [f32]) {
     }
 }
 
-/// Convert linear f32 values to sRGB u16 using a lazily-initialized 65537-entry LUT.
+/// Convert linear f32 values to sRGB u16 via rational polynomial.
+///
+/// Perfect roundtrip. For ~10× faster encode with ±1 max error, use
+/// [`linear_to_srgb_u16_slice_fast`].
 ///
 /// # Panics
 /// Panics if `input.len() != output.len()`.
@@ -703,6 +706,19 @@ pub fn linear_to_srgb_u16_slice(input: &[f32], output: &mut [u16]) {
     assert_eq!(input.len(), output.len());
     for (inp, out) in input.iter().zip(output.iter_mut()) {
         *out = crate::scalar::linear_to_srgb_u16(*inp);
+    }
+}
+
+/// Convert linear f32 values to sRGB u16 using sqrt-indexed LUT (~10× faster).
+///
+/// Max ±1 u16 roundtrip error, 94.2% exact. See [`linear_to_srgb_u16_fast`](crate::scalar::linear_to_srgb_u16_fast).
+///
+/// # Panics
+/// Panics if `input.len() != output.len()`.
+pub fn linear_to_srgb_u16_slice_fast(input: &[f32], output: &mut [u16]) {
+    assert_eq!(input.len(), output.len());
+    for (inp, out) in input.iter().zip(output.iter_mut()) {
+        *out = crate::scalar::linear_to_srgb_u16_fast(*inp);
     }
 }
 
@@ -924,9 +940,8 @@ pub fn srgb_u16_to_linear_rgba_slice(input: &[u16], output: &mut [f32]) {
 
 /// Convert linear RGBA f32 values to sRGB u16, preserving alpha.
 ///
-/// RGB channels are encoded via lazily-initialized 65537-entry LUT. Alpha is passed
-/// through as `(a * 65535 + 0.5) as u16` without sRGB transfer. Trailing
-/// elements that don't form a complete RGBA pixel are ignored.
+/// Convert linear RGBA f32 to sRGB u16, preserving alpha. Polynomial encode
+/// (perfect roundtrip). For ~10× faster, use [`linear_to_srgb_u16_rgba_slice_fast`].
 ///
 /// # Panics
 /// Panics if `input.len() != output.len()`.
@@ -938,6 +953,23 @@ pub fn linear_to_srgb_u16_rgba_slice(input: &[f32], output: &mut [u16]) {
         out[0] = crate::scalar::linear_to_srgb_u16(inp[0]);
         out[1] = crate::scalar::linear_to_srgb_u16(inp[1]);
         out[2] = crate::scalar::linear_to_srgb_u16(inp[2]);
+        out[3] = (inp[3].clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+    }
+}
+
+/// Convert linear RGBA f32 to sRGB u16, preserving alpha. Sqrt-indexed LUT
+/// encode (~10× faster, max ±1 roundtrip error).
+///
+/// # Panics
+/// Panics if `input.len() != output.len()`.
+pub fn linear_to_srgb_u16_rgba_slice_fast(input: &[f32], output: &mut [u16]) {
+    assert_eq!(input.len(), output.len());
+    let in_pixels = input.chunks_exact(4);
+    let out_pixels = output.chunks_exact_mut(4);
+    for (inp, out) in in_pixels.zip(out_pixels) {
+        out[0] = crate::scalar::linear_to_srgb_u16_fast(inp[0]);
+        out[1] = crate::scalar::linear_to_srgb_u16_fast(inp[1]);
+        out[2] = crate::scalar::linear_to_srgb_u16_fast(inp[2]);
         out[3] = (inp[3].clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
     }
 }
