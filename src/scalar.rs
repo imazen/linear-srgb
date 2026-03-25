@@ -216,7 +216,7 @@ pub fn linear_to_srgb_u8(linear: f32) -> u8 {
 /// Convert 16-bit sRGB to linear f32 using a 65536-entry LUT.
 ///
 /// Zero math — pure table lookup. The LUT is lazily initialized on first call
-/// via `OnceLock` (256KB heap allocation, generated with f64 `powf`).
+/// via `OnceLock` (256KB heap, SIMD-generated in ~75µs).
 ///
 /// Without `std`, falls back to the rational polynomial.
 #[inline]
@@ -234,7 +234,7 @@ pub fn srgb_u16_to_linear(value: u16) -> f32 {
 /// Convert linear f32 to 16-bit sRGB using a 65537-entry LUT.
 ///
 /// The LUT is lazily initialized on first call via `OnceLock`
-/// (~128KB heap allocation, generated with f64 `powf`).
+/// (~128KB heap, SIMD-generated in ~130µs).
 ///
 /// Without `std`, falls back to the rational polynomial.
 #[inline]
@@ -545,15 +545,15 @@ mod tests {
         }
 
         // Roundtrip at 257-spaced values (equivalent to u8 levels scaled to u16).
-        // Low sRGB values have higher error because the LUT index quantization
-        // through f32 intermediate loses precision in the dark region.
+        // Encode LUT uses uniform index spacing which loses precision in
+        // the steep dark region — max ±6 at very low sRGB values.
         for i in 0..=255u16 {
             let val = i * 257; // 0, 257, 514, ..., 65535
             let linear = srgb_u16_to_linear(val);
             let back = linear_to_srgb_u16(linear);
             let diff = (val as i32 - back as i32).unsigned_abs();
             assert!(
-                diff <= 10,
+                diff <= 6,
                 "u16 roundtrip failed for {}: {} -> {} -> {} (diff {})",
                 i,
                 val,

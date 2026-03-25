@@ -682,7 +682,7 @@ pub fn linear_to_srgb_u8_slice(input: &[f32], output: &mut [u8]) {
 // u16 Batch Functions (LUT-based)
 // ============================================================================
 
-/// Convert sRGB u16 values to linear f32 using a 65536-entry const LUT.
+/// Convert sRGB u16 values to linear f32 using a lazily-initialized 65536-entry LUT.
 ///
 /// Pure table lookup, no math. The LUT is 256KB.
 ///
@@ -695,7 +695,7 @@ pub fn srgb_u16_to_linear_slice(input: &[u16], output: &mut [f32]) {
     }
 }
 
-/// Convert linear f32 values to sRGB u16 using a 65537-entry const LUT.
+/// Convert linear f32 values to sRGB u16 using a lazily-initialized 65537-entry LUT.
 ///
 /// # Panics
 /// Panics if `input.len() != output.len()`.
@@ -904,7 +904,7 @@ pub fn unpremultiply_linear_to_srgb_u8_rgba_slice(input: &[f32], output: &mut [u
 
 /// Convert sRGB RGBA u16 values to linear f32, preserving alpha.
 ///
-/// RGB channels are decoded via 65536-entry const LUT. Alpha is passed
+/// RGB channels are decoded via lazily-initialized 65536-entry LUT. Alpha is passed
 /// through as `a / 65535.0` without sRGB transfer. Trailing elements
 /// that don't form a complete RGBA pixel are ignored.
 ///
@@ -924,7 +924,7 @@ pub fn srgb_u16_to_linear_rgba_slice(input: &[u16], output: &mut [f32]) {
 
 /// Convert linear RGBA f32 values to sRGB u16, preserving alpha.
 ///
-/// RGB channels are encoded via 65537-entry const LUT. Alpha is passed
+/// RGB channels are encoded via lazily-initialized 65537-entry LUT. Alpha is passed
 /// through as `(a * 65535 + 0.5) as u16` without sRGB transfer. Trailing
 /// elements that don't form a complete RGBA pixel are ignored.
 ///

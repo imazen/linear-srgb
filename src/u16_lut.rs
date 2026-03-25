@@ -59,12 +59,12 @@ pub fn generate_encode_lut() -> Box<[u16; 65537]> {
     let mut i = 0u32;
     while (i as usize) < 65537 {
         let n = CHUNK.min(65537 - i as usize);
-        for j in 0..n {
-            scratch[j] = (i + j as u32) as f32 * (1.0 / 65536.0);
+        for (j, s) in scratch[..n].iter_mut().enumerate() {
+            *s = (i + j as u32) as f32 * (1.0 / 65536.0);
         }
         crate::simd::linear_to_srgb_slice(&mut scratch[..n]);
-        for j in 0..n {
-            lut.push((scratch[j] * 65535.0 + 0.5) as u16);
+        for &s in &scratch[..n] {
+            lut.push((s * 65535.0 + 0.5) as u16);
         }
         i += n as u32;
     }
