@@ -330,7 +330,7 @@ scalar_slice_tiers!(
 /// ```
 #[inline]
 pub fn srgb_to_linear_slice(values: &mut [f32]) {
-    incant!(srgb_to_linear_slice_tier(values), [v4, v3])
+    incant!(srgb_to_linear_slice_tier(values), [v4, v3, scalar])
 }
 
 /// Convert sRGB RGBA f32 values to linear in-place, preserving alpha.
@@ -349,7 +349,7 @@ pub fn srgb_to_linear_slice(values: &mut [f32]) {
 /// ```
 #[inline]
 pub fn srgb_to_linear_rgba_slice(values: &mut [f32]) {
-    incant!(srgb_to_linear_rgba_slice_tier(values), [v4, v3])
+    incant!(srgb_to_linear_rgba_slice_tier(values), [v4, v3, scalar])
 }
 
 x16_slice_tiers!(
@@ -383,7 +383,7 @@ scalar_slice_tiers!(
 /// ```
 #[inline]
 pub fn linear_to_srgb_slice(values: &mut [f32]) {
-    incant!(linear_to_srgb_slice_tier(values), [v4, v3])
+    incant!(linear_to_srgb_slice_tier(values), [v4, v3, scalar])
 }
 
 /// Convert linear RGBA f32 values to sRGB in-place, preserving alpha.
@@ -402,7 +402,7 @@ pub fn linear_to_srgb_slice(values: &mut [f32]) {
 /// ```
 #[inline]
 pub fn linear_to_srgb_rgba_slice(values: &mut [f32]) {
-    incant!(linear_to_srgb_rgba_slice_tier(values), [v4, v3])
+    incant!(linear_to_srgb_rgba_slice_tier(values), [v4, v3, scalar])
 }
 
 // ============================================================================
@@ -487,7 +487,7 @@ fn srgb_to_linear_premultiply_rgba_slice_tier_scalar(_token: ScalarToken, values
 /// ```
 #[inline]
 pub fn srgb_to_linear_premultiply_rgba_slice(values: &mut [f32]) {
-    incant!(srgb_to_linear_premultiply_rgba_slice_tier(values), [v4, v3])
+    incant!(srgb_to_linear_premultiply_rgba_slice_tier(values), [v4, v3, scalar])
 }
 
 // ============================================================================
@@ -610,7 +610,7 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier_scalar(_token: ScalarToken, valu
 pub fn unpremultiply_linear_to_srgb_rgba_slice(values: &mut [f32]) {
     incant!(
         unpremultiply_linear_to_srgb_rgba_slice_tier(values),
-        [v4, v3]
+        [v4, v3, scalar]
     )
 }
 
@@ -1000,7 +1000,7 @@ fn gamma_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], ga
 /// ```
 #[inline]
 pub fn gamma_to_linear_slice(values: &mut [f32], gamma: f32) {
-    incant!(gamma_to_linear_slice_tier(values, gamma), [v4, v3])
+    incant!(gamma_to_linear_slice_tier(values, gamma), [v4, v3, scalar])
 }
 
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
@@ -1048,7 +1048,7 @@ fn linear_to_gamma_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], ga
 /// ```
 #[inline]
 pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
-    incant!(linear_to_gamma_slice_tier(values, gamma), [v4, v3])
+    incant!(linear_to_gamma_slice_tier(values, gamma), [v4, v3, scalar])
 }
 
 // ============================================================================
