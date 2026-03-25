@@ -1341,10 +1341,11 @@ fn const_lut_u8_cross_check() {
 }
 
 #[test]
-fn const_lut_u16_linearization_matches_precise() {
+fn u16_lut_decode_vs_f64() {
     use linear_srgb::default::srgb_u16_to_linear;
 
-    // Verify every u16 entry against f64 reference
+    // The u16 LUT is SIMD-generated (rational polynomial with FMA).
+    // Verify accuracy vs f64 reference — must be ≤16 ULP (same as f32 path).
     let mut max_ulp = 0u32;
     let mut worst = 0u16;
     for i in 0..=65535u16 {
@@ -1356,22 +1357,24 @@ fn const_lut_u16_linearization_matches_precise() {
             worst = i;
         }
     }
-    eprintln!("u16 linearization LUT: max ULP = {max_ulp} at {worst}");
-    // Const LUT was generated with f64, so should be ≤1 ULP
+    eprintln!("u16 decode LUT vs f64: max ULP = {max_ulp} at {worst}");
     assert!(
-        max_ulp <= 1,
-        "u16 linearization LUT max ULP {max_ulp} at {worst} exceeds 1"
+        max_ulp <= 16,
+        "u16 decode LUT max ULP {max_ulp} at {worst} exceeds 16"
     );
+    // Verify endpoints are exact
+    assert_eq!(srgb_u16_to_linear(0), 0.0, "sRGB 0 must map to 0.0");
+    assert_eq!(srgb_u16_to_linear(65535), 1.0, "sRGB 65535 must map to 1.0");
 }
 
 #[test]
-fn const_lut_u16_encoding_matches_precise() {
+fn u16_lut_encode_vs_f64() {
     use linear_srgb::default::linear_to_srgb_u16;
 
-    // Verify encoding LUT for uniformly spaced linear values
+    // Verify encode LUT vs f64 reference.
     let mut max_diff = 0u32;
-    let mut worst = 0u16;
-    for i in 0..=65535u16 {
+    let mut worst = 0u32;
+    for i in 0..=65535u32 {
         let linear = i as f32 / 65535.0;
         let lut_val = linear_to_srgb_u16(linear);
         let precise_val = (precise_l2s_f64(linear as f64) * 65535.0 + 0.5) as u16;
@@ -1381,11 +1384,18 @@ fn const_lut_u16_encoding_matches_precise() {
             worst = i;
         }
     }
-    eprintln!("u16 encoding LUT: max diff = {max_diff} at {worst}");
-    // LUT uses index quantization, so allow small error
+    eprintln!("u16 encode LUT vs f64: max diff = {max_diff} at {worst}");
+    // SIMD rational poly + index quantization → allow ±3 vs f64
     assert!(
-        max_diff <= 2,
-        "u16 encoding LUT max diff {max_diff} at {worst} exceeds 2"
+        max_diff <= 3,
+        "u16 encode LUT vs f64 max diff {max_diff} at {worst} exceeds 3"
+    );
+    // Verify endpoints
+    assert_eq!(linear_to_srgb_u16(0.0), 0, "linear 0.0 must map to 0");
+    assert_eq!(
+        linear_to_srgb_u16(1.0),
+        65535,
+        "linear 1.0 must map to 65535"
     );
 }
 

@@ -266,7 +266,8 @@ mod const_luts;
 
 // Lazily-initialized u16 sRGB LUTs (OnceLock, allocated on first use)
 #[cfg(feature = "std")]
-mod u16_lut;
+#[doc(hidden)]
+pub mod u16_lut;
 
 // Alternative/experimental implementations (for benchmarking, not stable API)
 #[cfg(feature = "alt")]
