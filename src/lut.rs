@@ -9,7 +9,7 @@
 //!
 //! ## For non-standard bit depths (10-bit, 12-bit)
 //!
-//! This module provides generic [`LinearizationTable<N>`] and [`EncodingTable<N>`]
+//! This module provides generic `LinearizationTable<N>` and `EncodingTable<N>`
 //! for arbitrary bit depths, plus interpolation helpers. Use these when working
 //! with 10-bit HDR, 12-bit medical imaging, or other non-standard formats.
 //!

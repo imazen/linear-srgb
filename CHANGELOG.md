@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.5
 
 u16 LUT overhaul: zero binary bloat, sqrt-indexed encode, two-tier encode API.
 
