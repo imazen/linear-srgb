@@ -1,24 +1,22 @@
 //! Lookup table (LUT) based sRGB conversions.
 //!
-//! This module provides two types of lookup tables:
+//! ## For u8 and u16 data
 //!
-//! ## Build-time Tables (Recommended)
+//! Use the functions in [`crate::default`] instead of this module — they're
+//! faster and easier:
+//! - u8: [`srgb_u8_to_linear`](crate::default::srgb_u8_to_linear), [`linear_to_srgb_u8`](crate::default::linear_to_srgb_u8)
+//! - u16: [`srgb_u16_to_linear`](crate::default::srgb_u16_to_linear), [`linear_to_srgb_u16`](crate::default::linear_to_srgb_u16)
 //!
-//! `SrgbConverter` uses pre-computed const tables embedded in the binary:
-//! - **Zero initialization cost** - tables exist at compile time
-//! - **8-bit linearization** (256 entries, 1KB): Direct lookup for sRGB u8 → linear f32
-//! - **12-bit encoding** (4096 entries, 16KB): Interpolated lookup for linear f32 → sRGB f32
+//! ## For non-standard bit depths (10-bit, 12-bit)
 //!
-//! ## Runtime Tables (For Custom Bit Depths)
+//! This module provides generic [`LinearizationTable<N>`] and [`EncodingTable<N>`]
+//! for arbitrary bit depths, plus interpolation helpers. Use these when working
+//! with 10-bit HDR, 12-bit medical imaging, or other non-standard formats.
 //!
-//! `LinearizationTable` and `EncodingTable` generate tables at runtime:
-//! - Use when you need non-standard bit depths (10-bit, 16-bit, etc.)
-//! - Incur one-time allocation and computation cost
-//! - Table sizes:
-//!   - 8-bit: 256 entries (1KB for f32)
-//!   - 10-bit: 1024 entries (4KB for f32)
-//!   - 12-bit: 4096 entries (16KB for f32)
-//!   - 16-bit: 65536 entries (256KB for f32)
+//! ## `SrgbConverter`
+//!
+//! A zero-sized type wrapping const 8-bit tables. Largely superseded by the
+//! free functions in [`crate::default`], but kept for API compatibility.
 
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, vec};

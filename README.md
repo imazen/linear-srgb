@@ -70,11 +70,31 @@ let rgba_bytes = vec![128u8, 128, 128, 200, 64, 64, 64, 128];
 let mut rgba_linear = vec![0.0f32; 8];
 srgb_u8_to_linear_rgba_slice(&rgba_bytes, &mut rgba_linear);
 
-// u16 support too
+// u16 support too — decode via 65536-entry LUT (30-40× faster than polynomial)
 let mut u16_linear = vec![0.0f32; 256];
 let srgb_u16: Vec<u16> = (0..256).map(|i| (i * 256) as u16).collect();
 srgb_u16_to_linear_slice(&srgb_u16, &mut u16_linear);
 ```
+
+### u16 encode: exact vs fast
+
+Two paths for linear f32 → sRGB u16, depending on whether you need perfect
+roundtrip or maximum throughput:
+
+```rust
+use linear_srgb::default::*;
+
+let linear = srgb_u16_to_linear(32768); // LUT decode (always fast, exact)
+
+// Exact roundtrip (polynomial, ~89 Mops/s)
+let exact = linear_to_srgb_u16(linear);
+
+// Fast encode (sqrt-indexed LUT, ~609 Mops/s, max ±1 level)
+let fast = linear_to_srgb_u16_fast(linear);
+```
+
+Slice variants: `linear_to_srgb_u16_slice` / `linear_to_srgb_u16_slice_fast`,
+`linear_to_srgb_u16_rgba_slice` / `linear_to_srgb_u16_rgba_slice_fast`.
 
 ### Premultiplied alpha (fused, single-pass)
 
