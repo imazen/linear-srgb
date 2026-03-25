@@ -1149,6 +1149,8 @@ fn gamma_to_linear_premultiply_rgba_slice_tier_scalar(
 ///
 /// # Example
 /// ```
+/// #[allow(deprecated)]
+/// # fn main() {
 /// use linear_srgb::default::gamma_to_linear_premultiply_rgba_slice;
 ///
 /// let mut rgba = vec![0.5f32, 0.5, 0.5, 0.5, 1.0, 1.0, 1.0, 1.0];
@@ -1156,7 +1158,12 @@ fn gamma_to_linear_premultiply_rgba_slice_tier_scalar(
 /// // gamma_to_linear(0.5, 2.2) ≈ 0.218, × 0.5 ≈ 0.109
 /// assert!(rgba[0] < 0.12);
 /// assert_eq!(rgba[3], 0.5); // alpha preserved
+/// # }
 /// ```
+#[deprecated(
+    since = "0.6.4",
+    note = "use srgb_to_linear_premultiply_rgba_slice instead; gamma-based premultiply will be removed in a future release"
+)]
 #[inline]
 pub fn gamma_to_linear_premultiply_rgba_slice(values: &mut [f32], gamma: f32) {
     incant!(
@@ -1297,6 +1304,8 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_scalar(
 ///
 /// # Example
 /// ```
+/// #[allow(deprecated)]
+/// # fn main() {
 /// use linear_srgb::default::{gamma_to_linear_premultiply_rgba_slice,
 ///     unpremultiply_linear_to_gamma_rgba_slice};
 ///
@@ -1306,7 +1315,12 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_scalar(
 /// assert!((rgba[0] - 0.5).abs() < 1e-3); // roundtrips
 /// assert_eq!(rgba[3], 0.75);              // alpha preserved
 /// assert_eq!(rgba[4], 0.0);               // transparent pixel stays zero
+/// # }
 /// ```
+#[deprecated(
+    since = "0.6.4",
+    note = "use unpremultiply_linear_to_srgb_rgba_slice instead; gamma-based unpremultiply will be removed in a future release"
+)]
 #[inline]
 pub fn unpremultiply_linear_to_gamma_rgba_slice(values: &mut [f32], gamma: f32) {
     incant!(
@@ -2328,6 +2342,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn gamma_premultiply_roundtrip() {
         // Exercise SIMD tiers with various pixel counts (1..=17 covers
         // scalar remainder, V3 8-wide, and V4 16-wide paths)
@@ -2357,6 +2372,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn gamma_premultiply_zero_alpha() {
         let mut rgba = vec![0.5f32, 0.5, 0.5, 0.0, 0.8, 0.8, 0.8, 1.0];
         gamma_to_linear_premultiply_rgba_slice(&mut rgba, 2.2);

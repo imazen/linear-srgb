@@ -50,8 +50,6 @@ pub use crate::scalar::{
 // ============================================================================
 
 pub use crate::simd::{
-    // Custom gamma premultiply/unpremultiply
-    gamma_to_linear_premultiply_rgba_slice,
     // Custom gamma slices
     gamma_to_linear_slice,
     linear_to_gamma_slice,
@@ -78,9 +76,14 @@ pub use crate::simd::{
     srgb_u16_to_linear_rgba_slice,
     // u16 slices
     srgb_u16_to_linear_slice,
-    unpremultiply_linear_to_gamma_rgba_slice,
     unpremultiply_linear_to_srgb_rgba_slice,
     unpremultiply_linear_to_srgb_u8_rgba_slice,
+};
+
+// Deprecated gamma premultiply/unpremultiply re-exports
+#[allow(deprecated)]
+pub use crate::simd::{
+    gamma_to_linear_premultiply_rgba_slice, unpremultiply_linear_to_gamma_rgba_slice,
 };
 
 // ============================================================================

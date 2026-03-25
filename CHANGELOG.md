@@ -4,6 +4,14 @@
 
 SIMD premultiply fused into single-pass, PQ/HLG slice operations added.
 
+### Deprecated
+
+- `gamma_to_linear_premultiply_rgba_slice` — use `srgb_to_linear_premultiply_rgba_slice` instead.
+- `unpremultiply_linear_to_gamma_rgba_slice` — use `unpremultiply_linear_to_srgb_rgba_slice` instead.
+
+These gamma-based premultiply functions are retained for backward compatibility
+but will be removed in a future release.
+
 ### Changed
 
 - **`srgb_to_linear_premultiply_rgba_slice` is now truly single-pass SIMD.**
