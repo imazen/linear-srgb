@@ -14,8 +14,12 @@
 //! ## Single-value LUT Functions
 //! - `srgb_u8_to_linear` - u8 → f32 via lookup table
 
+#[cfg(target_arch = "wasm32")]
+use archmage::Wasm128Token;
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 use archmage::X64V4Token;
+#[cfg(target_arch = "wasm32")]
+use archmage::arcane;
 use archmage::{ScalarToken, incant};
 #[cfg(target_arch = "x86_64")]
 use archmage::{X64V3Token, arcane, rite};
@@ -276,6 +280,41 @@ macro_rules! x8_slice_tiers {
     };
 }
 
+/// Generate WebAssembly SIMD128 (4-wide) slice tier functions (plain + RGBA).
+macro_rules! wasm128_slice_tiers {
+    ($plain:ident, $rgba:ident, $rite_fn:path, $scalar:path) => {
+        #[cfg(target_arch = "wasm32")]
+        #[arcane]
+        fn $plain(token: Wasm128Token, values: &mut [f32]) {
+            let (chunks, remainder) = values.as_chunks_mut::<4>();
+            for chunk in chunks {
+                *chunk = $rite_fn(token, *chunk);
+            }
+            for v in remainder {
+                *v = $scalar(*v);
+            }
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        #[arcane]
+        fn $rgba(token: Wasm128Token, values: &mut [f32]) {
+            let (chunks, remainder) = values.as_chunks_mut::<4>();
+            for chunk in chunks {
+                let a = chunk[3];
+                *chunk = $rite_fn(token, *chunk);
+                chunk[3] = a;
+            }
+            // No remainder — 4-wide chunks already match RGBA pixel stride.
+            // But if the slice length isn't a multiple of 4, handle trailing scalars.
+            for pixel in remainder.chunks_exact_mut(4) {
+                pixel[0] = $scalar(pixel[0]);
+                pixel[1] = $scalar(pixel[1]);
+                pixel[2] = $scalar(pixel[2]);
+            }
+        }
+    };
+}
+
 /// Generate scalar fallback slice tier functions (plain + RGBA).
 macro_rules! scalar_slice_tiers {
     ($plain:ident, $rgba:ident, $scalar:path) => {
@@ -311,6 +350,12 @@ x8_slice_tiers!(
     srgb_to_linear_mt,
     crate::scalar::srgb_to_linear
 );
+wasm128_slice_tiers!(
+    srgb_to_linear_slice_tier_wasm128,
+    srgb_to_linear_rgba_slice_tier_wasm128,
+    crate::tokens::x4::srgb_to_linear_wasm128,
+    crate::scalar::srgb_to_linear
+);
 scalar_slice_tiers!(
     srgb_to_linear_slice_tier_scalar,
     srgb_to_linear_rgba_slice_tier_scalar,
@@ -330,7 +375,7 @@ scalar_slice_tiers!(
 /// ```
 #[inline]
 pub fn srgb_to_linear_slice(values: &mut [f32]) {
-    incant!(srgb_to_linear_slice_tier(values), [v4, v3, scalar])
+    incant!(srgb_to_linear_slice_tier(values), [v4, v3, wasm128, scalar])
 }
 
 /// Convert sRGB RGBA f32 values to linear in-place, preserving alpha.
@@ -349,7 +394,10 @@ pub fn srgb_to_linear_slice(values: &mut [f32]) {
 /// ```
 #[inline]
 pub fn srgb_to_linear_rgba_slice(values: &mut [f32]) {
-    incant!(srgb_to_linear_rgba_slice_tier(values), [v4, v3, scalar])
+    incant!(
+        srgb_to_linear_rgba_slice_tier(values),
+        [v4, v3, wasm128, scalar]
+    )
 }
 
 x16_slice_tiers!(
@@ -362,6 +410,12 @@ x8_slice_tiers!(
     linear_to_srgb_slice_tier_v3,
     linear_to_srgb_rgba_slice_tier_v3,
     linear_to_srgb_mt,
+    crate::scalar::linear_to_srgb
+);
+wasm128_slice_tiers!(
+    linear_to_srgb_slice_tier_wasm128,
+    linear_to_srgb_rgba_slice_tier_wasm128,
+    crate::tokens::x4::linear_to_srgb_wasm128,
     crate::scalar::linear_to_srgb
 );
 scalar_slice_tiers!(
@@ -383,7 +437,7 @@ scalar_slice_tiers!(
 /// ```
 #[inline]
 pub fn linear_to_srgb_slice(values: &mut [f32]) {
-    incant!(linear_to_srgb_slice_tier(values), [v4, v3, scalar])
+    incant!(linear_to_srgb_slice_tier(values), [v4, v3, wasm128, scalar])
 }
 
 /// Convert linear RGBA f32 values to sRGB in-place, preserving alpha.
@@ -402,7 +456,10 @@ pub fn linear_to_srgb_slice(values: &mut [f32]) {
 /// ```
 #[inline]
 pub fn linear_to_srgb_rgba_slice(values: &mut [f32]) {
-    incant!(linear_to_srgb_rgba_slice_tier(values), [v4, v3, scalar])
+    incant!(
+        linear_to_srgb_rgba_slice_tier(values),
+        [v4, v3, wasm128, scalar]
+    )
 }
 
 // ============================================================================
@@ -455,6 +512,20 @@ fn srgb_to_linear_premultiply_rgba_slice_tier_v3(token: X64V3Token, values: &mut
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+#[arcane]
+fn srgb_to_linear_premultiply_rgba_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
+    let (chunks, _remainder) = values.as_chunks_mut::<4>();
+    for chunk in chunks {
+        let a = chunk[3];
+        *chunk = crate::tokens::x4::srgb_to_linear_wasm128(token, *chunk);
+        chunk[0] *= a;
+        chunk[1] *= a;
+        chunk[2] *= a;
+        chunk[3] = a;
+    }
+}
+
 fn srgb_to_linear_premultiply_rgba_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
     for pixel in values.chunks_exact_mut(4) {
         let a = pixel[3];
@@ -489,7 +560,7 @@ fn srgb_to_linear_premultiply_rgba_slice_tier_scalar(_token: ScalarToken, values
 pub fn srgb_to_linear_premultiply_rgba_slice(values: &mut [f32]) {
     incant!(
         srgb_to_linear_premultiply_rgba_slice_tier(values),
-        [v4, v3, scalar]
+        [v4, v3, wasm128, scalar]
     )
 }
 
@@ -568,6 +639,25 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier_v3(token: X64V3Token, values: &m
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+#[arcane]
+fn unpremultiply_linear_to_srgb_rgba_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
+    let (chunks, _remainder) = values.as_chunks_mut::<4>();
+    for chunk in chunks {
+        let a = chunk[3];
+        if a > 0.0 {
+            let inv_a = 1.0 / a;
+            let unpremul = [chunk[0] * inv_a, chunk[1] * inv_a, chunk[2] * inv_a, 1.0];
+            *chunk = crate::tokens::x4::linear_to_srgb_wasm128(token, unpremul);
+            chunk[3] = a;
+        } else {
+            chunk[0] = 0.0;
+            chunk[1] = 0.0;
+            chunk[2] = 0.0;
+        }
+    }
+}
+
 fn unpremultiply_linear_to_srgb_rgba_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
     for pixel in values.chunks_exact_mut(4) {
         let a = pixel[3];
@@ -613,7 +703,7 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier_scalar(_token: ScalarToken, valu
 pub fn unpremultiply_linear_to_srgb_rgba_slice(values: &mut [f32]) {
     incant!(
         unpremultiply_linear_to_srgb_rgba_slice_tier(values),
-        [v4, v3, scalar]
+        [v4, v3, wasm128, scalar]
     )
 }
 
@@ -1004,6 +1094,18 @@ fn gamma_to_linear_slice_tier_v3(token: X64V3Token, values: &mut [f32], gamma: f
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+#[arcane]
+fn gamma_to_linear_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32], gamma: f32) {
+    let (chunks, remainder) = values.as_chunks_mut::<4>();
+    for chunk in chunks {
+        *chunk = crate::tokens::x4::gamma_to_linear_wasm128(token, *chunk, gamma);
+    }
+    for v in remainder {
+        *v = crate::scalar::gamma_to_linear(*v, gamma);
+    }
+}
+
 fn gamma_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], gamma: f32) {
     for v in values.iter_mut() {
         *v = crate::scalar::gamma_to_linear(*v, gamma);
@@ -1012,7 +1114,7 @@ fn gamma_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], ga
 
 /// Convert gamma-encoded f32 values to linear in-place using a custom gamma.
 ///
-/// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), or scalar depending on CPU.
+/// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), WASM SIMD128 (4-wide), or scalar depending on CPU.
 ///
 /// # Example
 /// ```
@@ -1023,7 +1125,10 @@ fn gamma_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], ga
 /// ```
 #[inline]
 pub fn gamma_to_linear_slice(values: &mut [f32], gamma: f32) {
-    incant!(gamma_to_linear_slice_tier(values, gamma), [v4, v3, scalar])
+    incant!(
+        gamma_to_linear_slice_tier(values, gamma),
+        [v4, v3, wasm128, scalar]
+    )
 }
 
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
@@ -1052,6 +1157,18 @@ fn linear_to_gamma_slice_tier_v3(token: X64V3Token, values: &mut [f32], gamma: f
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+#[arcane]
+fn linear_to_gamma_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32], gamma: f32) {
+    let (chunks, remainder) = values.as_chunks_mut::<4>();
+    for chunk in chunks {
+        *chunk = crate::tokens::x4::linear_to_gamma_wasm128(token, *chunk, gamma);
+    }
+    for v in remainder {
+        *v = crate::scalar::linear_to_gamma(*v, gamma);
+    }
+}
+
 fn linear_to_gamma_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], gamma: f32) {
     for v in values.iter_mut() {
         *v = crate::scalar::linear_to_gamma(*v, gamma);
@@ -1060,7 +1177,7 @@ fn linear_to_gamma_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], ga
 
 /// Convert linear f32 values to gamma-encoded in-place using a custom gamma.
 ///
-/// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), or scalar depending on CPU.
+/// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), WASM SIMD128 (4-wide), or scalar depending on CPU.
 ///
 /// # Example
 /// ```
@@ -1071,7 +1188,10 @@ fn linear_to_gamma_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], ga
 /// ```
 #[inline]
 pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
-    incant!(linear_to_gamma_slice_tier(values, gamma), [v4, v3, scalar])
+    incant!(
+        linear_to_gamma_slice_tier(values, gamma),
+        [v4, v3, wasm128, scalar]
+    )
 }
 
 // ============================================================================
@@ -1144,6 +1264,24 @@ fn gamma_to_linear_premultiply_rgba_slice_tier_v3(
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+#[arcane]
+fn gamma_to_linear_premultiply_rgba_slice_tier_wasm128(
+    token: Wasm128Token,
+    values: &mut [f32],
+    gamma: f32,
+) {
+    let (chunks, _remainder) = values.as_chunks_mut::<4>();
+    for chunk in chunks {
+        let a = chunk[3];
+        *chunk = crate::tokens::x4::gamma_to_linear_wasm128(token, *chunk, gamma);
+        chunk[0] *= a;
+        chunk[1] *= a;
+        chunk[2] *= a;
+        chunk[3] = a;
+    }
+}
+
 fn gamma_to_linear_premultiply_rgba_slice_tier_scalar(
     _token: ScalarToken,
     values: &mut [f32],
@@ -1188,7 +1326,7 @@ fn gamma_to_linear_premultiply_rgba_slice_tier_scalar(
 pub fn gamma_to_linear_premultiply_rgba_slice(values: &mut [f32], gamma: f32) {
     incant!(
         gamma_to_linear_premultiply_rgba_slice_tier(values, gamma),
-        [v4, v3, scalar]
+        [v4, v3, wasm128, scalar]
     )
 }
 
@@ -1291,6 +1429,29 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_v3(
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+#[arcane]
+fn unpremultiply_linear_to_gamma_rgba_slice_tier_wasm128(
+    token: Wasm128Token,
+    values: &mut [f32],
+    gamma: f32,
+) {
+    let (chunks, _remainder) = values.as_chunks_mut::<4>();
+    for chunk in chunks {
+        let a = chunk[3];
+        if a > 0.0 {
+            let inv_a = 1.0 / a;
+            let unpremul = [chunk[0] * inv_a, chunk[1] * inv_a, chunk[2] * inv_a, 1.0];
+            *chunk = crate::tokens::x4::linear_to_gamma_wasm128(token, unpremul, gamma);
+            chunk[3] = a;
+        } else {
+            chunk[0] = 0.0;
+            chunk[1] = 0.0;
+            chunk[2] = 0.0;
+        }
+    }
+}
+
 fn unpremultiply_linear_to_gamma_rgba_slice_tier_scalar(
     _token: ScalarToken,
     values: &mut [f32],
@@ -1345,7 +1506,7 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_scalar(
 pub fn unpremultiply_linear_to_gamma_rgba_slice(values: &mut [f32], gamma: f32) {
     incant!(
         unpremultiply_linear_to_gamma_rgba_slice_tier(values, gamma),
-        [v4, v3, scalar]
+        [v4, v3, wasm128, scalar]
     )
 }
 
