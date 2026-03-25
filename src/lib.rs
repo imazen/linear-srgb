@@ -263,7 +263,10 @@ pub(crate) mod rational_poly;
 
 // Pre-computed const lookup tables (embedded in binary)
 mod const_luts;
-mod const_luts_u16;
+
+// Lazily-initialized u16 sRGB LUTs (OnceLock, allocated on first use)
+#[cfg(feature = "std")]
+mod u16_lut;
 
 // Alternative/experimental implementations (for benchmarking, not stable API)
 #[cfg(feature = "alt")]

@@ -690,10 +690,8 @@ pub fn linear_to_srgb_u8_slice(input: &[f32], output: &mut [u8]) {
 /// Panics if `input.len() != output.len()`.
 pub fn srgb_u16_to_linear_slice(input: &[u16], output: &mut [f32]) {
     assert_eq!(input.len(), output.len());
-    let lut = &crate::const_luts_u16::SRGB_U16_TO_LINEAR_F32;
-
     for (inp, out) in input.iter().zip(output.iter_mut()) {
-        *out = lut[*inp as usize];
+        *out = crate::scalar::srgb_u16_to_linear(*inp);
     }
 }
 
@@ -703,12 +701,8 @@ pub fn srgb_u16_to_linear_slice(input: &[u16], output: &mut [f32]) {
 /// Panics if `input.len() != output.len()`.
 pub fn linear_to_srgb_u16_slice(input: &[f32], output: &mut [u16]) {
     assert_eq!(input.len(), output.len());
-    let lut = &crate::const_luts_u16::LINEAR_TO_SRGB_U16_65536;
-
     for (inp, out) in input.iter().zip(output.iter_mut()) {
-        let clamped = inp.clamp(0.0, 1.0);
-        let idx = (clamped * 65536.0 + 0.5) as usize;
-        *out = lut[idx.min(65536)];
+        *out = crate::scalar::linear_to_srgb_u16(*inp);
     }
 }
 
@@ -918,14 +912,12 @@ pub fn unpremultiply_linear_to_srgb_u8_rgba_slice(input: &[f32], output: &mut [u
 /// Panics if `input.len() != output.len()`.
 pub fn srgb_u16_to_linear_rgba_slice(input: &[u16], output: &mut [f32]) {
     assert_eq!(input.len(), output.len());
-    let lut = &crate::const_luts_u16::SRGB_U16_TO_LINEAR_F32;
-
     let in_pixels = input.chunks_exact(4);
     let out_pixels = output.chunks_exact_mut(4);
     for (inp, out) in in_pixels.zip(out_pixels) {
-        out[0] = lut[inp[0] as usize];
-        out[1] = lut[inp[1] as usize];
-        out[2] = lut[inp[2] as usize];
+        out[0] = crate::scalar::srgb_u16_to_linear(inp[0]);
+        out[1] = crate::scalar::srgb_u16_to_linear(inp[1]);
+        out[2] = crate::scalar::srgb_u16_to_linear(inp[2]);
         out[3] = inp[3] as f32 / 65535.0;
     }
 }
@@ -940,16 +932,12 @@ pub fn srgb_u16_to_linear_rgba_slice(input: &[u16], output: &mut [f32]) {
 /// Panics if `input.len() != output.len()`.
 pub fn linear_to_srgb_u16_rgba_slice(input: &[f32], output: &mut [u16]) {
     assert_eq!(input.len(), output.len());
-    let lut = &crate::const_luts_u16::LINEAR_TO_SRGB_U16_65536;
-
     let in_pixels = input.chunks_exact(4);
     let out_pixels = output.chunks_exact_mut(4);
     for (inp, out) in in_pixels.zip(out_pixels) {
-        for i in 0..3 {
-            let clamped = inp[i].clamp(0.0, 1.0);
-            let idx = (clamped * 65536.0 + 0.5) as usize;
-            out[i] = lut[idx.min(65536)];
-        }
+        out[0] = crate::scalar::linear_to_srgb_u16(inp[0]);
+        out[1] = crate::scalar::linear_to_srgb_u16(inp[1]);
+        out[2] = crate::scalar::linear_to_srgb_u16(inp[2]);
         out[3] = (inp[3].clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
     }
 }
