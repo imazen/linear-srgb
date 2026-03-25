@@ -487,7 +487,10 @@ fn srgb_to_linear_premultiply_rgba_slice_tier_scalar(_token: ScalarToken, values
 /// ```
 #[inline]
 pub fn srgb_to_linear_premultiply_rgba_slice(values: &mut [f32]) {
-    incant!(srgb_to_linear_premultiply_rgba_slice_tier(values), [v4, v3, scalar])
+    incant!(
+        srgb_to_linear_premultiply_rgba_slice_tier(values),
+        [v4, v3, scalar]
+    )
 }
 
 // ============================================================================
