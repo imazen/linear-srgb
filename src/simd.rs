@@ -2407,4 +2407,233 @@ mod tests {
             );
         }
     }
+
+    // ====================================================================
+    // Systematic length tests — exercise SIMD boundaries (scalar remainder,
+    // 8-wide AVX2, 16-wide AVX-512) for ALL public slice functions.
+    // ====================================================================
+
+    /// Element counts that probe SIMD boundaries:
+    /// 1, 7 (pure scalar), 8 (one AVX2 chunk), 9 (AVX2 + 1 remainder),
+    /// 15, 16 (one AVX-512 chunk), 17, 31, 32, 33, 100.
+    const TEST_LENGTHS: &[usize] = &[1, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 100];
+
+    fn make_srgb_values(n: usize) -> Vec<f32> {
+        (0..n).map(|i| (i % 256) as f32 / 255.0).collect()
+    }
+
+    fn make_linear_values(n: usize) -> Vec<f32> {
+        (0..n).map(|i| (i % 256) as f32 / 255.0).collect()
+    }
+
+    fn make_u8_values(n: usize) -> Vec<u8> {
+        (0..n).map(|i| (i % 256) as u8).collect()
+    }
+
+    fn make_u16_values(n: usize) -> Vec<u16> {
+        (0..n).map(|i| ((i % 256) * 257) as u16).collect()
+    }
+
+    #[test]
+    fn length_srgb_to_linear_slice() {
+        for &n in TEST_LENGTHS {
+            let mut values = make_srgb_values(n);
+            let original = values.clone();
+            srgb_to_linear_slice(&mut values);
+            for (i, (&s, &l)) in original.iter().zip(values.iter()).enumerate() {
+                let expected = crate::scalar::srgb_to_linear(s);
+                assert!(
+                    (l - expected).abs() < 1e-5,
+                    "s2l_slice n={n} i={i}: {l} vs {expected}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn length_linear_to_srgb_slice() {
+        for &n in TEST_LENGTHS {
+            let mut values = make_linear_values(n);
+            let original = values.clone();
+            linear_to_srgb_slice(&mut values);
+            for (i, (&l, &s)) in original.iter().zip(values.iter()).enumerate() {
+                let expected = crate::scalar::linear_to_srgb(l);
+                assert!(
+                    (s - expected).abs() < 1e-5,
+                    "l2s_slice n={n} i={i}: {s} vs {expected}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn length_srgb_u8_to_linear_slice() {
+        for &n in TEST_LENGTHS {
+            let input = make_u8_values(n);
+            let mut output = vec![0.0f32; n];
+            srgb_u8_to_linear_slice(&input, &mut output);
+            for (i, (&u, &l)) in input.iter().zip(output.iter()).enumerate() {
+                let expected = crate::scalar::srgb_u8_to_linear(u);
+                assert!(
+                    (l - expected).abs() < 1e-5,
+                    "u8_s2l n={n} i={i}: {l} vs {expected}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn length_linear_to_srgb_u8_slice() {
+        for &n in TEST_LENGTHS {
+            let input = make_linear_values(n);
+            let mut output = vec![0u8; n];
+            linear_to_srgb_u8_slice(&input, &mut output);
+            for (i, (&l, &u)) in input.iter().zip(output.iter()).enumerate() {
+                let expected = crate::scalar::linear_to_srgb_u8(l);
+                let diff = (u as i32 - expected as i32).unsigned_abs();
+                assert!(diff <= 1, "l2s_u8 n={n} i={i}: {u} vs {expected}");
+            }
+        }
+    }
+
+    #[test]
+    fn length_srgb_u16_to_linear_slice() {
+        for &n in TEST_LENGTHS {
+            let input = make_u16_values(n);
+            let mut output = vec![0.0f32; n];
+            srgb_u16_to_linear_slice(&input, &mut output);
+            for (i, (&u, &l)) in input.iter().zip(output.iter()).enumerate() {
+                let expected = crate::scalar::srgb_u16_to_linear(u);
+                assert!(
+                    (l - expected).abs() < 1e-4,
+                    "u16_s2l n={n} i={i}: {l} vs {expected}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn length_linear_to_srgb_u16_slice() {
+        for &n in TEST_LENGTHS {
+            let input = make_linear_values(n);
+            let mut output = vec![0u16; n];
+            linear_to_srgb_u16_slice(&input, &mut output);
+            for (i, (&l, &u)) in input.iter().zip(output.iter()).enumerate() {
+                let expected = crate::scalar::linear_to_srgb_u16(l);
+                let diff = (u as i32 - expected as i32).unsigned_abs();
+                assert!(diff <= 1, "l2s_u16 n={n} i={i}: {u} vs {expected}");
+            }
+        }
+    }
+
+    #[test]
+    fn length_gamma_to_linear_slice() {
+        for &n in TEST_LENGTHS {
+            let mut values = make_srgb_values(n);
+            let original = values.clone();
+            gamma_to_linear_slice(&mut values, 2.2);
+            linear_to_gamma_slice(&mut values, 2.2);
+            for (i, (&orig, &conv)) in original.iter().zip(values.iter()).enumerate() {
+                assert!(
+                    (orig - conv).abs() < 1e-3,
+                    "gamma roundtrip n={n} i={i}: {orig} vs {conv}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn length_u8_rgba_roundtrip() {
+        for &num_pixels in TEST_LENGTHS {
+            let n = num_pixels * 4;
+            let input: Vec<u8> = (0..n).map(|i| (i % 256) as u8).collect();
+            let mut linear = vec![0.0f32; n];
+            srgb_u8_to_linear_rgba_slice(&input, &mut linear);
+            let mut output = vec![0u8; n];
+            linear_to_srgb_u8_rgba_slice(&linear, &mut output);
+            for px in 0..num_pixels {
+                assert_eq!(
+                    input[px * 4 + 3],
+                    output[px * 4 + 3],
+                    "u8 RGBA alpha roundtrip at px {px}/{num_pixels}"
+                );
+                for ch in 0..3 {
+                    let diff =
+                        (input[px * 4 + ch] as i32 - output[px * 4 + ch] as i32).unsigned_abs();
+                    assert!(
+                        diff <= 1,
+                        "u8 RGBA RGB roundtrip at px {px} ch {ch}/{num_pixels}: {} vs {}",
+                        input[px * 4 + ch],
+                        output[px * 4 + ch]
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn length_u16_rgba_roundtrip() {
+        for &num_pixels in TEST_LENGTHS {
+            let n = num_pixels * 4;
+            let input: Vec<u16> = (0..n).map(|i| ((i % 256) * 257) as u16).collect();
+            let mut linear = vec![0.0f32; n];
+            srgb_u16_to_linear_rgba_slice(&input, &mut linear);
+            // Alpha must be passthrough: a / 65535.0
+            for px in 0..num_pixels {
+                let expected_a = input[px * 4 + 3] as f32 / 65535.0;
+                assert!(
+                    (linear[px * 4 + 3] - expected_a).abs() < 1e-5,
+                    "u16 RGBA alpha at px {px}/{num_pixels}"
+                );
+            }
+            let mut output = vec![0u16; n];
+            linear_to_srgb_u16_rgba_slice(&linear, &mut output);
+            for px in 0..num_pixels {
+                assert_eq!(
+                    input[px * 4 + 3],
+                    output[px * 4 + 3],
+                    "u16 RGBA alpha roundtrip at px {px}/{num_pixels}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn length_premultiply_u8_roundtrip() {
+        for &num_pixels in TEST_LENGTHS {
+            let n = num_pixels * 4;
+            let input: Vec<u8> = (0..n)
+                .map(|i| {
+                    if i % 4 == 3 {
+                        ((i / 4) * 15 + 50).min(255) as u8
+                    } else {
+                        128u8
+                    }
+                })
+                .collect();
+            let mut linear = vec![0.0f32; n];
+            srgb_u8_to_linear_premultiply_rgba_slice(&input, &mut linear);
+            let mut output = vec![0u8; n];
+            unpremultiply_linear_to_srgb_u8_rgba_slice(&linear, &mut output);
+            for px in 0..num_pixels {
+                assert_eq!(
+                    input[px * 4 + 3],
+                    output[px * 4 + 3],
+                    "u8 premul alpha roundtrip at px {px}/{num_pixels}"
+                );
+                if input[px * 4 + 3] > 0 {
+                    for ch in 0..3 {
+                        let diff =
+                            (input[px * 4 + ch] as i32 - output[px * 4 + ch] as i32).unsigned_abs();
+                        assert!(
+                            diff <= 1,
+                            "u8 premul RGB roundtrip at px {px} ch {ch}/{num_pixels}: {} vs {}",
+                            input[px * 4 + ch],
+                            output[px * 4 + ch]
+                        );
+                    }
+                }
+            }
+        }
+    }
 }

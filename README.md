@@ -6,9 +6,12 @@ Handles `f32`, `f64`, `u8`, and `u16` data. Supports in-place RGBA with alpha
 preservation, fused premultiply/unpremultiply, custom gamma, and extended range.
 `no_std` compatible.
 
-[![Crates.io](https://img.shields.io/crates/v/linear-srgb.svg?style=for-the-badge)](https://crates.io/crates/linear-srgb)
-[![Docs.rs](https://img.shields.io/docsrs/linear-srgb?style=for-the-badge)](https://docs.rs/linear-srgb)
-[![License](https://img.shields.io/crates/l/linear-srgb.svg?style=for-the-badge)](LICENSE)
+[![Crates.io](https://img.shields.io/crates/v/linear-srgb?style=for-the-badge)](https://crates.io/crates/linear-srgb)
+[![docs.rs](https://img.shields.io/docsrs/linear-srgb?style=for-the-badge)](https://docs.rs/linear-srgb)
+[![CI](https://img.shields.io/github/actions/workflow/status/imazen/linear-srgb/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/imazen/linear-srgb/actions/workflows/ci.yml)
+[![codecov](https://img.shields.io/codecov/c/github/imazen/linear-srgb?style=for-the-badge)](https://codecov.io/gh/imazen/linear-srgb)
+[![License](https://img.shields.io/crates/l/linear-srgb?style=for-the-badge)](https://github.com/imazen/linear-srgb#license)
+[![MSRV](https://img.shields.io/badge/MSRV-1.89-blue?style=for-the-badge)](https://github.com/imazen/linear-srgb)
 
 ```toml
 [dependencies]

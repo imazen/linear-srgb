@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.5
+
+### Added
+
+- Systematic length-variant tests for all public slice functions. Tests at 12
+  element counts (1, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 100) to exercise
+  scalar remainder, AVX2 (8-wide), and AVX-512 (16-wide) SIMD boundaries.
+  Covers: f32 s2l/l2s, u8 s2l/l2s, u16 s2l/l2s, gamma roundtrip,
+  u8/u16 RGBA roundtrip, u8 premultiply roundtrip.
+- CI: code coverage via `cargo-llvm-cov` → Codecov.
+- README: CI, codecov, and MSRV badges.
+
 ## 0.6.4
 
 SIMD premultiply fused into single-pass, PQ/HLG slice operations added.

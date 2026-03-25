@@ -168,6 +168,22 @@ jobs:
       - name: Build benchmarks
         run: cargo build --release --benches --all-features
 
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - run: cargo llvm-cov --all-features --codecov --output-path codecov.json --release
+      - uses: codecov/codecov-action@v5
+        with:
+          files: codecov.json
+          fail_ci_if_error: false
+
   msrv:
     name: MSRV
     runs-on: ubuntu-latest
