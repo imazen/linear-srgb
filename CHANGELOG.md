@@ -2,15 +2,54 @@
 
 ## Unreleased
 
+u16 LUT overhaul: zero binary bloat, sqrt-indexed encode, two-tier encode API.
+
+### Breaking (behavioral)
+
+- **`linear_to_srgb_u16()` is now polynomial (was uniform LUT).** Perfect
+  roundtrip but ~10× slower than the previous LUT path. Callers who need
+  the old speed should switch to `linear_to_srgb_u16_fast()`.
+- **u16 LUTs are now lazily initialized** via `OnceLock` instead of compiled
+  into the binary. First call to any u16 function pays ~200µs init.
+
 ### Added
 
-- Systematic length-variant tests for all public slice functions. Tests at 12
-  element counts (1, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 100) to exercise
-  scalar remainder, AVX2 (8-wide), and AVX-512 (16-wide) SIMD boundaries.
-  Covers: f32 s2l/l2s, u8 s2l/l2s, u16 s2l/l2s, gamma roundtrip,
-  u8/u16 RGBA roundtrip, u8 premultiply roundtrip.
+- **`linear_to_srgb_u16_fast()`** — sqrt-indexed LUT encode. 10× faster than
+  polynomial, max ±1 u16 roundtrip error, 94.2% exact. The sqrt indexing
+  concentrates resolution where the sRGB curve is steepest (near black).
+- **`linear_to_srgb_u16_slice_fast()`**, **`linear_to_srgb_u16_rgba_slice_fast()`**
+  — slice variants of the fast encode path.
+- Systematic length-variant tests for all public slice functions at 12 element
+  counts (1–100) exercising scalar, AVX2, and AVX-512 SIMD boundaries.
 - CI: code coverage via `cargo-llvm-cov` → Codecov.
 - README: CI, codecov, and MSRV badges.
+- Examples: `roundtrip_matrix`, `encode_lut_strategies`, `encode_perf`,
+  `lut_init_time`, `u16_roundtrip_audit`.
+
+### Changed
+
+- **Deleted 1.8MB `const_luts_u16.rs`** (70,570 lines). u16 LUTs are now
+  generated at runtime via `OnceLock` using SIMD-accelerated slice functions
+  in L1-sized chunks. ~200µs init, zero binary bloat, only allocated if u16
+  API is called.
+- Decode LUT (`srgb_u16_to_linear`) unchanged in behavior — still a direct
+  65536-entry lookup, now lazily initialized instead of const.
+- `no_std`: u16 functions fall back to rational polynomial (no LUT, no heap).
+- Updated all doc comments referencing "const LUT" or "f64 powf".
+- Tightened u16 roundtrip test tolerance.
+
+### Accuracy
+
+| Path | vs f64 reference | Roundtrip |
+|------|-----------------|-----------|
+| `srgb_u16_to_linear` (LUT decode) | ≤12 ULP | exact input |
+| `linear_to_srgb_u16` (polynomial) | ≤14 ULP | 100% exact |
+| `linear_to_srgb_u16_fast` (sqrt LUT) | ≤14 ULP | 94.2% exact, max ±1 |
+
+### Closed
+
+- **Issue #3**: u16 LUT design resolved — OnceLock lazy init, sqrt-indexed
+  encode, no feature gate needed.
 
 ## 0.6.4
 
