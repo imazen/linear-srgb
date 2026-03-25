@@ -1,18 +1,8 @@
 # Changelog
 
-## 0.7.0
+## 0.6.4
 
-SIMD premultiply fused into single-pass, custom gamma premultiply removed,
-PQ/HLG slice operations added.
-
-### Breaking Changes
-
-- **Removed `gamma_to_linear_premultiply_rgba_slice`** and
-  **`unpremultiply_linear_to_gamma_rgba_slice`** — custom-gamma premultiply
-  with arbitrary exponent. No known downstream users (verified via cargo-copter
-  and workspace grep). Use `gamma_to_linear_slice` followed by manual
-  premultiply if needed.
-- `archmage` and `magetypes` minimum bumped to 0.9.12.
+SIMD premultiply fused into single-pass, PQ/HLG slice operations added.
 
 ### Changed
 
@@ -25,6 +15,9 @@ PQ/HLG slice operations added.
   `linear_to_srgb_rgba_slice`. Now fused with the same three-tier dispatch.
 - All `incant!` dispatch calls now include `scalar` in tier lists, fixing
   deprecation warnings from archmage 0.9.12.
+- `gamma_to_linear_premultiply_rgba_slice` and
+  `unpremultiply_linear_to_gamma_rgba_slice` retained for backwards
+  compatibility with 0.6.x.
 
 ### Added
 
@@ -50,7 +43,7 @@ PQ/HLG slice operations added.
 
 ### Tests
 
-200 tests passing, 2 ignored. Net reduction of ~24 test functions from
+200+ tests passing. Net reduction of ~24 test functions from
 internal tier-wrapper cleanup; public API coverage unchanged.
 
 ## 0.6.3
