@@ -1059,6 +1059,7 @@ pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
 // ============================================================================
 
 #[cfg(test)]
+#[allow(clippy::needless_range_loop)]
 mod tests {
     use super::*;
 
