@@ -1530,6 +1530,7 @@ fn lut_interp_edge_cases() {
 // ============================================================================
 
 #[test]
+#[allow(deprecated)]
 fn lut_table_16bit() {
     use linear_srgb::lut::LinearTable16;
 

@@ -1,3 +1,4 @@
+#![allow(deprecated)] // LinearTable16/EncodeTable16 compared for reference
 //! Comprehensive accuracy comparison of all sRGB conversion implementations.
 //!
 //! Run with: cargo run --release --example accuracy_comparison --features alt

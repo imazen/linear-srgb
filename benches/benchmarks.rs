@@ -1,3 +1,4 @@
+#![allow(deprecated)] // LinearTable16/EncodeTable16 benchmarks kept for comparison
 //! Comprehensive benchmarks for sRGB conversion methods.
 //!
 //! Tests all combinations of input/output types (u8, u16, f32) across implementations.

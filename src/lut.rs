@@ -166,6 +166,14 @@ pub type LinearTable10 = LinearizationTable<1024>;
 pub type LinearTable12 = LinearizationTable<4096>;
 
 /// Pre-computed 16-bit linearization table (65536 entries).
+///
+/// **Deprecated:** Use [`crate::default::srgb_u16_to_linear`] instead — it's
+/// faster (shared OnceLock LUT, SIMD-generated) and doesn't add 1+ seconds
+/// of compile time from const evaluation.
+#[deprecated(
+    since = "0.7.0",
+    note = "use default::srgb_u16_to_linear instead (faster, shared LUT)"
+)]
 pub type LinearTable16 = LinearizationTable<65536>;
 
 /// Pre-computed 8-bit encoding table (256 entries).
@@ -175,6 +183,13 @@ pub type EncodeTable8 = EncodingTable<256>;
 pub type EncodeTable12 = EncodingTable<4096>;
 
 /// Pre-computed 16-bit encoding table (65536 entries).
+///
+/// **Deprecated:** Use [`crate::default::linear_to_srgb_u16`] (exact) or
+/// [`crate::default::linear_to_srgb_u16_fast`] (10×, ±1 max error) instead.
+#[deprecated(
+    since = "0.7.0",
+    note = "use default::linear_to_srgb_u16 or linear_to_srgb_u16_fast instead"
+)]
 pub type EncodeTable16 = EncodingTable<65536>;
 
 /// Converter using pre-computed const LUTs for fast batch conversion.
