@@ -1,3 +1,5 @@
+> **Historical.** This performance analysis predates the archmage rewrite. The SIMD implementation, module structure, and API names described here no longer exist. See README.md for current architecture and performance data.
+
 # Performance Analysis
 
 Benchmark results on x86_64 (exact CPU details vary by system).
