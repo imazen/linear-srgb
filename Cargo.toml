@@ -20,7 +20,7 @@ archmage = { version = "0.9.12", default-features = false, features = ["macros"]
 magetypes = { version = "0.9.12", default-features = false }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-criterion = "0.8"
+zenbench = { version = "0.1.1", features = ["criterion-compat"] }
 
 [features]
 default = ["std", "avx512"]
