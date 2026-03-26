@@ -6,7 +6,8 @@
 //! 3. inverse_fixup — Convert everything, then undo alpha with inverse function
 //! 4. baseline — Plain srgb_to_linear_slice (no alpha handling, for reference)
 
-use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use zenbench::criterion_compat::*;
+use zenbench::{criterion_group, criterion_main};
 use linear_srgb::default;
 use std::hint::black_box;
 
