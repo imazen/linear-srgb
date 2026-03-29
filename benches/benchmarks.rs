@@ -3,8 +3,6 @@
 //!
 //! Tests all combinations of input/output types (u8, u16, f32) across implementations.
 
-use zenbench::criterion_compat::*;
-use zenbench::{criterion_group, criterion_main};
 #[cfg(feature = "alt")]
 use linear_srgb::alt::imageflow;
 use linear_srgb::default;
@@ -14,6 +12,8 @@ use linear_srgb::lut::{
 };
 use linear_srgb::precise::{linear_to_srgb, srgb_to_linear};
 use std::hint::black_box;
+use zenbench::criterion_compat::*;
+use zenbench::{criterion_group, criterion_main};
 
 const BATCH_SIZE: usize = 10000;
 

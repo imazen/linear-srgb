@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 #![allow(clippy::excessive_precision)]
 //! Transfer function implementations for sRGB, BT.709, PQ, and HLG.
 //!

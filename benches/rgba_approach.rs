@@ -6,10 +6,10 @@
 //! 3. inverse_fixup — Convert everything, then undo alpha with inverse function
 //! 4. baseline — Plain srgb_to_linear_slice (no alpha handling, for reference)
 
-use zenbench::criterion_compat::*;
-use zenbench::{criterion_group, criterion_main};
 use linear_srgb::default;
 use std::hint::black_box;
+use zenbench::criterion_compat::*;
+use zenbench::{criterion_group, criterion_main};
 
 // ============================================================================
 // Test data: RGBA f32, various pixel counts

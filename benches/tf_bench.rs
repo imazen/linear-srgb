@@ -1,10 +1,10 @@
 //! Benchmarks for all transfer functions across tiers (scalar, x8, x16).
 
-use zenbench::criterion_compat::*;
-use zenbench::{criterion_group, criterion_main};
 use linear_srgb::tf;
 use linear_srgb::tokens;
 use std::hint::black_box;
+use zenbench::criterion_compat::*;
+use zenbench::{criterion_group, criterion_main};
 
 const N: usize = 10000;
 
