@@ -1,6 +1,6 @@
 [package]
 name = "linear-srgb"
-version = "0.6.5"
+version = "0.6.6"
 authors = ["Lilith River"]
 edition = "2024"
 rust-version = "1.89"
