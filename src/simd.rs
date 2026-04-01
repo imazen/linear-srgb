@@ -56,11 +56,11 @@ fn srgb_to_linear_mt(token: X64V3Token, srgb: mt_f32x8) -> mt_f32x8 {
     let yq = yq.mul_add(x, mt_f32x8::splat(token, S2L_Q[1]));
     let yq = yq.mul_add(x, mt_f32x8::splat(token, S2L_Q[0]));
 
-    let power_result = yp / yq;
+    let power_result = (yp / yq).min(one);
 
     let mask = clamped.simd_lt(mt_f32x8::splat(token, SRGB_THRESHOLD));
     let result = mt_f32x8::blend(mask, linear_result, power_result);
-    // Force exact 1.0 for inputs >= 1.0 (polynomial may undershoot)
+    // Force exact 1.0 for inputs >= 1.0 (polynomial may undershoot at boundary)
     let ge_one = srgb.simd_ge(one);
     mt_f32x8::blend(ge_one, one, result)
 }
@@ -87,7 +87,7 @@ fn linear_to_srgb_mt(token: X64V3Token, linear: mt_f32x8) -> mt_f32x8 {
     let yq = yq.mul_add(x, mt_f32x8::splat(token, L2S_Q[1]));
     let yq = yq.mul_add(x, mt_f32x8::splat(token, L2S_Q[0]));
 
-    let power_result = yp / yq;
+    let power_result = (yp / yq).min(one);
 
     let mask = clamped.simd_lt(mt_f32x8::splat(token, LINEAR_THRESHOLD));
     let result = mt_f32x8::blend(mask, linear_result, power_result);
@@ -139,7 +139,7 @@ fn srgb_to_linear_mt_x16(token: X64V4Token, srgb: mt_f32x16) -> mt_f32x16 {
     let yq = yq.mul_add(x, mt_f32x16::splat(token, S2L_Q[1]));
     let yq = yq.mul_add(x, mt_f32x16::splat(token, S2L_Q[0]));
 
-    let power_result = yp / yq;
+    let power_result = (yp / yq).min(one);
 
     let mask = clamped.simd_lt(mt_f32x16::splat(token, SRGB_THRESHOLD));
     let result = mt_f32x16::blend(mask, linear_result, power_result);
@@ -169,7 +169,7 @@ fn linear_to_srgb_mt_x16(token: X64V4Token, linear: mt_f32x16) -> mt_f32x16 {
     let yq = yq.mul_add(x, mt_f32x16::splat(token, L2S_Q[1]));
     let yq = yq.mul_add(x, mt_f32x16::splat(token, L2S_Q[0]));
 
-    let power_result = yp / yq;
+    let power_result = (yp / yq).min(one);
 
     let mask = clamped.simd_lt(mt_f32x16::splat(token, LINEAR_THRESHOLD));
     let result = mt_f32x16::blend(mask, linear_result, power_result);
@@ -2815,6 +2815,72 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    // ====================================================================
+    // Regression: polynomial overshoot near 1.0 must be clamped
+    // ====================================================================
+
+    #[test]
+    fn simd_power_result_clamped_near_one() {
+        // The rational polynomial can slightly overshoot 1.0 for inputs
+        // very close to 1.0 due to FMA rounding. The SIMD dispatch path
+        // (srgb_to_linear_mt / linear_to_srgb_mt) must apply .min(one)
+        // to match the token implementations.
+        //
+        // Generate values near 1.0 where overshoot is most likely.
+        let near_one: Vec<f32> = (0..1000)
+            .map(|i| 1.0 - (i as f32) * 1e-7)
+            .chain(core::iter::once(1.0))
+            .collect();
+
+        // sRGB-to-linear: SIMD dispatch path
+        let mut simd_s2l = near_one.clone();
+        srgb_to_linear_slice(&mut simd_s2l);
+
+        for (i, &v) in simd_s2l.iter().enumerate() {
+            assert!(
+                v <= 1.0,
+                "srgb_to_linear overshoot at index {i}: input={}, output={} (bits: {:08x})",
+                near_one[i],
+                v,
+                v.to_bits()
+            );
+            assert!(v >= 0.0, "srgb_to_linear undershoot at index {i}");
+        }
+
+        // linear-to-sRGB: SIMD dispatch path
+        let mut simd_l2s = near_one.clone();
+        linear_to_srgb_slice(&mut simd_l2s);
+
+        for (i, &v) in simd_l2s.iter().enumerate() {
+            assert!(
+                v <= 1.0,
+                "linear_to_srgb overshoot at index {i}: input={}, output={} (bits: {:08x})",
+                near_one[i],
+                v,
+                v.to_bits()
+            );
+            assert!(v >= 0.0, "linear_to_srgb undershoot at index {i}");
+        }
+
+        // Verify SIMD results match scalar exactly at the bit level
+        for (i, &input) in near_one.iter().enumerate() {
+            let scalar_s2l = crate::scalar::srgb_to_linear(input);
+            let scalar_l2s = crate::scalar::linear_to_srgb(input);
+            assert!(
+                (simd_s2l[i] - scalar_s2l).abs() <= 1e-6,
+                "srgb_to_linear SIMD/scalar mismatch at {i}: input={input}, simd={}, scalar={}",
+                simd_s2l[i],
+                scalar_s2l
+            );
+            assert!(
+                (simd_l2s[i] - scalar_l2s).abs() <= 1e-6,
+                "linear_to_srgb SIMD/scalar mismatch at {i}: input={input}, simd={}, scalar={}",
+                simd_l2s[i],
+                scalar_l2s
+            );
         }
     }
 }
