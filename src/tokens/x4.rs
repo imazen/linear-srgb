@@ -56,12 +56,13 @@ pub fn srgb_to_linear_v3(token: X64V3Token, srgb: [f32; 4]) -> [f32; 4] {
 
     let zero = mt_f32x4::zero(token);
     let one = mt_f32x4::splat(token, 1.0);
-    let srgb = mt_f32x4::from_array(token, srgb).max(zero).min(one);
+    let srgb_v = mt_f32x4::from_array(token, srgb);
+    let clamped = srgb_v.max(zero).min(one);
 
-    let linear_result = srgb * mt_f32x4::splat(token, LINEAR_SCALE);
+    let linear_result = clamped * mt_f32x4::splat(token, LINEAR_SCALE);
 
     // Rational polynomial P(x)/Q(x) via Horner's method
-    let x = srgb;
+    let x = clamped;
     let yp = mt_f32x4::splat(token, S2L_P[4]).mul_add(x, mt_f32x4::splat(token, S2L_P[3]));
     let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[2]));
     let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[1]));
@@ -74,8 +75,11 @@ pub fn srgb_to_linear_v3(token: X64V3Token, srgb: [f32; 4]) -> [f32; 4] {
 
     let power_result = (yp / yq).min(one);
 
-    let mask = srgb.simd_lt(mt_f32x4::splat(token, SRGB_LINEAR_THRESHOLD));
-    mt_f32x4::blend(mask, linear_result, power_result).to_array()
+    let mask = clamped.simd_lt(mt_f32x4::splat(token, SRGB_LINEAR_THRESHOLD));
+    let result = mt_f32x4::blend(mask, linear_result, power_result);
+    // Force exact 1.0 for inputs >= 1.0 (polynomial may undershoot at boundary)
+    let ge_one = srgb_v.simd_ge(one);
+    mt_f32x4::blend(ge_one, one, result).to_array()
 }
 
 /// Convert 4 linear values to sRGB. Input clamped to \[0, 1\].
@@ -88,12 +92,13 @@ pub fn linear_to_srgb_v3(token: X64V3Token, linear: [f32; 4]) -> [f32; 4] {
 
     let zero = mt_f32x4::zero(token);
     let one = mt_f32x4::splat(token, 1.0);
-    let linear = mt_f32x4::from_array(token, linear).max(zero).min(one);
+    let linear_v = mt_f32x4::from_array(token, linear);
+    let clamped = linear_v.max(zero).min(one);
 
-    let linear_result = linear * mt_f32x4::splat(token, TWELVE_92);
+    let linear_result = clamped * mt_f32x4::splat(token, TWELVE_92);
 
     // sqrt transform + rational polynomial P(√x)/Q(√x) via Horner's method
-    let x = linear.sqrt();
+    let x = clamped.sqrt();
     let yp = mt_f32x4::splat(token, L2S_P[4]).mul_add(x, mt_f32x4::splat(token, L2S_P[3]));
     let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[2]));
     let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[1]));
@@ -106,8 +111,11 @@ pub fn linear_to_srgb_v3(token: X64V3Token, linear: [f32; 4]) -> [f32; 4] {
 
     let power_result = (yp / yq).min(one);
 
-    let mask = linear.simd_lt(mt_f32x4::splat(token, LINEAR_THRESHOLD));
-    mt_f32x4::blend(mask, linear_result, power_result).to_array()
+    let mask = clamped.simd_lt(mt_f32x4::splat(token, LINEAR_THRESHOLD));
+    let result = mt_f32x4::blend(mask, linear_result, power_result);
+    // Force exact 1.0 for inputs >= 1.0 (polynomial may undershoot at boundary)
+    let ge_one = linear_v.simd_ge(one);
+    mt_f32x4::blend(ge_one, one, result).to_array()
 }
 
 /// Convert 4 gamma-encoded values to linear. Input clamped to \[0, 1\].
@@ -217,12 +225,13 @@ pub fn srgb_to_linear_neon(token: NeonToken, srgb: [f32; 4]) -> [f32; 4] {
 
     let zero = mt_f32x4::zero(token);
     let one = mt_f32x4::splat(token, 1.0);
-    let srgb = mt_f32x4::from_array(token, srgb).max(zero).min(one);
+    let srgb_v = mt_f32x4::from_array(token, srgb);
+    let clamped = srgb_v.max(zero).min(one);
 
-    let linear_result = srgb * mt_f32x4::splat(token, LINEAR_SCALE);
+    let linear_result = clamped * mt_f32x4::splat(token, LINEAR_SCALE);
 
     // Rational polynomial P(x)/Q(x) via Horner's method
-    let x = srgb;
+    let x = clamped;
     let yp = mt_f32x4::splat(token, S2L_P[4]).mul_add(x, mt_f32x4::splat(token, S2L_P[3]));
     let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[2]));
     let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[1]));
@@ -235,8 +244,11 @@ pub fn srgb_to_linear_neon(token: NeonToken, srgb: [f32; 4]) -> [f32; 4] {
 
     let power_result = (yp / yq).min(one);
 
-    let mask = srgb.simd_lt(mt_f32x4::splat(token, SRGB_LINEAR_THRESHOLD));
-    mt_f32x4::blend(mask, linear_result, power_result).to_array()
+    let mask = clamped.simd_lt(mt_f32x4::splat(token, SRGB_LINEAR_THRESHOLD));
+    let result = mt_f32x4::blend(mask, linear_result, power_result);
+    // Force exact 1.0 for inputs >= 1.0 (polynomial may undershoot at boundary)
+    let ge_one = srgb_v.simd_ge(one);
+    mt_f32x4::blend(ge_one, one, result).to_array()
 }
 
 /// Convert 4 linear values to sRGB. Input clamped to \[0, 1\].
@@ -249,12 +261,13 @@ pub fn linear_to_srgb_neon(token: NeonToken, linear: [f32; 4]) -> [f32; 4] {
 
     let zero = mt_f32x4::zero(token);
     let one = mt_f32x4::splat(token, 1.0);
-    let linear = mt_f32x4::from_array(token, linear).max(zero).min(one);
+    let linear_v = mt_f32x4::from_array(token, linear);
+    let clamped = linear_v.max(zero).min(one);
 
-    let linear_result = linear * mt_f32x4::splat(token, TWELVE_92);
+    let linear_result = clamped * mt_f32x4::splat(token, TWELVE_92);
 
     // sqrt transform + rational polynomial P(√x)/Q(√x) via Horner's method
-    let x = linear.sqrt();
+    let x = clamped.sqrt();
     let yp = mt_f32x4::splat(token, L2S_P[4]).mul_add(x, mt_f32x4::splat(token, L2S_P[3]));
     let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[2]));
     let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[1]));
@@ -267,8 +280,11 @@ pub fn linear_to_srgb_neon(token: NeonToken, linear: [f32; 4]) -> [f32; 4] {
 
     let power_result = (yp / yq).min(one);
 
-    let mask = linear.simd_lt(mt_f32x4::splat(token, LINEAR_THRESHOLD));
-    mt_f32x4::blend(mask, linear_result, power_result).to_array()
+    let mask = clamped.simd_lt(mt_f32x4::splat(token, LINEAR_THRESHOLD));
+    let result = mt_f32x4::blend(mask, linear_result, power_result);
+    // Force exact 1.0 for inputs >= 1.0 (polynomial may undershoot at boundary)
+    let ge_one = linear_v.simd_ge(one);
+    mt_f32x4::blend(ge_one, one, result).to_array()
 }
 
 /// Convert 4 gamma-encoded values to linear. Input clamped to \[0, 1\].
@@ -378,12 +394,13 @@ pub fn srgb_to_linear_wasm128(token: Wasm128Token, srgb: [f32; 4]) -> [f32; 4] {
 
     let zero = mt_f32x4::zero(token);
     let one = mt_f32x4::splat(token, 1.0);
-    let srgb = mt_f32x4::from_array(token, srgb).max(zero).min(one);
+    let srgb_v = mt_f32x4::from_array(token, srgb);
+    let clamped = srgb_v.max(zero).min(one);
 
-    let linear_result = srgb * mt_f32x4::splat(token, LINEAR_SCALE);
+    let linear_result = clamped * mt_f32x4::splat(token, LINEAR_SCALE);
 
     // Rational polynomial P(x)/Q(x) via Horner's method
-    let x = srgb;
+    let x = clamped;
     let yp = mt_f32x4::splat(token, S2L_P[4]).mul_add(x, mt_f32x4::splat(token, S2L_P[3]));
     let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[2]));
     let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[1]));
@@ -396,8 +413,11 @@ pub fn srgb_to_linear_wasm128(token: Wasm128Token, srgb: [f32; 4]) -> [f32; 4] {
 
     let power_result = (yp / yq).min(one);
 
-    let mask = srgb.simd_lt(mt_f32x4::splat(token, SRGB_LINEAR_THRESHOLD));
-    mt_f32x4::blend(mask, linear_result, power_result).to_array()
+    let mask = clamped.simd_lt(mt_f32x4::splat(token, SRGB_LINEAR_THRESHOLD));
+    let result = mt_f32x4::blend(mask, linear_result, power_result);
+    // Force exact 1.0 for inputs >= 1.0 (polynomial may undershoot at boundary)
+    let ge_one = srgb_v.simd_ge(one);
+    mt_f32x4::blend(ge_one, one, result).to_array()
 }
 
 /// Convert 4 linear values to sRGB. Input clamped to \[0, 1\].
@@ -410,12 +430,13 @@ pub fn linear_to_srgb_wasm128(token: Wasm128Token, linear: [f32; 4]) -> [f32; 4]
 
     let zero = mt_f32x4::zero(token);
     let one = mt_f32x4::splat(token, 1.0);
-    let linear = mt_f32x4::from_array(token, linear).max(zero).min(one);
+    let linear_v = mt_f32x4::from_array(token, linear);
+    let clamped = linear_v.max(zero).min(one);
 
-    let linear_result = linear * mt_f32x4::splat(token, TWELVE_92);
+    let linear_result = clamped * mt_f32x4::splat(token, TWELVE_92);
 
     // sqrt transform + rational polynomial P(√x)/Q(√x) via Horner's method
-    let x = linear.sqrt();
+    let x = clamped.sqrt();
     let yp = mt_f32x4::splat(token, L2S_P[4]).mul_add(x, mt_f32x4::splat(token, L2S_P[3]));
     let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[2]));
     let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[1]));
@@ -428,8 +449,11 @@ pub fn linear_to_srgb_wasm128(token: Wasm128Token, linear: [f32; 4]) -> [f32; 4]
 
     let power_result = (yp / yq).min(one);
 
-    let mask = linear.simd_lt(mt_f32x4::splat(token, LINEAR_THRESHOLD));
-    mt_f32x4::blend(mask, linear_result, power_result).to_array()
+    let mask = clamped.simd_lt(mt_f32x4::splat(token, LINEAR_THRESHOLD));
+    let result = mt_f32x4::blend(mask, linear_result, power_result);
+    // Force exact 1.0 for inputs >= 1.0 (polynomial may undershoot at boundary)
+    let ge_one = linear_v.simd_ge(one);
+    mt_f32x4::blend(ge_one, one, result).to_array()
 }
 
 /// Convert 4 gamma-encoded values to linear. Input clamped to \[0, 1\].
