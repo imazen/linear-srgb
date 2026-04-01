@@ -11,12 +11,10 @@
 //!   the sRGB curve is steepest (near black). Max roundtrip error ±1 u16 level,
 //!   94.2% exact roundtrip (vs 71.3% / ±6 with uniform indexing).
 //!
-//! Generation uses SIMD-dispatched slice functions in L1-sized chunks.
+//! Generation uses the scalar f64-intermediate polynomial for platform-
+//! independent precision (see `generate_decode_lut` for rationale).
 
 use std::sync::OnceLock;
-
-/// Chunk size for LUT generation — 16KB fits in L1 cache.
-const CHUNK: usize = 4096;
 
 // ============================================================================
 // Decode: sRGB u16 → linear f32 (65536 entries, 256KB)
@@ -24,13 +22,21 @@ const CHUNK: usize = 4096;
 
 static DECODE_LUT: OnceLock<Box<[f32; 65536]>> = OnceLock::new();
 
-/// Generate the decode LUT using SIMD-accelerated sRGB→linear conversion.
+/// Generate the decode LUT using the scalar f64-intermediate polynomial.
+///
+/// Uses `rational_poly::srgb_to_linear_fast` (f64 Horner evaluation) instead
+/// of SIMD f32 dispatch to guarantee exact roundtrip with the scalar encode
+/// path (`linear_to_srgb_u16`). The f64 intermediate eliminates platform-
+/// dependent rounding differences — WASM SIMD128 lacks fused multiply-add,
+/// so its f32 `mul_add` (two roundings) can diverge from f64 by enough ULPs
+/// to break u16 roundtrip at boundary values.
+///
+/// LUT generation is one-time (`OnceLock`), so the cost is negligible.
 #[doc(hidden)]
 pub fn generate_decode_lut() -> Box<[f32; 65536]> {
-    let mut v: Vec<f32> = (0..65536u32).map(|i| i as f32 * (1.0 / 65535.0)).collect();
-    for chunk in v.chunks_mut(CHUNK) {
-        crate::simd::srgb_to_linear_slice(chunk);
-    }
+    let v: Vec<f32> = (0..65536u32)
+        .map(|i| crate::rational_poly::srgb_to_linear_fast(i as f32 * (1.0 / 65535.0)))
+        .collect();
     v.into_boxed_slice().try_into().ok().unwrap()
 }
 
@@ -51,28 +57,23 @@ pub(crate) const ENCODE_LUT_N: usize = 65537;
 /// Scale factor for sqrt index: `idx = (sqrt(linear) * ENCODE_SQRT_SCALE + 0.5) as usize`
 pub(crate) const ENCODE_SQRT_SCALE: f32 = (ENCODE_LUT_N - 1) as f32;
 
-/// Generate the sqrt-indexed encode LUT using SIMD-accelerated linear→sRGB.
+/// Generate the sqrt-indexed encode LUT using the scalar f64-intermediate polynomial.
 ///
 /// Entry `i` stores the sRGB u16 value for `linear = (i / 65536)²`.
 /// Lookup uses `idx = (sqrt(linear) * 65536 + 0.5)`.
+///
+/// Uses `rational_poly::linear_to_srgb_fast` for platform-independent precision
+/// (see `generate_decode_lut` for rationale).
 #[doc(hidden)]
 pub fn generate_encode_lut() -> Box<[u16; 65537]> {
-    let mut lut: Vec<u16> = Vec::with_capacity(ENCODE_LUT_N);
-    let mut scratch = [0.0f32; CHUNK];
-    let mut i = 0u32;
-    while (i as usize) < ENCODE_LUT_N {
-        let n = CHUNK.min(ENCODE_LUT_N - i as usize);
-        for (j, s) in scratch[..n].iter_mut().enumerate() {
-            // Inverse of sqrt: index i maps to linear = (i/65536)²
-            let t = (i + j as u32) as f32 * (1.0 / ENCODE_SQRT_SCALE);
-            *s = t * t;
-        }
-        crate::simd::linear_to_srgb_slice(&mut scratch[..n]);
-        for &s in &scratch[..n] {
-            lut.push((s * 65535.0 + 0.5) as u16);
-        }
-        i += n as u32;
-    }
+    let lut: Vec<u16> = (0..ENCODE_LUT_N as u32)
+        .map(|i| {
+            let t = i as f32 * (1.0 / ENCODE_SQRT_SCALE);
+            let linear = t * t;
+            let srgb = crate::rational_poly::linear_to_srgb_fast(linear);
+            (srgb * 65535.0 + 0.5) as u16
+        })
+        .collect();
     lut.into_boxed_slice().try_into().ok().unwrap()
 }
 
