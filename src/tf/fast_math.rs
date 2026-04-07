@@ -52,6 +52,9 @@ pub fn fast_log2f(x: f32) -> f32 {
 /// Coefficients from libjxl (via jxl crate).
 #[inline(always)]
 pub fn fast_pow2f(x: f32) -> f32 {
+    // Clamp to valid IEEE 754 exponent range to avoid i32 overflow in debug builds.
+    // Values outside [-126, 128] produce 0.0 or infinity anyway.
+    let x = x.clamp(-126.0, 128.0);
     let x_floor = x.floor();
     let exp = f32::from_bits(((x_floor as i32 + 127) as u32) << 23);
     let frac = x - x_floor;
