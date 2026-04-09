@@ -9,6 +9,20 @@ description = "Fast linear↔sRGB color space conversion with FMA acceleration a
 repository = "https://github.com/imazen/linear-srgb"
 keywords = ["color", "srgb", "linear", "gamma", "conversion"]
 categories = ["graphics", "multimedia::images", "no-std"]
+exclude = [
+    "CLAUDE.md",
+    "CONTEXT-HANDOFF.md",
+    "FEEDBACK.md",
+    ".claude/",
+    ".superwork/",
+    ".zenbench/",
+    "copter-report/",
+    ".github/",
+    "Cross.toml",
+    "justfile",
+    "Cargo.toml.original.txt",
+    "fuzz/",
+]
 
 [package.metadata.docs.rs]
 all-features = true
