@@ -41,7 +41,7 @@ fn srgb_u8_to_linear_all_tiers_match() {
     let input = generate_u8_input(4); // 1024 values
     let mut reference_hash = None;
 
-    for_each_token_permutation(CompileTimePolicy::Warn, |perm| {
+    let _ = for_each_token_permutation(CompileTimePolicy::Warn, |perm| {
         let mut output = vec![0.0f32; input.len()];
         srgb_u8_to_linear_slice(&input, &mut output);
         let h = hash_f32(&output);
@@ -63,7 +63,7 @@ fn linear_to_srgb_u8_all_tiers_match() {
     let input = generate_f32_input(4096);
     let mut reference_hash = None;
 
-    for_each_token_permutation(CompileTimePolicy::Warn, |perm| {
+    let _ = for_each_token_permutation(CompileTimePolicy::Warn, |perm| {
         let mut output = vec![0u8; input.len()];
         linear_to_srgb_u8_slice(&input, &mut output);
         let h = hash_bytes(&output);
@@ -93,7 +93,7 @@ fn srgb_to_linear_f32_all_tiers_within_ulp() {
     let input = generate_f32_input(8192);
     let mut reference: Option<Vec<f32>> = None;
 
-    for_each_token_permutation(CompileTimePolicy::Warn, |perm| {
+    let _ = for_each_token_permutation(CompileTimePolicy::Warn, |perm| {
         let mut data = input.clone();
         srgb_to_linear_slice(&mut data);
 
@@ -116,7 +116,7 @@ fn linear_to_srgb_f32_all_tiers_within_ulp() {
     let input = generate_f32_input(8192);
     let mut reference: Option<Vec<f32>> = None;
 
-    for_each_token_permutation(CompileTimePolicy::Warn, |perm| {
+    let _ = for_each_token_permutation(CompileTimePolicy::Warn, |perm| {
         let mut data = input.clone();
         linear_to_srgb_slice(&mut data);
 
@@ -138,7 +138,7 @@ fn roundtrip_u8_all_tiers_match() {
     let input = generate_u8_input(4);
     let mut reference_hash = None;
 
-    for_each_token_permutation(CompileTimePolicy::Warn, |perm| {
+    let _ = for_each_token_permutation(CompileTimePolicy::Warn, |perm| {
         let mut linear = vec![0.0f32; input.len()];
         srgb_u8_to_linear_slice(&input, &mut linear);
         let mut roundtripped = vec![0u8; input.len()];
