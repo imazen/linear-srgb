@@ -327,7 +327,8 @@ pub fn linear_to_srgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
 
 /// Convert sRGB f32 values to linear in-place using 8-wide SIMD (extended range).
 ///
-/// Values in \[0, 1\] use the fast polynomial; out-of-range lanes use scalar fixup.
+/// Pure SIMD via abs+sign: evaluates the polynomial on magnitudes, then
+/// restores signs. Remainder elements (< 8) use scalar fallback.
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[rite]
 pub fn srgb_to_linear_extended_slice_v3(token: X64V3Token, values: &mut [f32]) {
@@ -344,7 +345,8 @@ pub fn srgb_to_linear_extended_slice_v3(token: X64V3Token, values: &mut [f32]) {
 
 /// Convert linear f32 values to sRGB in-place using 8-wide SIMD (extended range).
 ///
-/// Values in \[0, 1\] use the fast polynomial; out-of-range lanes use scalar fixup.
+/// Pure SIMD via abs+sign: evaluates sqrt + polynomial on magnitudes, then
+/// restores signs. Remainder elements (< 8) use scalar fallback.
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[rite]
 pub fn linear_to_srgb_extended_slice_v3(token: X64V3Token, values: &mut [f32]) {
