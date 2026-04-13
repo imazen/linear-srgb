@@ -86,6 +86,104 @@ pub fn linear_to_srgb_v3(token: X64V3Token, linear: [f32; 8]) -> [f32; 8] {
     mt_f32x8::blend(mask, linear_result, power_result).to_array()
 }
 
+/// Convert 8 sRGB values to linear without clamping (extended range).
+///
+/// Values in \[0, 1\] use the fast rational polynomial (identical to
+/// [`srgb_to_linear_v3`]). Out-of-range lanes are fixed up with the
+/// scalar extended function (powf for >1, linear scale for <0).
+///
+/// Use this for HDR, cross-gamut (P3 → sRGB), and scRGB pipelines
+/// where values may be negative or exceed 1.0.
+///
+/// The `X64V3Token` parameter proves AVX2+FMA support at compile time.
+/// Call from inside an `#[arcane]` function for zero-overhead inlining.
+#[rite]
+pub fn srgb_to_linear_extended_v3(token: X64V3Token, srgb: [f32; 8]) -> [f32; 8] {
+    use crate::rational_poly::{S2L_P, S2L_Q};
+
+    let zero = mt_f32x8::zero(token);
+    let one = mt_f32x8::splat(token, 1.0);
+    let v = mt_f32x8::from_array(token, srgb);
+
+    // Fast path: clamp to [0,1] and evaluate polynomial (handles common case)
+    let clamped = v.max(zero).min(one);
+
+    let linear_result = clamped * mt_f32x8::splat(token, LINEAR_SCALE);
+
+    let x = clamped;
+    let yp = mt_f32x8::splat(token, S2L_P[4]).mul_add(x, mt_f32x8::splat(token, S2L_P[3]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, S2L_P[2]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, S2L_P[1]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, S2L_P[0]));
+
+    let yq = mt_f32x8::splat(token, S2L_Q[4]).mul_add(x, mt_f32x8::splat(token, S2L_Q[3]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, S2L_Q[2]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, S2L_Q[1]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, S2L_Q[0]));
+
+    let power_result = (yp / yq).min(one);
+
+    let mask = clamped.simd_lt(mt_f32x8::splat(token, SRGB_LINEAR_THRESHOLD));
+    let mut result = mt_f32x8::blend(mask, linear_result, power_result).to_array();
+
+    // Fixup: replace out-of-range lanes with scalar extended result
+    for i in 0..8 {
+        if srgb[i] < 0.0 || srgb[i] > 1.0 {
+            result[i] = crate::scalar::srgb_to_linear_extended(srgb[i]);
+        }
+    }
+    result
+}
+
+/// Convert 8 linear values to sRGB without clamping (extended range).
+///
+/// Values in \[0, 1\] use the fast rational polynomial (identical to
+/// [`linear_to_srgb_v3`]). Out-of-range lanes are fixed up with the
+/// scalar extended function (powf for >1, linear scale for <0).
+///
+/// Use this for HDR, cross-gamut (P3 → sRGB), and scRGB pipelines
+/// where values may be negative or exceed 1.0.
+///
+/// The `X64V3Token` parameter proves AVX2+FMA support at compile time.
+/// Call from inside an `#[arcane]` function for zero-overhead inlining.
+#[rite]
+pub fn linear_to_srgb_extended_v3(token: X64V3Token, linear: [f32; 8]) -> [f32; 8] {
+    use crate::rational_poly::{L2S_P, L2S_Q};
+
+    let zero = mt_f32x8::zero(token);
+    let one = mt_f32x8::splat(token, 1.0);
+    let v = mt_f32x8::from_array(token, linear);
+
+    // Fast path: clamp to [0,1] and evaluate polynomial (handles common case)
+    let clamped = v.max(zero).min(one);
+
+    let linear_result = clamped * mt_f32x8::splat(token, TWELVE_92);
+
+    let x = clamped.sqrt();
+    let yp = mt_f32x8::splat(token, L2S_P[4]).mul_add(x, mt_f32x8::splat(token, L2S_P[3]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, L2S_P[2]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, L2S_P[1]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, L2S_P[0]));
+
+    let yq = mt_f32x8::splat(token, L2S_Q[4]).mul_add(x, mt_f32x8::splat(token, L2S_Q[3]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, L2S_Q[2]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, L2S_Q[1]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, L2S_Q[0]));
+
+    let power_result = (yp / yq).min(one);
+
+    let mask = clamped.simd_lt(mt_f32x8::splat(token, LINEAR_THRESHOLD));
+    let mut result = mt_f32x8::blend(mask, linear_result, power_result).to_array();
+
+    // Fixup: replace out-of-range lanes with scalar extended result
+    for i in 0..8 {
+        if linear[i] < 0.0 || linear[i] > 1.0 {
+            result[i] = crate::scalar::linear_to_srgb_extended(linear[i]);
+        }
+    }
+    result
+}
+
 /// Convert 8 gamma-encoded values to linear. Input clamped to \[0, 1\].
 ///
 /// The `X64V3Token` parameter proves AVX2+FMA support at compile time.
@@ -226,6 +324,40 @@ pub fn linear_to_srgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
 
     for v in remainder {
         *v = crate::scalar::linear_to_srgb(*v);
+    }
+}
+
+/// Convert sRGB f32 values to linear in-place using 8-wide SIMD (extended range).
+///
+/// Values in \[0, 1\] use the fast polynomial; out-of-range lanes use scalar fixup.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
+#[rite]
+pub fn srgb_to_linear_extended_slice_v3(token: X64V3Token, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<8>();
+
+    for chunk in chunks {
+        *chunk = srgb_to_linear_extended_v3(token, *chunk);
+    }
+
+    for v in remainder {
+        *v = crate::scalar::srgb_to_linear_extended(*v);
+    }
+}
+
+/// Convert linear f32 values to sRGB in-place using 8-wide SIMD (extended range).
+///
+/// Values in \[0, 1\] use the fast polynomial; out-of-range lanes use scalar fixup.
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
+#[rite]
+pub fn linear_to_srgb_extended_slice_v3(token: X64V3Token, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<8>();
+
+    for chunk in chunks {
+        *chunk = linear_to_srgb_extended_v3(token, *chunk);
+    }
+
+    for v in remainder {
+        *v = crate::scalar::linear_to_srgb_extended(*v);
     }
 }
 
@@ -598,6 +730,224 @@ mod tests {
                 i,
                 orig,
                 conv
+            );
+        }
+    }
+
+    // ====================================================================
+    // Extended-range tests
+    // ====================================================================
+
+    #[archmage::arcane]
+    fn call_srgb_to_linear_extended(token: X64V3Token, input: [f32; 8]) -> [f32; 8] {
+        srgb_to_linear_extended_v3(token, input)
+    }
+
+    #[archmage::arcane]
+    fn call_linear_to_srgb_extended(token: X64V3Token, input: [f32; 8]) -> [f32; 8] {
+        linear_to_srgb_extended_v3(token, input)
+    }
+
+    #[archmage::arcane]
+    fn call_srgb_to_linear_extended_slice(token: X64V3Token, values: &mut [f32]) {
+        srgb_to_linear_extended_slice_v3(token, values);
+    }
+
+    #[archmage::arcane]
+    fn call_linear_to_srgb_extended_slice(token: X64V3Token, values: &mut [f32]) {
+        linear_to_srgb_extended_slice_v3(token, values);
+    }
+
+    #[test]
+    fn test_extended_in_range_matches_clamped() {
+        let Some(token) = get_token() else {
+            eprintln!("Skipping test: AVX2+FMA not available");
+            return;
+        };
+
+        // Values in [0,1] must produce identical results to non-extended
+        let input = [0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9, 1.0];
+        let clamped = call_srgb_to_linear(token, input);
+        let extended = call_srgb_to_linear_extended(token, input);
+        assert_eq!(
+            clamped, extended,
+            "srgb_to_linear: in-range must match clamped"
+        );
+
+        let input_lin = [0.0, 0.01, 0.05, 0.1, 0.2, 0.5, 0.8, 1.0];
+        let clamped = call_linear_to_srgb(token, input_lin);
+        let extended = call_linear_to_srgb_extended(token, input_lin);
+        assert_eq!(
+            clamped, extended,
+            "linear_to_srgb: in-range must match clamped"
+        );
+    }
+
+    #[test]
+    fn test_extended_sign_preservation() {
+        let Some(token) = get_token() else {
+            eprintln!("Skipping test: AVX2+FMA not available");
+            return;
+        };
+
+        // Negative sRGB inputs must produce negative linear outputs
+        let input = [-0.5, -0.1, -0.01, -1.0, 0.0, 0.5, 1.0, -0.001];
+        let result = call_srgb_to_linear_extended(token, input);
+        for i in [0, 1, 2, 3, 7] {
+            assert!(
+                result[i] < 0.0,
+                "srgb_to_linear_extended({}) = {} should be negative",
+                input[i],
+                result[i]
+            );
+        }
+
+        // Negative linear inputs must produce negative sRGB outputs
+        let input = [-0.5, -0.1, -0.01, -1.0, 0.0, 0.5, 1.0, -0.001];
+        let result = call_linear_to_srgb_extended(token, input);
+        for i in [0, 1, 2, 3, 7] {
+            assert!(
+                result[i] < 0.0,
+                "linear_to_srgb_extended({}) = {} should be negative",
+                input[i],
+                result[i]
+            );
+        }
+    }
+
+    #[test]
+    fn test_extended_above_one() {
+        let Some(token) = get_token() else {
+            eprintln!("Skipping test: AVX2+FMA not available");
+            return;
+        };
+
+        // Values > 1.0 must produce results > 1.0
+        let input = [1.5, 2.0, 3.0, 5.0, 10.0, 0.5, 1.0, 1.01];
+        let result = call_srgb_to_linear_extended(token, input);
+        for i in [0, 1, 2, 3, 4, 7] {
+            assert!(
+                result[i] > 1.0,
+                "srgb_to_linear_extended({}) = {} should be > 1.0",
+                input[i],
+                result[i]
+            );
+        }
+
+        let input = [1.5, 2.0, 3.0, 5.0, 10.0, 0.5, 1.0, 1.01];
+        let result = call_linear_to_srgb_extended(token, input);
+        for i in [0, 1, 2, 3, 4, 7] {
+            assert!(
+                result[i] > 1.0,
+                "linear_to_srgb_extended({}) = {} should be > 1.0",
+                input[i],
+                result[i]
+            );
+        }
+    }
+
+    #[test]
+    fn test_extended_matches_scalar() {
+        let Some(token) = get_token() else {
+            eprintln!("Skipping test: AVX2+FMA not available");
+            return;
+        };
+
+        // Mixed in-range and out-of-range values
+        let input = [-1.0, -0.1, 0.0, 0.3, 0.5, 1.0, 1.5, 3.0];
+
+        let simd_result = call_srgb_to_linear_extended(token, input);
+        for (i, &v) in input.iter().enumerate() {
+            let scalar = crate::scalar::srgb_to_linear_extended(v);
+            assert!(
+                (simd_result[i] - scalar).abs() < 1e-5,
+                "srgb_to_linear_extended mismatch at {}: SIMD={}, scalar={} (input={})",
+                i,
+                simd_result[i],
+                scalar,
+                v
+            );
+        }
+
+        let simd_result = call_linear_to_srgb_extended(token, input);
+        for (i, &v) in input.iter().enumerate() {
+            let scalar = crate::scalar::linear_to_srgb_extended(v);
+            assert!(
+                (simd_result[i] - scalar).abs() < 1e-5,
+                "linear_to_srgb_extended mismatch at {}: SIMD={}, scalar={} (input={})",
+                i,
+                simd_result[i],
+                scalar,
+                v
+            );
+        }
+    }
+
+    #[test]
+    fn test_extended_roundtrip() {
+        let Some(token) = get_token() else {
+            eprintln!("Skipping test: AVX2+FMA not available");
+            return;
+        };
+
+        let input = [-0.5, -0.1, 0.0, 0.3, 0.5, 1.0, 1.5, 3.0];
+        let linear = call_srgb_to_linear_extended(token, input);
+        let roundtrip = call_linear_to_srgb_extended(token, linear);
+
+        for (i, (&orig, &rt)) in input.iter().zip(roundtrip.iter()).enumerate() {
+            assert!(
+                (orig - rt).abs() < 1e-4,
+                "extended roundtrip failed at {}: {} -> {} -> {}",
+                i,
+                orig,
+                linear[i],
+                rt
+            );
+        }
+    }
+
+    #[test]
+    fn test_extended_slice() {
+        let Some(token) = get_token() else {
+            eprintln!("Skipping test: AVX2+FMA not available");
+            return;
+        };
+
+        // 11 values to test remainder handling (8 + 3 remainder)
+        let mut values = vec![-1.0, -0.5, -0.1, 0.0, 0.3, 0.5, 0.7, 1.0, 1.5, 2.0, 3.0];
+        let expected: Vec<f32> = values
+            .iter()
+            .map(|&v| crate::scalar::srgb_to_linear_extended(v))
+            .collect();
+
+        call_srgb_to_linear_extended_slice(token, &mut values);
+
+        for (i, (&got, &exp)) in values.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < 1e-5,
+                "extended slice mismatch at {}: got {}, expected {}",
+                i,
+                got,
+                exp
+            );
+        }
+
+        // Test linear_to_srgb_extended slice
+        let mut values = vec![-1.0, -0.5, -0.1, 0.0, 0.3, 0.5, 0.7, 1.0, 1.5, 2.0, 3.0];
+        let expected: Vec<f32> = values
+            .iter()
+            .map(|&v| crate::scalar::linear_to_srgb_extended(v))
+            .collect();
+
+        call_linear_to_srgb_extended_slice(token, &mut values);
+
+        for (i, (&got, &exp)) in values.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < 1e-5,
+                "extended slice mismatch at {}: got {}, expected {}",
+                i,
+                got,
+                exp
             );
         }
     }

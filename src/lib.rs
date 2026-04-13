@@ -151,16 +151,16 @@
 //! | All `default::*_slice`, `tokens::*`, `lut::*` | \[0, 1\] | Same-gamut batch processing |
 //! | [`default::srgb_to_linear`] | \[0, 1\] | Same-gamut single values |
 //! | [`default::linear_to_srgb`] | \[0, 1\] | Same-gamut single values |
-//! | [`precise::srgb_to_linear_extended`] | Unbounded | Cross-gamut, scRGB, HDR |
-//! | [`precise::linear_to_srgb_extended`] | Unbounded | Cross-gamut, scRGB, HDR |
+//! | [`precise::srgb_to_linear_extended`] | Unbounded | Cross-gamut, scRGB, HDR (scalar) |
+//! | [`precise::linear_to_srgb_extended`] | Unbounded | Cross-gamut, scRGB, HDR (scalar) |
+//! | [`default::srgb_to_linear_extended_slice`] | Unbounded | Cross-gamut, scRGB, HDR (SIMD batch) |
+//! | [`default::linear_to_srgb_extended_slice`] | Unbounded | Cross-gamut, scRGB, HDR (SIMD batch) |
 //! | All u8/u16 paths | \[0, 1\] | Final quantization (clamp inherent) |
 //!
-//! **No SIMD extended-range variants exist yet.** The fast polynomial
-//! approximation is fitted to \[0, 1\] and produces garbage outside that
-//! domain. Extended-range SIMD would use `pow` instead of the polynomial
-//! (~3× slower, still faster than scalar for `linear_to_srgb`). For batch
-//! extended-range conversion today, loop over the [`precise`] `_extended`
-//! functions.
+//! The `_extended_slice` functions use the fast SIMD polynomial for the
+//! common \[0, 1\] case and fix up out-of-range lanes with scalar `powf`.
+//! This is optimal when most pixels are in-gamut — only out-of-gamut
+//! lanes pay the `powf` cost.
 //!
 //! # Feature Flags
 //!

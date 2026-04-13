@@ -518,6 +518,85 @@ pub fn linear_to_srgb_rgba_slice(values: &mut [f32]) {
 }
 
 // ============================================================================
+// Extended-range sRGB ↔ Linear Slice Functions (no clamping)
+// ============================================================================
+
+// Extended-range: SIMD fast path + scalar fixup for out-of-range lanes.
+// No x16 or x4 tiers needed initially — only x8 (V3) and scalar.
+
+#[cfg(target_arch = "x86_64")]
+#[arcane]
+fn srgb_to_linear_extended_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
+    crate::tokens::x8::srgb_to_linear_extended_slice_v3(token, values);
+}
+
+fn srgb_to_linear_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+    for v in values.iter_mut() {
+        *v = crate::scalar::srgb_to_linear_extended(*v);
+    }
+}
+
+/// Convert sRGB f32 values to linear in-place without clamping (extended range).
+///
+/// Values in \[0, 1\] use the fast SIMD polynomial. Out-of-range values
+/// (negative or >1.0) are handled via scalar `powf` fixup per lane.
+///
+/// Use this for HDR content, cross-gamut conversion (P3 → sRGB), scRGB,
+/// and any pipeline where intermediate f32 values may be outside \[0, 1\].
+///
+/// For clamped conversion, use [`srgb_to_linear_slice`].
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::srgb_to_linear_extended_slice;
+///
+/// let mut values = vec![-0.1f32, 0.0, 0.5, 1.0, 1.5];
+/// srgb_to_linear_extended_slice(&mut values);
+/// assert!(values[0] < 0.0);  // negative preserved
+/// assert!(values[4] > 1.0);  // super-white preserved
+/// ```
+#[inline]
+pub fn srgb_to_linear_extended_slice(values: &mut [f32]) {
+    incant!(srgb_to_linear_extended_slice_tier(values), [v3, scalar])
+}
+
+#[cfg(target_arch = "x86_64")]
+#[arcane]
+fn linear_to_srgb_extended_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
+    crate::tokens::x8::linear_to_srgb_extended_slice_v3(token, values);
+}
+
+fn linear_to_srgb_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+    for v in values.iter_mut() {
+        *v = crate::scalar::linear_to_srgb_extended(*v);
+    }
+}
+
+/// Convert linear f32 values to sRGB in-place without clamping (extended range).
+///
+/// Values in \[0, 1\] use the fast SIMD polynomial. Out-of-range values
+/// (negative or >1.0) are handled via scalar `powf` fixup per lane.
+///
+/// Use this for HDR content, cross-gamut conversion (P3 → sRGB), scRGB,
+/// and any pipeline where intermediate f32 values may be outside \[0, 1\].
+///
+/// For clamped conversion, use [`linear_to_srgb_slice`].
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::linear_to_srgb_extended_slice;
+///
+/// let mut values = vec![-0.1f32, 0.0, 0.5, 1.0, 1.5];
+/// linear_to_srgb_extended_slice(&mut values);
+/// assert!(values[0] < 0.0);  // negative preserved
+/// assert!(values[4] > 1.0);  // super-white preserved
+/// ```
+#[inline]
+pub fn linear_to_srgb_extended_slice(values: &mut [f32]) {
+    incant!(linear_to_srgb_extended_slice_tier(values), [v3, scalar])
+}
+
+// ============================================================================
 // sRGB→Linear + Premultiply RGBA f32 (SIMD-fused single-pass)
 // ============================================================================
 
@@ -3035,5 +3114,95 @@ mod tests {
                 scalar_l2s
             );
         }
+    }
+
+    // ====================================================================
+    // Extended-range slice tests (dispatched via incant!)
+    // ====================================================================
+
+    #[test]
+    fn test_extended_slice_matches_scalar() {
+        let values: Vec<f32> = vec![
+            -2.0, -1.0, -0.5, -0.1, -0.01, 0.0, 0.01, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0, 1.01, 1.5, 2.0,
+            5.0, 10.0,
+        ];
+
+        // srgb_to_linear_extended
+        let mut simd_result = values.clone();
+        srgb_to_linear_extended_slice(&mut simd_result);
+        for (i, &v) in values.iter().enumerate() {
+            let scalar = crate::scalar::srgb_to_linear_extended(v);
+            assert!(
+                (simd_result[i] - scalar).abs() < 1e-5,
+                "srgb_to_linear_extended_slice mismatch at {i}: input={v}, got={}, expected={}",
+                simd_result[i],
+                scalar,
+            );
+        }
+
+        // linear_to_srgb_extended
+        let mut simd_result = values.clone();
+        linear_to_srgb_extended_slice(&mut simd_result);
+        for (i, &v) in values.iter().enumerate() {
+            let scalar = crate::scalar::linear_to_srgb_extended(v);
+            assert!(
+                (simd_result[i] - scalar).abs() < 1e-5,
+                "linear_to_srgb_extended_slice mismatch at {i}: input={v}, got={}, expected={}",
+                simd_result[i],
+                scalar,
+            );
+        }
+    }
+
+    #[test]
+    fn test_extended_slice_roundtrip() {
+        let original: Vec<f32> = vec![
+            -1.0, -0.5, -0.1, 0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0, 1.5, 2.0, 3.0,
+        ];
+        let mut values = original.clone();
+        srgb_to_linear_extended_slice(&mut values);
+        linear_to_srgb_extended_slice(&mut values);
+
+        for (i, (&orig, &rt)) in original.iter().zip(values.iter()).enumerate() {
+            assert!(
+                (orig - rt).abs() < 1e-4,
+                "extended roundtrip failed at {i}: {} -> {}",
+                orig,
+                rt,
+            );
+        }
+    }
+
+    #[test]
+    fn test_extended_slice_sign_and_magnitude() {
+        let mut values = vec![-0.5, -0.01, 0.0, 0.5, 1.0, 1.5, 3.0];
+        srgb_to_linear_extended_slice(&mut values);
+
+        assert!(
+            values[0] < 0.0,
+            "negative input must produce negative output"
+        );
+        assert!(
+            values[1] < 0.0,
+            "negative input must produce negative output"
+        );
+        assert_eq!(values[2], 0.0, "zero must stay zero");
+        assert!(values[5] > 1.0, "super-white input must produce > 1.0");
+        assert!(values[6] > 1.0, "super-white input must produce > 1.0");
+
+        let mut values = vec![-0.5, -0.01, 0.0, 0.5, 1.0, 1.5, 3.0];
+        linear_to_srgb_extended_slice(&mut values);
+
+        assert!(
+            values[0] < 0.0,
+            "negative input must produce negative output"
+        );
+        assert!(
+            values[1] < 0.0,
+            "negative input must produce negative output"
+        );
+        assert_eq!(values[2], 0.0, "zero must stay zero");
+        assert!(values[5] > 1.0, "super-white input must produce > 1.0");
+        assert!(values[6] > 1.0, "super-white input must produce > 1.0");
     }
 }
