@@ -790,19 +790,27 @@ fn clamping_behavior() {
 // Extended-range f64 references (unclamped)
 // ============================================================================
 
+/// Extended-range sRGB EOTF with sign preservation (CSS Color 4):
+/// `sign(v) * eotf(|v|)`.
 fn ref_s2l_ext(v: f64) -> f64 {
-    if v < GAM_THRESH {
+    let sign = v.signum();
+    let abs_v = v.abs();
+    if abs_v < GAM_THRESH {
         v / 12.92
     } else {
-        ((v + A) / A1).powf(2.4)
+        sign * ((abs_v + A) / A1).powf(2.4)
     }
 }
 
+/// Extended-range sRGB OETF with sign preservation (CSS Color 4):
+/// `sign(v) * oetf(|v|)`.
 fn ref_l2s_ext(v: f64) -> f64 {
-    if v < LIN_THRESH {
+    let sign = v.signum();
+    let abs_v = v.abs();
+    if abs_v < LIN_THRESH {
         v * 12.92
     } else {
-        A1 * v.powf(1.0 / 2.4) - A
+        sign * (A1 * abs_v.powf(1.0 / 2.4) - A)
     }
 }
 
@@ -885,7 +893,9 @@ fn next_f32_toward_zero_neg(v: f32) -> f32 {
 
 #[test]
 fn extended_s2l_negative_exhaustive() {
-    // Every f32 in [-1.0, -0.0)
+    // Every f32 in [-1.0, -0.0): sign-preserving abs+sign approach.
+    // Near zero: linear segment (v / 12.92, ~1 ULP).
+    // Beyond threshold: power curve (same accuracy as positive, ~6 ULP).
     let mut v = -1.0_f32;
     let mut max_ulp: u32 = 0;
     let mut worst_input = v;
@@ -904,15 +914,18 @@ fn extended_s2l_negative_exhaustive() {
     }
 
     eprintln!("s2l_extended [-1, 0): {count} values, max ULP = {max_ulp} at {worst_input}");
-    // Linear segment: v / 12.92 — single f32 division, expect ≤ 1 ULP
+    // Same accuracy as positive power segment (~6 ULP max)
     assert!(
-        max_ulp <= 1,
-        "s2l_extended negative max ULP {max_ulp} at {worst_input} exceeds 1"
+        max_ulp <= 7,
+        "s2l_extended negative max ULP {max_ulp} at {worst_input} exceeds 7"
     );
 }
 
 #[test]
 fn extended_l2s_negative_exhaustive() {
+    // Every f32 in [-1.0, -0.0): sign-preserving abs+sign approach.
+    // Near zero: linear segment (v * 12.92, ~1 ULP).
+    // Beyond threshold: power curve (same accuracy as positive, ~6 ULP).
     let mut v = -1.0_f32;
     let mut max_ulp: u32 = 0;
     let mut worst_input = v;
@@ -931,10 +944,10 @@ fn extended_l2s_negative_exhaustive() {
     }
 
     eprintln!("l2s_extended [-1, 0): {count} values, max ULP = {max_ulp} at {worst_input}");
-    // Linear segment: v * 12.92 — single f32 multiply, expect ≤ 1 ULP
+    // Same accuracy as positive power segment (~6 ULP max)
     assert!(
-        max_ulp <= 1,
-        "l2s_extended negative max ULP {max_ulp} at {worst_input} exceeds 1"
+        max_ulp <= 7,
+        "l2s_extended negative max ULP {max_ulp} at {worst_input} exceeds 7"
     );
 }
 
@@ -1026,12 +1039,13 @@ fn extended_roundtrip_negative() {
     }
 
     eprintln!("roundtrip s2l->l2s [-1, 0): {count} values, max ULP = {max_ulp} at {worst_input}");
-    // Both directions use the linear segment (multiply then divide).
+    // With abs+sign, negatives beyond the threshold use the power curve.
+    // Roundtrip error through powf is similar to the positive case (~20 ULP max).
     // Near zero, subnormal f32 values lose precision in the divide→multiply
     // chain, producing up to ~6 ULP error at the smallest subnormals.
     assert!(
-        max_ulp <= 6,
-        "negative roundtrip max ULP {max_ulp} at {worst_input} exceeds 6"
+        max_ulp <= 20,
+        "negative roundtrip max ULP {max_ulp} at {worst_input} exceeds 20"
     );
 }
 

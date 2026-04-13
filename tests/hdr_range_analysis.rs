@@ -297,9 +297,7 @@ fn step2_polynomial_extrapolation_error() {
     println!("{}", "-".repeat(80));
 
     // The L2S polynomial is evaluated on sqrt(linear), so test various linear values
-    let test_inputs_l2s: &[f64] = &[
-        0.0, 0.01, 0.1, 0.5, 1.0, 1.5, 2.0, 5.0, 10.0, 50.0, 100.0,
-    ];
+    let test_inputs_l2s: &[f64] = &[0.0, 0.01, 0.1, 0.5, 1.0, 1.5, 2.0, 5.0, 10.0, 50.0, 100.0];
 
     for &linear in test_inputs_l2s {
         let s = (linear as f32).sqrt();
@@ -383,11 +381,18 @@ fn step2_polynomial_denominator_zeros() {
         let sign = yq >= 0.0;
         if i > -2000 && sign != prev_sign {
             s2l_denom_sign_changes += 1;
-            println!("  S2L denom sign change near x={:.3}, Q(x)={:.6}", x as f64 / 1.0, yq);
+            println!(
+                "  S2L denom sign change near x={:.3}, Q(x)={:.6}",
+                x as f64 / 1.0,
+                yq
+            );
         }
         prev_sign = sign;
     }
-    println!("S2L denominator sign changes in [-2, 5]: {}", s2l_denom_sign_changes);
+    println!(
+        "S2L denominator sign changes in [-2, 5]: {}",
+        s2l_denom_sign_changes
+    );
 
     println!("\n=== Denominator behavior for L2S (linear→sRGB, input=sqrt(linear)) ===\n");
     let mut l2s_denom_sign_changes = 0;
