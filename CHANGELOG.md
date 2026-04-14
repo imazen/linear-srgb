@@ -1,5 +1,40 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **Base 4/4 scalar rational polynomial coefficients refit** via polyfit
+  (Sanathanan-Koerner + Levenberg-Marquardt with Nielsen damping, 8 restarts,
+  f32 ULP local search). Exhaustive sweep over all 1.07B f32 values in [0, 1]:
+  - `srgb_to_linear` fast: 11 → **8** ULP max (−27%)
+  - `linear_to_srgb` fast: 14 → **10** ULP max (−29%)
+  - `fast vs precise linear_to_srgb`: 16 → **12** ULP max (−25%)
+  - `fast vs precise srgb_to_linear`: 12 → 12 ULP max (unchanged)
+
+### Tradeoffs (honest)
+
+- **Roundtrip absolute error grew** in a narrow region: fwd 4.17e-7 → 6.56e-7
+  (+57%), inverse 1.01e-6 → 1.49e-6 (+47%). Still well under 1 u16 step (1.53e-5).
+  **No u16 roundtrip regression**: 0 values round-trip to a different u16,
+  same as before.
+- **L2S piecewise threshold gap widened** 1 → 3 ULP. Under the 4 ULP test
+  tolerance, but the margin is narrower.
+- **S2L piecewise threshold gap** unchanged at 1 ULP.
+- **30,273 of 65,536 u16 inputs** now produce different f32 linear values vs
+  the previous release. Any caller with baked test-vector hashes will see
+  failures. Maximum absolute change: 4.99e-7 (well below u16 LSB).
+- Average ULP went up (≤1 → ~3.2) because the peak error was reduced by
+  *spreading* residual error more uniformly. This is expected for a lower
+  max-ULP fit.
+
+### Added
+
+- Fitter script `scripts/fit_srgb_fast.py` committed with the inputs used
+  to produce the current coefficients (degrees, domain, weights, restarts).
+  Coefficients are reproducible from a clean checkout:
+  `python scripts/fit_srgb_fast.py`.
+
 ## 0.6.10
 
 Also published as 0.7.0 (unnecessarily bumped — no API was broken).
