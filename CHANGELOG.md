@@ -1,5 +1,16 @@
 # Changelog
 
+## Upcoming breaking changes
+
+- **`avx512` will be removed from default features in a future 0.x release.**
+  The AVX-512 code paths (16-wide f32, `tokens::x16`, `X64V4Token` dispatch)
+  add ~175ms to cold compile time. Most consumers don't benefit — the AVX2
+  (8-wide) path is already fast and available on far more hardware. If you use
+  `tokens::x16` or rely on AVX-512 dispatch, add `features = ["avx512"]`
+  explicitly to avoid breakage when the default changes. The `incant!` dispatch
+  in slice functions automatically falls through to the AVX2 tier when AVX-512
+  is not compiled in, so most users won't notice any difference.
+
 ## 0.6.5
 
 u16 LUT overhaul: zero binary bloat, sqrt-indexed encode, two-tier encode API.
