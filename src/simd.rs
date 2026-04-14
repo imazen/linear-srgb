@@ -563,8 +563,18 @@ fn srgb_to_linear_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [
 /// Pure SIMD polynomial on x86-64 (AVX2+FMA), AArch64 (NEON), and
 /// WebAssembly (SIMD128). Scalar `powf` fallback on other architectures.
 ///
-/// The polynomial extrapolates accurately for all standard gamut conversions
-/// (< 1e-3 error up to |encoded| = 1.59; worst gamut case is 1.50 from ACES AP0).
+/// # Polynomial accuracy beyond \[0, 1\]
+///
+/// The rational polynomial was fitted to \[0, 1\] but extrapolates well.
+/// Error vs exact `powf` grows with distance from the fitted domain:
+///
+/// | Precision | Max |encoded| for < 0.5 LSB error |
+/// |-----------|-------------------------------------|
+/// | u8 (8-bit) | 1.70 |
+/// | u16 (16-bit) | 1.10 |
+///
+/// All standard gamut conversions at SDR (linear 1.0) stay within u8-safe
+/// range: BT.2020 worst case is |encoded| = 1.22, ACES AP0 is 1.50.
 ///
 /// # Example
 /// ```
@@ -625,8 +635,18 @@ fn linear_to_srgb_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [
 /// Pure SIMD polynomial on x86-64 (AVX2+FMA), AArch64 (NEON), and
 /// WebAssembly (SIMD128). Scalar `powf` fallback on other architectures.
 ///
-/// The polynomial extrapolates accurately for all standard gamut conversions
-/// (< 1e-3 error up to |linear| = 4.33; worst gamut case is 2.52 from ACES AP0).
+/// # Polynomial accuracy beyond \[0, 1\]
+///
+/// The sqrt+rational polynomial was fitted to \[0, 1\] but extrapolates
+/// well (sqrt compresses the input range, improving stability):
+///
+/// | Precision | Max |linear| for < 0.5 LSB error |
+/// |-----------|--------------------------------------|
+/// | u8 (8-bit) | 5.52 |
+/// | u16 (16-bit) | 1.35 |
+///
+/// All standard gamut conversions at SDR (linear 1.0) stay within u16-safe
+/// range: BT.2020 worst case is |linear| = 1.61, ACES AP0 is 2.52 (u8-safe).
 ///
 /// # Example
 /// ```

@@ -1893,6 +1893,78 @@ fn eval_l2s_poly(lin: f64) -> f64 {
 }
 
 #[test]
+fn extended_polynomial_u8_u16_boundaries() {
+    // Verify the polynomial stays within 0.5 LSB for u8 and u16 channels
+    // up to the documented boundaries. Sweep with 0.0001 step.
+    let u8_half = 0.5 / 255.0;
+    let u16_half = 0.5 / 65535.0;
+
+    // S2L: u8-safe up to |encoded| = 1.70
+    let mut max_err = 0.0_f64;
+    for i in 0..=17000 {
+        let x = i as f64 / 10000.0;
+        let err = (eval_s2l_poly(x) - ref_s2l_ext(x)).abs();
+        max_err = max_err.max(err);
+    }
+    vprintln!("S2L max err in [0, 1.70]: {max_err:.6e} (u8 half = {u8_half:.6e})");
+    assert!(
+        max_err < u8_half,
+        "S2L exceeds u8 half-LSB ({max_err:.6e}) before |encoded| = 1.70"
+    );
+
+    // S2L: u16-safe up to |encoded| = 1.10
+    let mut max_err = 0.0_f64;
+    for i in 0..=11000 {
+        let x = i as f64 / 10000.0;
+        let err = (eval_s2l_poly(x) - ref_s2l_ext(x)).abs();
+        max_err = max_err.max(err);
+    }
+    vprintln!("S2L max err in [0, 1.10]: {max_err:.6e} (u16 half = {u16_half:.6e})");
+    assert!(
+        max_err < u16_half,
+        "S2L exceeds u16 half-LSB ({max_err:.6e}) before |encoded| = 1.10"
+    );
+
+    // L2S: u8-safe up to |linear| = 5.50
+    let mut max_err = 0.0_f64;
+    for i in 0..=55000 {
+        let x = i as f64 / 10000.0;
+        let err = (eval_l2s_poly(x) - ref_l2s_ext(x)).abs();
+        max_err = max_err.max(err);
+    }
+    vprintln!("L2S max err in [0, 5.50]: {max_err:.6e} (u8 half = {u8_half:.6e})");
+    assert!(
+        max_err < u8_half,
+        "L2S exceeds u8 half-LSB ({max_err:.6e}) before |linear| = 5.50"
+    );
+
+    // L2S: u16-safe up to |linear| = 1.34
+    let mut max_err = 0.0_f64;
+    for i in 0..=13400 {
+        let x = i as f64 / 10000.0;
+        let err = (eval_l2s_poly(x) - ref_l2s_ext(x)).abs();
+        max_err = max_err.max(err);
+    }
+    vprintln!("L2S max err in [0, 1.34]: {max_err:.6e} (u16 half = {u16_half:.6e})");
+    assert!(
+        max_err < u16_half,
+        "L2S exceeds u16 half-LSB ({max_err:.6e}) before |linear| = 1.34"
+    );
+
+    // Verify errors DO exceed thresholds beyond the boundaries (sanity check)
+    let s2l_err_at_2 = (eval_s2l_poly(2.0) - ref_s2l_ext(2.0)).abs();
+    assert!(
+        s2l_err_at_2 > u8_half,
+        "S2L should exceed u8 threshold at 2.0 but err = {s2l_err_at_2:.6e}"
+    );
+    let l2s_err_at_6 = (eval_l2s_poly(6.0) - ref_l2s_ext(6.0)).abs();
+    assert!(
+        l2s_err_at_6 > u8_half,
+        "L2S should exceed u8 threshold at 6.0 but err = {l2s_err_at_6:.6e}"
+    );
+}
+
+#[test]
 fn extended_denominator_safety() {
     // With abs+sign, the polynomial only sees non-negative inputs.
     // Verify Q(x) never approaches zero for x >= 0.
