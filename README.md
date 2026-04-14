@@ -275,10 +275,14 @@ Exhaustive f32 sweep (all ~1B values in [0, 1]) against f64 reference.
 | `default` l→s (4/4 scalar) | 14 | 0.4 | yes | [0, 1] |
 | `default` s→l (4/4 SIMD) | 6 | 0.09 | yes | [0, 1] |
 | `default` l→s (4/4 SIMD) | 3 | 0.10 | yes | [0, 1] |
-| `extended_slice` s→l (6/6 SIMD) | 8 | 0.12 | yes | [0, 8] |
-| `extended_slice` l→s (6/6 SIMD) | 8 | 0.17 | yes | [0, 64] |
+| `extended_slice` s→l (6/6 SIMD) | 8* | 0.12 | yes | [0, 8] |
+| `extended_slice` l→s (6/6 SIMD) | 8* | 0.17 | yes | [0, 64] |
 | `precise` s→l (powf) | 6 | 0.1 | yes | unbounded |
 | `precise` l→s (powf) | 3 | 0.1 | yes | unbounded |
+
+\*The 6/6 extended polynomials use larger coefficients to cover a wider domain,
+which costs ~2 ULP vs the clamped 4/4 in a narrow band near the piecewise
+threshold (0.04–0.05). Affects < 0.1% of values; avg ULP is comparable.
 
 **What does 14 ULP mean in practice?** 1 ULP (unit in the last place) is the
 spacing between adjacent f32 values at a given magnitude. At 0.5 that's ~6e-8,
