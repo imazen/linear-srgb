@@ -563,18 +563,30 @@ fn srgb_to_linear_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [
 /// Pure SIMD polynomial on x86-64 (AVX2+FMA), AArch64 (NEON), and
 /// WebAssembly (SIMD128). Scalar `powf` fallback on other architectures.
 ///
-/// # Polynomial accuracy beyond \[0, 1\]
+/// Designed for **SDR cross-gamut conversion** — converting between gamuts
+/// (P3→sRGB, BT.2020→sRGB, etc.) at SDR peak (linear 1.0). Out-of-gamut
+/// values from the 3×3 matrix survive the transfer function and can be
+/// gamut-mapped or composited downstream.
 ///
-/// The rational polynomial was fitted to \[0, 1\] but extrapolates well.
-/// Error vs exact `powf` grows with distance from the fitted domain:
+/// # Accuracy
 ///
-/// | Precision | Max |encoded| for < 0.5 LSB error |
-/// |-----------|-------------------------------------|
-/// | u8 (8-bit) | 1.70 |
-/// | u16 (16-bit) | 1.10 |
+/// The rational polynomial was fitted to \[0, 1\] and extrapolates with
+/// increasing error beyond that range. Headroom is limited — precision
+/// degrades notably past the fitted domain:
 ///
-/// All standard gamut conversions at SDR (linear 1.0) stay within u8-safe
-/// range: BT.2020 worst case is |encoded| = 1.22, ACES AP0 is 1.50.
+/// | Precision | Max |encoded| for < 0.5 LSB error | SDR worst case |
+/// |-----------|-------------------------------------|----------------|
+/// | u8 (8-bit) | 1.70 | ACES AP0: 1.50 |
+/// | u16 (16-bit) | 1.10 | Display P3: 1.09 |
+///
+/// Sufficient for all SDR gamut conversions at u8 depth. At u16 depth,
+/// Display P3 is at the boundary — saturated P3 green barely fits.
+/// BT.2020 (1.25) and wider gamuts exceed u16 precision.
+///
+/// **Not suitable for HDR.** BT.2020 at 1000 nits produces |encoded|
+/// up to 2.48, well past the u8 boundary. Use the scalar
+/// [`precise::srgb_to_linear_extended`](crate::precise::srgb_to_linear_extended)
+/// for HDR pipelines.
 ///
 /// # Example
 /// ```
@@ -635,18 +647,27 @@ fn linear_to_srgb_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [
 /// Pure SIMD polynomial on x86-64 (AVX2+FMA), AArch64 (NEON), and
 /// WebAssembly (SIMD128). Scalar `powf` fallback on other architectures.
 ///
-/// # Polynomial accuracy beyond \[0, 1\]
+/// Designed for **SDR cross-gamut conversion** — converting between gamuts
+/// (P3→sRGB, BT.2020→sRGB, etc.) at SDR peak (linear 1.0).
 ///
-/// The sqrt+rational polynomial was fitted to \[0, 1\] but extrapolates
-/// well (sqrt compresses the input range, improving stability):
+/// # Accuracy
 ///
-/// | Precision | Max |linear| for < 0.5 LSB error |
-/// |-----------|--------------------------------------|
-/// | u8 (8-bit) | 5.52 |
-/// | u16 (16-bit) | 1.35 |
+/// The sqrt+rational polynomial was fitted to \[0, 1\] and extrapolates
+/// better than the S2L direction (sqrt compresses the input range):
 ///
-/// All standard gamut conversions at SDR (linear 1.0) stay within u16-safe
-/// range: BT.2020 worst case is |linear| = 1.61, ACES AP0 is 2.52 (u8-safe).
+/// | Precision | Max |linear| for < 0.5 LSB error | SDR worst case |
+/// |-----------|--------------------------------------|----------------|
+/// | u8 (8-bit) | 5.52 | ACES AP0: 2.52 |
+/// | u16 (16-bit) | 1.35 | P3: 1.22, BT.2020: 1.66 |
+///
+/// Covers all SDR gamut conversions at u8 depth with headroom.
+/// At u16 depth, Display P3 (1.22) fits but BT.2020 (1.66) exceeds
+/// the precision boundary.
+///
+/// **Not suitable for HDR.** BT.2020 at 1000 nits produces |linear|
+/// up to 8.19, well past the u8 boundary. Use the scalar
+/// [`precise::linear_to_srgb_extended`](crate::precise::linear_to_srgb_extended)
+/// for HDR pipelines.
 ///
 /// # Example
 /// ```
