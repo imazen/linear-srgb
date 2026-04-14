@@ -580,7 +580,8 @@ fn srgb_to_linear_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [
 /// | u16 (16-bit) | ~4.2 | ~4× SDR |
 ///
 /// Covers all SDR cross-gamut conversions at u16 precision (ACES AP0
-/// worst case is 1.50). u16 boundary measured via SIMD FMA dispatch.
+/// worst case is 1.50). These values are pinned by the
+/// `extended_simd_doc_accuracy_claims` test — update both if coefficients change.
 ///
 /// # Example
 /// ```
@@ -648,7 +649,7 @@ fn linear_to_srgb_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [
 ///
 /// Uses a 6/6 rational polynomial fitted on √x to \[0, 64\]. The sqrt
 /// compression gives excellent extrapolation — u16-safe across the
-/// entire fitted domain (5 ULP max in \[0,1\]).
+/// entire fitted domain (8 ULP max in \[0,1\] via SIMD FMA).
 ///
 /// | Precision | Max |linear| for < 0.5 LSB error | Headroom |
 /// |-----------|--------------------------------------|----------|
@@ -656,7 +657,8 @@ fn linear_to_srgb_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [
 /// | u16 (16-bit) | 64.0 | 64× SDR |
 ///
 /// Covers all SDR cross-gamut conversions and all practical HDR
-/// scenarios at u16 precision.
+/// scenarios at u16 precision. These values are pinned by the
+/// `extended_simd_doc_accuracy_claims` test — update both if coefficients change.
 ///
 /// # Example
 /// ```

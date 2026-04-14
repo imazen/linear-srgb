@@ -1962,15 +1962,92 @@ fn extended_polynomial_u8_u16_boundaries() {
 }
 
 #[test]
-fn extended_simd_u16_boundary_via_dispatch() {
-    // Measure SIMD polynomial accuracy via the actual dispatched slice functions
-    // (which use FMA mul_add, not separate mul+add). This is the ground truth
-    // for the u16 boundary — f64 test helpers are optimistic.
+fn extended_simd_doc_accuracy_claims() {
+    // =====================================================================
+    // Ground truth for all doc/README accuracy claims about extended SIMD.
+    // Measured via actual dispatched SIMD path (f32 FMA), not fitter output.
+    //
+    // If this test fails after changing coefficients, update:
+    //   - README.md accuracy tables
+    //   - src/simd.rs doc comments on srgb_to_linear_extended_slice / linear_to_srgb_extended_slice
+    //   - src/tokens/x4.rs doc comments on srgb_to_linear_extended / linear_to_srgb_extended
+    //   - src/tokens/x8.rs doc comments on the extended rites
+    //   - src/rational_poly.rs doc comments on EXT_S2L_P / EXT_L2S_P
+    // =====================================================================
     use linear_srgb::default::{linear_to_srgb_extended_slice, srgb_to_linear_extended_slice};
 
     let u16_half = 0.5 / 65535.0_f32;
+    let u8_half = 0.5 / 255.0_f32;
 
-    // S2L: sweep [0, 8] in steps of 0.0001
+    // --- In-range ULP (exhaustive sweep of [0, 1] via SIMD dispatch) ---
+    // README claims: S2L max 8, avg 0.12 | L2S max 8, avg 0.17
+
+    let mut s2l_max_ulp = 0u32;
+    let mut l2s_max_ulp = 0u32;
+    let mut s2l_sum = 0u64;
+    let mut l2s_sum = 0u64;
+    let mut count = 0u64;
+    let mut v = 0.0f32;
+    while v <= 1.0 {
+        let mut s2l = [v, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        srgb_to_linear_extended_slice(&mut s2l);
+        let s2l_ref = precise_s2l_f64(v as f64) as f32;
+        let u = ulp_distance(s2l[0], s2l_ref);
+        s2l_max_ulp = s2l_max_ulp.max(u);
+        s2l_sum += u as u64;
+
+        let mut l2s = [v, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        linear_to_srgb_extended_slice(&mut l2s);
+        let l2s_ref = precise_l2s_f64(v as f64) as f32;
+        let u = ulp_distance(l2s[0], l2s_ref);
+        l2s_max_ulp = l2s_max_ulp.max(u);
+        l2s_sum += u as u64;
+
+        count += 1;
+        v = next_f32_above(v);
+    }
+    let s2l_avg = s2l_sum as f64 / count as f64;
+    let l2s_avg = l2s_sum as f64 / count as f64;
+
+    vprintln!("Extended SIMD [0,1] ({count} values):");
+    vprintln!("  S2L: max ULP = {s2l_max_ulp}, avg = {s2l_avg:.2}");
+    vprintln!("  L2S: max ULP = {l2s_max_ulp}, avg = {l2s_avg:.2}");
+
+    // Pin to documented values — update docs if these change
+    assert!(
+        s2l_max_ulp <= 8,
+        "S2L SIMD max ULP {s2l_max_ulp} > 8 (update README)"
+    );
+    assert!(
+        l2s_max_ulp <= 8,
+        "L2S SIMD max ULP {l2s_max_ulp} > 8 (update README)"
+    );
+    assert!(
+        s2l_avg < 0.2,
+        "S2L SIMD avg ULP {s2l_avg:.2} >= 0.2 (update README)"
+    );
+    assert!(
+        l2s_avg < 0.2,
+        "L2S SIMD avg ULP {l2s_avg:.2} >= 0.2 (update README)"
+    );
+
+    // --- Extended-range u8/u16 safe boundaries (via SIMD dispatch) ---
+    // README claims: S2L u8≤8 u16≤~4.2 | L2S u8≤64 u16≤64
+
+    // S2L u8 boundary
+    let mut s2l_u8_boundary = 8.0_f32;
+    for i in 0..=80000 {
+        let x = i as f32 / 10000.0;
+        let mut buf = [x, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        srgb_to_linear_extended_slice(&mut buf);
+        let exact = ref_s2l_ext(x as f64) as f32;
+        if (buf[0] - exact).abs() >= u8_half {
+            s2l_u8_boundary = x;
+            break;
+        }
+    }
+
+    // S2L u16 boundary
     let mut s2l_u16_boundary = 8.0_f32;
     for i in 0..=80000 {
         let x = i as f32 / 10000.0;
@@ -1983,7 +2060,20 @@ fn extended_simd_u16_boundary_via_dispatch() {
         }
     }
 
-    // L2S: sweep [0, 64] in steps of 0.001
+    // L2S u8 boundary
+    let mut l2s_u8_boundary = 64.0_f32;
+    for i in 0..=640000 {
+        let x = i as f32 / 10000.0;
+        let mut buf = [x, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        linear_to_srgb_extended_slice(&mut buf);
+        let exact = ref_l2s_ext(x as f64) as f32;
+        if (buf[0] - exact).abs() >= u8_half {
+            l2s_u8_boundary = x;
+            break;
+        }
+    }
+
+    // L2S u16 boundary
     let mut l2s_u16_boundary = 64.0_f32;
     for i in 0..=640000 {
         let x = i as f32 / 10000.0;
@@ -1996,18 +2086,26 @@ fn extended_simd_u16_boundary_via_dispatch() {
         }
     }
 
-    vprintln!("SIMD dispatch S2L u16 boundary: {s2l_u16_boundary:.4}");
-    vprintln!("SIMD dispatch L2S u16 boundary: {l2s_u16_boundary:.4}");
+    vprintln!("Extended SIMD safe boundaries:");
+    vprintln!("  S2L: u8≤{s2l_u8_boundary:.2}, u16≤{s2l_u16_boundary:.2}");
+    vprintln!("  L2S: u8≤{l2s_u8_boundary:.2}, u16≤{l2s_u16_boundary:.2}");
 
-    // S2L must cover at least ACES AP0 at SDR (|encoded| = 1.50)
+    // Pin to documented values — update docs if these change
     assert!(
-        s2l_u16_boundary >= 1.50,
-        "S2L SIMD u16 boundary {s2l_u16_boundary:.4} < 1.50"
+        s2l_u8_boundary >= 8.0,
+        "S2L u8 boundary {s2l_u8_boundary:.2} < 8.0 (update README/docs)"
     );
-    // L2S must cover at least ACES AP0 at SDR (|linear| = 2.52)
     assert!(
-        l2s_u16_boundary >= 2.52,
-        "L2S SIMD u16 boundary {l2s_u16_boundary:.4} < 2.52"
+        s2l_u16_boundary >= 4.0,
+        "S2L u16 boundary {s2l_u16_boundary:.2} < 4.0 (update README/docs)"
+    );
+    assert!(
+        l2s_u8_boundary >= 64.0,
+        "L2S u8 boundary {l2s_u8_boundary:.2} < 64.0 (update README/docs)"
+    );
+    assert!(
+        l2s_u16_boundary >= 64.0,
+        "L2S u16 boundary {l2s_u16_boundary:.2} < 64.0 (update README/docs)"
     );
 }
 
