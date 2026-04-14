@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.7.0
+
+### Breaking
+
+- **`srgb_to_linear_extended` / `linear_to_srgb_extended` now use sign-preserving
+  semantics** per CSS Color 4: `sign(v) * f(|v|)`. Previously, negatives passed
+  through the linear segment only, giving wrong results for out-of-gamut values
+  from 3×3 gamut matrix conversions (e.g., -0.5 mapped to -0.039 instead of
+  -0.214). The old behavior was a bug.
+
+### Added
+
+- **`srgb_to_linear_extended_slice` / `linear_to_srgb_extended_slice`** — SIMD
+  extended-range conversion for cross-gamut pipelines (P3→sRGB, BT.2020→sRGB).
+  Uses 6/6 rational polynomials fitted to wider domains via abs+sign, dispatching
+  to AVX2+FMA (8-wide), NEON (4-wide), WASM SIMD128 (4-wide), or scalar.
+
+- **6/6 extended-range polynomial coefficients** in `rational_poly.rs`:
+  - S2L fitted to [0, 8]: 8 ULP max in [0,1] via SIMD FMA, u8-safe to 8×, u16-safe to ~4.2×
+  - L2S fitted on √x to [0, 64]: 8 ULP max in [0,1], u16-safe across full domain
+
+- Token rites: `srgb_to_linear_extended_v3` / `linear_to_srgb_extended_v3` in
+  `tokens::x4` (via `#[magetypes]` generics) and `tokens::x8`.
+
+- `extended_simd_doc_accuracy_claims` test: exhaustive ~1B-value sweep via SIMD
+  dispatch, pinning all README/doc accuracy claims to measured values.
+
+### Changed
+
+- `archmage` / `magetypes` updated to 0.9.19.
+
+### Dependencies
+
+- `archmage`: 0.9.15 → 0.9.19
+- `magetypes`: 0.9.15 → 0.9.19
+
 ## 0.6.9
 
 No public API changes.
