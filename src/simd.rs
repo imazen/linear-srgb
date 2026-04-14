@@ -570,23 +570,17 @@ fn srgb_to_linear_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [
 ///
 /// # Accuracy
 ///
-/// The rational polynomial was fitted to \[0, 1\] and extrapolates with
-/// increasing error beyond that range. Headroom is limited — precision
-/// degrades notably past the fitted domain:
+/// Uses a 6/6 rational polynomial fitted to \[0, 8\] — wider domain
+/// than the clamped path's 4/4 polynomial, with comparable in-range
+/// accuracy (5 ULP max in \[0,1\] vs 11 for clamped).
 ///
-/// | Precision | Max |encoded| for < 0.5 LSB error | SDR worst case |
-/// |-----------|-------------------------------------|----------------|
-/// | u8 (8-bit) | 1.70 | ACES AP0: 1.50 |
-/// | u16 (16-bit) | 1.10 | Display P3: 1.09 |
+/// | Precision | Max |encoded| for < 0.5 LSB error | Headroom |
+/// |-----------|-------------------------------------|----------|
+/// | u8 (8-bit) | 8.0 | 8× SDR |
+/// | u16 (16-bit) | 6.0 | 6× SDR |
 ///
-/// Sufficient for all SDR gamut conversions at u8 depth. At u16 depth,
-/// Display P3 is at the boundary — saturated P3 green barely fits.
-/// BT.2020 (1.25) and wider gamuts exceed u16 precision.
-///
-/// **Not suitable for HDR.** BT.2020 at 1000 nits produces |encoded|
-/// up to 2.48, well past the u8 boundary. Use the scalar
-/// [`precise::srgb_to_linear_extended`](crate::precise::srgb_to_linear_extended)
-/// for HDR pipelines.
+/// Covers all SDR cross-gamut conversions at u16 precision, plus
+/// moderate HDR (up to ~1200 nits for BT.2020 at u16).
 ///
 /// # Example
 /// ```
@@ -652,22 +646,17 @@ fn linear_to_srgb_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [
 ///
 /// # Accuracy
 ///
-/// The sqrt+rational polynomial was fitted to \[0, 1\] and extrapolates
-/// better than the S2L direction (sqrt compresses the input range):
+/// Uses a 6/6 rational polynomial fitted on √x to \[0, 64\]. The sqrt
+/// compression gives excellent extrapolation — u16-safe across the
+/// entire fitted domain (9 ULP max in \[0,1\]).
 ///
-/// | Precision | Max |linear| for < 0.5 LSB error | SDR worst case |
-/// |-----------|--------------------------------------|----------------|
-/// | u8 (8-bit) | 5.52 | ACES AP0: 2.52 |
-/// | u16 (16-bit) | 1.35 | P3: 1.22, BT.2020: 1.66 |
+/// | Precision | Max |linear| for < 0.5 LSB error | Headroom |
+/// |-----------|--------------------------------------|----------|
+/// | u8 (8-bit) | 64.0 | 64× SDR |
+/// | u16 (16-bit) | 64.0 | 64× SDR |
 ///
-/// Covers all SDR gamut conversions at u8 depth with headroom.
-/// At u16 depth, Display P3 (1.22) fits but BT.2020 (1.66) exceeds
-/// the precision boundary.
-///
-/// **Not suitable for HDR.** BT.2020 at 1000 nits produces |linear|
-/// up to 8.19, well past the u8 boundary. Use the scalar
-/// [`precise::linear_to_srgb_extended`](crate::precise::linear_to_srgb_extended)
-/// for HDR pipelines.
+/// Covers all SDR cross-gamut conversions and all practical HDR
+/// scenarios at u16 precision.
 ///
 /// # Example
 /// ```

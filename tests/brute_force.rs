@@ -1799,25 +1799,21 @@ fn extended_polynomial_range_analysis() {
     //   BT.2020:  |encoded| = 1.22, |linear| = 1.61
     //   All within polynomial validity range.
 
-    // S2L: find where error crosses 1e-3
-    let mut s2l_1e3_boundary = 0.0_f64;
-    for i in (GAM_THRESH * 10000.0) as i64..30000 {
+    // S2L 6/6: find where error crosses 1e-3 (search up to 10.0)
+    let mut s2l_1e3_boundary = 10.0_f64; // default: never crossed
+    for i in (GAM_THRESH * 10000.0) as i64..100000 {
         let x = i as f64 / 10000.0;
-        let poly = eval_s2l_poly(x);
-        let exact = ref_s2l_ext(x);
-        if (poly - exact).abs() >= 1e-3 {
+        if (eval_s2l_poly(x) - ref_s2l_ext(x)).abs() >= 1e-3 {
             s2l_1e3_boundary = x;
             break;
         }
     }
 
-    // L2S: find where error crosses 1e-3
-    let mut l2s_1e3_boundary = 0.0_f64;
-    for i in (LIN_THRESH * 10000.0) as i64..100000 {
+    // L2S 6/6: find where error crosses 1e-3 (search up to 100.0)
+    let mut l2s_1e3_boundary = 100.0_f64;
+    for i in (LIN_THRESH * 10000.0) as i64..1000000 {
         let lin = i as f64 / 10000.0;
-        let poly = eval_l2s_poly(lin);
-        let exact = ref_l2s_ext(lin);
-        if (poly - exact).abs() >= 1e-3 {
+        if (eval_l2s_poly(lin) - ref_l2s_ext(lin)).abs() >= 1e-3 {
             l2s_1e3_boundary = lin;
             break;
         }
@@ -1826,70 +1822,82 @@ fn extended_polynomial_range_analysis() {
     vprintln!("S2L polynomial 1e-3 boundary: encoded = {s2l_1e3_boundary:.4}");
     vprintln!("L2S polynomial 1e-3 boundary: linear = {l2s_1e3_boundary:.4}");
 
-    // Assert the boundaries are at least as far as the worst gamut case
+    // 6/6 polynomials should stay within 1e-3 well past any SDR gamut
     assert!(
-        s2l_1e3_boundary >= 1.50,
-        "S2L 1e-3 boundary {s2l_1e3_boundary:.4} < 1.50 (ACES AP0 worst case)"
+        s2l_1e3_boundary >= 6.0,
+        "S2L 1e-3 boundary {s2l_1e3_boundary:.4} < 6.0"
     );
     assert!(
-        l2s_1e3_boundary >= 2.52,
-        "L2S 1e-3 boundary {l2s_1e3_boundary:.4} < 2.52 (ACES AP0 worst case)"
+        l2s_1e3_boundary >= 50.0,
+        "L2S 1e-3 boundary {l2s_1e3_boundary:.4} < 50.0"
     );
 }
 
 /// Evaluate S2L rational polynomial in f64 (same coefficients as the SIMD path).
-fn eval_s2l_poly(x: f64) -> f64 {
-    let p: [f64; 5] = [
-        1.724_942_4e-2,
-        8.335_514_7e-1,
-        1.326_215_8e1,
-        7.033_073_4e1,
-        8.387_046e1,
-    ];
-    let q: [f64; 5] = [2.066_183e1, 9.917_607e1, 5.466_011e1, -7.183_806, 1.0];
+fn horner7(x: f64, c: &[f64; 7]) -> f64 {
+    let y = c[6].mul_add(x, c[5]);
+    let y = y.mul_add(x, c[4]);
+    let y = y.mul_add(x, c[3]);
+    let y = y.mul_add(x, c[2]);
+    let y = y.mul_add(x, c[1]);
+    y.mul_add(x, c[0])
+}
 
+/// Evaluate extended S2L 6/6 rational polynomial in f64 (matches SIMD coefficients).
+fn eval_s2l_poly(x: f64) -> f64 {
+    #[allow(clippy::excessive_precision)]
+    let p: [f64; 7] = [
+        1.802_136_5e1,
+        9.110_411_4e2,
+        1.570_602_1e4,
+        1.020_638_2e5,
+        2.199_931_2e5,
+        1.338_269_2e5,
+        1.706_519_4e4,
+    ];
+    #[allow(clippy::excessive_precision)]
+    let q: [f64; 7] = [
+        2.159_401_7e4,
+        1.508_555_1e5,
+        2.303_299_0e5,
+        8.239_410_8e4,
+        4.473_249_1e3,
+        -6.359_000_1e1,
+        1.0,
+    ];
     if x <= GAM_THRESH {
         return x / 12.92;
     }
-    let yp = p[4].mul_add(x, p[3]);
-    let yp = yp.mul_add(x, p[2]);
-    let yp = yp.mul_add(x, p[1]);
-    let yp = yp.mul_add(x, p[0]);
-
-    let yq = q[4].mul_add(x, q[3]);
-    let yq = yq.mul_add(x, q[2]);
-    let yq = yq.mul_add(x, q[1]);
-    let yq = yq.mul_add(x, q[0]);
-
-    yp / yq
+    horner7(x, &p) / horner7(x, &q)
 }
 
-/// Evaluate L2S rational polynomial in f64 (same coefficients as the SIMD path).
+/// Evaluate extended L2S 6/6 rational polynomial in f64 (matches SIMD coefficients).
 fn eval_l2s_poly(lin: f64) -> f64 {
-    let p = [
-        -1.513_885e-2_f64,
-        1.167_372_8e-1,
-        1.257_921_2e1,
-        5.259_309_8e1,
-        2.852_907_6e1,
+    #[allow(clippy::excessive_precision)]
+    let p: [f64; 7] = [
+        -1.780_184_6,
+        5.030_732_0,
+        1.656_664_9e3,
+        1.017_330_6e4,
+        1.298_072_5e4,
+        3.771_270_8e3,
+        1.888_817_8e2,
     ];
-    let q: [f64; 5] = [2.943_901_4e-1, 9.779_103, 4.726_487_7e1, 3.546_463_8e1, 1.0];
-
+    #[allow(clippy::excessive_precision)]
+    let q: [f64; 7] = [
+        3.446_206_7e1,
+        1.327_327_9e3,
+        8.730_898_7e3,
+        1.340_767_0e4,
+        4.928_503_9e3,
+        3.442_401_8e2,
+        1.0,
+    ];
     if lin <= LIN_THRESH {
         return lin * 12.92;
     }
     let x = lin.sqrt();
-    let yp = p[4].mul_add(x, p[3]);
-    let yp = yp.mul_add(x, p[2]);
-    let yp = yp.mul_add(x, p[1]);
-    let yp = yp.mul_add(x, p[0]);
-
-    let yq = q[4].mul_add(x, q[3]);
-    let yq = yq.mul_add(x, q[2]);
-    let yq = yq.mul_add(x, q[1]);
-    let yq = yq.mul_add(x, q[0]);
-
-    yp / yq
+    horner7(x, &p) / horner7(x, &q)
 }
 
 #[test]
@@ -1899,68 +1907,56 @@ fn extended_polynomial_u8_u16_boundaries() {
     let u8_half = 0.5 / 255.0;
     let u16_half = 0.5 / 65535.0;
 
-    // S2L: u8-safe up to |encoded| = 1.70
+    // S2L 6/6 [0,8]: u8-safe to |encoded| ≤ 8.0
     let mut max_err = 0.0_f64;
-    for i in 0..=17000 {
+    for i in 0..=80000 {
         let x = i as f64 / 10000.0;
         let err = (eval_s2l_poly(x) - ref_s2l_ext(x)).abs();
         max_err = max_err.max(err);
     }
-    vprintln!("S2L max err in [0, 1.70]: {max_err:.6e} (u8 half = {u8_half:.6e})");
+    vprintln!("S2L max err in [0, 8.0]: {max_err:.6e} (u8 half = {u8_half:.6e})");
     assert!(
         max_err < u8_half,
-        "S2L exceeds u8 half-LSB ({max_err:.6e}) before |encoded| = 1.70"
+        "S2L exceeds u8 half-LSB ({max_err:.6e}) in [0, 8.0]"
     );
 
-    // S2L: u16-safe up to |encoded| = 1.10
+    // S2L 6/6 [0,8]: u16-safe to |encoded| ≤ 6.0
     let mut max_err = 0.0_f64;
-    for i in 0..=11000 {
+    for i in 0..=60000 {
         let x = i as f64 / 10000.0;
         let err = (eval_s2l_poly(x) - ref_s2l_ext(x)).abs();
         max_err = max_err.max(err);
     }
-    vprintln!("S2L max err in [0, 1.10]: {max_err:.6e} (u16 half = {u16_half:.6e})");
+    vprintln!("S2L max err in [0, 6.0]: {max_err:.6e} (u16 half = {u16_half:.6e})");
     assert!(
         max_err < u16_half,
-        "S2L exceeds u16 half-LSB ({max_err:.6e}) before |encoded| = 1.10"
+        "S2L exceeds u16 half-LSB ({max_err:.6e}) in [0, 6.0]"
     );
 
-    // L2S: u8-safe up to |linear| = 5.50
+    // L2S 6/6 [0,64]: u8-safe across full domain
     let mut max_err = 0.0_f64;
-    for i in 0..=55000 {
+    for i in 0..=640000 {
         let x = i as f64 / 10000.0;
         let err = (eval_l2s_poly(x) - ref_l2s_ext(x)).abs();
         max_err = max_err.max(err);
     }
-    vprintln!("L2S max err in [0, 5.50]: {max_err:.6e} (u8 half = {u8_half:.6e})");
+    vprintln!("L2S max err in [0, 64]: {max_err:.6e} (u8 half = {u8_half:.6e})");
     assert!(
         max_err < u8_half,
-        "L2S exceeds u8 half-LSB ({max_err:.6e}) before |linear| = 5.50"
+        "L2S exceeds u8 half-LSB ({max_err:.6e}) in [0, 64]"
     );
 
-    // L2S: u16-safe up to |linear| = 1.34
+    // L2S 6/6 [0,64]: u16-safe across full domain
     let mut max_err = 0.0_f64;
-    for i in 0..=13400 {
+    for i in 0..=640000 {
         let x = i as f64 / 10000.0;
         let err = (eval_l2s_poly(x) - ref_l2s_ext(x)).abs();
         max_err = max_err.max(err);
     }
-    vprintln!("L2S max err in [0, 1.34]: {max_err:.6e} (u16 half = {u16_half:.6e})");
+    vprintln!("L2S max err in [0, 64]: {max_err:.6e} (u16 half = {u16_half:.6e})");
     assert!(
         max_err < u16_half,
-        "L2S exceeds u16 half-LSB ({max_err:.6e}) before |linear| = 1.34"
-    );
-
-    // Verify errors DO exceed thresholds beyond the boundaries (sanity check)
-    let s2l_err_at_2 = (eval_s2l_poly(2.0) - ref_s2l_ext(2.0)).abs();
-    assert!(
-        s2l_err_at_2 > u8_half,
-        "S2L should exceed u8 threshold at 2.0 but err = {s2l_err_at_2:.6e}"
-    );
-    let l2s_err_at_6 = (eval_l2s_poly(6.0) - ref_l2s_ext(6.0)).abs();
-    assert!(
-        l2s_err_at_6 > u8_half,
-        "L2S should exceed u8 threshold at 6.0 but err = {l2s_err_at_6:.6e}"
+        "L2S exceeds u16 half-LSB ({max_err:.6e}) in [0, 64]"
     );
 }
 

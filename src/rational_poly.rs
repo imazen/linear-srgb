@@ -58,6 +58,60 @@ pub(crate) const L2S_P: [f32; 5] = [
 pub(crate) const L2S_Q: [f32; 5] = [2.943_901_4e-1, 9.779_103, 4.726_487_7e1, 3.546_463_8e1, 1.0];
 
 // =============================================================================
+// Extended-range 6/6 coefficients — fitted to wider domains for abs+sign path
+// =============================================================================
+
+/// Extended sRGB EOTF numerator (degree 6, fitted to [threshold, 8]).
+/// 5 ULP max in [0,1], u16-safe to |encoded| ≤ 6.18, u8-safe to 8.0.
+#[allow(clippy::excessive_precision)]
+pub(crate) const EXT_S2L_P: [f32; 7] = [
+    1.802_136_5e1,
+    9.110_411_4e2,
+    1.570_602_1e4,
+    1.020_638_2e5,
+    2.199_931_2e5,
+    1.338_269_2e5,
+    1.706_519_4e4,
+];
+
+/// Extended sRGB EOTF denominator (degree 6, fitted to [threshold, 8]).
+#[allow(clippy::excessive_precision)]
+pub(crate) const EXT_S2L_Q: [f32; 7] = [
+    2.159_401_7e4,
+    1.508_555_1e5,
+    2.303_299_0e5,
+    8.239_410_8e4,
+    4.473_249_1e3,
+    -6.359_000_1e1,
+    1.0,
+];
+
+/// Extended sRGB inverse EOTF numerator (degree 6, fitted on sqrt to [threshold, 64]).
+/// 9 ULP max in [0,1], u16-safe across full [0, 64] domain.
+#[allow(clippy::excessive_precision)]
+pub(crate) const EXT_L2S_P: [f32; 7] = [
+    -1.780_184_6,
+    5.030_732_0,
+    1.656_664_9e3,
+    1.017_330_6e4,
+    1.298_072_5e4,
+    3.771_270_8e3,
+    1.888_817_8e2,
+];
+
+/// Extended sRGB inverse EOTF denominator (degree 6, fitted on sqrt to [threshold, 64]).
+#[allow(clippy::excessive_precision)]
+pub(crate) const EXT_L2S_Q: [f32; 7] = [
+    3.446_206_7e1,
+    1.327_327_9e3,
+    8.730_898_7e3,
+    1.340_767_0e4,
+    4.928_503_9e3,
+    3.442_401_8e2,
+    1.0,
+];
+
+// =============================================================================
 // C0-continuous thresholds (moxcms) — exact continuity at the piecewise join
 // =============================================================================
 

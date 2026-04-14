@@ -88,11 +88,12 @@ pub fn linear_to_srgb_v3(token: X64V3Token, linear: [f32; 8]) -> [f32; 8] {
 
 /// Convert 8 sRGB values to linear without clamping (extended range).
 ///
-/// Uses abs+sign: evaluates the polynomial on `|v|`, restores sign.
+/// Uses abs+sign with a 6/6 rational polynomial fitted to \[0, 8\].
+/// 5 ULP max in \[0,1\], u16-safe to |encoded| ≤ 6.18, u8-safe to 8.0.
 /// Pure SIMD — no per-lane branching or scalar fallback.
 #[rite]
 pub fn srgb_to_linear_extended_v3(token: X64V3Token, srgb: [f32; 8]) -> [f32; 8] {
-    use crate::rational_poly::{S2L_P, S2L_Q};
+    use crate::rational_poly::{EXT_S2L_P as P, EXT_S2L_Q as Q};
 
     let zero = mt_f32x8::zero(token);
     let v = mt_f32x8::from_array(token, srgb);
@@ -102,15 +103,19 @@ pub fn srgb_to_linear_extended_v3(token: X64V3Token, srgb: [f32; 8]) -> [f32; 8]
     let linear_result = abs_v * mt_f32x8::splat(token, LINEAR_SCALE);
 
     let x = abs_v;
-    let yp = mt_f32x8::splat(token, S2L_P[4]).mul_add(x, mt_f32x8::splat(token, S2L_P[3]));
-    let yp = yp.mul_add(x, mt_f32x8::splat(token, S2L_P[2]));
-    let yp = yp.mul_add(x, mt_f32x8::splat(token, S2L_P[1]));
-    let yp = yp.mul_add(x, mt_f32x8::splat(token, S2L_P[0]));
+    let yp = mt_f32x8::splat(token, P[6]).mul_add(x, mt_f32x8::splat(token, P[5]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[4]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[3]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[2]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[1]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[0]));
 
-    let yq = mt_f32x8::splat(token, S2L_Q[4]).mul_add(x, mt_f32x8::splat(token, S2L_Q[3]));
-    let yq = yq.mul_add(x, mt_f32x8::splat(token, S2L_Q[2]));
-    let yq = yq.mul_add(x, mt_f32x8::splat(token, S2L_Q[1]));
-    let yq = yq.mul_add(x, mt_f32x8::splat(token, S2L_Q[0]));
+    let yq = mt_f32x8::splat(token, Q[6]).mul_add(x, mt_f32x8::splat(token, Q[5]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[4]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[3]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[2]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[1]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[0]));
 
     let power_result = yp / yq;
 
@@ -122,11 +127,12 @@ pub fn srgb_to_linear_extended_v3(token: X64V3Token, srgb: [f32; 8]) -> [f32; 8]
 
 /// Convert 8 linear values to sRGB without clamping (extended range).
 ///
-/// Uses abs+sign: evaluates sqrt+polynomial on `|v|`, restores sign.
+/// Uses abs+sign with a 6/6 rational polynomial fitted on √x to \[0, 64\].
+/// 9 ULP max in \[0,1\], u16-safe across the full \[0, 64\] domain.
 /// Pure SIMD — no per-lane branching or scalar fallback.
 #[rite]
 pub fn linear_to_srgb_extended_v3(token: X64V3Token, linear: [f32; 8]) -> [f32; 8] {
-    use crate::rational_poly::{L2S_P, L2S_Q};
+    use crate::rational_poly::{EXT_L2S_P as P, EXT_L2S_Q as Q};
 
     let zero = mt_f32x8::zero(token);
     let v = mt_f32x8::from_array(token, linear);
@@ -136,15 +142,19 @@ pub fn linear_to_srgb_extended_v3(token: X64V3Token, linear: [f32; 8]) -> [f32; 
     let linear_result = abs_v * mt_f32x8::splat(token, TWELVE_92);
 
     let x = abs_v.sqrt();
-    let yp = mt_f32x8::splat(token, L2S_P[4]).mul_add(x, mt_f32x8::splat(token, L2S_P[3]));
-    let yp = yp.mul_add(x, mt_f32x8::splat(token, L2S_P[2]));
-    let yp = yp.mul_add(x, mt_f32x8::splat(token, L2S_P[1]));
-    let yp = yp.mul_add(x, mt_f32x8::splat(token, L2S_P[0]));
+    let yp = mt_f32x8::splat(token, P[6]).mul_add(x, mt_f32x8::splat(token, P[5]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[4]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[3]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[2]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[1]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[0]));
 
-    let yq = mt_f32x8::splat(token, L2S_Q[4]).mul_add(x, mt_f32x8::splat(token, L2S_Q[3]));
-    let yq = yq.mul_add(x, mt_f32x8::splat(token, L2S_Q[2]));
-    let yq = yq.mul_add(x, mt_f32x8::splat(token, L2S_Q[1]));
-    let yq = yq.mul_add(x, mt_f32x8::splat(token, L2S_Q[0]));
+    let yq = mt_f32x8::splat(token, Q[6]).mul_add(x, mt_f32x8::splat(token, Q[5]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[4]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[3]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[2]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[1]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[0]));
 
     let power_result = yp / yq;
 
