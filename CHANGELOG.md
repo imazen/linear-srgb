@@ -1,8 +1,10 @@
 # Changelog
 
-## 0.7.0
+## 0.6.10
 
-### Breaking
+Also published as 0.7.0 (unnecessarily bumped — no API was broken).
+
+### Fixed
 
 - **`srgb_to_linear_extended` / `linear_to_srgb_extended` now use sign-preserving
   semantics** per CSS Color 4: `sign(v) * f(|v|)`. Previously, negatives passed
