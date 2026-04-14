@@ -1563,3 +1563,73 @@ fn lut_table_10bit() {
         "10-bit LUT[512] = {val}, precise = {precise}"
     );
 }
+
+// ============================================================================
+// Binary blob verification: regenerate tables at runtime and compare bit-exact
+// ============================================================================
+
+#[test]
+fn binary_blob_linear_table_8_matches_runtime() {
+    use linear_srgb::lut::LinearizationTable;
+
+    let runtime = LinearizationTable::<256>::new();
+    let conv = linear_srgb::lut::SrgbConverter::new();
+
+    for i in 0..256 {
+        let blob_val = conv.srgb_u8_to_linear(i as u8);
+        let runtime_val = runtime.lookup(i);
+        assert_eq!(
+            blob_val.to_bits(),
+            runtime_val.to_bits(),
+            "LINEAR_TABLE_8[{i}]: blob={blob_val:e} runtime={runtime_val:e}"
+        );
+    }
+}
+
+#[test]
+fn binary_blob_encode_table_12_matches_runtime() {
+    use linear_srgb::lut::{EncodingTable, SrgbConverter};
+
+    let runtime = EncodingTable::<4096>::new();
+    let conv = SrgbConverter::new();
+
+    for i in 0..4096 {
+        let linear = i as f32 / 4095.0;
+        let blob_val = conv.linear_to_srgb(linear);
+        // The SrgbConverter uses lut_interp_linear_float which interpolates,
+        // so compare the raw table entries directly via the runtime table.
+        let runtime_val = runtime.lookup(i);
+
+        // The blob stores the same values that EncodingTable::new() computes.
+        // We can't access the blob table directly from here, so verify via
+        // the interpolation-free lookup at exact table indices.
+        // At exact indices (linear = i/4095), interpolation weight is 0 or 1,
+        // so the converter should return the exact table entry.
+        assert_eq!(
+            blob_val.to_bits(),
+            runtime_val.to_bits(),
+            "ENCODE_TABLE_12[{i}]: blob={blob_val:e} runtime={runtime_val:e}"
+        );
+    }
+}
+
+#[test]
+fn binary_blob_linear_to_srgb_u8_matches_runtime() {
+    // Regenerate the u8 LUT from scratch: for each 12-bit index, compute
+    // linear_to_srgb_f64(i/4095) and round to u8.
+    let runtime_u8: Vec<u8> = (0..4096)
+        .map(|i| {
+            let linear = i as f64 / 4095.0;
+            let srgb = precise_l2s_f64(linear);
+            (srgb * 255.0 + 0.5).floor() as u8
+        })
+        .collect();
+
+    for i in 0..4096 {
+        let blob_val = linear_srgb::default::linear_to_srgb_u8(i as f32 / 4095.0);
+        assert_eq!(
+            blob_val, runtime_u8[i],
+            "LINEAR_TO_SRGB_U8[{i}]: blob={blob_val} runtime={}", runtime_u8[i]
+        );
+    }
+}
