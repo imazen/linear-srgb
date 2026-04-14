@@ -206,7 +206,7 @@ pub fn linear_to_srgb_extended(linear: f32) -> f32 {
 #[inline]
 pub fn linear_to_srgb_u8(linear: f32) -> u8 {
     let idx = (linear.clamp(0.0, 1.0) * 4095.0 + 0.5) as usize & 0xFFF;
-    crate::const_luts::LINEAR_TO_SRGB_U8[idx]
+    crate::const_luts::linear_to_srgb_u8()[idx]
 }
 
 // ============================================================================

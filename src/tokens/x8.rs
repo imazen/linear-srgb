@@ -124,7 +124,7 @@ pub fn linear_to_gamma_v3(token: X64V3Token, linear: [f32; 8], gamma: f32) -> [f
 /// Call from inside an `#[arcane]` function for zero-overhead inlining.
 #[rite]
 pub fn srgb_u8_to_linear_v3(_token: X64V3Token, srgb: [u8; 8]) -> [f32; 8] {
-    let lut = &crate::const_luts::LINEAR_TABLE_8;
+    let lut = crate::const_luts::linear_table_8();
     [
         lut[srgb[0] as usize],
         lut[srgb[1] as usize],
@@ -143,7 +143,7 @@ pub fn srgb_u8_to_linear_v3(_token: X64V3Token, srgb: [u8; 8]) -> [f32; 8] {
 #[rite]
 pub fn srgb_u8_to_linear_slice_v3(_token: X64V3Token, input: &[u8], output: &mut [f32]) {
     assert_eq!(input.len(), output.len());
-    let lut = &crate::const_luts::LINEAR_TABLE_8;
+    let lut = crate::const_luts::linear_table_8();
     let (in_chunks, in_remainder) = input.as_chunks::<8>();
     let (out_chunks, out_remainder) = output.as_chunks_mut::<8>();
 
@@ -180,7 +180,7 @@ pub fn linear_to_srgb_u8_v3(token: X64V3Token, linear: [f32; 8]) -> [u8; 8] {
     let linear = mt_f32x8::from_array(token, linear).max(zero).min(one);
     let scaled = linear * mt_f32x8::splat(token, 4095.0) + mt_f32x8::splat(token, 0.5);
     let arr = scaled.to_array();
-    let lut = &crate::const_luts::LINEAR_TO_SRGB_U8;
+    let lut = crate::const_luts::linear_to_srgb_u8();
     [
         lut[arr[0] as usize & 0xFFF],
         lut[arr[1] as usize & 0xFFF],

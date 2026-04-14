@@ -228,13 +228,13 @@ impl SrgbConverter {
     /// Convert 8-bit sRGB to linear using direct table lookup.
     #[inline]
     pub fn srgb_u8_to_linear(&self, value: u8) -> f32 {
-        crate::const_luts::LINEAR_TABLE_8[value as usize]
+        crate::const_luts::linear_table_8()[value as usize]
     }
 
     /// Convert linear to sRGB using table interpolation.
     #[inline]
     pub fn linear_to_srgb(&self, linear: f32) -> f32 {
-        lut_interp_linear_float(linear, &crate::const_luts::ENCODE_TABLE_12)
+        lut_interp_linear_float(linear, crate::const_luts::encode_table_12())
     }
 
     /// Convert linear to 8-bit sRGB using direct LUT lookup.

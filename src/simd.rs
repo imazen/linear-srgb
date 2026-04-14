@@ -847,7 +847,7 @@ pub fn srgb_u8_to_linear_slice(input: &[u8], output: &mut [f32]) {
 /// ```
 pub fn linear_to_srgb_u8_slice(input: &[f32], output: &mut [u8]) {
     assert_eq!(input.len(), output.len());
-    let lut = &crate::const_luts::LINEAR_TO_SRGB_U8;
+    let lut = crate::const_luts::linear_to_srgb_u8();
 
     for (inp, out) in input.iter().zip(output.iter_mut()) {
         let clamped = inp.clamp(0.0, 1.0);
@@ -968,7 +968,7 @@ pub fn srgb_u8_to_linear_rgba_slice(input: &[u8], output: &mut [f32]) {
 /// ```
 pub fn linear_to_srgb_u8_rgba_slice(input: &[f32], output: &mut [u8]) {
     assert_eq!(input.len(), output.len());
-    let lut = &crate::const_luts::LINEAR_TO_SRGB_U8;
+    let lut = crate::const_luts::linear_to_srgb_u8();
 
     let in_pixels = input.chunks_exact(4);
     let out_pixels = output.chunks_exact_mut(4);
@@ -1070,7 +1070,7 @@ pub fn srgb_u8_to_linear_premultiply_rgba_slice(input: &[u8], output: &mut [f32]
 /// ```
 pub fn unpremultiply_linear_to_srgb_u8_rgba_slice(input: &[f32], output: &mut [u8]) {
     assert_eq!(input.len(), output.len());
-    let lut = &crate::const_luts::LINEAR_TO_SRGB_U8;
+    let lut = crate::const_luts::linear_to_srgb_u8();
 
     let in_pixels = input.chunks_exact(4);
     let out_pixels = output.chunks_exact_mut(4);
