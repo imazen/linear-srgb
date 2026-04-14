@@ -265,17 +265,20 @@ the `iec` feature for `linear_srgb::iec::srgb_to_linear` /
 
 ### Accuracy summary (exhaustive f32 sweep)
 
-ULP measured in [0, 1] against f64 reference. "Fitted domain" is the range
-where the polynomial maintains accuracy beyond [0, 1].
+Exhaustive f32 sweep (all ~1B values in [0, 1]) against f64 reference.
+"SIMD" rows measured via the actual dispatched SIMD path (f32 FMA evaluation).
+"Scalar" rows use f64 intermediate precision.
 
 | Path | Max ULP | Avg ULP | Monotonic | Fitted domain |
 |------|---------|---------|-----------|---------------|
-| `default` s→l (4/4 rational poly) | 11 | ~0.5 | yes | [0, 1] |
-| `default` l→s (4/4 rational poly) | 14 | ~0.4 | yes | [0, 1] |
-| `extended_slice` s→l (6/6 rational poly) | 5 | ~2.0 | yes | [0, 8] |
-| `extended_slice` l→s (6/6 rational poly) | 5 | ~1.5 | yes | [0, 64] |
-| `precise` s→l (powf) | 6 | ~0.1 | yes | unbounded |
-| `precise` l→s (powf) | 3 | ~0.1 | yes | unbounded |
+| `default` s→l (4/4 scalar) | 11 | 0.5 | yes | [0, 1] |
+| `default` l→s (4/4 scalar) | 14 | 0.4 | yes | [0, 1] |
+| `default` s→l (4/4 SIMD) | 6 | 0.09 | yes | [0, 1] |
+| `default` l→s (4/4 SIMD) | 3 | 0.10 | yes | [0, 1] |
+| `extended_slice` s→l (6/6 SIMD) | 8 | 0.12 | yes | [0, 8] |
+| `extended_slice` l→s (6/6 SIMD) | 8 | 0.17 | yes | [0, 64] |
+| `precise` s→l (powf) | 6 | 0.1 | yes | unbounded |
+| `precise` l→s (powf) | 3 | 0.1 | yes | unbounded |
 
 **What does 14 ULP mean in practice?** 1 ULP (unit in the last place) is the
 spacing between adjacent f32 values at a given magnitude. At 0.5 that's ~6e-8,
