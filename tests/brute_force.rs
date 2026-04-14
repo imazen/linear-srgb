@@ -1625,11 +1625,11 @@ fn binary_blob_linear_to_srgb_u8_matches_runtime() {
         })
         .collect();
 
-    for i in 0..4096 {
+    for (i, &expected) in runtime_u8.iter().enumerate() {
         let blob_val = linear_srgb::default::linear_to_srgb_u8(i as f32 / 4095.0);
         assert_eq!(
-            blob_val, runtime_u8[i],
-            "LINEAR_TO_SRGB_U8[{i}]: blob={blob_val} runtime={}", runtime_u8[i]
+            blob_val, expected,
+            "LINEAR_TO_SRGB_U8[{i}]: blob={blob_val} runtime={expected}"
         );
     }
 }
