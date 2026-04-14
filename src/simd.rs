@@ -518,6 +518,78 @@ pub fn linear_to_srgb_rgba_slice(values: &mut [f32]) {
 }
 
 // ============================================================================
+// Extended-range sRGB ↔ Linear Slice Functions (no clamping)
+// ============================================================================
+
+#[cfg(target_arch = "x86_64")]
+#[arcane]
+fn srgb_to_linear_extended_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
+    crate::tokens::x8::srgb_to_linear_extended_slice_v3(token, values);
+}
+
+fn srgb_to_linear_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+    for v in values.iter_mut() {
+        *v = crate::scalar::srgb_to_linear_extended(*v);
+    }
+}
+
+/// Convert sRGB f32 values to linear in-place without clamping (extended range).
+///
+/// Uses sign-preserving extension per CSS Color 4: `sign(v) * eotf(|v|)`.
+/// Pure SIMD polynomial on x86-64 (AVX2+FMA), scalar `powf` fallback elsewhere.
+///
+/// The polynomial extrapolates accurately for all standard gamut conversions
+/// (< 1e-3 error up to |encoded| = 1.59; worst gamut case is 1.50 from ACES AP0).
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::srgb_to_linear_extended_slice;
+///
+/// let mut values = vec![-0.1f32, 0.0, 0.5, 1.0, 1.5];
+/// srgb_to_linear_extended_slice(&mut values);
+/// assert!(values[0] < 0.0);  // negative preserved
+/// assert!(values[4] > 1.0);  // super-white preserved
+/// ```
+#[inline]
+pub fn srgb_to_linear_extended_slice(values: &mut [f32]) {
+    incant!(srgb_to_linear_extended_slice_tier(values), [v3, scalar])
+}
+
+#[cfg(target_arch = "x86_64")]
+#[arcane]
+fn linear_to_srgb_extended_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
+    crate::tokens::x8::linear_to_srgb_extended_slice_v3(token, values);
+}
+
+fn linear_to_srgb_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+    for v in values.iter_mut() {
+        *v = crate::scalar::linear_to_srgb_extended(*v);
+    }
+}
+
+/// Convert linear f32 values to sRGB in-place without clamping (extended range).
+///
+/// Uses sign-preserving extension per CSS Color 4: `sign(v) * oetf(|v|)`.
+/// Pure SIMD polynomial on x86-64 (AVX2+FMA), scalar `powf` fallback elsewhere.
+///
+/// The polynomial extrapolates accurately for all standard gamut conversions
+/// (< 1e-3 error up to |linear| = 4.33; worst gamut case is 2.52 from ACES AP0).
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::linear_to_srgb_extended_slice;
+///
+/// let mut values = vec![-0.1f32, 0.0, 0.5, 1.0, 1.5];
+/// linear_to_srgb_extended_slice(&mut values);
+/// assert!(values[0] < 0.0);  // negative preserved
+/// assert!(values[4] > 1.0);  // super-white preserved
+/// ```
+#[inline]
+pub fn linear_to_srgb_extended_slice(values: &mut [f32]) {
+    incant!(linear_to_srgb_extended_slice_tier(values), [v3, scalar])
+}
+
+// ============================================================================
 // sRGB→Linear + Premultiply RGBA f32 (SIMD-fused single-pass)
 // ============================================================================
 

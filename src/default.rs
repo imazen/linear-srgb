@@ -54,6 +54,8 @@ pub use crate::simd::{
     // Custom gamma slices
     gamma_to_linear_slice,
     linear_to_gamma_slice,
+    // Extended-range f32 slices (no clamping, sign-preserving)
+    linear_to_srgb_extended_slice,
     // f32 RGBA slices (alpha-preserving)
     linear_to_srgb_rgba_slice,
     // f32 slices (in-place)
@@ -66,6 +68,7 @@ pub use crate::simd::{
     // u16 slices
     linear_to_srgb_u16_slice,
     linear_to_srgb_u16_slice_fast,
+    srgb_to_linear_extended_slice,
     // Fused premultiply/unpremultiply
     srgb_to_linear_premultiply_rgba_slice,
     // f32 RGBA slices (alpha-preserving)
