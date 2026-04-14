@@ -166,17 +166,20 @@ pub fn linear_to_srgb_fast(linear: f32) -> f32 {
 ///
 /// Unlike [`srgb_to_linear`], this does **not** clamp to \[0, 1\]. Use this for:
 /// - **HDR content** where values exceed 1.0
-/// - **ICC profile conversions** where negative values are possible
+/// - **Cross-gamut conversion** (P3 → sRGB, BT.2020 → sRGB) where 3×3 matrix
+///   output may be negative
 /// - **Scene-referred** workflows with unbounded linear light
 ///
-/// Negative inputs pass through the linear segment (scaled by 1/12.92).
-/// Inputs above 1.0 pass through the power segment.
+/// Uses sign-preserving extension per CSS Color 4: `sign(v) * eotf(|v|)`.
+/// The power curve is applied to the magnitude and the sign is restored.
 #[inline]
 pub fn srgb_to_linear_extended(gamma: f32) -> f32 {
-    if gamma < SRGB_LINEAR_THRESHOLD_F32 {
+    let sign = gamma.signum();
+    let abs_v = gamma.abs();
+    if abs_v < SRGB_LINEAR_THRESHOLD_F32 {
         gamma * LINEAR_SCALE_F32
     } else {
-        ((gamma + SRGB_A_F32) / SRGB_A_PLUS_1_F32).powf(GAMMA as f32)
+        sign * ((abs_v + SRGB_A_F32) / SRGB_A_PLUS_1_F32).powf(GAMMA as f32)
     }
 }
 
@@ -184,17 +187,20 @@ pub fn srgb_to_linear_extended(gamma: f32) -> f32 {
 ///
 /// Unlike [`linear_to_srgb`], this does **not** clamp to \[0, 1\]. Use this for:
 /// - **HDR content** where linear values exceed 1.0
-/// - **ICC profile conversions** where negative values are possible
+/// - **Cross-gamut conversion** (P3 → sRGB, BT.2020 → sRGB) where 3×3 matrix
+///   output may be negative
 /// - **Scene-referred** workflows with unbounded linear light
 ///
-/// Negative inputs pass through the linear segment (scaled by 12.92).
-/// Inputs above 1.0 pass through the power segment.
+/// Uses sign-preserving extension per CSS Color 4: `sign(v) * oetf(|v|)`.
+/// The power curve is applied to the magnitude and the sign is restored.
 #[inline]
 pub fn linear_to_srgb_extended(linear: f32) -> f32 {
-    if linear < LINEAR_THRESHOLD_F32 {
+    let sign = linear.signum();
+    let abs_v = linear.abs();
+    if abs_v < LINEAR_THRESHOLD_F32 {
         linear * 12.92
     } else {
-        fmla(SRGB_A_PLUS_1_F32, linear.powf(INV_GAMMA_F32), -SRGB_A_F32)
+        sign * fmla(SRGB_A_PLUS_1_F32, abs_v.powf(INV_GAMMA_F32), -SRGB_A_F32)
     }
 }
 
