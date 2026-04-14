@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Adobe RGB 1998 (ICC paraType-3) transfer function.** `adobe_rgb_to_linear` /
+  `linear_to_adobe_rgb` with scalar + x4 + x8 SIMD + slice APIs, gated behind
+  the existing `transfer` feature. Encodes `gamma=2.19921875` with the linear
+  toe (`c=1/32`, encoded break `d=0.05568`) — the form used by lcms2,
+  saucecontrol's Compact-ICC profiles, and virtually every Adobe RGB ICC
+  profile in the wild. The pure-gamma form (per the Adobe RGB 1998 encoding
+  spec) remains available via `scalar::gamma_to_linear(v, 2.19921875)`.
+- **ROMM RGB / ProPhoto (ISO 22028-2) transfer function.** `prophoto_to_linear`
+  / `linear_to_prophoto` with matching SIMD and slice APIs. Encodes
+  `gamma=1.8` with the linear toe (`c=1/16`, encoded break `d=1/32`) as
+  required by ISO 22028-2.
+
+No breaking changes. All additions opt-in via the existing `transfer` feature.
+
 ## 0.6.5
 
 u16 LUT overhaul: zero binary bloat, sqrt-indexed encode, two-tier encode API.

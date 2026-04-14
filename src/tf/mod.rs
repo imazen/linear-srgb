@@ -33,10 +33,12 @@
 use num_traits::Float; // provides powf/sqrt via libm in no_std
 
 // Submodules with implementations
+pub(crate) mod adobe_rgb;
 pub(crate) mod bt709;
 pub(crate) mod fast_math;
 pub(crate) mod hlg;
 pub(crate) mod pq;
+pub(crate) mod prophoto;
 pub(crate) mod srgb;
 
 // SIMD rites for TFs are now in `crate::tokens::{x4, x8, x16}` (behind `transfer` feature).
@@ -63,9 +65,11 @@ pub fn linear_to_srgb(v: f32) -> f32 {
     crate::rational_poly::linear_to_srgb_fast(v)
 }
 
+pub use adobe_rgb::{adobe_rgb_to_linear, linear_to_adobe_rgb};
 pub use bt709::{bt709_to_linear, linear_to_bt709};
 pub use hlg::{hlg_to_linear, linear_to_hlg};
 pub use pq::{linear_to_pq, pq_to_linear};
+pub use prophoto::{linear_to_prophoto, prophoto_to_linear};
 
 // =============================================================================
 // Tests
@@ -176,6 +180,38 @@ mod tests {
         }
     }
 
+    // ICC paraType-3 reference for Adobe RGB 1998: f64 mirror.
+    fn adobe_rgb_to_linear_f64(v: f64) -> f64 {
+        const D: f64 = 0.05568;
+        if v < D { v / 32.0 } else { v.powf(2.19921875) }
+    }
+
+    fn adobe_rgb_from_linear_f64(v: f64) -> f64 {
+        const D_LIN: f64 = 0.05568 / 32.0;
+        if v < D_LIN {
+            v * 32.0
+        } else {
+            v.powf(1.0 / 2.19921875)
+        }
+    }
+
+    // ISO 22028-2 reference for ROMM/ProPhoto: f64 mirror.
+    fn prophoto_to_linear_f64(v: f64) -> f64 {
+        if v < 1.0 / 32.0 {
+            v / 16.0
+        } else {
+            v.powf(1.8)
+        }
+    }
+
+    fn prophoto_from_linear_f64(v: f64) -> f64 {
+        if v < 1.0 / 512.0 {
+            v * 16.0
+        } else {
+            v.powf(1.0 / 1.8)
+        }
+    }
+
     fn max_abs_error(
         fast: impl Fn(f32) -> f32,
         reference: impl Fn(f64) -> f64,
@@ -279,6 +315,98 @@ mod tests {
             err < 5e-4,
             "HLG from_linear error {err:.2e} too high at {worst}"
         );
+    }
+
+    #[test]
+    fn adobe_rgb_to_linear_accuracy() {
+        let (err, worst) = max_abs_error(
+            adobe_rgb_to_linear,
+            adobe_rgb_to_linear_f64,
+            0.0..=1.0,
+            100_000,
+        );
+        eprintln!("Adobe RGB to_linear max error: {err:.2e} at {worst}");
+        assert!(
+            err < 5e-5,
+            "Adobe RGB to_linear error {err:.2e} too high at {worst}"
+        );
+    }
+
+    #[test]
+    fn adobe_rgb_from_linear_accuracy() {
+        let (err, worst) = max_abs_error(
+            linear_to_adobe_rgb,
+            adobe_rgb_from_linear_f64,
+            0.0..=1.0,
+            100_000,
+        );
+        eprintln!("Adobe RGB from_linear max error: {err:.2e} at {worst}");
+        assert!(
+            err < 5e-4,
+            "Adobe RGB from_linear error {err:.2e} too high at {worst}"
+        );
+    }
+
+    #[test]
+    fn prophoto_to_linear_accuracy() {
+        let (err, worst) = max_abs_error(
+            prophoto_to_linear,
+            prophoto_to_linear_f64,
+            0.0..=1.0,
+            100_000,
+        );
+        eprintln!("ProPhoto to_linear max error: {err:.2e} at {worst}");
+        assert!(
+            err < 5e-5,
+            "ProPhoto to_linear error {err:.2e} too high at {worst}"
+        );
+    }
+
+    #[test]
+    fn prophoto_from_linear_accuracy() {
+        let (err, worst) = max_abs_error(
+            linear_to_prophoto,
+            prophoto_from_linear_f64,
+            0.0..=1.0,
+            100_000,
+        );
+        eprintln!("ProPhoto from_linear max error: {err:.2e} at {worst}");
+        assert!(
+            err < 5e-4,
+            "ProPhoto from_linear error {err:.2e} too high at {worst}"
+        );
+    }
+
+    #[test]
+    fn adobe_rgb_roundtrip() {
+        let u16_step = 1.0 / 65535.0_f32;
+        for i in 0..=10000 {
+            let encoded = i as f32 / 10000.0;
+            let linear = adobe_rgb_to_linear(encoded);
+            let back = linear_to_adobe_rgb(linear);
+            let err = (back - encoded).abs();
+            assert!(
+                err < u16_step * 4.0,
+                "Adobe RGB roundtrip failed at {i}: {encoded} -> {linear} -> {back} (err={err}, {:.1} U16 steps)",
+                err / u16_step
+            );
+        }
+    }
+
+    #[test]
+    fn prophoto_roundtrip() {
+        let u16_step = 1.0 / 65535.0_f32;
+        for i in 0..=10000 {
+            let encoded = i as f32 / 10000.0;
+            let linear = prophoto_to_linear(encoded);
+            let back = linear_to_prophoto(linear);
+            let err = (back - encoded).abs();
+            assert!(
+                err < u16_step * 4.0,
+                "ProPhoto roundtrip failed at {i}: {encoded} -> {linear} -> {back} (err={err}, {:.1} U16 steps)",
+                err / u16_step
+            );
+        }
     }
 
     #[test]
@@ -445,6 +573,30 @@ mod tests {
             linear_to_hlg_x8,
             crate::tokens::x8::linear_to_hlg_v3,
             linear_to_hlg,
+            1e-4
+        );
+        test_x8_tf!(
+            adobe_rgb_to_linear_x8,
+            crate::tokens::x8::adobe_rgb_to_linear_v3,
+            adobe_rgb_to_linear,
+            1e-5
+        );
+        test_x8_tf!(
+            linear_to_adobe_rgb_x8,
+            crate::tokens::x8::linear_to_adobe_rgb_v3,
+            linear_to_adobe_rgb,
+            1e-4
+        );
+        test_x8_tf!(
+            prophoto_to_linear_x8,
+            crate::tokens::x8::prophoto_to_linear_v3,
+            prophoto_to_linear,
+            1e-5
+        );
+        test_x8_tf!(
+            linear_to_prophoto_x8,
+            crate::tokens::x8::linear_to_prophoto_v3,
+            linear_to_prophoto,
             1e-4
         );
     }

@@ -101,7 +101,8 @@ pub use crate::scalar::{gamma_to_linear, linear_to_gamma};
 
 #[cfg(feature = "transfer")]
 pub use crate::tf::{
-    bt709_to_linear, hlg_to_linear, linear_to_bt709, linear_to_hlg, linear_to_pq, pq_to_linear,
+    adobe_rgb_to_linear, bt709_to_linear, hlg_to_linear, linear_to_adobe_rgb, linear_to_bt709,
+    linear_to_hlg, linear_to_pq, linear_to_prophoto, pq_to_linear, prophoto_to_linear,
 };
 
 // ============================================================================
@@ -159,6 +160,45 @@ pub fn bt709_to_linear_slice(values: &mut [f32]) {
 pub fn linear_to_bt709_slice(values: &mut [f32]) {
     for v in values.iter_mut() {
         *v = crate::tf::linear_to_bt709(*v);
+    }
+}
+
+/// Convert Adobe RGB encoded f32 values to linear in-place
+/// (ICC `parametricCurveType funcType=3` form with linear toe — see
+/// [`adobe_rgb_to_linear`] for the spec/interop tradeoff).
+#[cfg(feature = "transfer")]
+#[archmage::autoversion]
+pub fn adobe_rgb_to_linear_slice(values: &mut [f32]) {
+    for v in values.iter_mut() {
+        *v = crate::tf::adobe_rgb_to_linear(*v);
+    }
+}
+
+/// Convert linear f32 values to Adobe RGB encoded in-place
+/// (ICC `parametricCurveType funcType=3` form with linear toe).
+#[cfg(feature = "transfer")]
+#[archmage::autoversion]
+pub fn linear_to_adobe_rgb_slice(values: &mut [f32]) {
+    for v in values.iter_mut() {
+        *v = crate::tf::linear_to_adobe_rgb(*v);
+    }
+}
+
+/// Convert ROMM/ProPhoto encoded f32 values to linear in-place (ISO 22028-2).
+#[cfg(feature = "transfer")]
+#[archmage::autoversion]
+pub fn prophoto_to_linear_slice(values: &mut [f32]) {
+    for v in values.iter_mut() {
+        *v = crate::tf::prophoto_to_linear(*v);
+    }
+}
+
+/// Convert linear f32 values to ROMM/ProPhoto encoded in-place (ISO 22028-2).
+#[cfg(feature = "transfer")]
+#[archmage::autoversion]
+pub fn linear_to_prophoto_slice(values: &mut [f32]) {
+    for v in values.iter_mut() {
+        *v = crate::tf::linear_to_prophoto(*v);
     }
 }
 

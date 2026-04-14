@@ -441,6 +441,66 @@ pub fn linear_to_hlg_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
     out
 }
 
+/// Convert 16 Adobe RGB encoded values to linear (2×x8 via tokens::x8).
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn adobe_rgb_to_linear_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
+    let t3 = token.v3();
+    let lo: [f32; 8] = v[..8].try_into().unwrap();
+    let hi: [f32; 8] = v[8..].try_into().unwrap();
+    let lo = super::x8::adobe_rgb_to_linear_v3(t3, lo);
+    let hi = super::x8::adobe_rgb_to_linear_v3(t3, hi);
+    let mut out = [0.0f32; 16];
+    out[..8].copy_from_slice(&lo);
+    out[8..].copy_from_slice(&hi);
+    out
+}
+
+/// Convert 16 linear values to Adobe RGB encoded (2×x8 via tokens::x8).
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn linear_to_adobe_rgb_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
+    let t3 = token.v3();
+    let lo: [f32; 8] = v[..8].try_into().unwrap();
+    let hi: [f32; 8] = v[8..].try_into().unwrap();
+    let lo = super::x8::linear_to_adobe_rgb_v3(t3, lo);
+    let hi = super::x8::linear_to_adobe_rgb_v3(t3, hi);
+    let mut out = [0.0f32; 16];
+    out[..8].copy_from_slice(&lo);
+    out[8..].copy_from_slice(&hi);
+    out
+}
+
+/// Convert 16 ROMM/ProPhoto encoded values to linear (2×x8 via tokens::x8).
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn prophoto_to_linear_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
+    let t3 = token.v3();
+    let lo: [f32; 8] = v[..8].try_into().unwrap();
+    let hi: [f32; 8] = v[8..].try_into().unwrap();
+    let lo = super::x8::prophoto_to_linear_v3(t3, lo);
+    let hi = super::x8::prophoto_to_linear_v3(t3, hi);
+    let mut out = [0.0f32; 16];
+    out[..8].copy_from_slice(&lo);
+    out[8..].copy_from_slice(&hi);
+    out
+}
+
+/// Convert 16 linear values to ROMM/ProPhoto encoded (2×x8 via tokens::x8).
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn linear_to_prophoto_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
+    let t3 = token.v3();
+    let lo: [f32; 8] = v[..8].try_into().unwrap();
+    let hi: [f32; 8] = v[8..].try_into().unwrap();
+    let lo = super::x8::linear_to_prophoto_v3(t3, lo);
+    let hi = super::x8::linear_to_prophoto_v3(t3, hi);
+    let mut out = [0.0f32; 16];
+    out[..8].copy_from_slice(&lo);
+    out[8..].copy_from_slice(&hi);
+    out
+}
+
 #[cfg(feature = "transfer")]
 macro_rules! tf_slice_v4 {
     ($name:ident, $rite:ident, $scalar:path) => {
@@ -509,6 +569,30 @@ tf_slice_v4!(
     linear_to_hlg_slice_v4,
     linear_to_hlg_v4,
     crate::tf::linear_to_hlg
+);
+#[cfg(feature = "transfer")]
+tf_slice_v4!(
+    adobe_rgb_to_linear_slice_v4,
+    adobe_rgb_to_linear_v4,
+    crate::tf::adobe_rgb_to_linear
+);
+#[cfg(feature = "transfer")]
+tf_slice_v4!(
+    linear_to_adobe_rgb_slice_v4,
+    linear_to_adobe_rgb_v4,
+    crate::tf::linear_to_adobe_rgb
+);
+#[cfg(feature = "transfer")]
+tf_slice_v4!(
+    prophoto_to_linear_slice_v4,
+    prophoto_to_linear_v4,
+    crate::tf::prophoto_to_linear
+);
+#[cfg(feature = "transfer")]
+tf_slice_v4!(
+    linear_to_prophoto_slice_v4,
+    linear_to_prophoto_v4,
+    crate::tf::linear_to_prophoto
 );
 
 #[cfg(feature = "transfer")]

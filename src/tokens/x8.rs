@@ -339,6 +339,34 @@ pub fn linear_to_hlg_v3(token: X64V3Token, v: [f32; 8]) -> [f32; 8] {
     crate::tf::hlg::linear_to_hlg_x8(token, mt_f32x8::from_array(token, v)).to_array()
 }
 
+/// Convert 8 Adobe RGB encoded values to linear (ICC paraType-3 form).
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn adobe_rgb_to_linear_v3(token: X64V3Token, v: [f32; 8]) -> [f32; 8] {
+    crate::tf::adobe_rgb::adobe_rgb_to_linear_x8(token, mt_f32x8::from_array(token, v)).to_array()
+}
+
+/// Convert 8 linear values to Adobe RGB encoded (ICC paraType-3 form).
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn linear_to_adobe_rgb_v3(token: X64V3Token, v: [f32; 8]) -> [f32; 8] {
+    crate::tf::adobe_rgb::linear_to_adobe_rgb_x8(token, mt_f32x8::from_array(token, v)).to_array()
+}
+
+/// Convert 8 ROMM/ProPhoto encoded values to linear (ISO 22028-2).
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn prophoto_to_linear_v3(token: X64V3Token, v: [f32; 8]) -> [f32; 8] {
+    crate::tf::prophoto::prophoto_to_linear_x8(token, mt_f32x8::from_array(token, v)).to_array()
+}
+
+/// Convert 8 linear values to ROMM/ProPhoto encoded (ISO 22028-2).
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn linear_to_prophoto_v3(token: X64V3Token, v: [f32; 8]) -> [f32; 8] {
+    crate::tf::prophoto::linear_to_prophoto_x8(token, mt_f32x8::from_array(token, v)).to_array()
+}
+
 /// Convert sRGB f32 values to linear in-place, 8-wide (TF module version).
 #[cfg(feature = "transfer")]
 #[rite]
@@ -424,6 +452,50 @@ pub fn linear_to_hlg_slice_v3(token: X64V3Token, values: &mut [f32]) {
         values,
         |v| linear_to_hlg_v3(token, v),
         crate::tf::linear_to_hlg,
+    );
+}
+
+/// Convert Adobe RGB f32 values to linear in-place, 8-wide.
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn adobe_rgb_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
+    tf_slice_x8(
+        values,
+        |v| adobe_rgb_to_linear_v3(token, v),
+        crate::tf::adobe_rgb_to_linear,
+    );
+}
+
+/// Convert linear f32 values to Adobe RGB in-place, 8-wide.
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn linear_to_adobe_rgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
+    tf_slice_x8(
+        values,
+        |v| linear_to_adobe_rgb_v3(token, v),
+        crate::tf::linear_to_adobe_rgb,
+    );
+}
+
+/// Convert ROMM/ProPhoto f32 values to linear in-place, 8-wide.
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn prophoto_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
+    tf_slice_x8(
+        values,
+        |v| prophoto_to_linear_v3(token, v),
+        crate::tf::prophoto_to_linear,
+    );
+}
+
+/// Convert linear f32 values to ROMM/ProPhoto in-place, 8-wide.
+#[cfg(feature = "transfer")]
+#[rite]
+pub fn linear_to_prophoto_slice_v3(token: X64V3Token, values: &mut [f32]) {
+    tf_slice_x8(
+        values,
+        |v| linear_to_prophoto_v3(token, v),
+        crate::tf::linear_to_prophoto,
     );
 }
 

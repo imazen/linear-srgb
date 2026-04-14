@@ -575,6 +575,22 @@ x86_tf_rite!(pq_to_linear_v3, crate::tf::pq::pq_to_linear_x4);
 x86_tf_rite!(linear_to_pq_v3, crate::tf::pq::linear_to_pq_x4);
 x86_tf_rite!(hlg_to_linear_v3, crate::tf::hlg::hlg_to_linear_x4);
 x86_tf_rite!(linear_to_hlg_v3, crate::tf::hlg::linear_to_hlg_x4);
+x86_tf_rite!(
+    adobe_rgb_to_linear_v3,
+    crate::tf::adobe_rgb::adobe_rgb_to_linear_x4
+);
+x86_tf_rite!(
+    linear_to_adobe_rgb_v3,
+    crate::tf::adobe_rgb::linear_to_adobe_rgb_x4
+);
+x86_tf_rite!(
+    prophoto_to_linear_v3,
+    crate::tf::prophoto::prophoto_to_linear_x4
+);
+x86_tf_rite!(
+    linear_to_prophoto_v3,
+    crate::tf::prophoto::linear_to_prophoto_x4
+);
 
 macro_rules! x86_tf_slice_rite {
     ($name:ident, $rite:ident, $scalar:path) => {
@@ -637,6 +653,26 @@ x86_tf_slice_rite!(
     linear_to_hlg_v3,
     crate::tf::linear_to_hlg
 );
+x86_tf_slice_rite!(
+    adobe_rgb_to_linear_slice_v3,
+    adobe_rgb_to_linear_v3,
+    crate::tf::adobe_rgb_to_linear
+);
+x86_tf_slice_rite!(
+    linear_to_adobe_rgb_slice_v3,
+    linear_to_adobe_rgb_v3,
+    crate::tf::linear_to_adobe_rgb
+);
+x86_tf_slice_rite!(
+    prophoto_to_linear_slice_v3,
+    prophoto_to_linear_v3,
+    crate::tf::prophoto_to_linear
+);
+x86_tf_slice_rite!(
+    linear_to_prophoto_slice_v3,
+    linear_to_prophoto_v3,
+    crate::tf::linear_to_prophoto
+);
 
 // ============================================================================
 // Transfer function rites — AArch64 NEON (behind `transfer` feature)
@@ -661,6 +697,22 @@ neon_tf_rite!(pq_to_linear_neon, crate::tf::pq::pq_to_linear_x4);
 neon_tf_rite!(linear_to_pq_neon, crate::tf::pq::linear_to_pq_x4);
 neon_tf_rite!(hlg_to_linear_neon, crate::tf::hlg::hlg_to_linear_x4);
 neon_tf_rite!(linear_to_hlg_neon, crate::tf::hlg::linear_to_hlg_x4);
+neon_tf_rite!(
+    adobe_rgb_to_linear_neon,
+    crate::tf::adobe_rgb::adobe_rgb_to_linear_x4
+);
+neon_tf_rite!(
+    linear_to_adobe_rgb_neon,
+    crate::tf::adobe_rgb::linear_to_adobe_rgb_x4
+);
+neon_tf_rite!(
+    prophoto_to_linear_neon,
+    crate::tf::prophoto::prophoto_to_linear_x4
+);
+neon_tf_rite!(
+    linear_to_prophoto_neon,
+    crate::tf::prophoto::linear_to_prophoto_x4
+);
 
 macro_rules! neon_tf_slice_rite {
     ($name:ident, $rite:ident, $scalar:path) => {
@@ -719,6 +771,26 @@ neon_tf_slice_rite!(
     linear_to_hlg_neon,
     crate::tf::linear_to_hlg
 );
+neon_tf_slice_rite!(
+    adobe_rgb_to_linear_slice_neon,
+    adobe_rgb_to_linear_neon,
+    crate::tf::adobe_rgb_to_linear
+);
+neon_tf_slice_rite!(
+    linear_to_adobe_rgb_slice_neon,
+    linear_to_adobe_rgb_neon,
+    crate::tf::linear_to_adobe_rgb
+);
+neon_tf_slice_rite!(
+    prophoto_to_linear_slice_neon,
+    prophoto_to_linear_neon,
+    crate::tf::prophoto_to_linear
+);
+neon_tf_slice_rite!(
+    linear_to_prophoto_slice_neon,
+    linear_to_prophoto_neon,
+    crate::tf::linear_to_prophoto
+);
 
 // ============================================================================
 // Transfer function rites — WebAssembly SIMD128 (behind `transfer` feature)
@@ -755,6 +827,22 @@ wasm_tf_rite!(pq_to_linear_wasm128, crate::tf::pq::pq_to_linear_x4);
 wasm_tf_rite!(linear_to_pq_wasm128, crate::tf::pq::linear_to_pq_x4);
 wasm_tf_rite!(hlg_to_linear_wasm128, crate::tf::hlg::hlg_to_linear_x4);
 wasm_tf_rite!(linear_to_hlg_wasm128, crate::tf::hlg::linear_to_hlg_x4);
+wasm_tf_rite!(
+    adobe_rgb_to_linear_wasm128,
+    crate::tf::adobe_rgb::adobe_rgb_to_linear_x4
+);
+wasm_tf_rite!(
+    linear_to_adobe_rgb_wasm128,
+    crate::tf::adobe_rgb::linear_to_adobe_rgb_x4
+);
+wasm_tf_rite!(
+    prophoto_to_linear_wasm128,
+    crate::tf::prophoto::prophoto_to_linear_x4
+);
+wasm_tf_rite!(
+    linear_to_prophoto_wasm128,
+    crate::tf::prophoto::linear_to_prophoto_x4
+);
 
 macro_rules! wasm_tf_slice_rite {
     ($name:ident, $rite:ident, $scalar:path) => {
@@ -812,6 +900,26 @@ wasm_tf_slice_rite!(
     linear_to_hlg_slice_wasm128,
     linear_to_hlg_wasm128,
     crate::tf::linear_to_hlg
+);
+wasm_tf_slice_rite!(
+    adobe_rgb_to_linear_slice_wasm128,
+    adobe_rgb_to_linear_wasm128,
+    crate::tf::adobe_rgb_to_linear
+);
+wasm_tf_slice_rite!(
+    linear_to_adobe_rgb_slice_wasm128,
+    linear_to_adobe_rgb_wasm128,
+    crate::tf::linear_to_adobe_rgb
+);
+wasm_tf_slice_rite!(
+    prophoto_to_linear_slice_wasm128,
+    prophoto_to_linear_wasm128,
+    crate::tf::prophoto_to_linear
+);
+wasm_tf_slice_rite!(
+    linear_to_prophoto_slice_wasm128,
+    linear_to_prophoto_wasm128,
+    crate::tf::linear_to_prophoto
 );
 
 // ============================================================================
