@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.9
+
+### Changed
+
+- **Const LUT tables replaced with binary blobs.** The three embedded lookup
+  tables (21 KB total) are now stored as raw little-endian bytes loaded via
+  `include_bytes!` + `bytemuck::cast_slice`, replacing 4,581 lines of float/u8
+  literals. Bit-exact with the previous const arrays. Reduces crate parse time.
+
+### Added
+
+- `compile_error!` on big-endian targets — the binary LUT blobs are
+  little-endian and would silently produce wrong values without byte-swapping.
+- Three new tests verifying binary blobs match runtime-computed tables.
+
 ## Upcoming breaking changes
 
 - **`avx512` will be removed from default features in a future 0.x release.**
