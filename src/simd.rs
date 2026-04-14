@@ -527,6 +527,30 @@ fn srgb_to_linear_extended_slice_tier_v3(token: X64V3Token, values: &mut [f32]) 
     crate::tokens::x8::srgb_to_linear_extended_slice_v3(token, values);
 }
 
+#[cfg(target_arch = "aarch64")]
+#[arcane]
+fn srgb_to_linear_extended_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<4>();
+    for chunk in chunks {
+        *chunk = crate::tokens::x4::srgb_to_linear_extended_neon(token, *chunk);
+    }
+    for v in remainder {
+        *v = crate::scalar::srgb_to_linear_extended(*v);
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[arcane]
+fn srgb_to_linear_extended_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<4>();
+    for chunk in chunks {
+        *chunk = crate::tokens::x4::srgb_to_linear_extended_wasm128(token, *chunk);
+    }
+    for v in remainder {
+        *v = crate::scalar::srgb_to_linear_extended(*v);
+    }
+}
+
 fn srgb_to_linear_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
     for v in values.iter_mut() {
         *v = crate::scalar::srgb_to_linear_extended(*v);
@@ -536,7 +560,8 @@ fn srgb_to_linear_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [
 /// Convert sRGB f32 values to linear in-place without clamping (extended range).
 ///
 /// Uses sign-preserving extension per CSS Color 4: `sign(v) * eotf(|v|)`.
-/// Pure SIMD polynomial on x86-64 (AVX2+FMA), scalar `powf` fallback elsewhere.
+/// Pure SIMD polynomial on x86-64 (AVX2+FMA), AArch64 (NEON), and
+/// WebAssembly (SIMD128). Scalar `powf` fallback on other architectures.
 ///
 /// The polynomial extrapolates accurately for all standard gamut conversions
 /// (< 1e-3 error up to |encoded| = 1.59; worst gamut case is 1.50 from ACES AP0).
@@ -552,13 +577,40 @@ fn srgb_to_linear_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [
 /// ```
 #[inline]
 pub fn srgb_to_linear_extended_slice(values: &mut [f32]) {
-    incant!(srgb_to_linear_extended_slice_tier(values), [v3, scalar])
+    incant!(
+        srgb_to_linear_extended_slice_tier(values),
+        [v3, neon, wasm128, scalar]
+    )
 }
 
 #[cfg(target_arch = "x86_64")]
 #[arcane]
 fn linear_to_srgb_extended_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     crate::tokens::x8::linear_to_srgb_extended_slice_v3(token, values);
+}
+
+#[cfg(target_arch = "aarch64")]
+#[arcane]
+fn linear_to_srgb_extended_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<4>();
+    for chunk in chunks {
+        *chunk = crate::tokens::x4::linear_to_srgb_extended_neon(token, *chunk);
+    }
+    for v in remainder {
+        *v = crate::scalar::linear_to_srgb_extended(*v);
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[arcane]
+fn linear_to_srgb_extended_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<4>();
+    for chunk in chunks {
+        *chunk = crate::tokens::x4::linear_to_srgb_extended_wasm128(token, *chunk);
+    }
+    for v in remainder {
+        *v = crate::scalar::linear_to_srgb_extended(*v);
+    }
 }
 
 fn linear_to_srgb_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
@@ -570,7 +622,8 @@ fn linear_to_srgb_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [
 /// Convert linear f32 values to sRGB in-place without clamping (extended range).
 ///
 /// Uses sign-preserving extension per CSS Color 4: `sign(v) * oetf(|v|)`.
-/// Pure SIMD polynomial on x86-64 (AVX2+FMA), scalar `powf` fallback elsewhere.
+/// Pure SIMD polynomial on x86-64 (AVX2+FMA), AArch64 (NEON), and
+/// WebAssembly (SIMD128). Scalar `powf` fallback on other architectures.
 ///
 /// The polynomial extrapolates accurately for all standard gamut conversions
 /// (< 1e-3 error up to |linear| = 4.33; worst gamut case is 2.52 from ACES AP0).
@@ -586,7 +639,10 @@ fn linear_to_srgb_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [
 /// ```
 #[inline]
 pub fn linear_to_srgb_extended_slice(values: &mut [f32]) {
-    incant!(linear_to_srgb_extended_slice_tier(values), [v3, scalar])
+    incant!(
+        linear_to_srgb_extended_slice_tier(values),
+        [v3, neon, wasm128, scalar]
+    )
 }
 
 // ============================================================================

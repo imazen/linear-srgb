@@ -118,6 +118,60 @@ pub fn linear_to_srgb_v3(token: X64V3Token, linear: [f32; 4]) -> [f32; 4] {
     mt_f32x4::blend(ge_one, one, result).to_array()
 }
 
+/// Convert 4 sRGB values to linear without clamping (extended range).
+///
+/// Uses abs+sign: polynomial on `|v|`, restores sign. Pure SIMD.
+#[cfg(target_arch = "x86_64")]
+#[rite]
+pub fn srgb_to_linear_extended_v3(token: X64V3Token, srgb: [f32; 4]) -> [f32; 4] {
+    use crate::rational_poly::{S2L_P, S2L_Q};
+    let zero = mt_f32x4::zero(token);
+    let v = mt_f32x4::from_array(token, srgb);
+    let neg_mask = v.simd_lt(zero);
+    let abs_v = v.abs();
+    let linear_result = abs_v * mt_f32x4::splat(token, LINEAR_SCALE);
+    let x = abs_v;
+    let yp = mt_f32x4::splat(token, S2L_P[4]).mul_add(x, mt_f32x4::splat(token, S2L_P[3]));
+    let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[2]));
+    let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[1]));
+    let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[0]));
+    let yq = mt_f32x4::splat(token, S2L_Q[4]).mul_add(x, mt_f32x4::splat(token, S2L_Q[3]));
+    let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[2]));
+    let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[1]));
+    let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[0]));
+    let power_result = yp / yq;
+    let thresh_mask = abs_v.simd_lt(mt_f32x4::splat(token, SRGB_LINEAR_THRESHOLD));
+    let result = mt_f32x4::blend(thresh_mask, linear_result, power_result);
+    mt_f32x4::blend(neg_mask, -result, result).to_array()
+}
+
+/// Convert 4 linear values to sRGB without clamping (extended range).
+///
+/// Uses abs+sign: sqrt+polynomial on `|v|`, restores sign. Pure SIMD.
+#[cfg(target_arch = "x86_64")]
+#[rite]
+pub fn linear_to_srgb_extended_v3(token: X64V3Token, linear: [f32; 4]) -> [f32; 4] {
+    use crate::rational_poly::{L2S_P, L2S_Q};
+    let zero = mt_f32x4::zero(token);
+    let v = mt_f32x4::from_array(token, linear);
+    let neg_mask = v.simd_lt(zero);
+    let abs_v = v.abs();
+    let linear_result = abs_v * mt_f32x4::splat(token, TWELVE_92);
+    let x = abs_v.sqrt();
+    let yp = mt_f32x4::splat(token, L2S_P[4]).mul_add(x, mt_f32x4::splat(token, L2S_P[3]));
+    let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[2]));
+    let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[1]));
+    let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[0]));
+    let yq = mt_f32x4::splat(token, L2S_Q[4]).mul_add(x, mt_f32x4::splat(token, L2S_Q[3]));
+    let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[2]));
+    let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[1]));
+    let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[0]));
+    let power_result = yp / yq;
+    let thresh_mask = abs_v.simd_lt(mt_f32x4::splat(token, LINEAR_THRESHOLD));
+    let result = mt_f32x4::blend(thresh_mask, linear_result, power_result);
+    mt_f32x4::blend(neg_mask, -result, result).to_array()
+}
+
 /// Convert 4 gamma-encoded values to linear. Input clamped to \[0, 1\].
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
@@ -287,6 +341,56 @@ pub fn linear_to_srgb_neon(token: NeonToken, linear: [f32; 4]) -> [f32; 4] {
     mt_f32x4::blend(ge_one, one, result).to_array()
 }
 
+/// Convert 4 sRGB values to linear without clamping (extended range, NEON).
+#[cfg(target_arch = "aarch64")]
+#[rite]
+pub fn srgb_to_linear_extended_neon(token: NeonToken, srgb: [f32; 4]) -> [f32; 4] {
+    use crate::rational_poly::{S2L_P, S2L_Q};
+    let zero = mt_f32x4::zero(token);
+    let v = mt_f32x4::from_array(token, srgb);
+    let neg_mask = v.simd_lt(zero);
+    let abs_v = v.abs();
+    let linear_result = abs_v * mt_f32x4::splat(token, LINEAR_SCALE);
+    let x = abs_v;
+    let yp = mt_f32x4::splat(token, S2L_P[4]).mul_add(x, mt_f32x4::splat(token, S2L_P[3]));
+    let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[2]));
+    let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[1]));
+    let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[0]));
+    let yq = mt_f32x4::splat(token, S2L_Q[4]).mul_add(x, mt_f32x4::splat(token, S2L_Q[3]));
+    let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[2]));
+    let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[1]));
+    let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[0]));
+    let power_result = yp / yq;
+    let thresh_mask = abs_v.simd_lt(mt_f32x4::splat(token, SRGB_LINEAR_THRESHOLD));
+    let result = mt_f32x4::blend(thresh_mask, linear_result, power_result);
+    mt_f32x4::blend(neg_mask, -result, result).to_array()
+}
+
+/// Convert 4 linear values to sRGB without clamping (extended range, NEON).
+#[cfg(target_arch = "aarch64")]
+#[rite]
+pub fn linear_to_srgb_extended_neon(token: NeonToken, linear: [f32; 4]) -> [f32; 4] {
+    use crate::rational_poly::{L2S_P, L2S_Q};
+    let zero = mt_f32x4::zero(token);
+    let v = mt_f32x4::from_array(token, linear);
+    let neg_mask = v.simd_lt(zero);
+    let abs_v = v.abs();
+    let linear_result = abs_v * mt_f32x4::splat(token, TWELVE_92);
+    let x = abs_v.sqrt();
+    let yp = mt_f32x4::splat(token, L2S_P[4]).mul_add(x, mt_f32x4::splat(token, L2S_P[3]));
+    let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[2]));
+    let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[1]));
+    let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[0]));
+    let yq = mt_f32x4::splat(token, L2S_Q[4]).mul_add(x, mt_f32x4::splat(token, L2S_Q[3]));
+    let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[2]));
+    let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[1]));
+    let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[0]));
+    let power_result = yp / yq;
+    let thresh_mask = abs_v.simd_lt(mt_f32x4::splat(token, LINEAR_THRESHOLD));
+    let result = mt_f32x4::blend(thresh_mask, linear_result, power_result);
+    mt_f32x4::blend(neg_mask, -result, result).to_array()
+}
+
 /// Convert 4 gamma-encoded values to linear. Input clamped to \[0, 1\].
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
@@ -454,6 +558,56 @@ pub fn linear_to_srgb_wasm128(token: Wasm128Token, linear: [f32; 4]) -> [f32; 4]
     // Force exact 1.0 for inputs >= 1.0 (polynomial may undershoot at boundary)
     let ge_one = linear_v.simd_ge(one);
     mt_f32x4::blend(ge_one, one, result).to_array()
+}
+
+/// Convert 4 sRGB values to linear without clamping (extended range, WASM).
+#[cfg(target_arch = "wasm32")]
+#[rite]
+pub fn srgb_to_linear_extended_wasm128(token: Wasm128Token, srgb: [f32; 4]) -> [f32; 4] {
+    use crate::rational_poly::{S2L_P, S2L_Q};
+    let zero = mt_f32x4::zero(token);
+    let v = mt_f32x4::from_array(token, srgb);
+    let neg_mask = v.simd_lt(zero);
+    let abs_v = v.abs();
+    let linear_result = abs_v * mt_f32x4::splat(token, LINEAR_SCALE);
+    let x = abs_v;
+    let yp = mt_f32x4::splat(token, S2L_P[4]).mul_add(x, mt_f32x4::splat(token, S2L_P[3]));
+    let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[2]));
+    let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[1]));
+    let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[0]));
+    let yq = mt_f32x4::splat(token, S2L_Q[4]).mul_add(x, mt_f32x4::splat(token, S2L_Q[3]));
+    let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[2]));
+    let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[1]));
+    let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[0]));
+    let power_result = yp / yq;
+    let thresh_mask = abs_v.simd_lt(mt_f32x4::splat(token, SRGB_LINEAR_THRESHOLD));
+    let result = mt_f32x4::blend(thresh_mask, linear_result, power_result);
+    mt_f32x4::blend(neg_mask, -result, result).to_array()
+}
+
+/// Convert 4 linear values to sRGB without clamping (extended range, WASM).
+#[cfg(target_arch = "wasm32")]
+#[rite]
+pub fn linear_to_srgb_extended_wasm128(token: Wasm128Token, linear: [f32; 4]) -> [f32; 4] {
+    use crate::rational_poly::{L2S_P, L2S_Q};
+    let zero = mt_f32x4::zero(token);
+    let v = mt_f32x4::from_array(token, linear);
+    let neg_mask = v.simd_lt(zero);
+    let abs_v = v.abs();
+    let linear_result = abs_v * mt_f32x4::splat(token, TWELVE_92);
+    let x = abs_v.sqrt();
+    let yp = mt_f32x4::splat(token, L2S_P[4]).mul_add(x, mt_f32x4::splat(token, L2S_P[3]));
+    let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[2]));
+    let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[1]));
+    let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[0]));
+    let yq = mt_f32x4::splat(token, L2S_Q[4]).mul_add(x, mt_f32x4::splat(token, L2S_Q[3]));
+    let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[2]));
+    let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[1]));
+    let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[0]));
+    let power_result = yp / yq;
+    let thresh_mask = abs_v.simd_lt(mt_f32x4::splat(token, LINEAR_THRESHOLD));
+    let result = mt_f32x4::blend(thresh_mask, linear_result, power_result);
+    mt_f32x4::blend(neg_mask, -result, result).to_array()
 }
 
 /// Convert 4 gamma-encoded values to linear. Input clamped to \[0, 1\].
