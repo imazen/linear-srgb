@@ -2,18 +2,23 @@
 
 ## 0.6.9
 
+No public API changes.
+
 ### Changed
 
 - **Const LUT tables replaced with binary blobs.** The three embedded lookup
   tables (21 KB total) are now stored as raw little-endian bytes loaded via
   `include_bytes!` + `bytemuck::cast_slice`, replacing 4,581 lines of float/u8
-  literals. Bit-exact with the previous const arrays. Reduces crate parse time.
+  literals. A `#[repr(C, align(4))]` wrapper guarantees f32 alignment; LLVM
+  optimizes the cast to a direct static address load (zero runtime cost,
+  verified via `cargo asm`). Bit-exact with the previous const arrays.
 
 ### Added
 
 - `compile_error!` on big-endian targets — the binary LUT blobs are
   little-endian and would silently produce wrong values without byte-swapping.
-- Three new tests verifying binary blobs match runtime-computed tables.
+- Three new tests verifying binary blobs match runtime-computed tables
+  bit-for-bit.
 
 ## Upcoming breaking changes
 
