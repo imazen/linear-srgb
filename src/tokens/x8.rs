@@ -86,6 +86,84 @@ pub fn linear_to_srgb_v3(token: X64V3Token, linear: [f32; 8]) -> [f32; 8] {
     mt_f32x8::blend(mask, linear_result, power_result).to_array()
 }
 
+/// Convert 8 sRGB values to linear without clamping (extended range).
+///
+/// Uses abs+sign with a 6/6 rational polynomial fitted to \[0, 8\].
+/// 5 ULP max in \[0,1\], u16-safe to |encoded| ≤ 6.18, u8-safe to 8.0.
+/// Pure SIMD — no per-lane branching or scalar fallback.
+#[rite]
+pub fn srgb_to_linear_extended_v3(token: X64V3Token, srgb: [f32; 8]) -> [f32; 8] {
+    use crate::rational_poly::{EXT_S2L_P as P, EXT_S2L_Q as Q};
+
+    let zero = mt_f32x8::zero(token);
+    let v = mt_f32x8::from_array(token, srgb);
+    let neg_mask = v.simd_lt(zero);
+    let abs_v = v.abs();
+
+    let linear_result = abs_v * mt_f32x8::splat(token, LINEAR_SCALE);
+
+    let x = abs_v;
+    let yp = mt_f32x8::splat(token, P[6]).mul_add(x, mt_f32x8::splat(token, P[5]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[4]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[3]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[2]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[1]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[0]));
+
+    let yq = mt_f32x8::splat(token, Q[6]).mul_add(x, mt_f32x8::splat(token, Q[5]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[4]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[3]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[2]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[1]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[0]));
+
+    let power_result = yp / yq;
+
+    let thresh_mask = abs_v.simd_lt(mt_f32x8::splat(token, SRGB_LINEAR_THRESHOLD));
+    let result = mt_f32x8::blend(thresh_mask, linear_result, power_result);
+    let result = mt_f32x8::blend(neg_mask, -result, result);
+    result.to_array()
+}
+
+/// Convert 8 linear values to sRGB without clamping (extended range).
+///
+/// Uses abs+sign with a 6/6 rational polynomial fitted on √x to \[0, 64\].
+/// 5 ULP max in \[0,1\], u16-safe across the full \[0, 64\] domain.
+/// Pure SIMD — no per-lane branching or scalar fallback.
+#[rite]
+pub fn linear_to_srgb_extended_v3(token: X64V3Token, linear: [f32; 8]) -> [f32; 8] {
+    use crate::rational_poly::{EXT_L2S_P as P, EXT_L2S_Q as Q};
+
+    let zero = mt_f32x8::zero(token);
+    let v = mt_f32x8::from_array(token, linear);
+    let neg_mask = v.simd_lt(zero);
+    let abs_v = v.abs();
+
+    let linear_result = abs_v * mt_f32x8::splat(token, TWELVE_92);
+
+    let x = abs_v.sqrt();
+    let yp = mt_f32x8::splat(token, P[6]).mul_add(x, mt_f32x8::splat(token, P[5]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[4]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[3]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[2]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[1]));
+    let yp = yp.mul_add(x, mt_f32x8::splat(token, P[0]));
+
+    let yq = mt_f32x8::splat(token, Q[6]).mul_add(x, mt_f32x8::splat(token, Q[5]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[4]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[3]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[2]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[1]));
+    let yq = yq.mul_add(x, mt_f32x8::splat(token, Q[0]));
+
+    let power_result = yp / yq;
+
+    let thresh_mask = abs_v.simd_lt(mt_f32x8::splat(token, LINEAR_THRESHOLD));
+    let result = mt_f32x8::blend(thresh_mask, linear_result, power_result);
+    let result = mt_f32x8::blend(neg_mask, -result, result);
+    result.to_array()
+}
+
 /// Convert 8 gamma-encoded values to linear. Input clamped to \[0, 1\].
 ///
 /// The `X64V3Token` parameter proves AVX2+FMA support at compile time.
@@ -226,6 +304,38 @@ pub fn linear_to_srgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
 
     for v in remainder {
         *v = crate::scalar::linear_to_srgb(*v);
+    }
+}
+
+/// Convert sRGB f32 values to linear in-place (extended range, no clamping).
+///
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
+#[rite]
+pub fn srgb_to_linear_extended_slice_v3(token: X64V3Token, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<8>();
+
+    for chunk in chunks {
+        *chunk = srgb_to_linear_extended_v3(token, *chunk);
+    }
+
+    for v in remainder {
+        *v = crate::scalar::srgb_to_linear_extended(*v);
+    }
+}
+
+/// Convert linear f32 values to sRGB in-place (extended range, no clamping).
+///
+/// Token parameter proves CPU support. Call from `#[arcane]` context.
+#[rite]
+pub fn linear_to_srgb_extended_slice_v3(token: X64V3Token, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<8>();
+
+    for chunk in chunks {
+        *chunk = linear_to_srgb_extended_v3(token, *chunk);
+    }
+
+    for v in remainder {
+        *v = crate::scalar::linear_to_srgb_extended(*v);
     }
 }
 

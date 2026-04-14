@@ -31,7 +31,6 @@ pub use archmage::NeonToken;
 pub use archmage::Wasm128Token;
 
 use magetypes::simd::f32x4 as mt_f32x4;
-#[cfg(any(feature = "transfer", target_arch = "aarch64", target_arch = "wasm32"))]
 use magetypes::simd::generic::f32x4 as gen_f32x4;
 
 // sRGB transfer function constants (C0-continuous moxcms, matching rational polynomial)
@@ -116,6 +115,72 @@ pub fn linear_to_srgb_v3(token: X64V3Token, linear: [f32; 4]) -> [f32; 4] {
     // Force exact 1.0 for inputs >= 1.0 (polynomial may undershoot at boundary)
     let ge_one = linear_v.simd_ge(one);
     mt_f32x4::blend(ge_one, one, result).to_array()
+}
+
+/// Convert 4 sRGB values to linear without clamping (extended range).
+///
+/// 6/6 rational polynomial fitted to \[0, 8\]. 5 ULP in \[0,1\], u16-safe to ~4.2.
+#[archmage::magetypes(v3, neon, wasm128)]
+#[rite]
+pub fn srgb_to_linear_extended(token: Token, srgb: [f32; 4]) -> [f32; 4] {
+    use crate::rational_poly::{EXT_S2L_P as P, EXT_S2L_Q as Q};
+    #[allow(non_camel_case_types)]
+    type f32x4 = gen_f32x4<Token>;
+    let zero = f32x4::zero(token);
+    let v = f32x4::from_array(token, srgb);
+    let neg_mask = v.simd_lt(zero);
+    let abs_v = v.abs();
+    let linear_result = abs_v * f32x4::splat(token, LINEAR_SCALE);
+    let x = abs_v;
+    let yp = f32x4::splat(token, P[6]).mul_add(x, f32x4::splat(token, P[5]));
+    let yp = yp.mul_add(x, f32x4::splat(token, P[4]));
+    let yp = yp.mul_add(x, f32x4::splat(token, P[3]));
+    let yp = yp.mul_add(x, f32x4::splat(token, P[2]));
+    let yp = yp.mul_add(x, f32x4::splat(token, P[1]));
+    let yp = yp.mul_add(x, f32x4::splat(token, P[0]));
+    let yq = f32x4::splat(token, Q[6]).mul_add(x, f32x4::splat(token, Q[5]));
+    let yq = yq.mul_add(x, f32x4::splat(token, Q[4]));
+    let yq = yq.mul_add(x, f32x4::splat(token, Q[3]));
+    let yq = yq.mul_add(x, f32x4::splat(token, Q[2]));
+    let yq = yq.mul_add(x, f32x4::splat(token, Q[1]));
+    let yq = yq.mul_add(x, f32x4::splat(token, Q[0]));
+    let power_result = yp / yq;
+    let thresh_mask = abs_v.simd_lt(f32x4::splat(token, SRGB_LINEAR_THRESHOLD));
+    let result = f32x4::blend(thresh_mask, linear_result, power_result);
+    f32x4::blend(neg_mask, -result, result).to_array()
+}
+
+/// Convert 4 linear values to sRGB without clamping (extended range).
+///
+/// 6/6 rational polynomial fitted on √x to \[0, 64\]. 5 ULP in \[0,1\], u16-safe to 64.
+#[archmage::magetypes(v3, neon, wasm128)]
+#[rite]
+pub fn linear_to_srgb_extended(token: Token, linear: [f32; 4]) -> [f32; 4] {
+    use crate::rational_poly::{EXT_L2S_P as P, EXT_L2S_Q as Q};
+    #[allow(non_camel_case_types)]
+    type f32x4 = gen_f32x4<Token>;
+    let zero = f32x4::zero(token);
+    let v = f32x4::from_array(token, linear);
+    let neg_mask = v.simd_lt(zero);
+    let abs_v = v.abs();
+    let linear_result = abs_v * f32x4::splat(token, TWELVE_92);
+    let x = abs_v.sqrt();
+    let yp = f32x4::splat(token, P[6]).mul_add(x, f32x4::splat(token, P[5]));
+    let yp = yp.mul_add(x, f32x4::splat(token, P[4]));
+    let yp = yp.mul_add(x, f32x4::splat(token, P[3]));
+    let yp = yp.mul_add(x, f32x4::splat(token, P[2]));
+    let yp = yp.mul_add(x, f32x4::splat(token, P[1]));
+    let yp = yp.mul_add(x, f32x4::splat(token, P[0]));
+    let yq = f32x4::splat(token, Q[6]).mul_add(x, f32x4::splat(token, Q[5]));
+    let yq = yq.mul_add(x, f32x4::splat(token, Q[4]));
+    let yq = yq.mul_add(x, f32x4::splat(token, Q[3]));
+    let yq = yq.mul_add(x, f32x4::splat(token, Q[2]));
+    let yq = yq.mul_add(x, f32x4::splat(token, Q[1]));
+    let yq = yq.mul_add(x, f32x4::splat(token, Q[0]));
+    let power_result = yp / yq;
+    let thresh_mask = abs_v.simd_lt(f32x4::splat(token, LINEAR_THRESHOLD));
+    let result = f32x4::blend(thresh_mask, linear_result, power_result);
+    f32x4::blend(neg_mask, -result, result).to_array()
 }
 
 /// Convert 4 gamma-encoded values to linear. Input clamped to \[0, 1\].

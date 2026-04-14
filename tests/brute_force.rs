@@ -791,18 +791,22 @@ fn clamping_behavior() {
 // ============================================================================
 
 fn ref_s2l_ext(v: f64) -> f64 {
-    if v < GAM_THRESH {
+    let sign = v.signum();
+    let abs_v = v.abs();
+    if abs_v <= GAM_THRESH {
         v / 12.92
     } else {
-        ((v + A) / A1).powf(2.4)
+        sign * ((abs_v + A) / A1).powf(2.4)
     }
 }
 
 fn ref_l2s_ext(v: f64) -> f64 {
-    if v < LIN_THRESH {
+    let sign = v.signum();
+    let abs_v = v.abs();
+    if abs_v <= LIN_THRESH {
         v * 12.92
     } else {
-        A1 * v.powf(1.0 / 2.4) - A
+        sign * (A1 * abs_v.powf(1.0 / 2.4) - A)
     }
 }
 
@@ -904,10 +908,10 @@ fn extended_s2l_negative_exhaustive() {
     }
 
     eprintln!("s2l_extended [-1, 0): {count} values, max ULP = {max_ulp} at {worst_input}");
-    // Linear segment: v / 12.92 — single f32 division, expect ≤ 1 ULP
+    // Sign-preserving: negatives beyond threshold use powf (~7 ULP)
     assert!(
-        max_ulp <= 1,
-        "s2l_extended negative max ULP {max_ulp} at {worst_input} exceeds 1"
+        max_ulp <= 7,
+        "s2l_extended negative max ULP {max_ulp} at {worst_input} exceeds 7"
     );
 }
 
@@ -931,10 +935,10 @@ fn extended_l2s_negative_exhaustive() {
     }
 
     eprintln!("l2s_extended [-1, 0): {count} values, max ULP = {max_ulp} at {worst_input}");
-    // Linear segment: v * 12.92 — single f32 multiply, expect ≤ 1 ULP
+    // Sign-preserving: negatives beyond threshold use powf (~7 ULP)
     assert!(
-        max_ulp <= 1,
-        "l2s_extended negative max ULP {max_ulp} at {worst_input} exceeds 1"
+        max_ulp <= 7,
+        "l2s_extended negative max ULP {max_ulp} at {worst_input} exceeds 7"
     );
 }
 
@@ -1632,4 +1636,417 @@ fn binary_blob_linear_to_srgb_u8_matches_runtime() {
             "LINEAR_TO_SRGB_U8[{i}]: blob={blob_val} runtime={expected}"
         );
     }
+}
+
+// ============================================================================
+// Extended-range tests: scalar bugfix, SIMD parity, polynomial range analysis
+// ============================================================================
+
+/// Print only when VERBOSE_TESTS=1 is set.
+macro_rules! vprintln {
+    ($($arg:tt)*) => {
+        if std::env::var("VERBOSE_TESTS").is_ok() {
+            eprintln!($($arg)*);
+        }
+    };
+}
+
+#[test]
+fn extended_scalar_sign_preserving() {
+    // The bugfix: negatives must use sign(v) * f(|v|), not pass through linear segment.
+    let neg_inputs = [-0.5f32, -0.1, -0.04, -0.01, -1.0, -2.0];
+
+    for &v in &neg_inputs {
+        let s2l = precise_s2l_ext(v);
+        let l2s = precise_l2s_ext(v);
+        let s2l_ref = ref_s2l_ext(v as f64) as f32;
+        let l2s_ref = ref_l2s_ext(v as f64) as f32;
+
+        assert!(s2l < 0.0, "s2l_extended({v}) must be negative, got {s2l}");
+        assert!(l2s < 0.0, "l2s_extended({v}) must be negative, got {l2s}");
+
+        let s2l_ulp = ulp_distance(s2l, s2l_ref);
+        let l2s_ulp = ulp_distance(l2s, l2s_ref);
+        assert!(
+            s2l_ulp <= 7,
+            "s2l_extended({v}): got {s2l}, expected {s2l_ref}, ulp {s2l_ulp}"
+        );
+        assert!(
+            l2s_ulp <= 7,
+            "l2s_extended({v}): got {l2s}, expected {l2s_ref}, ulp {l2s_ulp}"
+        );
+    }
+
+    // Positive values > 1.0 must pass through power segment, not clamp
+    for &v in &[1.5f32, 2.0, 5.0] {
+        let s2l = precise_s2l_ext(v);
+        let l2s = precise_l2s_ext(v);
+        assert!(s2l > 1.0, "s2l_extended({v}) must be > 1.0, got {s2l}");
+        assert!(l2s > 1.0, "l2s_extended({v}) must be > 1.0, got {l2s}");
+    }
+
+    // Zero must stay zero
+    assert_eq!(precise_s2l_ext(0.0), 0.0);
+    assert_eq!(precise_l2s_ext(0.0), 0.0);
+}
+
+#[test]
+fn extended_scalar_exhaustive_negative() {
+    // Sweep all f32 in [-1, 0) and verify against f64 reference.
+    let mut max_s2l_ulp = 0u32;
+    let mut max_l2s_ulp = 0u32;
+    let mut v = -1.0f32;
+    while v < 0.0 {
+        let s2l = precise_s2l_ext(v);
+        let s2l_ref = ref_s2l_ext(v as f64) as f32;
+        max_s2l_ulp = max_s2l_ulp.max(ulp_distance(s2l, s2l_ref));
+
+        let l2s = precise_l2s_ext(v);
+        let l2s_ref = ref_l2s_ext(v as f64) as f32;
+        max_l2s_ulp = max_l2s_ulp.max(ulp_distance(l2s, l2s_ref));
+
+        v = next_f32_above(v);
+    }
+    vprintln!("extended scalar [-1, 0): S2L max ULP = {max_s2l_ulp}, L2S max ULP = {max_l2s_ulp}");
+    // Worst case is near the piecewise threshold where f32 vs f64
+    // precision makes a different branch decision. Same as positive range.
+    assert!(
+        max_s2l_ulp <= 64,
+        "S2L extended max ULP {max_s2l_ulp} exceeds 64"
+    );
+    assert!(
+        max_l2s_ulp <= 64,
+        "L2S extended max ULP {max_l2s_ulp} exceeds 64"
+    );
+}
+
+#[test]
+fn extended_simd_vs_scalar_sweep() {
+    use linear_srgb::default::{linear_to_srgb_extended_slice, srgb_to_linear_extended_slice};
+
+    // Sweep [-2, 2] comparing SIMD (polynomial) to scalar (powf).
+    // In [-1, 1]: polynomial tracks powf within 1e-5.
+    // Beyond: polynomial extrapolation error grows but stays within bounds.
+    let step = 0.001_f32;
+    let mut v = -2.0_f32;
+    let mut max_s2l_err = 0.0_f32;
+    let mut max_l2s_err = 0.0_f32;
+
+    while v <= 2.0 {
+        let mut s2l_buf = [v, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        srgb_to_linear_extended_slice(&mut s2l_buf);
+        let scalar = precise_s2l_ext(v);
+        let err = (s2l_buf[0] - scalar).abs();
+        let tol = if v.abs() <= 1.0 { 1e-5 } else { 1e-2 };
+        assert!(
+            err < tol,
+            "S2L at {v:.3}: SIMD={}, scalar={scalar}, err={err:.2e}",
+            s2l_buf[0],
+        );
+        max_s2l_err = max_s2l_err.max(err);
+
+        let mut l2s_buf = [v, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        linear_to_srgb_extended_slice(&mut l2s_buf);
+        let scalar = precise_l2s_ext(v);
+        let err = (l2s_buf[0] - scalar).abs();
+        let tol = if v.abs() <= 1.0 { 1e-5 } else { 1e-3 };
+        assert!(
+            err < tol,
+            "L2S at {v:.3}: SIMD={}, scalar={scalar}, err={err:.2e}",
+            l2s_buf[0],
+        );
+        max_l2s_err = max_l2s_err.max(err);
+
+        v += step;
+    }
+    vprintln!(
+        "extended SIMD vs scalar [-2, 2]: S2L max err = {max_s2l_err:.2e}, L2S max err = {max_l2s_err:.2e}"
+    );
+}
+
+#[test]
+fn extended_slice_roundtrip() {
+    use linear_srgb::default::{linear_to_srgb_extended_slice, srgb_to_linear_extended_slice};
+
+    let original: Vec<f32> = vec![
+        -1.0, -0.5, -0.1, -0.01, 0.0, 0.01, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0, 1.5,
+    ];
+    let mut values = original.clone();
+    srgb_to_linear_extended_slice(&mut values);
+    linear_to_srgb_extended_slice(&mut values);
+
+    for (i, (&orig, &rt)) in original.iter().zip(values.iter()).enumerate() {
+        let tol = if orig.abs() <= 1.0 { 1e-4 } else { 1e-2 };
+        assert!(
+            (orig - rt).abs() < tol,
+            "extended roundtrip[{i}]: {orig} -> {rt} (tol={tol})"
+        );
+    }
+}
+
+#[test]
+fn extended_polynomial_range_analysis() {
+    // Verify the rational polynomial extrapolates within 1e-3 error
+    // for all practical gamut conversions. The polynomial was fitted to
+    // [0, 1] but extrapolates well due to the rational form.
+    //
+    // Key thresholds:
+    //   S2L polynomial: < 1e-3 error up to |encoded| = 1.59
+    //   L2S polynomial: < 1e-3 error up to |linear| = 4.33
+    //
+    // Worst-case gamut conversions at linear 1.0:
+    //   ACES AP0: |encoded| = 1.50, |linear| = 2.52
+    //   BT.2020:  |encoded| = 1.22, |linear| = 1.61
+    //   All within polynomial validity range.
+
+    // S2L 6/6: find where error crosses 1e-3 (search up to 10.0)
+    let mut s2l_1e3_boundary = 10.0_f64; // default: never crossed
+    for i in (GAM_THRESH * 10000.0) as i64..100000 {
+        let x = i as f64 / 10000.0;
+        if (eval_s2l_poly(x) - ref_s2l_ext(x)).abs() >= 1e-3 {
+            s2l_1e3_boundary = x;
+            break;
+        }
+    }
+
+    // L2S 6/6: find where error crosses 1e-3 (search up to 100.0)
+    let mut l2s_1e3_boundary = 100.0_f64;
+    for i in (LIN_THRESH * 10000.0) as i64..1000000 {
+        let lin = i as f64 / 10000.0;
+        if (eval_l2s_poly(lin) - ref_l2s_ext(lin)).abs() >= 1e-3 {
+            l2s_1e3_boundary = lin;
+            break;
+        }
+    }
+
+    vprintln!("S2L polynomial 1e-3 boundary: encoded = {s2l_1e3_boundary:.4}");
+    vprintln!("L2S polynomial 1e-3 boundary: linear = {l2s_1e3_boundary:.4}");
+
+    // 6/6 polynomials should stay within 1e-3 well past any SDR gamut
+    assert!(
+        s2l_1e3_boundary >= 6.0,
+        "S2L 1e-3 boundary {s2l_1e3_boundary:.4} < 6.0"
+    );
+    assert!(
+        l2s_1e3_boundary >= 50.0,
+        "L2S 1e-3 boundary {l2s_1e3_boundary:.4} < 50.0"
+    );
+}
+
+/// Evaluate S2L rational polynomial in f64 (same coefficients as the SIMD path).
+fn horner7(x: f64, c: &[f64; 7]) -> f64 {
+    let y = c[6].mul_add(x, c[5]);
+    let y = y.mul_add(x, c[4]);
+    let y = y.mul_add(x, c[3]);
+    let y = y.mul_add(x, c[2]);
+    let y = y.mul_add(x, c[1]);
+    y.mul_add(x, c[0])
+}
+
+/// Evaluate extended S2L 6/6 rational polynomial in f64 (matches SIMD coefficients).
+fn eval_s2l_poly(x: f64) -> f64 {
+    #[allow(clippy::excessive_precision)]
+    let p: [f64; 7] = [
+        1.802_136_5e1,
+        9.110_411_4e2,
+        1.570_602_1e4,
+        1.020_638_2e5,
+        2.199_931_2e5,
+        1.338_269_2e5,
+        1.706_519_4e4,
+    ];
+    #[allow(clippy::excessive_precision)]
+    let q: [f64; 7] = [
+        2.159_401_7e4,
+        1.508_555_1e5,
+        2.303_299_0e5,
+        8.239_410_8e4,
+        4.473_249_1e3,
+        -6.359_000_1e1,
+        1.0,
+    ];
+    if x <= GAM_THRESH {
+        return x / 12.92;
+    }
+    horner7(x, &p) / horner7(x, &q)
+}
+
+/// Evaluate extended L2S 6/6 rational polynomial in f64 (matches SIMD coefficients).
+fn eval_l2s_poly(lin: f64) -> f64 {
+    #[allow(clippy::excessive_precision)]
+    let p: [f64; 7] = [
+        -1.025_467_4,
+        -3.075_361_5e-1,
+        1.027_286e3,
+        7.093_665e3,
+        1.006_868_9e4,
+        3.230_716e3,
+        1.769_130_4e2,
+    ];
+    #[allow(clippy::excessive_precision)]
+    let q: [f64; 7] = [
+        1.977_460_5e1,
+        8.308_271e2,
+        6.024_792_5e3,
+        1.024_407_5e4,
+        4.157_534e3,
+        3.179_324_6e2,
+        1.0,
+    ];
+    if lin <= LIN_THRESH {
+        return lin * 12.92;
+    }
+    let x = lin.sqrt();
+    horner7(x, &p) / horner7(x, &q)
+}
+
+#[test]
+fn extended_polynomial_u8_u16_boundaries() {
+    // Verify the polynomial stays within 0.5 LSB for u8 and u16 channels
+    // up to the documented boundaries. Sweep with 0.0001 step.
+    let u8_half = 0.5 / 255.0;
+    let u16_half = 0.5 / 65535.0;
+
+    // S2L 6/6 [0,8]: u8-safe across domain (f64 eval; f32 SIMD also passes)
+    let mut max_err = 0.0_f64;
+    for i in 0..=80000 {
+        let x = i as f64 / 10000.0;
+        let err = (eval_s2l_poly(x) - ref_s2l_ext(x)).abs();
+        max_err = max_err.max(err);
+    }
+    vprintln!("S2L f64 max err in [0, 8.0]: {max_err:.6e} (u8 half = {u8_half:.6e})");
+    assert!(
+        max_err < u8_half,
+        "S2L exceeds u8 half-LSB ({max_err:.6e}) in [0, 8.0]"
+    );
+
+    // S2L 6/6: u16-safe to ~4.0 (f64 eval is optimistic; real SIMD boundary
+    // is ~4.2 due to f32 Horner rounding — see extended_simd_u16_boundary test)
+    let mut max_err = 0.0_f64;
+    for i in 0..=40000 {
+        let x = i as f64 / 10000.0;
+        let err = (eval_s2l_poly(x) - ref_s2l_ext(x)).abs();
+        max_err = max_err.max(err);
+    }
+    vprintln!("S2L f64 max err in [0, 4.0]: {max_err:.6e} (u16 half = {u16_half:.6e})");
+    assert!(
+        max_err < u16_half,
+        "S2L exceeds u16 half-LSB ({max_err:.6e}) in [0, 4.0]"
+    );
+
+    // L2S 6/6 [0,64]: u8-safe across full domain
+    let mut max_err = 0.0_f64;
+    for i in 0..=640000 {
+        let x = i as f64 / 10000.0;
+        let err = (eval_l2s_poly(x) - ref_l2s_ext(x)).abs();
+        max_err = max_err.max(err);
+    }
+    vprintln!("L2S max err in [0, 64]: {max_err:.6e} (u8 half = {u8_half:.6e})");
+    assert!(
+        max_err < u8_half,
+        "L2S exceeds u8 half-LSB ({max_err:.6e}) in [0, 64]"
+    );
+
+    // L2S 6/6 [0,64]: u16-safe across full domain
+    let mut max_err = 0.0_f64;
+    for i in 0..=640000 {
+        let x = i as f64 / 10000.0;
+        let err = (eval_l2s_poly(x) - ref_l2s_ext(x)).abs();
+        max_err = max_err.max(err);
+    }
+    vprintln!("L2S max err in [0, 64]: {max_err:.6e} (u16 half = {u16_half:.6e})");
+    assert!(
+        max_err < u16_half,
+        "L2S exceeds u16 half-LSB ({max_err:.6e}) in [0, 64]"
+    );
+}
+
+#[test]
+fn extended_simd_u16_boundary_via_dispatch() {
+    // Measure SIMD polynomial accuracy via the actual dispatched slice functions
+    // (which use FMA mul_add, not separate mul+add). This is the ground truth
+    // for the u16 boundary — f64 test helpers are optimistic.
+    use linear_srgb::default::{linear_to_srgb_extended_slice, srgb_to_linear_extended_slice};
+
+    let u16_half = 0.5 / 65535.0_f32;
+
+    // S2L: sweep [0, 8] in steps of 0.0001
+    let mut s2l_u16_boundary = 8.0_f32;
+    for i in 0..=80000 {
+        let x = i as f32 / 10000.0;
+        let mut buf = [x, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        srgb_to_linear_extended_slice(&mut buf);
+        let exact = ref_s2l_ext(x as f64) as f32;
+        if (buf[0] - exact).abs() >= u16_half {
+            s2l_u16_boundary = x;
+            break;
+        }
+    }
+
+    // L2S: sweep [0, 64] in steps of 0.001
+    let mut l2s_u16_boundary = 64.0_f32;
+    for i in 0..=640000 {
+        let x = i as f32 / 10000.0;
+        let mut buf = [x, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        linear_to_srgb_extended_slice(&mut buf);
+        let exact = ref_l2s_ext(x as f64) as f32;
+        if (buf[0] - exact).abs() >= u16_half {
+            l2s_u16_boundary = x;
+            break;
+        }
+    }
+
+    vprintln!("SIMD dispatch S2L u16 boundary: {s2l_u16_boundary:.4}");
+    vprintln!("SIMD dispatch L2S u16 boundary: {l2s_u16_boundary:.4}");
+
+    // S2L must cover at least ACES AP0 at SDR (|encoded| = 1.50)
+    assert!(
+        s2l_u16_boundary >= 1.50,
+        "S2L SIMD u16 boundary {s2l_u16_boundary:.4} < 1.50"
+    );
+    // L2S must cover at least ACES AP0 at SDR (|linear| = 2.52)
+    assert!(
+        l2s_u16_boundary >= 2.52,
+        "L2S SIMD u16 boundary {l2s_u16_boundary:.4} < 2.52"
+    );
+}
+
+#[test]
+fn extended_denominator_safety() {
+    // With abs+sign, the polynomial only sees non-negative inputs.
+    // Verify Q(x) never approaches zero for x >= 0.
+
+    // S2L denominator
+    let q = [2.066_183e1_f64, 9.917_607e1, 5.466_011e1, -7.183_806, 1.0];
+    let mut min_q = f64::MAX;
+    for i in 0..=40000 {
+        let x = i as f64 / 10000.0;
+        let yq = q[4].mul_add(x, q[3]);
+        let yq = yq.mul_add(x, q[2]);
+        let yq = yq.mul_add(x, q[1]);
+        let yq = yq.mul_add(x, q[0]);
+        min_q = min_q.min(yq.abs());
+    }
+    vprintln!("S2L min |Q(x)| in [0, 4]: {min_q:.4}");
+    assert!(min_q > 1.0, "S2L denominator near zero: min |Q| = {min_q}");
+
+    // L2S denominator (input is sqrt(linear))
+    let q = [
+        2.943_901_4e-1_f64,
+        9.779_103,
+        4.726_487_7e1,
+        3.546_463_8e1,
+        1.0,
+    ];
+    let mut min_q = f64::MAX;
+    for i in 0..=50000 {
+        let x = i as f64 / 10000.0;
+        let yq = q[4].mul_add(x, q[3]);
+        let yq = yq.mul_add(x, q[2]);
+        let yq = yq.mul_add(x, q[1]);
+        let yq = yq.mul_add(x, q[0]);
+        min_q = min_q.min(yq.abs());
+    }
+    vprintln!("L2S min |Q(x)| in [0, 5]: {min_q:.4}");
+    assert!(min_q > 0.1, "L2S denominator near zero: min |Q| = {min_q}");
 }

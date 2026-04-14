@@ -518,6 +518,164 @@ pub fn linear_to_srgb_rgba_slice(values: &mut [f32]) {
 }
 
 // ============================================================================
+// Extended-range sRGB ↔ Linear Slice Functions (no clamping)
+// ============================================================================
+
+#[cfg(target_arch = "x86_64")]
+#[arcane]
+fn srgb_to_linear_extended_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
+    crate::tokens::x8::srgb_to_linear_extended_slice_v3(token, values);
+}
+
+#[cfg(target_arch = "aarch64")]
+#[arcane]
+fn srgb_to_linear_extended_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<4>();
+    for chunk in chunks {
+        *chunk = crate::tokens::x4::srgb_to_linear_extended_neon(token, *chunk);
+    }
+    for v in remainder {
+        *v = crate::scalar::srgb_to_linear_extended(*v);
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[arcane]
+fn srgb_to_linear_extended_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<4>();
+    for chunk in chunks {
+        *chunk = crate::tokens::x4::srgb_to_linear_extended_wasm128(token, *chunk);
+    }
+    for v in remainder {
+        *v = crate::scalar::srgb_to_linear_extended(*v);
+    }
+}
+
+fn srgb_to_linear_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+    for v in values.iter_mut() {
+        *v = crate::scalar::srgb_to_linear_extended(*v);
+    }
+}
+
+/// Convert sRGB f32 values to linear in-place without clamping (extended range).
+///
+/// Uses sign-preserving extension per CSS Color 4: `sign(v) * eotf(|v|)`.
+/// Pure SIMD polynomial on x86-64 (AVX2+FMA), AArch64 (NEON), and
+/// WebAssembly (SIMD128). Scalar `powf` fallback on other architectures.
+///
+/// Designed for **SDR cross-gamut conversion** — converting between gamuts
+/// (P3→sRGB, BT.2020→sRGB, etc.) at SDR peak (linear 1.0). Out-of-gamut
+/// values from the 3×3 matrix survive the transfer function and can be
+/// gamut-mapped or composited downstream.
+///
+/// # Accuracy
+///
+/// Uses a 6/6 rational polynomial fitted to \[0, 8\] — wider domain
+/// than the clamped path's 4/4 polynomial, with comparable in-range
+/// accuracy (5 ULP max in \[0,1\] vs 11 for clamped).
+///
+/// | Precision | Max |encoded| for < 0.5 LSB error | Headroom |
+/// |-----------|-------------------------------------|----------|
+/// | u8 (8-bit) | 8.0 | 8× SDR |
+/// | u16 (16-bit) | ~4.2 | ~4× SDR |
+///
+/// Covers all SDR cross-gamut conversions at u16 precision (ACES AP0
+/// worst case is 1.50). u16 boundary measured via SIMD FMA dispatch.
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::srgb_to_linear_extended_slice;
+///
+/// let mut values = vec![-0.1f32, 0.0, 0.5, 1.0, 1.5];
+/// srgb_to_linear_extended_slice(&mut values);
+/// assert!(values[0] < 0.0);  // negative preserved
+/// assert!(values[4] > 1.0);  // super-white preserved
+/// ```
+#[inline]
+pub fn srgb_to_linear_extended_slice(values: &mut [f32]) {
+    incant!(
+        srgb_to_linear_extended_slice_tier(values),
+        [v3, neon, wasm128, scalar]
+    )
+}
+
+#[cfg(target_arch = "x86_64")]
+#[arcane]
+fn linear_to_srgb_extended_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
+    crate::tokens::x8::linear_to_srgb_extended_slice_v3(token, values);
+}
+
+#[cfg(target_arch = "aarch64")]
+#[arcane]
+fn linear_to_srgb_extended_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<4>();
+    for chunk in chunks {
+        *chunk = crate::tokens::x4::linear_to_srgb_extended_neon(token, *chunk);
+    }
+    for v in remainder {
+        *v = crate::scalar::linear_to_srgb_extended(*v);
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[arcane]
+fn linear_to_srgb_extended_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<4>();
+    for chunk in chunks {
+        *chunk = crate::tokens::x4::linear_to_srgb_extended_wasm128(token, *chunk);
+    }
+    for v in remainder {
+        *v = crate::scalar::linear_to_srgb_extended(*v);
+    }
+}
+
+fn linear_to_srgb_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+    for v in values.iter_mut() {
+        *v = crate::scalar::linear_to_srgb_extended(*v);
+    }
+}
+
+/// Convert linear f32 values to sRGB in-place without clamping (extended range).
+///
+/// Uses sign-preserving extension per CSS Color 4: `sign(v) * oetf(|v|)`.
+/// Pure SIMD polynomial on x86-64 (AVX2+FMA), AArch64 (NEON), and
+/// WebAssembly (SIMD128). Scalar `powf` fallback on other architectures.
+///
+/// Designed for **SDR cross-gamut conversion** — converting between gamuts
+/// (P3→sRGB, BT.2020→sRGB, etc.) at SDR peak (linear 1.0).
+///
+/// # Accuracy
+///
+/// Uses a 6/6 rational polynomial fitted on √x to \[0, 64\]. The sqrt
+/// compression gives excellent extrapolation — u16-safe across the
+/// entire fitted domain (5 ULP max in \[0,1\]).
+///
+/// | Precision | Max |linear| for < 0.5 LSB error | Headroom |
+/// |-----------|--------------------------------------|----------|
+/// | u8 (8-bit) | 64.0 | 64× SDR |
+/// | u16 (16-bit) | 64.0 | 64× SDR |
+///
+/// Covers all SDR cross-gamut conversions and all practical HDR
+/// scenarios at u16 precision.
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::linear_to_srgb_extended_slice;
+///
+/// let mut values = vec![-0.1f32, 0.0, 0.5, 1.0, 1.5];
+/// linear_to_srgb_extended_slice(&mut values);
+/// assert!(values[0] < 0.0);  // negative preserved
+/// assert!(values[4] > 1.0);  // super-white preserved
+/// ```
+#[inline]
+pub fn linear_to_srgb_extended_slice(values: &mut [f32]) {
+    incant!(
+        linear_to_srgb_extended_slice_tier(values),
+        [v3, neon, wasm128, scalar]
+    )
+}
+
+// ============================================================================
 // sRGB→Linear + Premultiply RGBA f32 (SIMD-fused single-pass)
 // ============================================================================
 
