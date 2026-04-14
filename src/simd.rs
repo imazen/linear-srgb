@@ -577,10 +577,10 @@ fn srgb_to_linear_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [
 /// | Precision | Max |encoded| for < 0.5 LSB error | Headroom |
 /// |-----------|-------------------------------------|----------|
 /// | u8 (8-bit) | 8.0 | 8× SDR |
-/// | u16 (16-bit) | 6.0 | 6× SDR |
+/// | u16 (16-bit) | ~4.2 | ~4× SDR |
 ///
-/// Covers all SDR cross-gamut conversions at u16 precision, plus
-/// moderate HDR (up to ~1200 nits for BT.2020 at u16).
+/// Covers all SDR cross-gamut conversions at u16 precision (ACES AP0
+/// worst case is 1.50). u16 boundary measured via SIMD FMA dispatch.
 ///
 /// # Example
 /// ```

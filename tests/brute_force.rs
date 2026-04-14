@@ -1907,30 +1907,31 @@ fn extended_polynomial_u8_u16_boundaries() {
     let u8_half = 0.5 / 255.0;
     let u16_half = 0.5 / 65535.0;
 
-    // S2L 6/6 [0,8]: u8-safe to |encoded| ≤ 8.0
+    // S2L 6/6 [0,8]: u8-safe across domain (f64 eval; f32 SIMD also passes)
     let mut max_err = 0.0_f64;
     for i in 0..=80000 {
         let x = i as f64 / 10000.0;
         let err = (eval_s2l_poly(x) - ref_s2l_ext(x)).abs();
         max_err = max_err.max(err);
     }
-    vprintln!("S2L max err in [0, 8.0]: {max_err:.6e} (u8 half = {u8_half:.6e})");
+    vprintln!("S2L f64 max err in [0, 8.0]: {max_err:.6e} (u8 half = {u8_half:.6e})");
     assert!(
         max_err < u8_half,
         "S2L exceeds u8 half-LSB ({max_err:.6e}) in [0, 8.0]"
     );
 
-    // S2L 6/6 [0,8]: u16-safe to |encoded| ≤ 6.0
+    // S2L 6/6: u16-safe to ~4.0 (f64 eval is optimistic; real SIMD boundary
+    // is ~4.2 due to f32 Horner rounding — see extended_simd_u16_boundary test)
     let mut max_err = 0.0_f64;
-    for i in 0..=60000 {
+    for i in 0..=40000 {
         let x = i as f64 / 10000.0;
         let err = (eval_s2l_poly(x) - ref_s2l_ext(x)).abs();
         max_err = max_err.max(err);
     }
-    vprintln!("S2L max err in [0, 6.0]: {max_err:.6e} (u16 half = {u16_half:.6e})");
+    vprintln!("S2L f64 max err in [0, 4.0]: {max_err:.6e} (u16 half = {u16_half:.6e})");
     assert!(
         max_err < u16_half,
-        "S2L exceeds u16 half-LSB ({max_err:.6e}) in [0, 6.0]"
+        "S2L exceeds u16 half-LSB ({max_err:.6e}) in [0, 4.0]"
     );
 
     // L2S 6/6 [0,64]: u8-safe across full domain
@@ -1957,6 +1958,56 @@ fn extended_polynomial_u8_u16_boundaries() {
     assert!(
         max_err < u16_half,
         "L2S exceeds u16 half-LSB ({max_err:.6e}) in [0, 64]"
+    );
+}
+
+#[test]
+fn extended_simd_u16_boundary_via_dispatch() {
+    // Measure SIMD polynomial accuracy via the actual dispatched slice functions
+    // (which use FMA mul_add, not separate mul+add). This is the ground truth
+    // for the u16 boundary — f64 test helpers are optimistic.
+    use linear_srgb::default::{linear_to_srgb_extended_slice, srgb_to_linear_extended_slice};
+
+    let u16_half = 0.5 / 65535.0_f32;
+
+    // S2L: sweep [0, 8] in steps of 0.0001
+    let mut s2l_u16_boundary = 8.0_f32;
+    for i in 0..=80000 {
+        let x = i as f32 / 10000.0;
+        let mut buf = [x, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        srgb_to_linear_extended_slice(&mut buf);
+        let exact = ref_s2l_ext(x as f64) as f32;
+        if (buf[0] - exact).abs() >= u16_half {
+            s2l_u16_boundary = x;
+            break;
+        }
+    }
+
+    // L2S: sweep [0, 64] in steps of 0.001
+    let mut l2s_u16_boundary = 64.0_f32;
+    for i in 0..=640000 {
+        let x = i as f32 / 10000.0;
+        let mut buf = [x, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        linear_to_srgb_extended_slice(&mut buf);
+        let exact = ref_l2s_ext(x as f64) as f32;
+        if (buf[0] - exact).abs() >= u16_half {
+            l2s_u16_boundary = x;
+            break;
+        }
+    }
+
+    vprintln!("SIMD dispatch S2L u16 boundary: {s2l_u16_boundary:.4}");
+    vprintln!("SIMD dispatch L2S u16 boundary: {l2s_u16_boundary:.4}");
+
+    // S2L must cover at least ACES AP0 at SDR (|encoded| = 1.50)
+    assert!(
+        s2l_u16_boundary >= 1.50,
+        "S2L SIMD u16 boundary {s2l_u16_boundary:.4} < 1.50"
+    );
+    // L2S must cover at least ACES AP0 at SDR (|linear| = 2.52)
+    assert!(
+        l2s_u16_boundary >= 2.52,
+        "L2S SIMD u16 boundary {l2s_u16_boundary:.4} < 2.52"
     );
 }
 
