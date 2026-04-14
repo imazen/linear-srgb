@@ -62,7 +62,7 @@ pub(crate) const L2S_Q: [f32; 5] = [2.943_901_4e-1, 9.779_103, 4.726_487_7e1, 3.
 // =============================================================================
 
 /// Extended sRGB EOTF numerator (degree 6, fitted to [threshold, 8]).
-/// 5 ULP max in [0,1], u16-safe to |encoded| ≤ 6.18, u8-safe to 8.0.
+/// 5 ULP max in [0,1], u16-safe to |encoded| ≤ ~4.2 (SIMD FMA), u8-safe to 8.0.
 #[allow(clippy::excessive_precision)]
 pub(crate) const EXT_S2L_P: [f32; 7] = [
     1.802_136_5e1,
