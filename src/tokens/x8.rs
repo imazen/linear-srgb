@@ -128,7 +128,7 @@ pub fn srgb_to_linear_extended_v3(token: X64V3Token, srgb: [f32; 8]) -> [f32; 8]
 /// Convert 8 linear values to sRGB without clamping (extended range).
 ///
 /// Uses abs+sign with a 6/6 rational polynomial fitted on √x to \[0, 64\].
-/// 9 ULP max in \[0,1\], u16-safe across the full \[0, 64\] domain.
+/// 7 ULP max in \[0,1\], u16-safe across the full \[0, 64\] domain.
 /// Pure SIMD — no per-lane branching or scalar fallback.
 #[rite]
 pub fn linear_to_srgb_extended_v3(token: X64V3Token, linear: [f32; 8]) -> [f32; 8] {

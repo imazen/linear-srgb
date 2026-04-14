@@ -648,7 +648,7 @@ fn linear_to_srgb_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [
 ///
 /// Uses a 6/6 rational polynomial fitted on √x to \[0, 64\]. The sqrt
 /// compression gives excellent extrapolation — u16-safe across the
-/// entire fitted domain (9 ULP max in \[0,1\]).
+/// entire fitted domain (7 ULP max in \[0,1\]).
 ///
 /// | Precision | Max |linear| for < 0.5 LSB error | Headroom |
 /// |-----------|--------------------------------------|----------|

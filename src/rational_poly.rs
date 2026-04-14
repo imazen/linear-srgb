@@ -87,27 +87,28 @@ pub(crate) const EXT_S2L_Q: [f32; 7] = [
 ];
 
 /// Extended sRGB inverse EOTF numerator (degree 6, fitted on sqrt to [threshold, 64]).
-/// 9 ULP max in [0,1], u16-safe across full [0, 64] domain.
+/// 7 ULP max in [0,1], u16-safe across full [0, 64] domain.
+/// Coefficients from polyfit (SK init + LM with analytical Jacobian, boundary snap).
 #[allow(clippy::excessive_precision)]
 pub(crate) const EXT_L2S_P: [f32; 7] = [
-    -1.780_184_6,
-    5.030_732_0,
-    1.656_664_9e3,
-    1.017_330_6e4,
-    1.298_072_5e4,
-    3.771_270_8e3,
-    1.888_817_8e2,
+    -1.025_468_1,
+    -3.075_366e-1,
+    1.027_286e3,
+    7.093_665e3,
+    1.006_868_75e4,
+    3.230_715_8e3,
+    1.769_128_1e2,
 ];
 
 /// Extended sRGB inverse EOTF denominator (degree 6, fitted on sqrt to [threshold, 64]).
 #[allow(clippy::excessive_precision)]
 pub(crate) const EXT_L2S_Q: [f32; 7] = [
-    3.446_206_7e1,
-    1.327_327_9e3,
-    8.730_898_7e3,
-    1.340_767_0e4,
-    4.928_503_9e3,
-    3.442_401_8e2,
+    1.977_460_5e1,
+    8.308_271e2,
+    6.024_792e3,
+    1.024_407_5e4,
+    4.157_535e3,
+    3.179_329_2e2,
     1.0,
 ];
 
