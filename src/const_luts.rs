@@ -6,6 +6,9 @@
 //!
 //! Generated using C0-continuous sRGB constants (moxcms).
 
+#[cfg(not(target_endian = "little"))]
+compile_error!("const_luts binary blobs are little-endian; big-endian targets need a byte-swap path or regenerated tables");
+
 // LinearTable8: sRGB u8 → linear f32 (256 entries, 1 KB)
 static LINEAR_TABLE_8_BYTES: &[u8; 256 * 4] = include_bytes!("data/linear_table_8.bin");
 
