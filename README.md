@@ -265,11 +265,14 @@ the `iec` feature for `linear_srgb::iec::srgb_to_linear` /
 
 ### Accuracy summary (exhaustive f32 sweep)
 
-| Path | Max ULP | Avg ULP | Monotonic | Domain |
-|------|---------|---------|-----------|--------|
+ULP measured in [0, 1] against f64 reference. "Fitted domain" is the range
+where the polynomial maintains accuracy beyond [0, 1].
+
+| Path | Max ULP | Avg ULP | Monotonic | Fitted domain |
+|------|---------|---------|-----------|---------------|
 | `default` s→l (4/4 rational poly) | 11 | ~0.5 | yes | [0, 1] |
 | `default` l→s (4/4 rational poly) | 14 | ~0.4 | yes | [0, 1] |
-| `extended_slice` s→l (6/6 rational poly) | 5 | ~1.5 | yes | [0, 8] |
+| `extended_slice` s→l (6/6 rational poly) | 5 | ~2.0 | yes | [0, 8] |
 | `extended_slice` l→s (6/6 rational poly) | 5 | ~1.5 | yes | [0, 64] |
 | `precise` s→l (powf) | 6 | ~0.1 | yes | unbounded |
 | `precise` l→s (powf) | 3 | ~0.1 | yes | unbounded |
