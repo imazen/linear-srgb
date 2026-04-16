@@ -253,6 +253,23 @@ pub mod tf;
 pub mod iec;
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+/// Alpha threshold for unpremultiply operations.
+///
+/// Pixels with alpha at or below this value skip the divide-by-alpha step;
+/// their RGB channels are zeroed instead. This prevents division by
+/// near-zero alpha from amplifying filter-ringing noise into bright
+/// white fringe artifacts at transparent edges.
+///
+/// The value `1.0 / 1024.0` (~0.000977) is well below the smallest alpha
+/// that rounds to u8=1 (`0.5 / 255.0` ≈ 0.00196), so it never affects
+/// visible pixels in u8 output. It matches the threshold used by
+/// zenresize's SIMD unpremultiply and Chrome Skia's approach.
+pub const UNPREMUL_ALPHA_THRESHOLD: f32 = 1.0 / 1024.0;
+
+// ============================================================================
 // Internal modules
 // ============================================================================
 

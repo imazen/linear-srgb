@@ -802,10 +802,10 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier_v4(token: X64V4Token, values: &m
     for chunk in chunks {
         let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
         let inv = [
-            if a[0] > 0.0 { 1.0 / a[0] } else { 0.0 },
-            if a[1] > 0.0 { 1.0 / a[1] } else { 0.0 },
-            if a[2] > 0.0 { 1.0 / a[2] } else { 0.0 },
-            if a[3] > 0.0 { 1.0 / a[3] } else { 0.0 },
+            if a[0] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[0] } else { 0.0 },
+            if a[1] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[1] } else { 0.0 },
+            if a[2] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[2] } else { 0.0 },
+            if a[3] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[3] } else { 0.0 },
         ];
         let inv_alpha = mt_f32x16::from_array(
             token,
@@ -820,7 +820,7 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier_v4(token: X64V4Token, values: &m
     }
     for pixel in remainder.chunks_exact_mut(4) {
         let a = pixel[3];
-        if a > 0.0 {
+        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
             let inv_a = 1.0 / a;
             pixel[0] = crate::scalar::linear_to_srgb(pixel[0] * inv_a);
             pixel[1] = crate::scalar::linear_to_srgb(pixel[1] * inv_a);
@@ -840,8 +840,8 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier_v3(token: X64V3Token, values: &m
     for chunk in chunks {
         let a = [chunk[3], chunk[7]];
         let inv = [
-            if a[0] > 0.0 { 1.0 / a[0] } else { 0.0 },
-            if a[1] > 0.0 { 1.0 / a[1] } else { 0.0 },
+            if a[0] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[0] } else { 0.0 },
+            if a[1] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[1] } else { 0.0 },
         ];
         let inv_alpha = mt_f32x8::from_array(
             token,
@@ -853,7 +853,7 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier_v3(token: X64V3Token, values: &m
     }
     for pixel in remainder.chunks_exact_mut(4) {
         let a = pixel[3];
-        if a > 0.0 {
+        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
             let inv_a = 1.0 / a;
             pixel[0] = crate::scalar::linear_to_srgb(pixel[0] * inv_a);
             pixel[1] = crate::scalar::linear_to_srgb(pixel[1] * inv_a);
@@ -872,7 +872,7 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier_neon(token: NeonToken, values: &
     let (chunks, _remainder) = values.as_chunks_mut::<4>();
     for chunk in chunks {
         let a = chunk[3];
-        if a > 0.0 {
+        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
             let inv_a = 1.0 / a;
             let unpremul = [chunk[0] * inv_a, chunk[1] * inv_a, chunk[2] * inv_a, 1.0];
             *chunk = crate::tokens::x4::linear_to_srgb_neon(token, unpremul);
@@ -891,7 +891,7 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier_wasm128(token: Wasm128Token, val
     let (chunks, _remainder) = values.as_chunks_mut::<4>();
     for chunk in chunks {
         let a = chunk[3];
-        if a > 0.0 {
+        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
             let inv_a = 1.0 / a;
             let unpremul = [chunk[0] * inv_a, chunk[1] * inv_a, chunk[2] * inv_a, 1.0];
             *chunk = crate::tokens::x4::linear_to_srgb_wasm128(token, unpremul);
@@ -907,7 +907,7 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier_wasm128(token: Wasm128Token, val
 fn unpremultiply_linear_to_srgb_rgba_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
     for pixel in values.chunks_exact_mut(4) {
         let a = pixel[3];
-        if a > 0.0 {
+        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
             let inv_a = 1.0 / a;
             pixel[0] = crate::scalar::linear_to_srgb(pixel[0] * inv_a);
             pixel[1] = crate::scalar::linear_to_srgb(pixel[1] * inv_a);
@@ -1234,7 +1234,7 @@ pub fn unpremultiply_linear_to_srgb_u8_rgba_slice(input: &[f32], output: &mut [u
     let out_pixels = output.chunks_exact_mut(4);
     for (inp, out) in in_pixels.zip(out_pixels) {
         let a = inp[3];
-        if a > 0.0 {
+        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
             let inv_a = 1.0 / a;
             for i in 0..3 {
                 let clamped = (inp[i] * inv_a).clamp(0.0, 1.0);
@@ -1641,13 +1641,13 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_v4(
             let inv_alpha = mt_f32x8::from_array(
                 t3,
                 [
-                    if a0 > 0.0 { 1.0 / a0 } else { 0.0 },
-                    if a0 > 0.0 { 1.0 / a0 } else { 0.0 },
-                    if a0 > 0.0 { 1.0 / a0 } else { 0.0 },
+                    if a0 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a0 } else { 0.0 },
+                    if a0 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a0 } else { 0.0 },
+                    if a0 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a0 } else { 0.0 },
                     1.0,
-                    if a1 > 0.0 { 1.0 / a1 } else { 0.0 },
-                    if a1 > 0.0 { 1.0 / a1 } else { 0.0 },
-                    if a1 > 0.0 { 1.0 / a1 } else { 0.0 },
+                    if a1 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a1 } else { 0.0 },
+                    if a1 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a1 } else { 0.0 },
+                    if a1 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a1 } else { 0.0 },
                     1.0,
                 ],
             );
@@ -1660,7 +1660,7 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_v4(
     }
     for pixel in remainder.chunks_exact_mut(4) {
         let a = pixel[3];
-        if a > 0.0 {
+        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
             let inv_a = 1.0 / a;
             pixel[0] = crate::scalar::linear_to_gamma(pixel[0] * inv_a, gamma);
             pixel[1] = crate::scalar::linear_to_gamma(pixel[1] * inv_a, gamma);
@@ -1687,13 +1687,13 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_v3(
         let inv_alpha = mt_f32x8::from_array(
             token,
             [
-                if a0 > 0.0 { 1.0 / a0 } else { 0.0 },
-                if a0 > 0.0 { 1.0 / a0 } else { 0.0 },
-                if a0 > 0.0 { 1.0 / a0 } else { 0.0 },
+                if a0 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a0 } else { 0.0 },
+                if a0 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a0 } else { 0.0 },
+                if a0 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a0 } else { 0.0 },
                 1.0,
-                if a1 > 0.0 { 1.0 / a1 } else { 0.0 },
-                if a1 > 0.0 { 1.0 / a1 } else { 0.0 },
-                if a1 > 0.0 { 1.0 / a1 } else { 0.0 },
+                if a1 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a1 } else { 0.0 },
+                if a1 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a1 } else { 0.0 },
+                if a1 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a1 } else { 0.0 },
                 1.0,
             ],
         );
@@ -1704,7 +1704,7 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_v3(
     }
     for pixel in remainder.chunks_exact_mut(4) {
         let a = pixel[3];
-        if a > 0.0 {
+        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
             let inv_a = 1.0 / a;
             pixel[0] = crate::scalar::linear_to_gamma(pixel[0] * inv_a, gamma);
             pixel[1] = crate::scalar::linear_to_gamma(pixel[1] * inv_a, gamma);
@@ -1727,7 +1727,7 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_neon(
     let (chunks, _remainder) = values.as_chunks_mut::<4>();
     for chunk in chunks {
         let a = chunk[3];
-        if a > 0.0 {
+        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
             let inv_a = 1.0 / a;
             let unpremul = [chunk[0] * inv_a, chunk[1] * inv_a, chunk[2] * inv_a, 1.0];
             *chunk = crate::tokens::x4::linear_to_gamma_neon(token, unpremul, gamma);
@@ -1750,7 +1750,7 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_wasm128(
     let (chunks, _remainder) = values.as_chunks_mut::<4>();
     for chunk in chunks {
         let a = chunk[3];
-        if a > 0.0 {
+        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
             let inv_a = 1.0 / a;
             let unpremul = [chunk[0] * inv_a, chunk[1] * inv_a, chunk[2] * inv_a, 1.0];
             *chunk = crate::tokens::x4::linear_to_gamma_wasm128(token, unpremul, gamma);
@@ -1770,7 +1770,7 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_scalar(
 ) {
     for pixel in values.chunks_exact_mut(4) {
         let a = pixel[3];
-        if a > 0.0 {
+        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
             let inv_a = 1.0 / a;
             pixel[0] = crate::scalar::linear_to_gamma(pixel[0] * inv_a, gamma);
             pixel[1] = crate::scalar::linear_to_gamma(pixel[1] * inv_a, gamma);
