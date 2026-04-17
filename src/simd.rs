@@ -802,10 +802,26 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier_v4(token: X64V4Token, values: &m
     for chunk in chunks {
         let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
         let inv = [
-            if a[0] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[0] } else { 0.0 },
-            if a[1] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[1] } else { 0.0 },
-            if a[2] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[2] } else { 0.0 },
-            if a[3] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[3] } else { 0.0 },
+            if a[0] > crate::UNPREMUL_ALPHA_THRESHOLD {
+                1.0 / a[0]
+            } else {
+                0.0
+            },
+            if a[1] > crate::UNPREMUL_ALPHA_THRESHOLD {
+                1.0 / a[1]
+            } else {
+                0.0
+            },
+            if a[2] > crate::UNPREMUL_ALPHA_THRESHOLD {
+                1.0 / a[2]
+            } else {
+                0.0
+            },
+            if a[3] > crate::UNPREMUL_ALPHA_THRESHOLD {
+                1.0 / a[3]
+            } else {
+                0.0
+            },
         ];
         let inv_alpha = mt_f32x16::from_array(
             token,
@@ -840,8 +856,16 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier_v3(token: X64V3Token, values: &m
     for chunk in chunks {
         let a = [chunk[3], chunk[7]];
         let inv = [
-            if a[0] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[0] } else { 0.0 },
-            if a[1] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[1] } else { 0.0 },
+            if a[0] > crate::UNPREMUL_ALPHA_THRESHOLD {
+                1.0 / a[0]
+            } else {
+                0.0
+            },
+            if a[1] > crate::UNPREMUL_ALPHA_THRESHOLD {
+                1.0 / a[1]
+            } else {
+                0.0
+            },
         ];
         let inv_alpha = mt_f32x8::from_array(
             token,
@@ -1641,13 +1665,37 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_v4(
             let inv_alpha = mt_f32x8::from_array(
                 t3,
                 [
-                    if a0 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a0 } else { 0.0 },
-                    if a0 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a0 } else { 0.0 },
-                    if a0 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a0 } else { 0.0 },
+                    if a0 > crate::UNPREMUL_ALPHA_THRESHOLD {
+                        1.0 / a0
+                    } else {
+                        0.0
+                    },
+                    if a0 > crate::UNPREMUL_ALPHA_THRESHOLD {
+                        1.0 / a0
+                    } else {
+                        0.0
+                    },
+                    if a0 > crate::UNPREMUL_ALPHA_THRESHOLD {
+                        1.0 / a0
+                    } else {
+                        0.0
+                    },
                     1.0,
-                    if a1 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a1 } else { 0.0 },
-                    if a1 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a1 } else { 0.0 },
-                    if a1 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a1 } else { 0.0 },
+                    if a1 > crate::UNPREMUL_ALPHA_THRESHOLD {
+                        1.0 / a1
+                    } else {
+                        0.0
+                    },
+                    if a1 > crate::UNPREMUL_ALPHA_THRESHOLD {
+                        1.0 / a1
+                    } else {
+                        0.0
+                    },
+                    if a1 > crate::UNPREMUL_ALPHA_THRESHOLD {
+                        1.0 / a1
+                    } else {
+                        0.0
+                    },
                     1.0,
                 ],
             );
@@ -1687,13 +1735,37 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_v3(
         let inv_alpha = mt_f32x8::from_array(
             token,
             [
-                if a0 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a0 } else { 0.0 },
-                if a0 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a0 } else { 0.0 },
-                if a0 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a0 } else { 0.0 },
+                if a0 > crate::UNPREMUL_ALPHA_THRESHOLD {
+                    1.0 / a0
+                } else {
+                    0.0
+                },
+                if a0 > crate::UNPREMUL_ALPHA_THRESHOLD {
+                    1.0 / a0
+                } else {
+                    0.0
+                },
+                if a0 > crate::UNPREMUL_ALPHA_THRESHOLD {
+                    1.0 / a0
+                } else {
+                    0.0
+                },
                 1.0,
-                if a1 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a1 } else { 0.0 },
-                if a1 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a1 } else { 0.0 },
-                if a1 > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a1 } else { 0.0 },
+                if a1 > crate::UNPREMUL_ALPHA_THRESHOLD {
+                    1.0 / a1
+                } else {
+                    0.0
+                },
+                if a1 > crate::UNPREMUL_ALPHA_THRESHOLD {
+                    1.0 / a1
+                } else {
+                    0.0
+                },
+                if a1 > crate::UNPREMUL_ALPHA_THRESHOLD {
+                    1.0 / a1
+                } else {
+                    0.0
+                },
                 1.0,
             ],
         );
