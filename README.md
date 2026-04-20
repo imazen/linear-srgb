@@ -116,7 +116,7 @@ When you only need one value at a time (not a batch):
 ```rust
 use linear_srgb::default::*;
 
-// f32 — rational polynomial (≤14 ULP max, perfectly monotonic)
+// f32 — rational polynomial (≤10 ULP max, perfectly monotonic)
 let linear = srgb_to_linear(0.5f32);
 let srgb = linear_to_srgb(linear);
 
@@ -271,10 +271,10 @@ Exhaustive f32 sweep (all ~1B values in [0, 1]) against f64 reference.
 
 | Path | Max ULP | Avg ULP | Monotonic | Fitted domain |
 |------|---------|---------|-----------|---------------|
-| `default` s→l (4/4 scalar) | 11 | 0.5 | yes | [0, 1] |
-| `default` l→s (4/4 scalar) | 14 | 0.4 | yes | [0, 1] |
-| `default` s→l (4/4 SIMD) | 6 | 0.09 | yes | [0, 1] |
-| `default` l→s (4/4 SIMD) | 3 | 0.10 | yes | [0, 1] |
+| `default` s→l (4/4 scalar) | 8 | 0.18 | yes | [0, 1] |
+| `default` l→s (4/4 scalar) | 10 | 0.32 | yes | [0, 1] |
+| `default` s→l (4/4 SIMD) | 4 | 0.09 | yes | [0, 1] |
+| `default` l→s (4/4 SIMD) | 5 | 0.10 | yes | [0, 1] |
 | `extended_slice` s→l (6/6 SIMD) | 8* | 0.12 | yes | [0, 8] |
 | `extended_slice` l→s (6/6 SIMD) | 8* | 0.17 | yes | [0, 64] |
 | `precise` s→l (powf) | 6 | 0.1 | yes | unbounded |
@@ -284,9 +284,9 @@ Exhaustive f32 sweep (all ~1B values in [0, 1]) against f64 reference.
 which costs ~2 ULP vs the clamped 4/4 in a narrow band near the piecewise
 threshold (0.04–0.05). Affects < 0.1% of values; avg ULP is comparable.
 
-**What does 14 ULP mean in practice?** 1 ULP (unit in the last place) is the
+**What does 10 ULP mean in practice?** 1 ULP (unit in the last place) is the
 spacing between adjacent f32 values at a given magnitude. At 0.5 that's ~6e-8,
-so 14 ULP ≈ 8e-7 — about 6 decimal digits of precision. At 0.01 it's ~1e-8.
+so 10 ULP ≈ 6e-7 — about 6 decimal digits of precision. At 0.01 it's ~1e-8.
 For any 8-bit or 16-bit output, this error is invisible — it's thousands of
 times smaller than one output level.
 

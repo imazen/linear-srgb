@@ -15,8 +15,8 @@
 //!
 //! | Direction | Max ULP (power segment) | Max ULP (boundary) | Avg ULP |
 //! |---|---|---|---|
-//! | sRGB → linear | 11 | 1 | ~0.5 |
-//! | linear → sRGB | 14 | 0 | ~0.4 |
+//! | sRGB → linear | 9 | 1 | ~3.4 |
+//! | linear → sRGB | 10 | 0 | ~3.0 |
 //!
 //! The scalar evaluator uses f64 intermediate precision, which guarantees
 //! perfect monotonicity (zero reversals across all ~1B f32 values in \[0, 1\]).
@@ -32,30 +32,50 @@ use num_traits::Float; // provides mul_add/sqrt via libm in no_std
 // =============================================================================
 
 /// sRGB EOTF (encoded → linear) numerator coefficients.
+/// Polyfit: weighted constraint w=50000, 8 restarts + f32 ULP search.
+/// Max 9 ULP, boundary 1 ULP (vs 11/1 previously).
+#[allow(clippy::excessive_precision)]
 pub(crate) const S2L_P: [f32; 5] = [
-    1.724_942_4e-2,
-    8.335_514_7e-1,
-    1.326_215_8e1,
-    7.033_073_4e1,
-    8.387_046e1,
+    1.672_814_6e-2,
+    8.089_536_4e-1,
+    1.288_439_66e1,
+    6.854_374_7e1,
+    8.224_625_4e1,
 ];
 
 /// sRGB EOTF (encoded → linear) denominator coefficients.
-pub(crate) const S2L_Q: [f32; 5] = [2.066_183e1, 9.917_607e1, 5.466_011e1, -7.183_806, 1.0];
+#[allow(clippy::excessive_precision)]
+pub(crate) const S2L_Q: [f32; 5] = [
+    2.003_807_83e1,
+    9.681_468_2e1,
+    5.377_303_3e1,
+    -7.125_638,
+    1.0,
+];
 
 /// sRGB inverse EOTF (linear → encoded) numerator coefficients.
 /// Evaluated on `sqrt(linear)`.
+/// Polyfit: weighted constraint w=1000, 8 restarts + f32 ULP search.
+/// Max 10 ULP, boundary 0 ULP (vs 14/0 previously).
+#[allow(clippy::excessive_precision)]
 pub(crate) const L2S_P: [f32; 5] = [
-    -1.513_885e-2,
-    1.167_372_8e-1,
-    1.257_921_2e1,
-    5.259_309_8e1,
-    2.852_907_6e1,
+    -1.356_440_97e-2,
+    9.336_896_24e-2,
+    1.157_270_53e1,
+    5.002_124_79e1,
+    2.792_420_96e1,
 ];
 
 /// sRGB inverse EOTF (linear → encoded) denominator coefficients.
 /// Evaluated on `sqrt(linear)`.
-pub(crate) const L2S_Q: [f32; 5] = [2.943_901_4e-1, 9.779_103, 4.726_487_7e1, 3.546_463_8e1, 1.0];
+#[allow(clippy::excessive_precision)]
+pub(crate) const L2S_Q: [f32; 5] = [
+    2.633_812_73e-1,
+    8.998_917_58,
+    4.477_739_72e1,
+    3.455_830_76e1,
+    1.0,
+];
 
 // =============================================================================
 // Extended-range 6/6 coefficients — fitted to wider domains for abs+sign path
