@@ -1,0 +1,32 @@
+[package]
+name = "linear-srgb-tango"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Standalone package for paired-benchmark regression testing against the
+# published `linear-srgb` crate. See README.md for usage.
+#
+# The default here depends on the crates.io-published version; this build
+# produces the BASELINE binary. To test a local WIP, uncomment the
+# `[patch.crates-io]` block at the bottom, rebuild, and run in `compare`
+# mode against the saved baseline.
+
+[dependencies]
+linear-srgb = { version = "=0.6.11", default-features = false, features = [
+    "std",
+    "avx512",
+    "transfer",
+] }
+
+[dev-dependencies]
+tango-bench = "0.7.2"
+
+[[bench]]
+name = "regression"
+harness = false
+
+# To run the WIP version against the saved baseline binary, uncomment:
+#
+# [patch.crates-io]
+# linear-srgb = { path = ".." }
