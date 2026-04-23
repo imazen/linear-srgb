@@ -385,6 +385,134 @@ fn bench_tf_scalar_via_dispatch(c: &mut Criterion) {
 #[cfg(not(target_arch = "x86_64"))]
 fn bench_tf_scalar_via_dispatch(_c: &mut Criterion) {}
 
+// =============================================================================
+// Public slice dispatcher: before (scalar-loop + autoversion) vs after (incant!)
+// =============================================================================
+//
+// Replicates the pre-fix `default::bt709_to_linear_slice` et al. shape
+// (scalar for-loop, #[archmage::autoversion]) so we can A/B it against the
+// current incant!-dispatched implementation without toggling source trees.
+// The `_old` functions are exactly what shipped before issue #10 was fixed.
+
+#[cfg(feature = "transfer")]
+mod old_dispatchers {
+    use linear_srgb::tf;
+
+    #[archmage::autoversion]
+    pub fn bt709_to_linear_slice_old(values: &mut [f32]) {
+        for v in values.iter_mut() {
+            *v = tf::bt709_to_linear(*v);
+        }
+    }
+    #[archmage::autoversion]
+    pub fn linear_to_bt709_slice_old(values: &mut [f32]) {
+        for v in values.iter_mut() {
+            *v = tf::linear_to_bt709(*v);
+        }
+    }
+    #[archmage::autoversion]
+    pub fn pq_to_linear_slice_old(values: &mut [f32]) {
+        for v in values.iter_mut() {
+            *v = tf::pq_to_linear(*v);
+        }
+    }
+    #[archmage::autoversion]
+    pub fn linear_to_pq_slice_old(values: &mut [f32]) {
+        for v in values.iter_mut() {
+            *v = tf::linear_to_pq(*v);
+        }
+    }
+    #[archmage::autoversion]
+    pub fn hlg_to_linear_slice_old(values: &mut [f32]) {
+        for v in values.iter_mut() {
+            *v = tf::hlg_to_linear(*v);
+        }
+    }
+    #[archmage::autoversion]
+    pub fn linear_to_hlg_slice_old(values: &mut [f32]) {
+        for v in values.iter_mut() {
+            *v = tf::linear_to_hlg(*v);
+        }
+    }
+}
+
+#[cfg(feature = "transfer")]
+fn bench_tf_public_dispatcher(c: &mut Criterion) {
+    use linear_srgb::default;
+
+    let encoded = make_encoded();
+    let linear = make_linear();
+
+    macro_rules! ab_bench {
+        ($group_name:expr, $bench_name:expr, $data:expr, $old:path, $new:path) => {
+            let mut g = c.benchmark_group($group_name);
+            g.throughput(Throughput::Elements(N as u64));
+            g.bench_function("old_scalar_loop", |b| {
+                let mut buf = $data.clone();
+                b.iter(|| {
+                    buf.copy_from_slice(&$data);
+                    $old(black_box(&mut buf));
+                })
+            });
+            g.bench_function("new_incant_dispatch", |b| {
+                let mut buf = $data.clone();
+                b.iter(|| {
+                    buf.copy_from_slice(&$data);
+                    $new(black_box(&mut buf));
+                })
+            });
+            let _ = $bench_name;
+            g.finish();
+        };
+    }
+
+    ab_bench!(
+        "tf_dispatch_bt709_to_linear",
+        "",
+        encoded,
+        old_dispatchers::bt709_to_linear_slice_old,
+        default::bt709_to_linear_slice
+    );
+    ab_bench!(
+        "tf_dispatch_linear_to_bt709",
+        "",
+        linear,
+        old_dispatchers::linear_to_bt709_slice_old,
+        default::linear_to_bt709_slice
+    );
+    ab_bench!(
+        "tf_dispatch_pq_to_linear",
+        "",
+        encoded,
+        old_dispatchers::pq_to_linear_slice_old,
+        default::pq_to_linear_slice
+    );
+    ab_bench!(
+        "tf_dispatch_linear_to_pq",
+        "",
+        linear,
+        old_dispatchers::linear_to_pq_slice_old,
+        default::linear_to_pq_slice
+    );
+    ab_bench!(
+        "tf_dispatch_hlg_to_linear",
+        "",
+        encoded,
+        old_dispatchers::hlg_to_linear_slice_old,
+        default::hlg_to_linear_slice
+    );
+    ab_bench!(
+        "tf_dispatch_linear_to_hlg",
+        "",
+        linear,
+        old_dispatchers::linear_to_hlg_slice_old,
+        default::linear_to_hlg_slice
+    );
+}
+
+#[cfg(not(feature = "transfer"))]
+fn bench_tf_public_dispatcher(_c: &mut Criterion) {}
+
 criterion_group!(
     benches,
     bench_tf_scalar,
@@ -392,5 +520,6 @@ criterion_group!(
     bench_tf_x16,
     bench_tf_x8_v4_disabled,
     bench_tf_scalar_via_dispatch,
+    bench_tf_public_dispatcher,
 );
 criterion_main!(benches);
