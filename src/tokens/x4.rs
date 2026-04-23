@@ -30,7 +30,7 @@ pub use archmage::NeonToken;
 #[cfg(target_arch = "wasm32")]
 pub use archmage::Wasm128Token;
 
-use magetypes::simd::f32x4 as mt_f32x4;
+use magetypes::simd::backends::{F32x4Backend, F32x4Convert};
 use magetypes::simd::generic::f32x4 as gen_f32x4;
 
 // sRGB transfer function constants (C0-continuous moxcms, matching rational polynomial)
@@ -38,6 +38,93 @@ const SRGB_LINEAR_THRESHOLD: f32 = 0.039_293_37;
 const LINEAR_THRESHOLD: f32 = 0.003_041_282_6;
 const LINEAR_SCALE: f32 = 1.0 / 12.92;
 const TWELVE_92: f32 = 12.92;
+
+// ============================================================================
+// Generic core implementations
+// ============================================================================
+//
+// Inline helpers generic over `T: F32x4Convert`. The per-tier `#[rite]` entry
+// points (V3, NEON, WASM128 sections below) each delegate to these in one
+// line. LLVM inlines the core through the tier's `#[target_feature]` scope,
+// so per-tier codegen is identical to the previous hand-written bodies.
+
+/// sRGB → linear (4 lanes). Clamps input to \[0, 1\]; forces exact 1.0 output
+/// for inputs >= 1.0 to cover polynomial boundary undershoot.
+#[inline(always)]
+fn srgb_to_linear_core<T: F32x4Backend>(token: T, srgb: [f32; 4]) -> [f32; 4] {
+    use crate::rational_poly::{S2L_P, S2L_Q};
+    let zero = gen_f32x4::<T>::zero(token);
+    let one = gen_f32x4::<T>::splat(token, 1.0);
+    let v = gen_f32x4::<T>::from_array(token, srgb);
+    let clamped = v.max(zero).min(one);
+    let linear_result = clamped * gen_f32x4::<T>::splat(token, LINEAR_SCALE);
+    // Rational polynomial P(x)/Q(x) via Horner's method
+    let x = clamped;
+    let yp =
+        gen_f32x4::<T>::splat(token, S2L_P[4]).mul_add(x, gen_f32x4::<T>::splat(token, S2L_P[3]));
+    let yp = yp.mul_add(x, gen_f32x4::<T>::splat(token, S2L_P[2]));
+    let yp = yp.mul_add(x, gen_f32x4::<T>::splat(token, S2L_P[1]));
+    let yp = yp.mul_add(x, gen_f32x4::<T>::splat(token, S2L_P[0]));
+    let yq =
+        gen_f32x4::<T>::splat(token, S2L_Q[4]).mul_add(x, gen_f32x4::<T>::splat(token, S2L_Q[3]));
+    let yq = yq.mul_add(x, gen_f32x4::<T>::splat(token, S2L_Q[2]));
+    let yq = yq.mul_add(x, gen_f32x4::<T>::splat(token, S2L_Q[1]));
+    let yq = yq.mul_add(x, gen_f32x4::<T>::splat(token, S2L_Q[0]));
+    let power_result = (yp / yq).min(one);
+    let mask = clamped.simd_lt(gen_f32x4::<T>::splat(token, SRGB_LINEAR_THRESHOLD));
+    let result = gen_f32x4::<T>::blend(mask, linear_result, power_result);
+    let ge_one = v.simd_ge(one);
+    gen_f32x4::<T>::blend(ge_one, one, result).to_array()
+}
+
+/// Linear → sRGB (4 lanes). Clamps input to \[0, 1\]; forces exact 1.0 output
+/// for inputs >= 1.0 to cover polynomial boundary undershoot.
+#[inline(always)]
+fn linear_to_srgb_core<T: F32x4Backend>(token: T, linear: [f32; 4]) -> [f32; 4] {
+    use crate::rational_poly::{L2S_P, L2S_Q};
+    let zero = gen_f32x4::<T>::zero(token);
+    let one = gen_f32x4::<T>::splat(token, 1.0);
+    let v = gen_f32x4::<T>::from_array(token, linear);
+    let clamped = v.max(zero).min(one);
+    let linear_result = clamped * gen_f32x4::<T>::splat(token, TWELVE_92);
+    // sqrt transform + rational polynomial P(√x)/Q(√x) via Horner's method
+    let x = clamped.sqrt();
+    let yp =
+        gen_f32x4::<T>::splat(token, L2S_P[4]).mul_add(x, gen_f32x4::<T>::splat(token, L2S_P[3]));
+    let yp = yp.mul_add(x, gen_f32x4::<T>::splat(token, L2S_P[2]));
+    let yp = yp.mul_add(x, gen_f32x4::<T>::splat(token, L2S_P[1]));
+    let yp = yp.mul_add(x, gen_f32x4::<T>::splat(token, L2S_P[0]));
+    let yq =
+        gen_f32x4::<T>::splat(token, L2S_Q[4]).mul_add(x, gen_f32x4::<T>::splat(token, L2S_Q[3]));
+    let yq = yq.mul_add(x, gen_f32x4::<T>::splat(token, L2S_Q[2]));
+    let yq = yq.mul_add(x, gen_f32x4::<T>::splat(token, L2S_Q[1]));
+    let yq = yq.mul_add(x, gen_f32x4::<T>::splat(token, L2S_Q[0]));
+    let power_result = (yp / yq).min(one);
+    let mask = clamped.simd_lt(gen_f32x4::<T>::splat(token, LINEAR_THRESHOLD));
+    let result = gen_f32x4::<T>::blend(mask, linear_result, power_result);
+    let ge_one = v.simd_ge(one);
+    gen_f32x4::<T>::blend(ge_one, one, result).to_array()
+}
+
+/// Custom-gamma encoded → linear (4 lanes). Clamps input to \[0, 1\].
+#[inline(always)]
+fn gamma_to_linear_core<T: F32x4Convert>(token: T, encoded: [f32; 4], gamma: f32) -> [f32; 4] {
+    let zero = gen_f32x4::<T>::zero(token);
+    let one = gen_f32x4::<T>::splat(token, 1.0);
+    let v = gen_f32x4::<T>::from_array(token, encoded)
+        .max(zero)
+        .min(one);
+    v.pow_midp(gamma).to_array()
+}
+
+/// Linear → custom-gamma encoded (4 lanes). Clamps input to \[0, 1\].
+#[inline(always)]
+fn linear_to_gamma_core<T: F32x4Convert>(token: T, linear: [f32; 4], gamma: f32) -> [f32; 4] {
+    let zero = gen_f32x4::<T>::zero(token);
+    let one = gen_f32x4::<T>::splat(token, 1.0);
+    let v = gen_f32x4::<T>::from_array(token, linear).max(zero).min(one);
+    v.pow_midp(1.0 / gamma).to_array()
+}
 
 // ============================================================================
 // x86-64 V3 (AVX2+FMA) — 4×f32 with X64V3Token
@@ -51,34 +138,7 @@ const TWELVE_92: f32 = 12.92;
 #[cfg(target_arch = "x86_64")]
 #[rite]
 pub fn srgb_to_linear_v3(token: X64V3Token, srgb: [f32; 4]) -> [f32; 4] {
-    use crate::rational_poly::{S2L_P, S2L_Q};
-
-    let zero = mt_f32x4::zero(token);
-    let one = mt_f32x4::splat(token, 1.0);
-    let srgb_v = mt_f32x4::from_array(token, srgb);
-    let clamped = srgb_v.max(zero).min(one);
-
-    let linear_result = clamped * mt_f32x4::splat(token, LINEAR_SCALE);
-
-    // Rational polynomial P(x)/Q(x) via Horner's method
-    let x = clamped;
-    let yp = mt_f32x4::splat(token, S2L_P[4]).mul_add(x, mt_f32x4::splat(token, S2L_P[3]));
-    let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[2]));
-    let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[1]));
-    let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[0]));
-
-    let yq = mt_f32x4::splat(token, S2L_Q[4]).mul_add(x, mt_f32x4::splat(token, S2L_Q[3]));
-    let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[2]));
-    let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[1]));
-    let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[0]));
-
-    let power_result = (yp / yq).min(one);
-
-    let mask = clamped.simd_lt(mt_f32x4::splat(token, SRGB_LINEAR_THRESHOLD));
-    let result = mt_f32x4::blend(mask, linear_result, power_result);
-    // Force exact 1.0 for inputs >= 1.0 (polynomial may undershoot at boundary)
-    let ge_one = srgb_v.simd_ge(one);
-    mt_f32x4::blend(ge_one, one, result).to_array()
+    srgb_to_linear_core(token, srgb)
 }
 
 /// Convert 4 linear values to sRGB. Input clamped to \[0, 1\].
@@ -87,34 +147,7 @@ pub fn srgb_to_linear_v3(token: X64V3Token, srgb: [f32; 4]) -> [f32; 4] {
 #[cfg(target_arch = "x86_64")]
 #[rite]
 pub fn linear_to_srgb_v3(token: X64V3Token, linear: [f32; 4]) -> [f32; 4] {
-    use crate::rational_poly::{L2S_P, L2S_Q};
-
-    let zero = mt_f32x4::zero(token);
-    let one = mt_f32x4::splat(token, 1.0);
-    let linear_v = mt_f32x4::from_array(token, linear);
-    let clamped = linear_v.max(zero).min(one);
-
-    let linear_result = clamped * mt_f32x4::splat(token, TWELVE_92);
-
-    // sqrt transform + rational polynomial P(√x)/Q(√x) via Horner's method
-    let x = clamped.sqrt();
-    let yp = mt_f32x4::splat(token, L2S_P[4]).mul_add(x, mt_f32x4::splat(token, L2S_P[3]));
-    let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[2]));
-    let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[1]));
-    let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[0]));
-
-    let yq = mt_f32x4::splat(token, L2S_Q[4]).mul_add(x, mt_f32x4::splat(token, L2S_Q[3]));
-    let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[2]));
-    let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[1]));
-    let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[0]));
-
-    let power_result = (yp / yq).min(one);
-
-    let mask = clamped.simd_lt(mt_f32x4::splat(token, LINEAR_THRESHOLD));
-    let result = mt_f32x4::blend(mask, linear_result, power_result);
-    // Force exact 1.0 for inputs >= 1.0 (polynomial may undershoot at boundary)
-    let ge_one = linear_v.simd_ge(one);
-    mt_f32x4::blend(ge_one, one, result).to_array()
+    linear_to_srgb_core(token, linear)
 }
 
 /// Convert 4 sRGB values to linear without clamping (extended range).
@@ -189,10 +222,7 @@ pub fn linear_to_srgb_extended(token: Token, linear: [f32; 4]) -> [f32; 4] {
 #[cfg(target_arch = "x86_64")]
 #[rite]
 pub fn gamma_to_linear_v3(token: X64V3Token, encoded: [f32; 4], gamma: f32) -> [f32; 4] {
-    let zero = mt_f32x4::zero(token);
-    let one = mt_f32x4::splat(token, 1.0);
-    let encoded = mt_f32x4::from_array(token, encoded).max(zero).min(one);
-    encoded.pow_midp(gamma).to_array()
+    gamma_to_linear_core(token, encoded, gamma)
 }
 
 /// Convert 4 linear values to gamma-encoded. Input clamped to \[0, 1\].
@@ -201,10 +231,7 @@ pub fn gamma_to_linear_v3(token: X64V3Token, encoded: [f32; 4], gamma: f32) -> [
 #[cfg(target_arch = "x86_64")]
 #[rite]
 pub fn linear_to_gamma_v3(token: X64V3Token, linear: [f32; 4], gamma: f32) -> [f32; 4] {
-    let zero = mt_f32x4::zero(token);
-    let one = mt_f32x4::splat(token, 1.0);
-    let linear = mt_f32x4::from_array(token, linear).max(zero).min(one);
-    linear.pow_midp(1.0 / gamma).to_array()
+    linear_to_gamma_core(token, linear, gamma)
 }
 
 /// Convert sRGB f32 values to linear in-place using 4-wide SSE SIMD.
@@ -214,11 +241,9 @@ pub fn linear_to_gamma_v3(token: X64V3Token, linear: [f32; 4], gamma: f32) -> [f
 #[rite]
 pub fn srgb_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
-
     for chunk in chunks {
-        *chunk = srgb_to_linear_v3(token, *chunk);
+        *chunk = srgb_to_linear_core(token, *chunk);
     }
-
     for v in remainder {
         *v = crate::scalar::srgb_to_linear(*v);
     }
@@ -231,11 +256,9 @@ pub fn srgb_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
 #[rite]
 pub fn linear_to_srgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
-
     for chunk in chunks {
-        *chunk = linear_to_srgb_v3(token, *chunk);
+        *chunk = linear_to_srgb_core(token, *chunk);
     }
-
     for v in remainder {
         *v = crate::scalar::linear_to_srgb(*v);
     }
@@ -248,11 +271,9 @@ pub fn linear_to_srgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
 #[rite]
 pub fn gamma_to_linear_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
-
     for chunk in chunks {
-        *chunk = gamma_to_linear_v3(token, *chunk, gamma);
+        *chunk = gamma_to_linear_core(token, *chunk, gamma);
     }
-
     for v in remainder {
         *v = crate::scalar::gamma_to_linear(*v, gamma);
     }
@@ -265,11 +286,9 @@ pub fn gamma_to_linear_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f3
 #[rite]
 pub fn linear_to_gamma_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
-
     for chunk in chunks {
-        *chunk = linear_to_gamma_v3(token, *chunk, gamma);
+        *chunk = linear_to_gamma_core(token, *chunk, gamma);
     }
-
     for v in remainder {
         *v = crate::scalar::linear_to_gamma(*v, gamma);
     }
@@ -286,34 +305,7 @@ pub fn linear_to_gamma_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f3
 #[cfg(target_arch = "aarch64")]
 #[rite]
 pub fn srgb_to_linear_neon(token: NeonToken, srgb: [f32; 4]) -> [f32; 4] {
-    use crate::rational_poly::{S2L_P, S2L_Q};
-
-    let zero = mt_f32x4::zero(token);
-    let one = mt_f32x4::splat(token, 1.0);
-    let srgb_v = mt_f32x4::from_array(token, srgb);
-    let clamped = srgb_v.max(zero).min(one);
-
-    let linear_result = clamped * mt_f32x4::splat(token, LINEAR_SCALE);
-
-    // Rational polynomial P(x)/Q(x) via Horner's method
-    let x = clamped;
-    let yp = mt_f32x4::splat(token, S2L_P[4]).mul_add(x, mt_f32x4::splat(token, S2L_P[3]));
-    let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[2]));
-    let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[1]));
-    let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[0]));
-
-    let yq = mt_f32x4::splat(token, S2L_Q[4]).mul_add(x, mt_f32x4::splat(token, S2L_Q[3]));
-    let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[2]));
-    let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[1]));
-    let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[0]));
-
-    let power_result = (yp / yq).min(one);
-
-    let mask = clamped.simd_lt(mt_f32x4::splat(token, SRGB_LINEAR_THRESHOLD));
-    let result = mt_f32x4::blend(mask, linear_result, power_result);
-    // Force exact 1.0 for inputs >= 1.0 (polynomial may undershoot at boundary)
-    let ge_one = srgb_v.simd_ge(one);
-    mt_f32x4::blend(ge_one, one, result).to_array()
+    srgb_to_linear_core(token, srgb)
 }
 
 /// Convert 4 linear values to sRGB. Input clamped to \[0, 1\].
@@ -322,34 +314,7 @@ pub fn srgb_to_linear_neon(token: NeonToken, srgb: [f32; 4]) -> [f32; 4] {
 #[cfg(target_arch = "aarch64")]
 #[rite]
 pub fn linear_to_srgb_neon(token: NeonToken, linear: [f32; 4]) -> [f32; 4] {
-    use crate::rational_poly::{L2S_P, L2S_Q};
-
-    let zero = mt_f32x4::zero(token);
-    let one = mt_f32x4::splat(token, 1.0);
-    let linear_v = mt_f32x4::from_array(token, linear);
-    let clamped = linear_v.max(zero).min(one);
-
-    let linear_result = clamped * mt_f32x4::splat(token, TWELVE_92);
-
-    // sqrt transform + rational polynomial P(√x)/Q(√x) via Horner's method
-    let x = clamped.sqrt();
-    let yp = mt_f32x4::splat(token, L2S_P[4]).mul_add(x, mt_f32x4::splat(token, L2S_P[3]));
-    let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[2]));
-    let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[1]));
-    let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[0]));
-
-    let yq = mt_f32x4::splat(token, L2S_Q[4]).mul_add(x, mt_f32x4::splat(token, L2S_Q[3]));
-    let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[2]));
-    let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[1]));
-    let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[0]));
-
-    let power_result = (yp / yq).min(one);
-
-    let mask = clamped.simd_lt(mt_f32x4::splat(token, LINEAR_THRESHOLD));
-    let result = mt_f32x4::blend(mask, linear_result, power_result);
-    // Force exact 1.0 for inputs >= 1.0 (polynomial may undershoot at boundary)
-    let ge_one = linear_v.simd_ge(one);
-    mt_f32x4::blend(ge_one, one, result).to_array()
+    linear_to_srgb_core(token, linear)
 }
 
 /// Convert 4 gamma-encoded values to linear. Input clamped to \[0, 1\].
@@ -358,10 +323,7 @@ pub fn linear_to_srgb_neon(token: NeonToken, linear: [f32; 4]) -> [f32; 4] {
 #[cfg(target_arch = "aarch64")]
 #[rite]
 pub fn gamma_to_linear_neon(token: NeonToken, encoded: [f32; 4], gamma: f32) -> [f32; 4] {
-    let zero = mt_f32x4::zero(token);
-    let one = mt_f32x4::splat(token, 1.0);
-    let encoded = mt_f32x4::from_array(token, encoded).max(zero).min(one);
-    encoded.pow_midp(gamma).to_array()
+    gamma_to_linear_core(token, encoded, gamma)
 }
 
 /// Convert 4 linear values to gamma-encoded. Input clamped to \[0, 1\].
@@ -370,10 +332,7 @@ pub fn gamma_to_linear_neon(token: NeonToken, encoded: [f32; 4], gamma: f32) -> 
 #[cfg(target_arch = "aarch64")]
 #[rite]
 pub fn linear_to_gamma_neon(token: NeonToken, linear: [f32; 4], gamma: f32) -> [f32; 4] {
-    let zero = mt_f32x4::zero(token);
-    let one = mt_f32x4::splat(token, 1.0);
-    let linear = mt_f32x4::from_array(token, linear).max(zero).min(one);
-    linear.pow_midp(1.0 / gamma).to_array()
+    linear_to_gamma_core(token, linear, gamma)
 }
 
 /// Convert sRGB f32 values to linear in-place using 4-wide NEON SIMD.
@@ -383,11 +342,9 @@ pub fn linear_to_gamma_neon(token: NeonToken, linear: [f32; 4], gamma: f32) -> [
 #[rite]
 pub fn srgb_to_linear_slice_neon(token: NeonToken, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
-
     for chunk in chunks {
-        *chunk = srgb_to_linear_neon(token, *chunk);
+        *chunk = srgb_to_linear_core(token, *chunk);
     }
-
     for v in remainder {
         *v = crate::scalar::srgb_to_linear(*v);
     }
@@ -400,11 +357,9 @@ pub fn srgb_to_linear_slice_neon(token: NeonToken, values: &mut [f32]) {
 #[rite]
 pub fn linear_to_srgb_slice_neon(token: NeonToken, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
-
     for chunk in chunks {
-        *chunk = linear_to_srgb_neon(token, *chunk);
+        *chunk = linear_to_srgb_core(token, *chunk);
     }
-
     for v in remainder {
         *v = crate::scalar::linear_to_srgb(*v);
     }
@@ -417,11 +372,9 @@ pub fn linear_to_srgb_slice_neon(token: NeonToken, values: &mut [f32]) {
 #[rite]
 pub fn gamma_to_linear_slice_neon(token: NeonToken, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
-
     for chunk in chunks {
-        *chunk = gamma_to_linear_neon(token, *chunk, gamma);
+        *chunk = gamma_to_linear_core(token, *chunk, gamma);
     }
-
     for v in remainder {
         *v = crate::scalar::gamma_to_linear(*v, gamma);
     }
@@ -434,11 +387,9 @@ pub fn gamma_to_linear_slice_neon(token: NeonToken, values: &mut [f32], gamma: f
 #[rite]
 pub fn linear_to_gamma_slice_neon(token: NeonToken, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
-
     for chunk in chunks {
-        *chunk = linear_to_gamma_neon(token, *chunk, gamma);
+        *chunk = linear_to_gamma_core(token, *chunk, gamma);
     }
-
     for v in remainder {
         *v = crate::scalar::linear_to_gamma(*v, gamma);
     }
@@ -455,34 +406,7 @@ pub fn linear_to_gamma_slice_neon(token: NeonToken, values: &mut [f32], gamma: f
 #[cfg(target_arch = "wasm32")]
 #[rite]
 pub fn srgb_to_linear_wasm128(token: Wasm128Token, srgb: [f32; 4]) -> [f32; 4] {
-    use crate::rational_poly::{S2L_P, S2L_Q};
-
-    let zero = mt_f32x4::zero(token);
-    let one = mt_f32x4::splat(token, 1.0);
-    let srgb_v = mt_f32x4::from_array(token, srgb);
-    let clamped = srgb_v.max(zero).min(one);
-
-    let linear_result = clamped * mt_f32x4::splat(token, LINEAR_SCALE);
-
-    // Rational polynomial P(x)/Q(x) via Horner's method
-    let x = clamped;
-    let yp = mt_f32x4::splat(token, S2L_P[4]).mul_add(x, mt_f32x4::splat(token, S2L_P[3]));
-    let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[2]));
-    let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[1]));
-    let yp = yp.mul_add(x, mt_f32x4::splat(token, S2L_P[0]));
-
-    let yq = mt_f32x4::splat(token, S2L_Q[4]).mul_add(x, mt_f32x4::splat(token, S2L_Q[3]));
-    let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[2]));
-    let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[1]));
-    let yq = yq.mul_add(x, mt_f32x4::splat(token, S2L_Q[0]));
-
-    let power_result = (yp / yq).min(one);
-
-    let mask = clamped.simd_lt(mt_f32x4::splat(token, SRGB_LINEAR_THRESHOLD));
-    let result = mt_f32x4::blend(mask, linear_result, power_result);
-    // Force exact 1.0 for inputs >= 1.0 (polynomial may undershoot at boundary)
-    let ge_one = srgb_v.simd_ge(one);
-    mt_f32x4::blend(ge_one, one, result).to_array()
+    srgb_to_linear_core(token, srgb)
 }
 
 /// Convert 4 linear values to sRGB. Input clamped to \[0, 1\].
@@ -491,34 +415,7 @@ pub fn srgb_to_linear_wasm128(token: Wasm128Token, srgb: [f32; 4]) -> [f32; 4] {
 #[cfg(target_arch = "wasm32")]
 #[rite]
 pub fn linear_to_srgb_wasm128(token: Wasm128Token, linear: [f32; 4]) -> [f32; 4] {
-    use crate::rational_poly::{L2S_P, L2S_Q};
-
-    let zero = mt_f32x4::zero(token);
-    let one = mt_f32x4::splat(token, 1.0);
-    let linear_v = mt_f32x4::from_array(token, linear);
-    let clamped = linear_v.max(zero).min(one);
-
-    let linear_result = clamped * mt_f32x4::splat(token, TWELVE_92);
-
-    // sqrt transform + rational polynomial P(√x)/Q(√x) via Horner's method
-    let x = clamped.sqrt();
-    let yp = mt_f32x4::splat(token, L2S_P[4]).mul_add(x, mt_f32x4::splat(token, L2S_P[3]));
-    let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[2]));
-    let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[1]));
-    let yp = yp.mul_add(x, mt_f32x4::splat(token, L2S_P[0]));
-
-    let yq = mt_f32x4::splat(token, L2S_Q[4]).mul_add(x, mt_f32x4::splat(token, L2S_Q[3]));
-    let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[2]));
-    let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[1]));
-    let yq = yq.mul_add(x, mt_f32x4::splat(token, L2S_Q[0]));
-
-    let power_result = (yp / yq).min(one);
-
-    let mask = clamped.simd_lt(mt_f32x4::splat(token, LINEAR_THRESHOLD));
-    let result = mt_f32x4::blend(mask, linear_result, power_result);
-    // Force exact 1.0 for inputs >= 1.0 (polynomial may undershoot at boundary)
-    let ge_one = linear_v.simd_ge(one);
-    mt_f32x4::blend(ge_one, one, result).to_array()
+    linear_to_srgb_core(token, linear)
 }
 
 /// Convert 4 gamma-encoded values to linear. Input clamped to \[0, 1\].
@@ -527,10 +424,7 @@ pub fn linear_to_srgb_wasm128(token: Wasm128Token, linear: [f32; 4]) -> [f32; 4]
 #[cfg(target_arch = "wasm32")]
 #[rite]
 pub fn gamma_to_linear_wasm128(token: Wasm128Token, encoded: [f32; 4], gamma: f32) -> [f32; 4] {
-    let zero = mt_f32x4::zero(token);
-    let one = mt_f32x4::splat(token, 1.0);
-    let encoded = mt_f32x4::from_array(token, encoded).max(zero).min(one);
-    encoded.pow_midp(gamma).to_array()
+    gamma_to_linear_core(token, encoded, gamma)
 }
 
 /// Convert 4 linear values to gamma-encoded. Input clamped to \[0, 1\].
@@ -539,10 +433,7 @@ pub fn gamma_to_linear_wasm128(token: Wasm128Token, encoded: [f32; 4], gamma: f3
 #[cfg(target_arch = "wasm32")]
 #[rite]
 pub fn linear_to_gamma_wasm128(token: Wasm128Token, linear: [f32; 4], gamma: f32) -> [f32; 4] {
-    let zero = mt_f32x4::zero(token);
-    let one = mt_f32x4::splat(token, 1.0);
-    let linear = mt_f32x4::from_array(token, linear).max(zero).min(one);
-    linear.pow_midp(1.0 / gamma).to_array()
+    linear_to_gamma_core(token, linear, gamma)
 }
 
 /// Convert sRGB f32 values to linear in-place using 4-wide WASM SIMD.
@@ -552,11 +443,9 @@ pub fn linear_to_gamma_wasm128(token: Wasm128Token, linear: [f32; 4], gamma: f32
 #[rite]
 pub fn srgb_to_linear_slice_wasm128(token: Wasm128Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
-
     for chunk in chunks {
-        *chunk = srgb_to_linear_wasm128(token, *chunk);
+        *chunk = srgb_to_linear_core(token, *chunk);
     }
-
     for v in remainder {
         *v = crate::scalar::srgb_to_linear(*v);
     }
@@ -569,11 +458,9 @@ pub fn srgb_to_linear_slice_wasm128(token: Wasm128Token, values: &mut [f32]) {
 #[rite]
 pub fn linear_to_srgb_slice_wasm128(token: Wasm128Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
-
     for chunk in chunks {
-        *chunk = linear_to_srgb_wasm128(token, *chunk);
+        *chunk = linear_to_srgb_core(token, *chunk);
     }
-
     for v in remainder {
         *v = crate::scalar::linear_to_srgb(*v);
     }
@@ -586,11 +473,9 @@ pub fn linear_to_srgb_slice_wasm128(token: Wasm128Token, values: &mut [f32]) {
 #[rite]
 pub fn gamma_to_linear_slice_wasm128(token: Wasm128Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
-
     for chunk in chunks {
-        *chunk = gamma_to_linear_wasm128(token, *chunk, gamma);
+        *chunk = gamma_to_linear_core(token, *chunk, gamma);
     }
-
     for v in remainder {
         *v = crate::scalar::gamma_to_linear(*v, gamma);
     }
@@ -603,11 +488,9 @@ pub fn gamma_to_linear_slice_wasm128(token: Wasm128Token, values: &mut [f32], ga
 #[rite]
 pub fn linear_to_gamma_slice_wasm128(token: Wasm128Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
-
     for chunk in chunks {
-        *chunk = linear_to_gamma_wasm128(token, *chunk, gamma);
+        *chunk = linear_to_gamma_core(token, *chunk, gamma);
     }
-
     for v in remainder {
         *v = crate::scalar::linear_to_gamma(*v, gamma);
     }
