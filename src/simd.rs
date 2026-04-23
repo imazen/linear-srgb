@@ -1675,55 +1675,17 @@ pub fn linear_to_srgb_u16_rgba_slice_fast(input: &[f32], output: &mut [u16]) {
 // Custom Gamma Slice Functions
 // ============================================================================
 
-#[cfg(feature = "avx512")]
-#[arcane]
-fn gamma_to_linear_slice_tier_v4(token: X64V4Token, values: &mut [f32], gamma: f32) {
+#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn gamma_to_linear_slice_tier(token: Token, values: &mut [f32], gamma: f32) {
+    #[allow(non_camel_case_types)]
+    type f32x16 = g_f32x16<Token>;
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
-        *chunk = gamma_to_linear_x16_2x8(token, *chunk, gamma);
+        let v = f32x16::from_array(token, *chunk);
+        let clamped = v.max(f32x16::zero(token)).min(f32x16::splat(token, 1.0));
+        *chunk = clamped.pow_midp(gamma).to_array();
     }
     for v in remainder {
-        *v = crate::scalar::gamma_to_linear(*v, gamma);
-    }
-}
-
-#[arcane]
-fn gamma_to_linear_slice_tier_v3(token: X64V3Token, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<8>();
-    for chunk in chunks {
-        let v = mt_f32x8::from_array(token, *chunk);
-        let result = gamma_to_linear_mt(token, v, gamma);
-        *chunk = result.to_array();
-    }
-    for v in remainder {
-        *v = crate::scalar::gamma_to_linear(*v, gamma);
-    }
-}
-
-#[arcane]
-fn gamma_to_linear_slice_tier_neon(token: NeonToken, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = crate::tokens::x4::gamma_to_linear_neon(token, *chunk, gamma);
-    }
-    for v in remainder {
-        *v = crate::scalar::gamma_to_linear(*v, gamma);
-    }
-}
-
-#[arcane]
-fn gamma_to_linear_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = crate::tokens::x4::gamma_to_linear_wasm128(token, *chunk, gamma);
-    }
-    for v in remainder {
-        *v = crate::scalar::gamma_to_linear(*v, gamma);
-    }
-}
-
-fn gamma_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], gamma: f32) {
-    for v in values.iter_mut() {
         *v = crate::scalar::gamma_to_linear(*v, gamma);
     }
 }
@@ -1747,55 +1709,17 @@ pub fn gamma_to_linear_slice(values: &mut [f32], gamma: f32) {
     )
 }
 
-#[cfg(feature = "avx512")]
-#[arcane]
-fn linear_to_gamma_slice_tier_v4(token: X64V4Token, values: &mut [f32], gamma: f32) {
+#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_gamma_slice_tier(token: Token, values: &mut [f32], gamma: f32) {
+    #[allow(non_camel_case_types)]
+    type f32x16 = g_f32x16<Token>;
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
-        *chunk = linear_to_gamma_x16_2x8(token, *chunk, gamma);
+        let v = f32x16::from_array(token, *chunk);
+        let clamped = v.max(f32x16::zero(token)).min(f32x16::splat(token, 1.0));
+        *chunk = clamped.pow_midp(1.0 / gamma).to_array();
     }
     for v in remainder {
-        *v = crate::scalar::linear_to_gamma(*v, gamma);
-    }
-}
-
-#[arcane]
-fn linear_to_gamma_slice_tier_v3(token: X64V3Token, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<8>();
-    for chunk in chunks {
-        let v = mt_f32x8::from_array(token, *chunk);
-        let result = linear_to_gamma_mt(token, v, gamma);
-        *chunk = result.to_array();
-    }
-    for v in remainder {
-        *v = crate::scalar::linear_to_gamma(*v, gamma);
-    }
-}
-
-#[arcane]
-fn linear_to_gamma_slice_tier_neon(token: NeonToken, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = crate::tokens::x4::linear_to_gamma_neon(token, *chunk, gamma);
-    }
-    for v in remainder {
-        *v = crate::scalar::linear_to_gamma(*v, gamma);
-    }
-}
-
-#[arcane]
-fn linear_to_gamma_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = crate::tokens::x4::linear_to_gamma_wasm128(token, *chunk, gamma);
-    }
-    for v in remainder {
-        *v = crate::scalar::linear_to_gamma(*v, gamma);
-    }
-}
-
-fn linear_to_gamma_slice_tier_scalar(_token: ScalarToken, values: &mut [f32], gamma: f32) {
-    for v in values.iter_mut() {
         *v = crate::scalar::linear_to_gamma(*v, gamma);
     }
 }
