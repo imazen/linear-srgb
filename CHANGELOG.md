@@ -35,6 +35,27 @@
   Coefficients are reproducible from a clean checkout:
   `python scripts/fit_srgb_fast.py`.
 
+### Changed
+
+- **Linear → sRGB integer quantization paths now SIMD-dispatched**
+  (`linear_to_srgb_u8_slice`, `linear_to_srgb_u8_rgba_slice`,
+  `linear_to_srgb_u16_slice`, `linear_to_srgb_u16_rgba_slice`). Previously
+  scalar loops that serialized on `cvtss2si` → LUT load or on the per-pixel
+  polynomial. Now dispatch through `incant!` over
+  `[v4, v3, neon, wasm128, scalar]`, evaluating the polynomial / LUT index
+  4/8/16-wide per chunk. Measured on Ryzen 7950X, N=10000 elements:
+  - `linear_to_srgb_u8_slice`: 10.5µs → 2.9µs (**3.6×**)
+  - `linear_to_srgb_u16_slice`: 117µs → 2.3µs (**~51×**)
+  - `linear_to_srgb_u8_rgba_slice`: 8.3µs → 3.6µs (**2.3×**)
+  - `linear_to_srgb_u16_rgba_slice`: 86µs → 5.6µs (**~15×**)
+
+  u8 paths use the 4096-entry LUT with SIMD-computed indices (bit-exact
+  output across all tiers). u16 paths evaluate the rational polynomial in
+  SIMD, then quantize — cross-tier output may differ by ±1 u16 LSB at
+  polynomial boundaries (same ~1-ULP tier tolerance as `linear_to_srgb_slice`
+  has always had on f32 output). Alpha lanes in the RGBA variants remain
+  bit-exact across tiers.
+
 - **Alpha-preserving RGBA variants for BT.709 / PQ / HLG slices:**
   `bt709_to_linear_rgba_slice`, `linear_to_bt709_rgba_slice`,
   `pq_to_linear_rgba_slice`, `linear_to_pq_rgba_slice`,

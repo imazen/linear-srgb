@@ -781,15 +781,15 @@ fn bench_dispatched_at_tier(c: &mut Criterion, tier: &str) {
         let _ = archmage::X64V4Token::dangerously_disable_token_process_wide(false);
 
         match tier {
-            "scalar" => {
-                // Disable V3 (cascades to V4/V4x) to force scalar fallback
-                if archmage::X64V3Token::dangerously_disable_token_process_wide(true).is_err() {
-                    eprintln!(
-                        "Cannot disable V3 (compile-time guaranteed). \
-                         Build without -Ctarget-cpu=native or enable testable_dispatch."
-                    );
-                    return;
-                }
+            // Disable V3 (cascades to V4/V4x) to force scalar fallback
+            "scalar"
+                if archmage::X64V3Token::dangerously_disable_token_process_wide(true).is_err() =>
+            {
+                eprintln!(
+                    "Cannot disable V3 (compile-time guaranteed). \
+                     Build without -Ctarget-cpu=native or enable testable_dispatch."
+                );
+                return;
             }
             "v3" => {
                 // Disable V4 to isolate V3 (AVX2+FMA only)
@@ -799,12 +799,9 @@ fn bench_dispatched_at_tier(c: &mut Criterion, tier: &str) {
                     return;
                 }
             }
-            "v4" => {
-                // Leave everything enabled — V4 (AVX-512) takes priority
-                if archmage::X64V4Token::summon().is_none() {
-                    eprintln!("V4 (AVX-512) not available on this CPU. Skipping.");
-                    return;
-                }
+            "v4" if archmage::X64V4Token::summon().is_none() => {
+                eprintln!("V4 (AVX-512) not available on this CPU. Skipping.");
+                return;
             }
             _ => {}
         }
@@ -890,6 +887,67 @@ fn bench_dispatched_at_tier(c: &mut Criterion, tier: &str) {
         let mut output = vec![0u16; BATCH_SIZE];
         b.iter(|| {
             default::linear_to_srgb_u16_slice(black_box(&f32_linear), &mut output);
+            black_box(&output);
+        })
+    });
+
+    // --- RGBA variants (separate input/output arrays, every 4th lane = alpha) ---
+
+    group.bench_function("linear_to_srgb_u8_rgba_slice", |b| {
+        let mut output = vec![0u8; BATCH_SIZE];
+        b.iter(|| {
+            default::linear_to_srgb_u8_rgba_slice(black_box(&linear_from_u8), &mut output);
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("linear_to_srgb_u16_rgba_slice", |b| {
+        let mut output = vec![0u16; BATCH_SIZE];
+        b.iter(|| {
+            default::linear_to_srgb_u16_rgba_slice(black_box(&f32_linear), &mut output);
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("linear_to_srgb_u16_slice_fast", |b| {
+        let mut output = vec![0u16; BATCH_SIZE];
+        b.iter(|| {
+            default::linear_to_srgb_u16_slice_fast(black_box(&f32_linear), &mut output);
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("linear_to_srgb_u16_rgba_slice_fast", |b| {
+        let mut output = vec![0u16; BATCH_SIZE];
+        b.iter(|| {
+            default::linear_to_srgb_u16_rgba_slice_fast(black_box(&f32_linear), &mut output);
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("unpremultiply_linear_to_srgb_u8_rgba_slice", |b| {
+        let mut output = vec![0u8; BATCH_SIZE];
+        b.iter(|| {
+            default::unpremultiply_linear_to_srgb_u8_rgba_slice(
+                black_box(&f32_linear),
+                &mut output,
+            );
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("srgb_u16_to_linear_rgba_slice", |b| {
+        let mut output = vec![0.0f32; BATCH_SIZE];
+        b.iter(|| {
+            default::srgb_u16_to_linear_rgba_slice(black_box(&u16_data), &mut output);
+            black_box(&output);
+        })
+    });
+
+    group.bench_function("srgb_u8_to_linear_rgba_slice", |b| {
+        let mut output = vec![0.0f32; BATCH_SIZE];
+        b.iter(|| {
+            default::srgb_u8_to_linear_rgba_slice(black_box(&u8_data), &mut output);
             black_box(&output);
         })
     });

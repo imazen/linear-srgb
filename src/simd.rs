@@ -14,29 +14,41 @@
 //! ## Single-value LUT Functions
 //! - `srgb_u8_to_linear` - u8 → f32 via lookup table
 
-#[cfg(target_arch = "aarch64")]
-use archmage::NeonToken;
-#[cfg(target_arch = "wasm32")]
-use archmage::Wasm128Token;
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-use archmage::X64V4Token;
-#[cfg(any(target_arch = "aarch64", target_arch = "wasm32"))]
-use archmage::arcane;
-use archmage::{ScalarToken, incant};
-#[cfg(target_arch = "x86_64")]
-use archmage::{X64V3Token, arcane, rite};
+// All archmage tokens are available on every platform — real impls on their
+// native arch, zero-construction stubs elsewhere. The `#[arcane]` /
+// `#[rite]` / `#[archmage::magetypes]` macros emit their own cfg guards
+// based on the token param's arch, so tier wrappers only compile on their
+// target platform — but we still need the imports in scope unconditionally
+// for the macros to resolve.
+#[allow(unused_imports)] // Some tokens are only live in cfg'd-out tier wrappers.
+use archmage::{
+    NeonToken, ScalarToken, Wasm128Token, X64V3Token, X64V4Token, arcane, incant, rite,
+};
 
-// Alias magetypes SIMD types to avoid name clash
+// Alias magetypes SIMD types to avoid name clash with the generic f32x8. These
+// are used by the pre-magetypes #[rite] helpers below that take concrete V3/V4
+// tokens; the helpers themselves are emitted only on x86_64 (via the token
+// parameter's arch), and the aliases resolve on x86_64 since that's where
+// `magetypes::simd::f32x8` is the concrete width-aware type. Cross-compiling
+// to other arches excludes the helpers entirely, so the alias is unused
+// there — but we still need it defined to satisfy reference inside the
+// cfg-in scope on x86_64.
 #[cfg(target_arch = "x86_64")]
 use magetypes::simd::f32x8 as mt_f32x8;
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 use magetypes::simd::v4::f32x16 as mt_f32x16;
 
+// Generic magetypes type for `#[archmage::magetypes(...)]` bodies. `f32x16`
+// is native on X64V4Token and polyfilled on X64V3Token / NeonToken /
+// Wasm128Token / ScalarToken; using it as the common width lets one body
+// cover every tier. The `Token` placeholder inside each body expands
+// per-tier via the macro.
+use magetypes::simd::generic::f32x16 as g_f32x16;
+
 // ============================================================================
 // magetypes #[rite] helpers (x86-64 only) — real AVX2+FMA SIMD
 // ============================================================================
 
-#[cfg(target_arch = "x86_64")]
 #[rite]
 fn srgb_to_linear_mt(token: X64V3Token, srgb: mt_f32x8) -> mt_f32x8 {
     use crate::rational_poly::{S2L_P, S2L_Q, SRGB_THRESHOLD};
@@ -67,7 +79,6 @@ fn srgb_to_linear_mt(token: X64V3Token, srgb: mt_f32x8) -> mt_f32x8 {
     mt_f32x8::blend(ge_one, one, result)
 }
 
-#[cfg(target_arch = "x86_64")]
 #[rite]
 fn linear_to_srgb_mt(token: X64V3Token, linear: mt_f32x8) -> mt_f32x8 {
     use crate::rational_poly::{L2S_P, L2S_Q, LINEAR_THRESHOLD};
@@ -97,7 +108,6 @@ fn linear_to_srgb_mt(token: X64V3Token, linear: mt_f32x8) -> mt_f32x8 {
     mt_f32x8::blend(ge_one, one, result)
 }
 
-#[cfg(target_arch = "x86_64")]
 #[rite]
 fn gamma_to_linear_mt(token: X64V3Token, encoded: mt_f32x8, gamma: f32) -> mt_f32x8 {
     let zero = mt_f32x8::zero(token);
@@ -106,7 +116,6 @@ fn gamma_to_linear_mt(token: X64V3Token, encoded: mt_f32x8, gamma: f32) -> mt_f3
     encoded.pow_midp(gamma)
 }
 
-#[cfg(target_arch = "x86_64")]
 #[rite]
 fn linear_to_gamma_mt(token: X64V3Token, linear: mt_f32x8, gamma: f32) -> mt_f32x8 {
     let zero = mt_f32x8::zero(token);
@@ -119,7 +128,7 @@ fn linear_to_gamma_mt(token: X64V3Token, linear: mt_f32x8, gamma: f32) -> mt_f32
 // magetypes #[rite] helpers (x86-64 V4/AVX-512) — native 512-bit SIMD
 // ============================================================================
 
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(feature = "avx512")]
 #[rite]
 fn srgb_to_linear_mt_x16(token: X64V4Token, srgb: mt_f32x16) -> mt_f32x16 {
     use crate::rational_poly::{S2L_P, S2L_Q, SRGB_THRESHOLD};
@@ -149,7 +158,7 @@ fn srgb_to_linear_mt_x16(token: X64V4Token, srgb: mt_f32x16) -> mt_f32x16 {
     mt_f32x16::blend(ge_one, one, result)
 }
 
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(feature = "avx512")]
 #[rite]
 fn linear_to_srgb_mt_x16(token: X64V4Token, linear: mt_f32x16) -> mt_f32x16 {
     use crate::rational_poly::{L2S_P, L2S_Q, LINEAR_THRESHOLD};
@@ -180,7 +189,7 @@ fn linear_to_srgb_mt_x16(token: X64V4Token, linear: mt_f32x16) -> mt_f32x16 {
 }
 
 // gamma x16: pow_midp not available on f32x16, delegate to 2×x8 via token.v3()
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(feature = "avx512")]
 #[rite]
 fn gamma_to_linear_x16_2x8(token: X64V4Token, v: [f32; 16], gamma: f32) -> [f32; 16] {
     let t3 = token.v3();
@@ -194,7 +203,7 @@ fn gamma_to_linear_x16_2x8(token: X64V4Token, v: [f32; 16], gamma: f32) -> [f32;
     out
 }
 
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(feature = "avx512")]
 #[rite]
 fn linear_to_gamma_x16_2x8(token: X64V4Token, v: [f32; 16], gamma: f32) -> [f32; 16] {
     let t3 = token.v3();
@@ -215,7 +224,7 @@ fn linear_to_gamma_x16_2x8(token: X64V4Token, v: [f32; 16], gamma: f32) -> [f32;
 /// Generate x86_64 AVX-512 (16-wide) slice tier functions (plain + RGBA).
 macro_rules! x16_slice_tiers {
     ($plain:ident, $rgba:ident, $rite:ident, $scalar:path) => {
-        #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+        #[cfg(feature = "avx512")]
         #[arcane]
         fn $plain(token: X64V4Token, values: &mut [f32]) {
             let (chunks, remainder) = values.as_chunks_mut::<16>();
@@ -228,7 +237,7 @@ macro_rules! x16_slice_tiers {
             }
         }
 
-        #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+        #[cfg(feature = "avx512")]
         #[arcane]
         fn $rgba(token: X64V4Token, values: &mut [f32]) {
             let (chunks, remainder) = values.as_chunks_mut::<16>();
@@ -250,7 +259,6 @@ macro_rules! x16_slice_tiers {
 /// Generate x86_64 AVX2+FMA (8-wide) slice tier functions (plain + RGBA).
 macro_rules! x8_slice_tiers {
     ($plain:ident, $rgba:ident, $rite:ident, $scalar:path) => {
-        #[cfg(target_arch = "x86_64")]
         #[arcane]
         fn $plain(token: X64V3Token, values: &mut [f32]) {
             let (chunks, remainder) = values.as_chunks_mut::<8>();
@@ -263,7 +271,6 @@ macro_rules! x8_slice_tiers {
             }
         }
 
-        #[cfg(target_arch = "x86_64")]
         #[arcane]
         fn $rgba(token: X64V3Token, values: &mut [f32]) {
             let (chunks, remainder) = values.as_chunks_mut::<8>();
@@ -285,7 +292,6 @@ macro_rules! x8_slice_tiers {
 /// Generate WebAssembly SIMD128 (4-wide) slice tier functions (plain + RGBA).
 macro_rules! wasm128_slice_tiers {
     ($plain:ident, $rgba:ident, $rite_fn:path, $scalar:path) => {
-        #[cfg(target_arch = "wasm32")]
         #[arcane]
         fn $plain(token: Wasm128Token, values: &mut [f32]) {
             let (chunks, remainder) = values.as_chunks_mut::<4>();
@@ -297,7 +303,6 @@ macro_rules! wasm128_slice_tiers {
             }
         }
 
-        #[cfg(target_arch = "wasm32")]
         #[arcane]
         fn $rgba(token: Wasm128Token, values: &mut [f32]) {
             let (chunks, remainder) = values.as_chunks_mut::<4>();
@@ -320,7 +325,6 @@ macro_rules! wasm128_slice_tiers {
 /// Generate AArch64 NEON (4-wide) slice tier functions (plain + RGBA).
 macro_rules! neon_slice_tiers {
     ($plain:ident, $rgba:ident, $rite_fn:path, $scalar:path) => {
-        #[cfg(target_arch = "aarch64")]
         #[arcane]
         fn $plain(token: NeonToken, values: &mut [f32]) {
             let (chunks, remainder) = values.as_chunks_mut::<4>();
@@ -332,7 +336,6 @@ macro_rules! neon_slice_tiers {
             }
         }
 
-        #[cfg(target_arch = "aarch64")]
         #[arcane]
         fn $rgba(token: NeonToken, values: &mut [f32]) {
             let (chunks, remainder) = values.as_chunks_mut::<4>();
@@ -521,13 +524,11 @@ pub fn linear_to_srgb_rgba_slice(values: &mut [f32]) {
 // Extended-range sRGB ↔ Linear Slice Functions (no clamping)
 // ============================================================================
 
-#[cfg(target_arch = "x86_64")]
 #[arcane]
 fn srgb_to_linear_extended_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     crate::tokens::x8::srgb_to_linear_extended_slice_v3(token, values);
 }
 
-#[cfg(target_arch = "aarch64")]
 #[arcane]
 fn srgb_to_linear_extended_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
@@ -539,7 +540,6 @@ fn srgb_to_linear_extended_slice_tier_neon(token: NeonToken, values: &mut [f32])
     }
 }
 
-#[cfg(target_arch = "wasm32")]
 #[arcane]
 fn srgb_to_linear_extended_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
@@ -599,13 +599,11 @@ pub fn srgb_to_linear_extended_slice(values: &mut [f32]) {
     )
 }
 
-#[cfg(target_arch = "x86_64")]
 #[arcane]
 fn linear_to_srgb_extended_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     crate::tokens::x8::linear_to_srgb_extended_slice_v3(token, values);
 }
 
-#[cfg(target_arch = "aarch64")]
 #[arcane]
 fn linear_to_srgb_extended_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
@@ -617,7 +615,6 @@ fn linear_to_srgb_extended_slice_tier_neon(token: NeonToken, values: &mut [f32])
     }
 }
 
-#[cfg(target_arch = "wasm32")]
 #[arcane]
 fn linear_to_srgb_extended_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
@@ -679,7 +676,7 @@ pub fn linear_to_srgb_extended_slice(values: &mut [f32]) {
 // sRGB→Linear + Premultiply RGBA f32 (SIMD-fused single-pass)
 // ============================================================================
 
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(feature = "avx512")]
 #[arcane]
 fn srgb_to_linear_premultiply_rgba_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
@@ -705,7 +702,6 @@ fn srgb_to_linear_premultiply_rgba_slice_tier_v4(token: X64V4Token, values: &mut
     }
 }
 
-#[cfg(target_arch = "x86_64")]
 #[arcane]
 fn srgb_to_linear_premultiply_rgba_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
@@ -725,7 +721,6 @@ fn srgb_to_linear_premultiply_rgba_slice_tier_v3(token: X64V3Token, values: &mut
     }
 }
 
-#[cfg(target_arch = "aarch64")]
 #[arcane]
 fn srgb_to_linear_premultiply_rgba_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
     let (chunks, _remainder) = values.as_chunks_mut::<4>();
@@ -739,7 +734,6 @@ fn srgb_to_linear_premultiply_rgba_slice_tier_neon(token: NeonToken, values: &mu
     }
 }
 
-#[cfg(target_arch = "wasm32")]
 #[arcane]
 fn srgb_to_linear_premultiply_rgba_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
     let (chunks, _remainder) = values.as_chunks_mut::<4>();
@@ -795,7 +789,7 @@ pub fn srgb_to_linear_premultiply_rgba_slice(values: &mut [f32]) {
 // Unpremultiply + Linear→sRGB RGBA f32 (SIMD-fused single-pass)
 // ============================================================================
 
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(feature = "avx512")]
 #[arcane]
 fn unpremultiply_linear_to_srgb_rgba_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
@@ -849,7 +843,6 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier_v4(token: X64V4Token, values: &m
     }
 }
 
-#[cfg(target_arch = "x86_64")]
 #[arcane]
 fn unpremultiply_linear_to_srgb_rgba_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
@@ -890,7 +883,6 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier_v3(token: X64V3Token, values: &m
     }
 }
 
-#[cfg(target_arch = "aarch64")]
 #[arcane]
 fn unpremultiply_linear_to_srgb_rgba_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
     let (chunks, _remainder) = values.as_chunks_mut::<4>();
@@ -909,7 +901,6 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier_neon(token: NeonToken, values: &
     }
 }
 
-#[cfg(target_arch = "wasm32")]
 #[arcane]
 fn unpremultiply_linear_to_srgb_rgba_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
     let (chunks, _remainder) = values.as_chunks_mut::<4>();
@@ -1012,9 +1003,50 @@ pub fn srgb_u8_to_linear_slice(input: &[u8], output: &mut [f32]) {
     }
 }
 
+// ---------- SIMD-indexed LUT path for linear_to_srgb_u8_slice ----------
+//
+// Computes the LUT index in SIMD (clamp, FMA by (4095, 0.5), truncate-to-int)
+// so the 8 scalar LUT loads following each SIMD chunk are independent and
+// issue in parallel. Preserves the exact scalar LUT formula — output is
+// bit-identical across all tiers.
+//
+// `#[archmage::magetypes(...)]` generates one tier-suffixed variant per
+// SIMD token (`_v4`, `_v3`, `_neon`, `_wasm128`, `_scalar`) from this
+// single body. `f32x8` is native on x86-V3 / x86-V4; on NEON / WASM128
+// it's polyfilled as 2×f32x4 (inlined, no runtime overhead).
+
+#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_srgb_u8_slice_tier(token: Token, input: &[f32], output: &mut [u8]) {
+    // f32x16 is native on V4 (AVX-512) and polyfilled on V3 (2×f32x8), NEON
+    // (4×f32x4), Wasm128 (4×f32x4), and scalar. F32x8Backend isn't impl'd
+    // for X64V4Token in published magetypes 0.9.19, so f32x16 is the
+    // natural common width across all tiers.
+    #[allow(non_camel_case_types)]
+    type f32x16 = g_f32x16<Token>;
+    let lut = crate::const_luts::linear_to_srgb_u8();
+    let (in_chunks, in_rem) = input.as_chunks::<16>();
+    let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
+    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+        let v = f32x16::from_array(token, *inp);
+        let clamped = v.max(f32x16::zero(token)).min(f32x16::splat(token, 1.0));
+        let idx_f = clamped.mul_add(f32x16::splat(token, 4095.0), f32x16::splat(token, 0.5));
+        let idx_i = idx_f.to_i32().to_array();
+        for i in 0..16 {
+            out[i] = lut[(idx_i[i] as usize) & 0xFFF];
+        }
+    }
+    for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
+        let clamped = inp.clamp(0.0, 1.0);
+        let idx = (clamped * 4095.0 + 0.5) as usize & 0xFFF;
+        *out = lut[idx];
+    }
+}
+
 /// Convert linear f32 values to sRGB u8.
 ///
-/// Uses a 4096-entry const LUT — no pow/log/exp computation.
+/// Uses a 4096-entry const LUT with SIMD-computed indices (AVX-512 / AVX2+FMA
+/// / NEON / WASM SIMD128) so the 4/8/16 scalar LUT loads per chunk can issue
+/// in parallel rather than serializing through the float-to-int cast.
 ///
 /// # Panics
 /// Panics if `input.len() != output.len()`.
@@ -1027,15 +1059,13 @@ pub fn srgb_u8_to_linear_slice(input: &[u8], output: &mut [f32]) {
 /// let mut output = vec![0u8; 256];
 /// linear_to_srgb_u8_slice(&input, &mut output);
 /// ```
+#[inline]
 pub fn linear_to_srgb_u8_slice(input: &[f32], output: &mut [u8]) {
     assert_eq!(input.len(), output.len());
-    let lut = crate::const_luts::linear_to_srgb_u8();
-
-    for (inp, out) in input.iter().zip(output.iter_mut()) {
-        let clamped = inp.clamp(0.0, 1.0);
-        let idx = (clamped * 4095.0 + 0.5) as usize & 0xFFF;
-        *out = lut[idx];
-    }
+    incant!(
+        linear_to_srgb_u8_slice_tier(input, output),
+        [v4, v3, neon, wasm128, scalar]
+    )
 }
 
 // ============================================================================
@@ -1055,30 +1085,135 @@ pub fn srgb_u16_to_linear_slice(input: &[u16], output: &mut [f32]) {
     }
 }
 
+// ---------- SIMD polynomial + quantize path for linear_to_srgb_u16_slice ----------
+//
+// Inlines the linear→sRGB rational polynomial against the `rational_poly`
+// constants (no `transfer` feature needed), scales by 65535+0.5, truncates
+// to i32, and casts to u16. `f32x16` polyfills to 2×f32x8 on V3, 4×f32x4
+// on NEON / WASM (inlined, no runtime overhead). Cross-tier output may
+// differ by ≤1 u16 LSB — see `linear_to_srgb_u16_all_tiers_within_one_lsb`.
+
+#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_srgb_u16_slice_tier(token: Token, input: &[f32], output: &mut [u16]) {
+    use crate::rational_poly::{L2S_P, L2S_Q, LINEAR_THRESHOLD};
+    #[allow(non_camel_case_types)]
+    type f32x16 = g_f32x16<Token>;
+
+    let (in_chunks, in_rem) = input.as_chunks::<16>();
+    let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
+    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+        let linear = f32x16::from_array(token, *inp);
+        let zero = f32x16::zero(token);
+        let one = f32x16::splat(token, 1.0);
+        let clamped = linear.max(zero).min(one);
+        let linear_result = clamped * f32x16::splat(token, 12.92);
+        let x = clamped.sqrt();
+        let yp = f32x16::splat(token, L2S_P[4]).mul_add(x, f32x16::splat(token, L2S_P[3]));
+        let yp = yp.mul_add(x, f32x16::splat(token, L2S_P[2]));
+        let yp = yp.mul_add(x, f32x16::splat(token, L2S_P[1]));
+        let yp = yp.mul_add(x, f32x16::splat(token, L2S_P[0]));
+        let yq = f32x16::splat(token, L2S_Q[4]).mul_add(x, f32x16::splat(token, L2S_Q[3]));
+        let yq = yq.mul_add(x, f32x16::splat(token, L2S_Q[2]));
+        let yq = yq.mul_add(x, f32x16::splat(token, L2S_Q[1]));
+        let yq = yq.mul_add(x, f32x16::splat(token, L2S_Q[0]));
+        let power_result = (yp / yq).min(one);
+        let thresh_mask = clamped.simd_lt(f32x16::splat(token, LINEAR_THRESHOLD));
+        let srgb = f32x16::blend(thresh_mask, linear_result, power_result);
+        let ge_one = linear.simd_ge(one);
+        let srgb = f32x16::blend(ge_one, one, srgb);
+
+        let scaled = srgb.mul_add(f32x16::splat(token, 65535.0), f32x16::splat(token, 0.5));
+        let idx_i = scaled.to_i32().to_array();
+        for i in 0..16 {
+            out[i] = idx_i[i] as u16;
+        }
+    }
+    for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
+        *out = crate::scalar::linear_to_srgb_u16(*inp);
+    }
+}
+
 /// Convert linear f32 values to sRGB u16 via rational polynomial.
 ///
-/// Perfect roundtrip. For ~10× faster encode with ±1 max error, use
-/// [`linear_to_srgb_u16_slice_fast`].
+/// Perfect roundtrip. Dispatches through `incant!` over
+/// `[v4, v3, neon, wasm128, scalar]` so the polynomial evaluates 4/8/16 wide
+/// before f32→u16 quantization. For ~10× faster encode with ±1 max error,
+/// use [`linear_to_srgb_u16_slice_fast`].
 ///
 /// # Panics
 /// Panics if `input.len() != output.len()`.
+#[inline]
 pub fn linear_to_srgb_u16_slice(input: &[f32], output: &mut [u16]) {
     assert_eq!(input.len(), output.len());
-    for (inp, out) in input.iter().zip(output.iter_mut()) {
-        *out = crate::scalar::linear_to_srgb_u16(*inp);
+    incant!(
+        linear_to_srgb_u16_slice_tier(input, output),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+// ---------- SIMD-indexed sqrt-LUT path for linear_to_srgb_u16_slice_fast ----------
+//
+// Same shape as the u8 LUT path but with sqrt-indexing:
+//   idx = (sqrt(clamp(linear)) * ENCODE_SQRT_SCALE + 0.5) as usize
+// SIMD does clamp, sqrt, FMA(65536, 0.5), cvttps2dq; the scalar LUT loads
+// following each SIMD chunk are independent so they issue in parallel.
+// Bit-exact output across all tiers (same formula).
+//
+// Requires `std` because the sqrt-LUT is lazily initialized via OnceLock.
+// In `no_std` the scalar fallback uses the full polynomial (no LUT).
+
+#[cfg(feature = "std")]
+#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_srgb_u16_slice_fast_tier(token: Token, input: &[f32], output: &mut [u16]) {
+    #[allow(non_camel_case_types)]
+    type f32x16 = g_f32x16<Token>;
+    let lut = crate::u16_lut::encode_lut();
+    let max_idx = crate::u16_lut::ENCODE_LUT_N - 1;
+    let scale = crate::u16_lut::ENCODE_SQRT_SCALE;
+    let (in_chunks, in_rem) = input.as_chunks::<16>();
+    let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
+    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+        let v = f32x16::from_array(token, *inp);
+        let clamped = v.max(f32x16::zero(token)).min(f32x16::splat(token, 1.0));
+        let idx_f = clamped
+            .sqrt()
+            .mul_add(f32x16::splat(token, scale), f32x16::splat(token, 0.5));
+        let idx_i = idx_f.to_i32().to_array();
+        for i in 0..16 {
+            out[i] = lut[(idx_i[i] as usize).min(max_idx)];
+        }
+    }
+    for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
+        *out = crate::scalar::linear_to_srgb_u16_fast(*inp);
     }
 }
 
 /// Convert linear f32 values to sRGB u16 using sqrt-indexed LUT (~10× faster).
 ///
-/// Max ±1 u16 roundtrip error, 94.2% exact. See [`linear_to_srgb_u16_fast`](crate::scalar::linear_to_srgb_u16_fast).
+/// Max ±1 u16 roundtrip error, 94.2% exact. SIMD-computes the sqrt-based
+/// index 4/8/16-wide per chunk so the scalar LUT loads can issue in
+/// parallel. See [`linear_to_srgb_u16_fast`](crate::scalar::linear_to_srgb_u16_fast)
+/// for the exact formula.
 ///
 /// # Panics
 /// Panics if `input.len() != output.len()`.
+#[inline]
 pub fn linear_to_srgb_u16_slice_fast(input: &[f32], output: &mut [u16]) {
     assert_eq!(input.len(), output.len());
-    for (inp, out) in input.iter().zip(output.iter_mut()) {
-        *out = crate::scalar::linear_to_srgb_u16_fast(*inp);
+    // The sqrt-LUT only exists with `std`. Without `std`, fall back to the
+    // scalar polynomial path used by `linear_to_srgb_u16_fast`.
+    #[cfg(feature = "std")]
+    {
+        incant!(
+            linear_to_srgb_u16_slice_fast_tier(input, output),
+            [v4, v3, neon, wasm128, scalar]
+        )
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        for (inp, out) in input.iter().zip(output.iter_mut()) {
+            *out = crate::scalar::linear_to_srgb_u16_fast(*inp);
+        }
     }
 }
 
@@ -1148,22 +1283,58 @@ pub fn srgb_u8_to_linear_rgba_slice(input: &[u8], output: &mut [f32]) {
 /// assert_eq!(output[3], 255);  // alpha 1.0 → 255
 /// assert_eq!(output[7], 128);  // alpha 0.5 → 128
 /// ```
-pub fn linear_to_srgb_u8_rgba_slice(input: &[f32], output: &mut [u8]) {
-    assert_eq!(input.len(), output.len());
-    let lut = crate::const_luts::linear_to_srgb_u8();
+// ---------- SIMD-indexed LUT path for linear_to_srgb_u8_rgba_slice ----------
+//
+// Computes LUT indices in SIMD for all lanes; alpha lanes (every 4th) are
+// overwritten with a scalar `(alpha * 255 + 0.5) as u8` direct cast. Same
+// 25%-wasted-SIMD-lanes pattern as the other RGBA paths — wins come from
+// parallelizing the LUT loads.
 
-    let in_pixels = input.chunks_exact(4);
-    let out_pixels = output.chunks_exact_mut(4);
-    for (inp, out) in in_pixels.zip(out_pixels) {
-        // RGB: LUT encode
+#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_srgb_u8_rgba_slice_tier(token: Token, input: &[f32], output: &mut [u8]) {
+    #[allow(non_camel_case_types)]
+    type f32x16 = g_f32x16<Token>;
+    let lut = crate::const_luts::linear_to_srgb_u8();
+    let (in_chunks, in_rem) = input.as_chunks::<16>();
+    let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
+    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+        let v = f32x16::from_array(token, *inp);
+        let clamped = v.max(f32x16::zero(token)).min(f32x16::splat(token, 1.0));
+        let idx_f = clamped.mul_add(f32x16::splat(token, 4095.0), f32x16::splat(token, 0.5));
+        let idx_i = idx_f.to_i32().to_array();
+        for px in 0..4 {
+            let base = px * 4;
+            out[base] = lut[(idx_i[base] as usize) & 0xFFF];
+            out[base + 1] = lut[(idx_i[base + 1] as usize) & 0xFFF];
+            out[base + 2] = lut[(idx_i[base + 2] as usize) & 0xFFF];
+            out[base + 3] = (inp[base + 3].clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+        }
+    }
+    for (inp, out) in in_rem.chunks_exact(4).zip(out_rem.chunks_exact_mut(4)) {
         for i in 0..3 {
             let clamped = inp[i].clamp(0.0, 1.0);
             let idx = (clamped * 4095.0 + 0.5) as usize & 0xFFF;
             out[i] = lut[idx];
         }
-        // Alpha: linear passthrough
         out[3] = (inp[3].clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
     }
+}
+
+/// Convert linear RGBA f32 to sRGB RGBA u8, preserving alpha.
+///
+/// RGB channels are LUT-encoded with SIMD-computed indices; alpha is scaled
+/// linearly by 255 and rounded. Trailing elements that don't form a complete
+/// RGBA pixel are ignored.
+///
+/// # Panics
+/// Panics if `input.len() != output.len()`.
+#[inline]
+pub fn linear_to_srgb_u8_rgba_slice(input: &[f32], output: &mut [u8]) {
+    assert_eq!(input.len(), output.len());
+    incant!(
+        linear_to_srgb_u8_rgba_slice_tier(input, output),
+        [v4, v3, neon, wasm128, scalar]
+    )
 }
 
 // ============================================================================
@@ -1224,13 +1395,86 @@ pub fn srgb_u8_to_linear_premultiply_rgba_slice(input: &[u8], output: &mut [f32]
     }
 }
 
+// ---------- SIMD unpremultiply + SIMD LUT index for u8 RGBA output ----------
+//
+// Per-pixel strategy:
+//   1. Scalar: extract alpha, compute inv_a = 1/a (or 0 if a <= threshold).
+//      Below-threshold pixels get inv_a = 0, which makes RGB * inv_a = 0,
+//      clamp stays 0, LUT index stays 0, and lut[0] == 0 (sRGB-encoded
+//      black) — so the "transparent pixel → zero RGB" contract falls out
+//      of the math with no per-pixel branch on the write side.
+//   2. SIMD: build a per-lane multiplier vector — [inv_a, inv_a, inv_a,
+//      1.0] per pixel — then multiply, clamp, FMA(4095, 0.5), cvttps2dq.
+//      Scalar LUT loads following each chunk are independent.
+//   3. Alpha lane (every 4th) is overwritten with a scalar
+//      `(a * 255 + 0.5) as u8` direct cast; its SIMD LUT index is
+//      discarded.
+
+#[inline(always)]
+fn inv_alpha_or_zero(a: f32) -> f32 {
+    if a > crate::UNPREMUL_ALPHA_THRESHOLD {
+        1.0 / a
+    } else {
+        0.0
+    }
+}
+
+#[allow(clippy::needless_range_loop)]
+#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn unpremultiply_linear_to_srgb_u8_rgba_slice_tier(token: Token, input: &[f32], output: &mut [u8]) {
+    #[allow(non_camel_case_types)]
+    type f32x16 = g_f32x16<Token>;
+    let lut = crate::const_luts::linear_to_srgb_u8();
+    let (in_chunks, in_rem) = input.as_chunks::<16>();
+    let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
+    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+        let a = [inp[3], inp[7], inp[11], inp[15]];
+        let inv_a = [
+            inv_alpha_or_zero(a[0]),
+            inv_alpha_or_zero(a[1]),
+            inv_alpha_or_zero(a[2]),
+            inv_alpha_or_zero(a[3]),
+        ];
+        let mul_arr = [
+            inv_a[0], inv_a[0], inv_a[0], 1.0, inv_a[1], inv_a[1], inv_a[1], 1.0, inv_a[2],
+            inv_a[2], inv_a[2], 1.0, inv_a[3], inv_a[3], inv_a[3], 1.0,
+        ];
+        let mul_vec = f32x16::from_array(token, mul_arr);
+        let v = f32x16::from_array(token, *inp);
+        let unpremul = v * mul_vec;
+        let clamped = unpremul
+            .max(f32x16::zero(token))
+            .min(f32x16::splat(token, 1.0));
+        let idx_f = clamped.mul_add(f32x16::splat(token, 4095.0), f32x16::splat(token, 0.5));
+        let idx_i = idx_f.to_i32().to_array();
+        for px in 0..4 {
+            let base = px * 4;
+            out[base] = lut[(idx_i[base] as usize) & 0xFFF];
+            out[base + 1] = lut[(idx_i[base + 1] as usize) & 0xFFF];
+            out[base + 2] = lut[(idx_i[base + 2] as usize) & 0xFFF];
+            out[base + 3] = (a[px].clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+        }
+    }
+    for (inp, out) in in_rem.chunks_exact(4).zip(out_rem.chunks_exact_mut(4)) {
+        let a = inp[3];
+        let inv_a = inv_alpha_or_zero(a);
+        for i in 0..3 {
+            let clamped = (inp[i] * inv_a).clamp(0.0, 1.0);
+            let idx = (clamped * 4095.0 + 0.5) as usize & 0xFFF;
+            out[i] = lut[idx];
+        }
+        out[3] = (a.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+    }
+}
+
 /// Convert linear premultiplied RGBA f32 to sRGB straight-alpha RGBA u8.
 ///
-/// Fused operation: each RGB channel is divided by alpha (unpremultiplied),
-/// then encoded to sRGB u8 via LUT. Alpha is passed through as
-/// `(a * 255 + 0.5) as u8`.
-///
-/// When alpha is zero, RGB output bytes are set to zero.
+/// Fused SIMD operation: each RGB channel is divided by alpha
+/// (unpremultiplied), then encoded to sRGB u8 via LUT. Alpha is passed
+/// through as `(a * 255 + 0.5) as u8`. When alpha is at or below
+/// [`UNPREMUL_ALPHA_THRESHOLD`](crate::UNPREMUL_ALPHA_THRESHOLD), RGB
+/// output bytes are set to zero — this falls out of the math naturally
+/// (`inv_a = 0 → lut[0] = 0`) with no per-pixel branch on the write side.
 ///
 /// Trailing elements that don't form a complete RGBA pixel are ignored.
 ///
@@ -1250,28 +1494,13 @@ pub fn srgb_u8_to_linear_premultiply_rgba_slice(input: &[u8], output: &mut [f32]
 /// assert!((output[0] as i32 - 128).abs() <= 1); // roundtrips within 1
 /// assert_eq!(output[7], 0); // transparent pixel
 /// ```
+#[inline]
 pub fn unpremultiply_linear_to_srgb_u8_rgba_slice(input: &[f32], output: &mut [u8]) {
     assert_eq!(input.len(), output.len());
-    let lut = crate::const_luts::linear_to_srgb_u8();
-
-    let in_pixels = input.chunks_exact(4);
-    let out_pixels = output.chunks_exact_mut(4);
-    for (inp, out) in in_pixels.zip(out_pixels) {
-        let a = inp[3];
-        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
-            let inv_a = 1.0 / a;
-            for i in 0..3 {
-                let clamped = (inp[i] * inv_a).clamp(0.0, 1.0);
-                let idx = (clamped * 4095.0 + 0.5) as usize & 0xFFF;
-                out[i] = lut[idx];
-            }
-        } else {
-            out[0] = 0;
-            out[1] = 0;
-            out[2] = 0;
-        }
-        out[3] = (a.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
-    }
+    incant!(
+        unpremultiply_linear_to_srgb_u8_rgba_slice_tier(input, output),
+        [v4, v3, neon, wasm128, scalar]
+    )
 }
 
 // ============================================================================
@@ -1298,18 +1527,53 @@ pub fn srgb_u16_to_linear_rgba_slice(input: &[u16], output: &mut [f32]) {
     }
 }
 
-/// Convert linear RGBA f32 values to sRGB u16, preserving alpha.
-///
-/// Convert linear RGBA f32 to sRGB u16, preserving alpha. Polynomial encode
-/// (perfect roundtrip). For ~10× faster, use [`linear_to_srgb_u16_rgba_slice_fast`].
-///
-/// # Panics
-/// Panics if `input.len() != output.len()`.
-pub fn linear_to_srgb_u16_rgba_slice(input: &[f32], output: &mut [u16]) {
-    assert_eq!(input.len(), output.len());
-    let in_pixels = input.chunks_exact(4);
-    let out_pixels = output.chunks_exact_mut(4);
-    for (inp, out) in in_pixels.zip(out_pixels) {
+// ---------- SIMD polynomial + quantize for linear_to_srgb_u16_rgba_slice ----------
+//
+// Applies the polynomial to all lanes (including alpha positions — their
+// polynomial result is discarded and replaced with a scalar
+// `(alpha * 65535 + 0.5) as u16` direct cast). Same 25% lane-waste pattern
+// as other memory-based RGBA paths.
+
+#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_srgb_u16_rgba_slice_tier(token: Token, input: &[f32], output: &mut [u16]) {
+    use crate::rational_poly::{L2S_P, L2S_Q, LINEAR_THRESHOLD};
+    #[allow(non_camel_case_types)]
+    type f32x16 = g_f32x16<Token>;
+
+    let (in_chunks, in_rem) = input.as_chunks::<16>();
+    let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
+    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+        let linear = f32x16::from_array(token, *inp);
+        let zero = f32x16::zero(token);
+        let one = f32x16::splat(token, 1.0);
+        let clamped = linear.max(zero).min(one);
+        let linear_result = clamped * f32x16::splat(token, 12.92);
+        let x = clamped.sqrt();
+        let yp = f32x16::splat(token, L2S_P[4]).mul_add(x, f32x16::splat(token, L2S_P[3]));
+        let yp = yp.mul_add(x, f32x16::splat(token, L2S_P[2]));
+        let yp = yp.mul_add(x, f32x16::splat(token, L2S_P[1]));
+        let yp = yp.mul_add(x, f32x16::splat(token, L2S_P[0]));
+        let yq = f32x16::splat(token, L2S_Q[4]).mul_add(x, f32x16::splat(token, L2S_Q[3]));
+        let yq = yq.mul_add(x, f32x16::splat(token, L2S_Q[2]));
+        let yq = yq.mul_add(x, f32x16::splat(token, L2S_Q[1]));
+        let yq = yq.mul_add(x, f32x16::splat(token, L2S_Q[0]));
+        let power_result = (yp / yq).min(one);
+        let thresh_mask = clamped.simd_lt(f32x16::splat(token, LINEAR_THRESHOLD));
+        let srgb = f32x16::blend(thresh_mask, linear_result, power_result);
+        let ge_one = linear.simd_ge(one);
+        let srgb = f32x16::blend(ge_one, one, srgb);
+
+        let scaled = srgb.mul_add(f32x16::splat(token, 65535.0), f32x16::splat(token, 0.5));
+        let idx_i = scaled.to_i32().to_array();
+        for px in 0..4 {
+            let base = px * 4;
+            out[base] = idx_i[base] as u16;
+            out[base + 1] = idx_i[base + 1] as u16;
+            out[base + 2] = idx_i[base + 2] as u16;
+            out[base + 3] = (inp[base + 3].clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+        }
+    }
+    for (inp, out) in in_rem.chunks_exact(4).zip(out_rem.chunks_exact_mut(4)) {
         out[0] = crate::scalar::linear_to_srgb_u16(inp[0]);
         out[1] = crate::scalar::linear_to_srgb_u16(inp[1]);
         out[2] = crate::scalar::linear_to_srgb_u16(inp[2]);
@@ -1317,16 +1581,60 @@ pub fn linear_to_srgb_u16_rgba_slice(input: &[f32], output: &mut [u16]) {
     }
 }
 
+/// Convert linear RGBA f32 to sRGB u16, preserving alpha. Polynomial encode
+/// with SIMD dispatch (perfect roundtrip). For ~10× faster, use
+/// [`linear_to_srgb_u16_rgba_slice_fast`].
+///
+/// # Panics
+/// Panics if `input.len() != output.len()`.
+#[inline]
+pub fn linear_to_srgb_u16_rgba_slice(input: &[f32], output: &mut [u16]) {
+    assert_eq!(input.len(), output.len());
+    incant!(
+        linear_to_srgb_u16_rgba_slice_tier(input, output),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
 /// Convert linear RGBA f32 to sRGB u16, preserving alpha. Sqrt-indexed LUT
 /// encode (~10× faster, max ±1 roundtrip error).
 ///
 /// # Panics
 /// Panics if `input.len() != output.len()`.
-pub fn linear_to_srgb_u16_rgba_slice_fast(input: &[f32], output: &mut [u16]) {
-    assert_eq!(input.len(), output.len());
-    let in_pixels = input.chunks_exact(4);
-    let out_pixels = output.chunks_exact_mut(4);
-    for (inp, out) in in_pixels.zip(out_pixels) {
+// ---------- SIMD-indexed sqrt-LUT path for linear_to_srgb_u16_rgba_slice_fast ----------
+//
+// Like linear_to_srgb_u16_slice_fast, but computes indices for all lanes
+// (including alpha positions — those indices are discarded and replaced
+// with scalar `(alpha * 65535 + 0.5) as u16` direct casts). Alpha is
+// bit-exact across tiers.
+
+#[cfg(feature = "std")]
+#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_srgb_u16_rgba_slice_fast_tier(token: Token, input: &[f32], output: &mut [u16]) {
+    #[allow(non_camel_case_types)]
+    type f32x16 = g_f32x16<Token>;
+    let lut = crate::u16_lut::encode_lut();
+    let max_idx = crate::u16_lut::ENCODE_LUT_N - 1;
+    let scale = crate::u16_lut::ENCODE_SQRT_SCALE;
+
+    let (in_chunks, in_rem) = input.as_chunks::<16>();
+    let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
+    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+        let v = f32x16::from_array(token, *inp);
+        let clamped = v.max(f32x16::zero(token)).min(f32x16::splat(token, 1.0));
+        let idx_f = clamped
+            .sqrt()
+            .mul_add(f32x16::splat(token, scale), f32x16::splat(token, 0.5));
+        let idx_i = idx_f.to_i32().to_array();
+        for px in 0..4 {
+            let base = px * 4;
+            out[base] = lut[(idx_i[base] as usize).min(max_idx)];
+            out[base + 1] = lut[(idx_i[base + 1] as usize).min(max_idx)];
+            out[base + 2] = lut[(idx_i[base + 2] as usize).min(max_idx)];
+            out[base + 3] = (inp[base + 3].clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+        }
+    }
+    for (inp, out) in in_rem.chunks_exact(4).zip(out_rem.chunks_exact_mut(4)) {
         out[0] = crate::scalar::linear_to_srgb_u16_fast(inp[0]);
         out[1] = crate::scalar::linear_to_srgb_u16_fast(inp[1]);
         out[2] = crate::scalar::linear_to_srgb_u16_fast(inp[2]);
@@ -1334,11 +1642,40 @@ pub fn linear_to_srgb_u16_rgba_slice_fast(input: &[f32], output: &mut [u16]) {
     }
 }
 
+/// Convert linear RGBA f32 to sRGB u16, preserving alpha. Sqrt-indexed LUT
+/// encode with SIMD-computed indices (~10× faster than the polynomial
+/// variant, max ±1 u16 roundtrip error).
+///
+/// # Panics
+/// Panics if `input.len() != output.len()`.
+#[inline]
+pub fn linear_to_srgb_u16_rgba_slice_fast(input: &[f32], output: &mut [u16]) {
+    assert_eq!(input.len(), output.len());
+    #[cfg(feature = "std")]
+    {
+        incant!(
+            linear_to_srgb_u16_rgba_slice_fast_tier(input, output),
+            [v4, v3, neon, wasm128, scalar]
+        )
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        let in_pixels = input.chunks_exact(4);
+        let out_pixels = output.chunks_exact_mut(4);
+        for (inp, out) in in_pixels.zip(out_pixels) {
+            out[0] = crate::scalar::linear_to_srgb_u16_fast(inp[0]);
+            out[1] = crate::scalar::linear_to_srgb_u16_fast(inp[1]);
+            out[2] = crate::scalar::linear_to_srgb_u16_fast(inp[2]);
+            out[3] = (inp[3].clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+        }
+    }
+}
+
 // ============================================================================
 // Custom Gamma Slice Functions
 // ============================================================================
 
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(feature = "avx512")]
 #[arcane]
 fn gamma_to_linear_slice_tier_v4(token: X64V4Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
@@ -1350,7 +1687,6 @@ fn gamma_to_linear_slice_tier_v4(token: X64V4Token, values: &mut [f32], gamma: f
     }
 }
 
-#[cfg(target_arch = "x86_64")]
 #[arcane]
 fn gamma_to_linear_slice_tier_v3(token: X64V3Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
@@ -1364,7 +1700,6 @@ fn gamma_to_linear_slice_tier_v3(token: X64V3Token, values: &mut [f32], gamma: f
     }
 }
 
-#[cfg(target_arch = "aarch64")]
 #[arcane]
 fn gamma_to_linear_slice_tier_neon(token: NeonToken, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
@@ -1376,7 +1711,6 @@ fn gamma_to_linear_slice_tier_neon(token: NeonToken, values: &mut [f32], gamma: 
     }
 }
 
-#[cfg(target_arch = "wasm32")]
 #[arcane]
 fn gamma_to_linear_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
@@ -1413,7 +1747,7 @@ pub fn gamma_to_linear_slice(values: &mut [f32], gamma: f32) {
     )
 }
 
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(feature = "avx512")]
 #[arcane]
 fn linear_to_gamma_slice_tier_v4(token: X64V4Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
@@ -1425,7 +1759,6 @@ fn linear_to_gamma_slice_tier_v4(token: X64V4Token, values: &mut [f32], gamma: f
     }
 }
 
-#[cfg(target_arch = "x86_64")]
 #[arcane]
 fn linear_to_gamma_slice_tier_v3(token: X64V3Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
@@ -1439,7 +1772,6 @@ fn linear_to_gamma_slice_tier_v3(token: X64V3Token, values: &mut [f32], gamma: f
     }
 }
 
-#[cfg(target_arch = "aarch64")]
 #[arcane]
 fn linear_to_gamma_slice_tier_neon(token: NeonToken, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
@@ -1451,7 +1783,6 @@ fn linear_to_gamma_slice_tier_neon(token: NeonToken, values: &mut [f32], gamma: 
     }
 }
 
-#[cfg(target_arch = "wasm32")]
 #[arcane]
 fn linear_to_gamma_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
@@ -1492,7 +1823,7 @@ pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
 // Custom Gamma + Premultiply RGBA f32 (SIMD-fused single-pass)
 // ============================================================================
 
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(feature = "avx512")]
 #[arcane]
 fn gamma_to_linear_premultiply_rgba_slice_tier_v4(
     token: X64V4Token,
@@ -1528,7 +1859,6 @@ fn gamma_to_linear_premultiply_rgba_slice_tier_v4(
     }
 }
 
-#[cfg(target_arch = "x86_64")]
 #[arcane]
 fn gamma_to_linear_premultiply_rgba_slice_tier_v3(
     token: X64V3Token,
@@ -1558,7 +1888,6 @@ fn gamma_to_linear_premultiply_rgba_slice_tier_v3(
     }
 }
 
-#[cfg(target_arch = "aarch64")]
 #[arcane]
 fn gamma_to_linear_premultiply_rgba_slice_tier_neon(
     token: NeonToken,
@@ -1576,7 +1905,6 @@ fn gamma_to_linear_premultiply_rgba_slice_tier_neon(
     }
 }
 
-#[cfg(target_arch = "wasm32")]
 #[arcane]
 fn gamma_to_linear_premultiply_rgba_slice_tier_wasm128(
     token: Wasm128Token,
@@ -1646,7 +1974,7 @@ pub fn gamma_to_linear_premultiply_rgba_slice(values: &mut [f32], gamma: f32) {
 // Unpremultiply + Linear→Gamma RGBA f32 (SIMD-fused single-pass)
 // ============================================================================
 
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(feature = "avx512")]
 #[arcane]
 fn unpremultiply_linear_to_gamma_rgba_slice_tier_v4(
     token: X64V4Token,
@@ -1721,7 +2049,6 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_v4(
     }
 }
 
-#[cfg(target_arch = "x86_64")]
 #[arcane]
 fn unpremultiply_linear_to_gamma_rgba_slice_tier_v3(
     token: X64V3Token,
@@ -1789,7 +2116,6 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_v3(
     }
 }
 
-#[cfg(target_arch = "aarch64")]
 #[arcane]
 fn unpremultiply_linear_to_gamma_rgba_slice_tier_neon(
     token: NeonToken,
@@ -1812,7 +2138,6 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_neon(
     }
 }
 
-#[cfg(target_arch = "wasm32")]
 #[arcane]
 fn unpremultiply_linear_to_gamma_rgba_slice_tier_wasm128(
     token: Wasm128Token,
@@ -1902,22 +2227,22 @@ pub fn unpremultiply_linear_to_gamma_rgba_slice(values: &mut [f32], gamma: f32) 
 // built on magetypes generics. The tier wrappers here are thin `#[arcane]`
 // adapters so that `incant!` can dispatch by suffix at runtime.
 
-#[cfg(all(feature = "transfer", target_arch = "x86_64", feature = "avx512"))]
+#[cfg(all(feature = "transfer", feature = "avx512"))]
 #[arcane]
 fn bt709_to_linear_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
     crate::tokens::x16::bt709_to_linear_slice_v4(token, values);
 }
-#[cfg(all(feature = "transfer", target_arch = "x86_64"))]
+#[cfg(feature = "transfer")]
 #[arcane]
 fn bt709_to_linear_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     crate::tokens::x8::bt709_to_linear_slice_v3(token, values);
 }
-#[cfg(all(feature = "transfer", target_arch = "aarch64"))]
+#[cfg(feature = "transfer")]
 #[arcane]
 fn bt709_to_linear_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
     crate::tokens::x4::bt709_to_linear_slice_neon(token, values);
 }
-#[cfg(all(feature = "transfer", target_arch = "wasm32"))]
+#[cfg(feature = "transfer")]
 #[arcane]
 fn bt709_to_linear_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
     crate::tokens::x4::bt709_to_linear_slice_wasm128(token, values);
@@ -1946,22 +2271,22 @@ pub fn bt709_to_linear_slice(values: &mut [f32]) {
     )
 }
 
-#[cfg(all(feature = "transfer", target_arch = "x86_64", feature = "avx512"))]
+#[cfg(all(feature = "transfer", feature = "avx512"))]
 #[arcane]
 fn linear_to_bt709_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
     crate::tokens::x16::linear_to_bt709_slice_v4(token, values);
 }
-#[cfg(all(feature = "transfer", target_arch = "x86_64"))]
+#[cfg(feature = "transfer")]
 #[arcane]
 fn linear_to_bt709_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     crate::tokens::x8::linear_to_bt709_slice_v3(token, values);
 }
-#[cfg(all(feature = "transfer", target_arch = "aarch64"))]
+#[cfg(feature = "transfer")]
 #[arcane]
 fn linear_to_bt709_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
     crate::tokens::x4::linear_to_bt709_slice_neon(token, values);
 }
-#[cfg(all(feature = "transfer", target_arch = "wasm32"))]
+#[cfg(feature = "transfer")]
 #[arcane]
 fn linear_to_bt709_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
     crate::tokens::x4::linear_to_bt709_slice_wasm128(token, values);
@@ -1990,22 +2315,22 @@ pub fn linear_to_bt709_slice(values: &mut [f32]) {
     )
 }
 
-#[cfg(all(feature = "transfer", target_arch = "x86_64", feature = "avx512"))]
+#[cfg(all(feature = "transfer", feature = "avx512"))]
 #[arcane]
 fn pq_to_linear_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
     crate::tokens::x16::pq_to_linear_slice_v4(token, values);
 }
-#[cfg(all(feature = "transfer", target_arch = "x86_64"))]
+#[cfg(feature = "transfer")]
 #[arcane]
 fn pq_to_linear_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     crate::tokens::x8::pq_to_linear_slice_v3(token, values);
 }
-#[cfg(all(feature = "transfer", target_arch = "aarch64"))]
+#[cfg(feature = "transfer")]
 #[arcane]
 fn pq_to_linear_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
     crate::tokens::x4::pq_to_linear_slice_neon(token, values);
 }
-#[cfg(all(feature = "transfer", target_arch = "wasm32"))]
+#[cfg(feature = "transfer")]
 #[arcane]
 fn pq_to_linear_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
     crate::tokens::x4::pq_to_linear_slice_wasm128(token, values);
@@ -2034,22 +2359,22 @@ pub fn pq_to_linear_slice(values: &mut [f32]) {
     )
 }
 
-#[cfg(all(feature = "transfer", target_arch = "x86_64", feature = "avx512"))]
+#[cfg(all(feature = "transfer", feature = "avx512"))]
 #[arcane]
 fn linear_to_pq_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
     crate::tokens::x16::linear_to_pq_slice_v4(token, values);
 }
-#[cfg(all(feature = "transfer", target_arch = "x86_64"))]
+#[cfg(feature = "transfer")]
 #[arcane]
 fn linear_to_pq_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     crate::tokens::x8::linear_to_pq_slice_v3(token, values);
 }
-#[cfg(all(feature = "transfer", target_arch = "aarch64"))]
+#[cfg(feature = "transfer")]
 #[arcane]
 fn linear_to_pq_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
     crate::tokens::x4::linear_to_pq_slice_neon(token, values);
 }
-#[cfg(all(feature = "transfer", target_arch = "wasm32"))]
+#[cfg(feature = "transfer")]
 #[arcane]
 fn linear_to_pq_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
     crate::tokens::x4::linear_to_pq_slice_wasm128(token, values);
@@ -2078,22 +2403,22 @@ pub fn linear_to_pq_slice(values: &mut [f32]) {
     )
 }
 
-#[cfg(all(feature = "transfer", target_arch = "x86_64", feature = "avx512"))]
+#[cfg(all(feature = "transfer", feature = "avx512"))]
 #[arcane]
 fn hlg_to_linear_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
     crate::tokens::x16::hlg_to_linear_slice_v4(token, values);
 }
-#[cfg(all(feature = "transfer", target_arch = "x86_64"))]
+#[cfg(feature = "transfer")]
 #[arcane]
 fn hlg_to_linear_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     crate::tokens::x8::hlg_to_linear_slice_v3(token, values);
 }
-#[cfg(all(feature = "transfer", target_arch = "aarch64"))]
+#[cfg(feature = "transfer")]
 #[arcane]
 fn hlg_to_linear_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
     crate::tokens::x4::hlg_to_linear_slice_neon(token, values);
 }
-#[cfg(all(feature = "transfer", target_arch = "wasm32"))]
+#[cfg(feature = "transfer")]
 #[arcane]
 fn hlg_to_linear_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
     crate::tokens::x4::hlg_to_linear_slice_wasm128(token, values);
@@ -2122,22 +2447,22 @@ pub fn hlg_to_linear_slice(values: &mut [f32]) {
     )
 }
 
-#[cfg(all(feature = "transfer", target_arch = "x86_64", feature = "avx512"))]
+#[cfg(all(feature = "transfer", feature = "avx512"))]
 #[arcane]
 fn linear_to_hlg_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
     crate::tokens::x16::linear_to_hlg_slice_v4(token, values);
 }
-#[cfg(all(feature = "transfer", target_arch = "x86_64"))]
+#[cfg(feature = "transfer")]
 #[arcane]
 fn linear_to_hlg_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     crate::tokens::x8::linear_to_hlg_slice_v3(token, values);
 }
-#[cfg(all(feature = "transfer", target_arch = "aarch64"))]
+#[cfg(feature = "transfer")]
 #[arcane]
 fn linear_to_hlg_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
     crate::tokens::x4::linear_to_hlg_slice_neon(token, values);
 }
-#[cfg(all(feature = "transfer", target_arch = "wasm32"))]
+#[cfg(feature = "transfer")]
 #[arcane]
 fn linear_to_hlg_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
     crate::tokens::x4::linear_to_hlg_slice_wasm128(token, values);
@@ -2193,7 +2518,7 @@ macro_rules! tf_rgba_slice_dispatcher {
         x4_wasm128 = $x4_wasm128:path,
         doc = $doc:expr,
     ) => {
-        #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+        #[cfg(feature = "avx512")]
         #[arcane]
         fn $tier_v4(token: X64V4Token, values: &mut [f32]) {
             let (chunks, remainder) = values.as_chunks_mut::<16>();
@@ -2209,7 +2534,6 @@ macro_rules! tf_rgba_slice_dispatcher {
             }
         }
 
-        #[cfg(target_arch = "x86_64")]
         #[arcane]
         fn $tier_v3(token: X64V3Token, values: &mut [f32]) {
             let (chunks, remainder) = values.as_chunks_mut::<8>();
@@ -2225,7 +2549,6 @@ macro_rules! tf_rgba_slice_dispatcher {
             }
         }
 
-        #[cfg(target_arch = "aarch64")]
         #[arcane]
         fn $tier_neon(token: NeonToken, values: &mut [f32]) {
             let (chunks, _remainder) = values.as_chunks_mut::<4>();
@@ -2236,7 +2559,6 @@ macro_rules! tf_rgba_slice_dispatcher {
             }
         }
 
-        #[cfg(target_arch = "wasm32")]
         #[arcane]
         fn $tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
             let (chunks, _remainder) = values.as_chunks_mut::<4>();
@@ -2262,10 +2584,7 @@ macro_rules! tf_rgba_slice_dispatcher {
         /// that don't form a complete RGBA pixel are ignored.
         #[inline]
         pub fn $pub_name(values: &mut [f32]) {
-            incant!(
-                $tier_base(values),
-                [v4, v3, neon, wasm128, scalar]
-            )
+            incant!($tier_base(values), [v4, v3, neon, wasm128, scalar])
         }
     };
 }
@@ -3870,10 +4189,8 @@ mod tests {
             let input = rgba_sweep();
             let mut out = input.clone();
             rgba_fn(&mut out);
-            for (px_idx, (in_px, out_px)) in input
-                .chunks_exact(4)
-                .zip(out.chunks_exact(4))
-                .enumerate()
+            for (px_idx, (in_px, out_px)) in
+                input.chunks_exact(4).zip(out.chunks_exact(4)).enumerate()
             {
                 for ch in 0..3 {
                     let expect = scalar_fn(in_px[ch]);
