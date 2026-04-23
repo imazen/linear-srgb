@@ -595,42 +595,42 @@ fn bench_tf_public_dispatcher(c: &mut Criterion) {
         "",
         encoded,
         old_dispatchers::bt709_to_linear_slice_old,
-        default::bt709_to_linear_slice
+        default::bt709_to_linear_rgb_slice
     );
     ab_bench!(
         "tf_dispatch_linear_to_bt709",
         "",
         linear,
         old_dispatchers::linear_to_bt709_slice_old,
-        default::linear_to_bt709_slice
+        default::linear_to_bt709_rgb_slice
     );
     ab_bench!(
         "tf_dispatch_pq_to_linear",
         "",
         encoded,
         old_dispatchers::pq_to_linear_slice_old,
-        default::pq_to_linear_slice
+        default::pq_to_linear_rgb_slice
     );
     ab_bench!(
         "tf_dispatch_linear_to_pq",
         "",
         linear,
         old_dispatchers::linear_to_pq_slice_old,
-        default::linear_to_pq_slice
+        default::linear_to_pq_rgb_slice
     );
     ab_bench!(
         "tf_dispatch_hlg_to_linear",
         "",
         encoded,
         old_dispatchers::hlg_to_linear_slice_old,
-        default::hlg_to_linear_slice
+        default::hlg_to_linear_rgb_slice
     );
     ab_bench!(
         "tf_dispatch_linear_to_hlg",
         "",
         linear,
         old_dispatchers::linear_to_hlg_slice_old,
-        default::linear_to_hlg_slice
+        default::linear_to_hlg_rgb_slice
     );
 }
 

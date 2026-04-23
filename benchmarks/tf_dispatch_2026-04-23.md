@@ -10,7 +10,7 @@
 
 ## Question
 
-Does the issue #10 fix (wiring `default::{bt709,pq,hlg,...}_*_slice` through
+Does the issue #10 fix (wiring `default::{bt709,pq,hlg,...}_*_rgb_slice` through
 `incant!` instead of scalar-loop + `#[archmage::autoversion]`) actually
 reach the SIMD rites at the expected throughput, or is autoversion's
 autovectorizer already close enough to make the change cosmetic?
@@ -21,7 +21,7 @@ Bench file added `bench_tf_public_dispatcher` with A/B pairs:
 
 - `old_scalar_loop`: replicates the pre-fix function body in the bench file
   (`for v in values { *v = tf::X(*v); }` under `#[archmage::autoversion]`).
-- `new_incant_dispatch`: calls the current `default::X_slice` function,
+- `new_incant_dispatch`: calls the current `default::X_rgb_slice` function,
   which dispatches via `incant!` over `[v4, v3, neon, wasm128, scalar]`.
 
 Baseline numbers included for context:

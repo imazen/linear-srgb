@@ -1904,264 +1904,270 @@ pub fn unpremultiply_linear_to_gamma_rgba_slice(values: &mut [f32], gamma: f32) 
 
 #[cfg(all(feature = "transfer", target_arch = "x86_64", feature = "avx512"))]
 #[arcane]
-fn bt709_to_linear_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
+fn bt709_to_linear_rgb_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
     crate::tokens::x16::bt709_to_linear_slice_v4(token, values);
 }
 #[cfg(all(feature = "transfer", target_arch = "x86_64"))]
 #[arcane]
-fn bt709_to_linear_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
+fn bt709_to_linear_rgb_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     crate::tokens::x8::bt709_to_linear_slice_v3(token, values);
 }
 #[cfg(all(feature = "transfer", target_arch = "aarch64"))]
 #[arcane]
-fn bt709_to_linear_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
+fn bt709_to_linear_rgb_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
     crate::tokens::x4::bt709_to_linear_slice_neon(token, values);
 }
 #[cfg(all(feature = "transfer", target_arch = "wasm32"))]
 #[arcane]
-fn bt709_to_linear_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
+fn bt709_to_linear_rgb_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
     crate::tokens::x4::bt709_to_linear_slice_wasm128(token, values);
 }
 #[cfg(feature = "transfer")]
-fn bt709_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+fn bt709_to_linear_rgb_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
     for v in values.iter_mut() {
         *v = crate::tf::bt709_to_linear(*v);
     }
 }
 
-/// Convert BT.709 signal f32 values to linear in-place.
+/// Convert BT.709 signal f32 values to linear in-place, applying the TF to
+/// every element.
 ///
-/// Applies the transfer function to **every element of the slice** — if you
-/// pass RGBA data, alpha will be decoded too. Use
-/// [`bt709_to_linear_rgba_slice`] for alpha-preserving RGBA conversion.
+/// Channel-agnostic: suitable for RGB-packed data, single-channel planes, or
+/// any layout where every f32 is a TF-encoded sample. For interleaved RGBA
+/// where alpha must be preserved, use [`bt709_to_linear_rgba_slice`].
 ///
 /// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), NEON (4-wide), WASM SIMD128
 /// (4-wide), or scalar depending on CPU.
 #[cfg(feature = "transfer")]
 #[inline]
-pub fn bt709_to_linear_slice(values: &mut [f32]) {
+pub fn bt709_to_linear_rgb_slice(values: &mut [f32]) {
     incant!(
-        bt709_to_linear_slice_tier(values),
+        bt709_to_linear_rgb_slice_tier(values),
         [v4, v3, neon, wasm128, scalar]
     )
 }
 
 #[cfg(all(feature = "transfer", target_arch = "x86_64", feature = "avx512"))]
 #[arcane]
-fn linear_to_bt709_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
+fn linear_to_bt709_rgb_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
     crate::tokens::x16::linear_to_bt709_slice_v4(token, values);
 }
 #[cfg(all(feature = "transfer", target_arch = "x86_64"))]
 #[arcane]
-fn linear_to_bt709_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
+fn linear_to_bt709_rgb_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     crate::tokens::x8::linear_to_bt709_slice_v3(token, values);
 }
 #[cfg(all(feature = "transfer", target_arch = "aarch64"))]
 #[arcane]
-fn linear_to_bt709_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
+fn linear_to_bt709_rgb_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
     crate::tokens::x4::linear_to_bt709_slice_neon(token, values);
 }
 #[cfg(all(feature = "transfer", target_arch = "wasm32"))]
 #[arcane]
-fn linear_to_bt709_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
+fn linear_to_bt709_rgb_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
     crate::tokens::x4::linear_to_bt709_slice_wasm128(token, values);
 }
 #[cfg(feature = "transfer")]
-fn linear_to_bt709_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+fn linear_to_bt709_rgb_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
     for v in values.iter_mut() {
         *v = crate::tf::linear_to_bt709(*v);
     }
 }
 
-/// Convert linear f32 values to BT.709 signal in-place.
+/// Convert linear f32 values to BT.709 signal in-place, applying the TF to
+/// every element.
 ///
-/// Applies the transfer function to **every element of the slice** — if you
-/// pass RGBA data, alpha will be encoded too. Use
-/// [`linear_to_bt709_rgba_slice`] for alpha-preserving RGBA conversion.
+/// Channel-agnostic: suitable for RGB-packed data, single-channel planes, or
+/// any layout where every f32 is a linear-light sample. For interleaved RGBA
+/// where alpha must be preserved, use [`linear_to_bt709_rgba_slice`].
 ///
 /// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), NEON (4-wide), WASM SIMD128
 /// (4-wide), or scalar depending on CPU.
 #[cfg(feature = "transfer")]
 #[inline]
-pub fn linear_to_bt709_slice(values: &mut [f32]) {
+pub fn linear_to_bt709_rgb_slice(values: &mut [f32]) {
     incant!(
-        linear_to_bt709_slice_tier(values),
+        linear_to_bt709_rgb_slice_tier(values),
         [v4, v3, neon, wasm128, scalar]
     )
 }
 
 #[cfg(all(feature = "transfer", target_arch = "x86_64", feature = "avx512"))]
 #[arcane]
-fn pq_to_linear_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
+fn pq_to_linear_rgb_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
     crate::tokens::x16::pq_to_linear_slice_v4(token, values);
 }
 #[cfg(all(feature = "transfer", target_arch = "x86_64"))]
 #[arcane]
-fn pq_to_linear_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
+fn pq_to_linear_rgb_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     crate::tokens::x8::pq_to_linear_slice_v3(token, values);
 }
 #[cfg(all(feature = "transfer", target_arch = "aarch64"))]
 #[arcane]
-fn pq_to_linear_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
+fn pq_to_linear_rgb_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
     crate::tokens::x4::pq_to_linear_slice_neon(token, values);
 }
 #[cfg(all(feature = "transfer", target_arch = "wasm32"))]
 #[arcane]
-fn pq_to_linear_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
+fn pq_to_linear_rgb_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
     crate::tokens::x4::pq_to_linear_slice_wasm128(token, values);
 }
 #[cfg(feature = "transfer")]
-fn pq_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+fn pq_to_linear_rgb_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
     for v in values.iter_mut() {
         *v = crate::tf::pq_to_linear(*v);
     }
 }
 
-/// Convert PQ (ST 2084) signal f32 values to linear in-place.
+/// Convert PQ (ST 2084) signal f32 values to linear in-place, applying the TF
+/// to every element.
 ///
-/// Applies the transfer function to **every element of the slice** — if you
-/// pass RGBA data, alpha will be decoded too. Use [`pq_to_linear_rgba_slice`]
-/// for alpha-preserving RGBA conversion.
+/// Channel-agnostic: suitable for RGB-packed data, single-channel planes, or
+/// any layout where every f32 is a TF-encoded sample. For interleaved RGBA
+/// where alpha must be preserved, use [`pq_to_linear_rgba_slice`].
 ///
 /// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), NEON (4-wide), WASM SIMD128
 /// (4-wide), or scalar depending on CPU.
 #[cfg(feature = "transfer")]
 #[inline]
-pub fn pq_to_linear_slice(values: &mut [f32]) {
+pub fn pq_to_linear_rgb_slice(values: &mut [f32]) {
     incant!(
-        pq_to_linear_slice_tier(values),
+        pq_to_linear_rgb_slice_tier(values),
         [v4, v3, neon, wasm128, scalar]
     )
 }
 
 #[cfg(all(feature = "transfer", target_arch = "x86_64", feature = "avx512"))]
 #[arcane]
-fn linear_to_pq_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
+fn linear_to_pq_rgb_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
     crate::tokens::x16::linear_to_pq_slice_v4(token, values);
 }
 #[cfg(all(feature = "transfer", target_arch = "x86_64"))]
 #[arcane]
-fn linear_to_pq_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
+fn linear_to_pq_rgb_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     crate::tokens::x8::linear_to_pq_slice_v3(token, values);
 }
 #[cfg(all(feature = "transfer", target_arch = "aarch64"))]
 #[arcane]
-fn linear_to_pq_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
+fn linear_to_pq_rgb_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
     crate::tokens::x4::linear_to_pq_slice_neon(token, values);
 }
 #[cfg(all(feature = "transfer", target_arch = "wasm32"))]
 #[arcane]
-fn linear_to_pq_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
+fn linear_to_pq_rgb_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
     crate::tokens::x4::linear_to_pq_slice_wasm128(token, values);
 }
 #[cfg(feature = "transfer")]
-fn linear_to_pq_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+fn linear_to_pq_rgb_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
     for v in values.iter_mut() {
         *v = crate::tf::linear_to_pq(*v);
     }
 }
 
-/// Convert linear f32 values to PQ (ST 2084) signal in-place.
+/// Convert linear f32 values to PQ (ST 2084) signal in-place, applying the TF
+/// to every element.
 ///
-/// Applies the transfer function to **every element of the slice** — if you
-/// pass RGBA data, alpha will be encoded too. Use [`linear_to_pq_rgba_slice`]
-/// for alpha-preserving RGBA conversion.
+/// Channel-agnostic: suitable for RGB-packed data, single-channel planes, or
+/// any layout where every f32 is a linear-light sample. For interleaved RGBA
+/// where alpha must be preserved, use [`linear_to_pq_rgba_slice`].
 ///
 /// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), NEON (4-wide), WASM SIMD128
 /// (4-wide), or scalar depending on CPU.
 #[cfg(feature = "transfer")]
 #[inline]
-pub fn linear_to_pq_slice(values: &mut [f32]) {
+pub fn linear_to_pq_rgb_slice(values: &mut [f32]) {
     incant!(
-        linear_to_pq_slice_tier(values),
+        linear_to_pq_rgb_slice_tier(values),
         [v4, v3, neon, wasm128, scalar]
     )
 }
 
 #[cfg(all(feature = "transfer", target_arch = "x86_64", feature = "avx512"))]
 #[arcane]
-fn hlg_to_linear_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
+fn hlg_to_linear_rgb_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
     crate::tokens::x16::hlg_to_linear_slice_v4(token, values);
 }
 #[cfg(all(feature = "transfer", target_arch = "x86_64"))]
 #[arcane]
-fn hlg_to_linear_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
+fn hlg_to_linear_rgb_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     crate::tokens::x8::hlg_to_linear_slice_v3(token, values);
 }
 #[cfg(all(feature = "transfer", target_arch = "aarch64"))]
 #[arcane]
-fn hlg_to_linear_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
+fn hlg_to_linear_rgb_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
     crate::tokens::x4::hlg_to_linear_slice_neon(token, values);
 }
 #[cfg(all(feature = "transfer", target_arch = "wasm32"))]
 #[arcane]
-fn hlg_to_linear_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
+fn hlg_to_linear_rgb_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
     crate::tokens::x4::hlg_to_linear_slice_wasm128(token, values);
 }
 #[cfg(feature = "transfer")]
-fn hlg_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+fn hlg_to_linear_rgb_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
     for v in values.iter_mut() {
         *v = crate::tf::hlg_to_linear(*v);
     }
 }
 
-/// Convert HLG (ARIB STD-B67) signal f32 values to linear in-place.
+/// Convert HLG (ARIB STD-B67) signal f32 values to linear in-place, applying
+/// the TF to every element.
 ///
-/// Applies the transfer function to **every element of the slice** — if you
-/// pass RGBA data, alpha will be decoded too. Use [`hlg_to_linear_rgba_slice`]
-/// for alpha-preserving RGBA conversion.
+/// Channel-agnostic: suitable for RGB-packed data, single-channel planes, or
+/// any layout where every f32 is a TF-encoded sample. For interleaved RGBA
+/// where alpha must be preserved, use [`hlg_to_linear_rgba_slice`].
 ///
 /// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), NEON (4-wide), WASM SIMD128
 /// (4-wide), or scalar depending on CPU.
 #[cfg(feature = "transfer")]
 #[inline]
-pub fn hlg_to_linear_slice(values: &mut [f32]) {
+pub fn hlg_to_linear_rgb_slice(values: &mut [f32]) {
     incant!(
-        hlg_to_linear_slice_tier(values),
+        hlg_to_linear_rgb_slice_tier(values),
         [v4, v3, neon, wasm128, scalar]
     )
 }
 
 #[cfg(all(feature = "transfer", target_arch = "x86_64", feature = "avx512"))]
 #[arcane]
-fn linear_to_hlg_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
+fn linear_to_hlg_rgb_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
     crate::tokens::x16::linear_to_hlg_slice_v4(token, values);
 }
 #[cfg(all(feature = "transfer", target_arch = "x86_64"))]
 #[arcane]
-fn linear_to_hlg_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
+fn linear_to_hlg_rgb_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
     crate::tokens::x8::linear_to_hlg_slice_v3(token, values);
 }
 #[cfg(all(feature = "transfer", target_arch = "aarch64"))]
 #[arcane]
-fn linear_to_hlg_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
+fn linear_to_hlg_rgb_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
     crate::tokens::x4::linear_to_hlg_slice_neon(token, values);
 }
 #[cfg(all(feature = "transfer", target_arch = "wasm32"))]
 #[arcane]
-fn linear_to_hlg_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
+fn linear_to_hlg_rgb_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
     crate::tokens::x4::linear_to_hlg_slice_wasm128(token, values);
 }
 #[cfg(feature = "transfer")]
-fn linear_to_hlg_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+fn linear_to_hlg_rgb_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
     for v in values.iter_mut() {
         *v = crate::tf::linear_to_hlg(*v);
     }
 }
 
-/// Convert linear f32 values to HLG (ARIB STD-B67) signal in-place.
+/// Convert linear f32 values to HLG (ARIB STD-B67) signal in-place, applying
+/// the TF to every element.
 ///
-/// Applies the transfer function to **every element of the slice** — if you
-/// pass RGBA data, alpha will be encoded too. Use [`linear_to_hlg_rgba_slice`]
-/// for alpha-preserving RGBA conversion.
+/// Channel-agnostic: suitable for RGB-packed data, single-channel planes, or
+/// any layout where every f32 is a linear-light sample. For interleaved RGBA
+/// where alpha must be preserved, use [`linear_to_hlg_rgba_slice`].
 ///
 /// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), NEON (4-wide), WASM SIMD128
 /// (4-wide), or scalar depending on CPU.
 #[cfg(feature = "transfer")]
 #[inline]
-pub fn linear_to_hlg_slice(values: &mut [f32]) {
+pub fn linear_to_hlg_rgb_slice(values: &mut [f32]) {
     incant!(
-        linear_to_hlg_slice_tier(values),
+        linear_to_hlg_rgb_slice_tier(values),
         [v4, v3, neon, wasm128, scalar]
     )
 }
@@ -3782,60 +3788,60 @@ mod tests {
         }
 
         #[test]
-        fn bt709_to_linear_slice_matches_scalar() {
+        fn bt709_to_linear_rgb_slice_matches_scalar() {
             check(
-                "bt709_to_linear_slice",
-                bt709_to_linear_slice,
+                "bt709_to_linear_rgb_slice",
+                bt709_to_linear_rgb_slice,
                 crate::tf::bt709_to_linear,
                 1e-5,
             );
         }
 
         #[test]
-        fn linear_to_bt709_slice_matches_scalar() {
+        fn linear_to_bt709_rgb_slice_matches_scalar() {
             check(
-                "linear_to_bt709_slice",
-                linear_to_bt709_slice,
+                "linear_to_bt709_rgb_slice",
+                linear_to_bt709_rgb_slice,
                 crate::tf::linear_to_bt709,
                 1e-4,
             );
         }
 
         #[test]
-        fn pq_to_linear_slice_matches_scalar() {
+        fn pq_to_linear_rgb_slice_matches_scalar() {
             check(
-                "pq_to_linear_slice",
-                pq_to_linear_slice,
+                "pq_to_linear_rgb_slice",
+                pq_to_linear_rgb_slice,
                 crate::tf::pq_to_linear,
                 1e-5,
             );
         }
 
         #[test]
-        fn linear_to_pq_slice_matches_scalar() {
+        fn linear_to_pq_rgb_slice_matches_scalar() {
             check(
-                "linear_to_pq_slice",
-                linear_to_pq_slice,
+                "linear_to_pq_rgb_slice",
+                linear_to_pq_rgb_slice,
                 crate::tf::linear_to_pq,
                 1e-5,
             );
         }
 
         #[test]
-        fn hlg_to_linear_slice_matches_scalar() {
+        fn hlg_to_linear_rgb_slice_matches_scalar() {
             check(
-                "hlg_to_linear_slice",
-                hlg_to_linear_slice,
+                "hlg_to_linear_rgb_slice",
+                hlg_to_linear_rgb_slice,
                 crate::tf::hlg_to_linear,
                 1e-4,
             );
         }
 
         #[test]
-        fn linear_to_hlg_slice_matches_scalar() {
+        fn linear_to_hlg_rgb_slice_matches_scalar() {
             check(
-                "linear_to_hlg_slice",
-                linear_to_hlg_slice,
+                "linear_to_hlg_rgb_slice",
+                linear_to_hlg_rgb_slice,
                 crate::tf::linear_to_hlg,
                 1e-4,
             );
