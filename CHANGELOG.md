@@ -35,6 +35,17 @@
   Coefficients are reproducible from a clean checkout:
   `python scripts/fit_srgb_fast.py`.
 
+### Fixed
+
+- **BT.709 / PQ / HLG slice APIs now SIMD-dispatched.** The public
+  `bt709_to_linear_slice`, `linear_to_bt709_slice`, `pq_to_linear_slice`,
+  `linear_to_pq_slice`, `hlg_to_linear_slice`, and `linear_to_hlg_slice`
+  functions were scalar loops with only `#[autoversion]`, so HDR/video
+  callers never reached the AVX-512 / AVX2+FMA / NEON / WASM SIMD128 rites
+  in `tokens::{x4,x8,x16}` that already existed. They now dispatch through
+  `incant!` over `[v4, v3, neon, wasm128, scalar]` like `srgb_to_linear_slice`.
+  Closes #10.
+
 ## 0.6.10
 
 Also published as 0.7.0 (unnecessarily bumped — no API was broken).

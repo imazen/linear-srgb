@@ -111,59 +111,11 @@ pub use crate::tf::{
 // Transfer function slice operations (behind `transfer` feature)
 // ============================================================================
 
-/// Convert HLG signal f32 values to linear in-place.
 #[cfg(feature = "transfer")]
-#[archmage::autoversion]
-pub fn hlg_to_linear_slice(values: &mut [f32]) {
-    for v in values.iter_mut() {
-        *v = crate::tf::hlg_to_linear(*v);
-    }
-}
-
-/// Convert linear f32 values to HLG signal in-place.
-#[cfg(feature = "transfer")]
-#[archmage::autoversion]
-pub fn linear_to_hlg_slice(values: &mut [f32]) {
-    for v in values.iter_mut() {
-        *v = crate::tf::linear_to_hlg(*v);
-    }
-}
-
-/// Convert PQ (ST 2084) signal f32 values to linear in-place.
-#[cfg(feature = "transfer")]
-#[archmage::autoversion]
-pub fn pq_to_linear_slice(values: &mut [f32]) {
-    for v in values.iter_mut() {
-        *v = crate::tf::pq_to_linear(*v);
-    }
-}
-
-/// Convert linear f32 values to PQ (ST 2084) signal in-place.
-#[cfg(feature = "transfer")]
-#[archmage::autoversion]
-pub fn linear_to_pq_slice(values: &mut [f32]) {
-    for v in values.iter_mut() {
-        *v = crate::tf::linear_to_pq(*v);
-    }
-}
-
-/// Convert BT.709 signal f32 values to linear in-place.
-#[cfg(feature = "transfer")]
-#[archmage::autoversion]
-pub fn bt709_to_linear_slice(values: &mut [f32]) {
-    for v in values.iter_mut() {
-        *v = crate::tf::bt709_to_linear(*v);
-    }
-}
-
-/// Convert linear f32 values to BT.709 signal in-place.
-#[cfg(feature = "transfer")]
-#[archmage::autoversion]
-pub fn linear_to_bt709_slice(values: &mut [f32]) {
-    for v in values.iter_mut() {
-        *v = crate::tf::linear_to_bt709(*v);
-    }
-}
+pub use crate::simd::{
+    bt709_to_linear_slice, hlg_to_linear_slice, linear_to_bt709_slice, linear_to_hlg_slice,
+    linear_to_pq_slice, pq_to_linear_slice,
+};
 
 // ============================================================================
 // LUT converter (zero-cost const tables)

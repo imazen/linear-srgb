@@ -1894,6 +1894,255 @@ pub fn unpremultiply_linear_to_gamma_rgba_slice(values: &mut [f32], gamma: f32) 
 }
 
 // ============================================================================
+// Transfer function slice dispatchers (BT.709, PQ, HLG)
+// ============================================================================
+
+// Each public dispatcher calls into the existing `#[rite]` slice functions in
+// `crate::tokens::{x4,x8,x16}`, which already carry the SIMD implementation
+// built on magetypes generics. The tier wrappers here are thin `#[arcane]`
+// adapters so that `incant!` can dispatch by suffix at runtime.
+
+#[cfg(all(feature = "transfer", target_arch = "x86_64", feature = "avx512"))]
+#[arcane]
+fn bt709_to_linear_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
+    crate::tokens::x16::bt709_to_linear_slice_v4(token, values);
+}
+#[cfg(all(feature = "transfer", target_arch = "x86_64"))]
+#[arcane]
+fn bt709_to_linear_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
+    crate::tokens::x8::bt709_to_linear_slice_v3(token, values);
+}
+#[cfg(all(feature = "transfer", target_arch = "aarch64"))]
+#[arcane]
+fn bt709_to_linear_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
+    crate::tokens::x4::bt709_to_linear_slice_neon(token, values);
+}
+#[cfg(all(feature = "transfer", target_arch = "wasm32"))]
+#[arcane]
+fn bt709_to_linear_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
+    crate::tokens::x4::bt709_to_linear_slice_wasm128(token, values);
+}
+#[cfg(feature = "transfer")]
+fn bt709_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+    for v in values.iter_mut() {
+        *v = crate::tf::bt709_to_linear(*v);
+    }
+}
+
+/// Convert BT.709 signal f32 values to linear in-place.
+///
+/// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), NEON (4-wide), WASM SIMD128
+/// (4-wide), or scalar depending on CPU.
+#[cfg(feature = "transfer")]
+#[inline]
+pub fn bt709_to_linear_slice(values: &mut [f32]) {
+    incant!(
+        bt709_to_linear_slice_tier(values),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+#[cfg(all(feature = "transfer", target_arch = "x86_64", feature = "avx512"))]
+#[arcane]
+fn linear_to_bt709_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
+    crate::tokens::x16::linear_to_bt709_slice_v4(token, values);
+}
+#[cfg(all(feature = "transfer", target_arch = "x86_64"))]
+#[arcane]
+fn linear_to_bt709_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
+    crate::tokens::x8::linear_to_bt709_slice_v3(token, values);
+}
+#[cfg(all(feature = "transfer", target_arch = "aarch64"))]
+#[arcane]
+fn linear_to_bt709_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
+    crate::tokens::x4::linear_to_bt709_slice_neon(token, values);
+}
+#[cfg(all(feature = "transfer", target_arch = "wasm32"))]
+#[arcane]
+fn linear_to_bt709_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
+    crate::tokens::x4::linear_to_bt709_slice_wasm128(token, values);
+}
+#[cfg(feature = "transfer")]
+fn linear_to_bt709_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+    for v in values.iter_mut() {
+        *v = crate::tf::linear_to_bt709(*v);
+    }
+}
+
+/// Convert linear f32 values to BT.709 signal in-place.
+///
+/// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), NEON (4-wide), WASM SIMD128
+/// (4-wide), or scalar depending on CPU.
+#[cfg(feature = "transfer")]
+#[inline]
+pub fn linear_to_bt709_slice(values: &mut [f32]) {
+    incant!(
+        linear_to_bt709_slice_tier(values),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+#[cfg(all(feature = "transfer", target_arch = "x86_64", feature = "avx512"))]
+#[arcane]
+fn pq_to_linear_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
+    crate::tokens::x16::pq_to_linear_slice_v4(token, values);
+}
+#[cfg(all(feature = "transfer", target_arch = "x86_64"))]
+#[arcane]
+fn pq_to_linear_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
+    crate::tokens::x8::pq_to_linear_slice_v3(token, values);
+}
+#[cfg(all(feature = "transfer", target_arch = "aarch64"))]
+#[arcane]
+fn pq_to_linear_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
+    crate::tokens::x4::pq_to_linear_slice_neon(token, values);
+}
+#[cfg(all(feature = "transfer", target_arch = "wasm32"))]
+#[arcane]
+fn pq_to_linear_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
+    crate::tokens::x4::pq_to_linear_slice_wasm128(token, values);
+}
+#[cfg(feature = "transfer")]
+fn pq_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+    for v in values.iter_mut() {
+        *v = crate::tf::pq_to_linear(*v);
+    }
+}
+
+/// Convert PQ (ST 2084) signal f32 values to linear in-place.
+///
+/// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), NEON (4-wide), WASM SIMD128
+/// (4-wide), or scalar depending on CPU.
+#[cfg(feature = "transfer")]
+#[inline]
+pub fn pq_to_linear_slice(values: &mut [f32]) {
+    incant!(
+        pq_to_linear_slice_tier(values),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+#[cfg(all(feature = "transfer", target_arch = "x86_64", feature = "avx512"))]
+#[arcane]
+fn linear_to_pq_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
+    crate::tokens::x16::linear_to_pq_slice_v4(token, values);
+}
+#[cfg(all(feature = "transfer", target_arch = "x86_64"))]
+#[arcane]
+fn linear_to_pq_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
+    crate::tokens::x8::linear_to_pq_slice_v3(token, values);
+}
+#[cfg(all(feature = "transfer", target_arch = "aarch64"))]
+#[arcane]
+fn linear_to_pq_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
+    crate::tokens::x4::linear_to_pq_slice_neon(token, values);
+}
+#[cfg(all(feature = "transfer", target_arch = "wasm32"))]
+#[arcane]
+fn linear_to_pq_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
+    crate::tokens::x4::linear_to_pq_slice_wasm128(token, values);
+}
+#[cfg(feature = "transfer")]
+fn linear_to_pq_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+    for v in values.iter_mut() {
+        *v = crate::tf::linear_to_pq(*v);
+    }
+}
+
+/// Convert linear f32 values to PQ (ST 2084) signal in-place.
+///
+/// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), NEON (4-wide), WASM SIMD128
+/// (4-wide), or scalar depending on CPU.
+#[cfg(feature = "transfer")]
+#[inline]
+pub fn linear_to_pq_slice(values: &mut [f32]) {
+    incant!(
+        linear_to_pq_slice_tier(values),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+#[cfg(all(feature = "transfer", target_arch = "x86_64", feature = "avx512"))]
+#[arcane]
+fn hlg_to_linear_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
+    crate::tokens::x16::hlg_to_linear_slice_v4(token, values);
+}
+#[cfg(all(feature = "transfer", target_arch = "x86_64"))]
+#[arcane]
+fn hlg_to_linear_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
+    crate::tokens::x8::hlg_to_linear_slice_v3(token, values);
+}
+#[cfg(all(feature = "transfer", target_arch = "aarch64"))]
+#[arcane]
+fn hlg_to_linear_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
+    crate::tokens::x4::hlg_to_linear_slice_neon(token, values);
+}
+#[cfg(all(feature = "transfer", target_arch = "wasm32"))]
+#[arcane]
+fn hlg_to_linear_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
+    crate::tokens::x4::hlg_to_linear_slice_wasm128(token, values);
+}
+#[cfg(feature = "transfer")]
+fn hlg_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+    for v in values.iter_mut() {
+        *v = crate::tf::hlg_to_linear(*v);
+    }
+}
+
+/// Convert HLG (ARIB STD-B67) signal f32 values to linear in-place.
+///
+/// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), NEON (4-wide), WASM SIMD128
+/// (4-wide), or scalar depending on CPU.
+#[cfg(feature = "transfer")]
+#[inline]
+pub fn hlg_to_linear_slice(values: &mut [f32]) {
+    incant!(
+        hlg_to_linear_slice_tier(values),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+#[cfg(all(feature = "transfer", target_arch = "x86_64", feature = "avx512"))]
+#[arcane]
+fn linear_to_hlg_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
+    crate::tokens::x16::linear_to_hlg_slice_v4(token, values);
+}
+#[cfg(all(feature = "transfer", target_arch = "x86_64"))]
+#[arcane]
+fn linear_to_hlg_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
+    crate::tokens::x8::linear_to_hlg_slice_v3(token, values);
+}
+#[cfg(all(feature = "transfer", target_arch = "aarch64"))]
+#[arcane]
+fn linear_to_hlg_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
+    crate::tokens::x4::linear_to_hlg_slice_neon(token, values);
+}
+#[cfg(all(feature = "transfer", target_arch = "wasm32"))]
+#[arcane]
+fn linear_to_hlg_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
+    crate::tokens::x4::linear_to_hlg_slice_wasm128(token, values);
+}
+#[cfg(feature = "transfer")]
+fn linear_to_hlg_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
+    for v in values.iter_mut() {
+        *v = crate::tf::linear_to_hlg(*v);
+    }
+}
+
+/// Convert linear f32 values to HLG (ARIB STD-B67) signal in-place.
+///
+/// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), NEON (4-wide), WASM SIMD128
+/// (4-wide), or scalar depending on CPU.
+#[cfg(feature = "transfer")]
+#[inline]
+pub fn linear_to_hlg_slice(values: &mut [f32]) {
+    incant!(
+        linear_to_hlg_slice_tier(values),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -3263,6 +3512,102 @@ mod tests {
                 "linear_to_srgb SIMD/scalar mismatch at {i}: input={input}, simd={}, scalar={}",
                 simd_l2s[i],
                 scalar_l2s
+            );
+        }
+    }
+
+    // ====================================================================
+    // Transfer function slice dispatchers match scalar reference
+    // ====================================================================
+
+    #[cfg(feature = "transfer")]
+    mod tf_slice_parity {
+        use super::super::*;
+
+        fn sweep() -> Vec<f32> {
+            // Include small remainder past the widest SIMD width (16) to
+            // exercise chunk + remainder paths for every tier.
+            (0..=1024)
+                .map(|i| i as f32 / 1024.0)
+                .chain([0.0, 0.25, 0.5, 0.75, 1.0])
+                .collect()
+        }
+
+        fn check<F, G>(name: &str, slice_fn: F, scalar_fn: G, tol: f32)
+        where
+            F: Fn(&mut [f32]),
+            G: Fn(f32) -> f32,
+        {
+            let input = sweep();
+            let mut simd = input.clone();
+            slice_fn(&mut simd);
+            for (i, &v) in input.iter().enumerate() {
+                let expect = scalar_fn(v);
+                let got = simd[i];
+                assert!(
+                    (got - expect).abs() <= tol,
+                    "{name} mismatch at {i} (input={v}): simd={got}, scalar={expect}"
+                );
+            }
+        }
+
+        #[test]
+        fn bt709_to_linear_slice_matches_scalar() {
+            check(
+                "bt709_to_linear_slice",
+                bt709_to_linear_slice,
+                crate::tf::bt709_to_linear,
+                1e-5,
+            );
+        }
+
+        #[test]
+        fn linear_to_bt709_slice_matches_scalar() {
+            check(
+                "linear_to_bt709_slice",
+                linear_to_bt709_slice,
+                crate::tf::linear_to_bt709,
+                1e-4,
+            );
+        }
+
+        #[test]
+        fn pq_to_linear_slice_matches_scalar() {
+            check(
+                "pq_to_linear_slice",
+                pq_to_linear_slice,
+                crate::tf::pq_to_linear,
+                1e-5,
+            );
+        }
+
+        #[test]
+        fn linear_to_pq_slice_matches_scalar() {
+            check(
+                "linear_to_pq_slice",
+                linear_to_pq_slice,
+                crate::tf::linear_to_pq,
+                1e-5,
+            );
+        }
+
+        #[test]
+        fn hlg_to_linear_slice_matches_scalar() {
+            check(
+                "hlg_to_linear_slice",
+                hlg_to_linear_slice,
+                crate::tf::hlg_to_linear,
+                1e-4,
+            );
+        }
+
+        #[test]
+        fn linear_to_hlg_slice_matches_scalar() {
+            check(
+                "linear_to_hlg_slice",
+                linear_to_hlg_slice,
+                crate::tf::linear_to_hlg,
+                1e-4,
             );
         }
     }
