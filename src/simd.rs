@@ -524,35 +524,16 @@ pub fn linear_to_srgb_rgba_slice(values: &mut [f32]) {
 // Extended-range sRGB ↔ Linear Slice Functions (no clamping)
 // ============================================================================
 
-#[arcane]
-fn srgb_to_linear_extended_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
-    crate::tokens::x8::srgb_to_linear_extended_slice_v3(token, values);
-}
-
-#[arcane]
-fn srgb_to_linear_extended_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
+#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn srgb_to_linear_extended_slice_tier(token: Token, values: &mut [f32]) {
+    #[allow(non_camel_case_types)]
+    type f32x16 = g_f32x16<Token>;
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
-        *chunk = crate::tokens::x4::srgb_to_linear_extended_neon(token, *chunk);
+        let v = f32x16::from_array(token, *chunk);
+        *chunk = crate::tf::srgb::srgb_to_linear_extended_x16(token, v).to_array();
     }
     for v in remainder {
-        *v = crate::scalar::srgb_to_linear_extended(*v);
-    }
-}
-
-#[arcane]
-fn srgb_to_linear_extended_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = crate::tokens::x4::srgb_to_linear_extended_wasm128(token, *chunk);
-    }
-    for v in remainder {
-        *v = crate::scalar::srgb_to_linear_extended(*v);
-    }
-}
-
-fn srgb_to_linear_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
-    for v in values.iter_mut() {
         *v = crate::scalar::srgb_to_linear_extended(*v);
     }
 }
@@ -595,39 +576,20 @@ fn srgb_to_linear_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [
 pub fn srgb_to_linear_extended_slice(values: &mut [f32]) {
     incant!(
         srgb_to_linear_extended_slice_tier(values),
-        [v3, neon, wasm128, scalar]
+        [v4, v3, neon, wasm128, scalar]
     )
 }
 
-#[arcane]
-fn linear_to_srgb_extended_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
-    crate::tokens::x8::linear_to_srgb_extended_slice_v3(token, values);
-}
-
-#[arcane]
-fn linear_to_srgb_extended_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
+#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_srgb_extended_slice_tier(token: Token, values: &mut [f32]) {
+    #[allow(non_camel_case_types)]
+    type f32x16 = g_f32x16<Token>;
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
-        *chunk = crate::tokens::x4::linear_to_srgb_extended_neon(token, *chunk);
+        let v = f32x16::from_array(token, *chunk);
+        *chunk = crate::tf::srgb::linear_to_srgb_extended_x16(token, v).to_array();
     }
     for v in remainder {
-        *v = crate::scalar::linear_to_srgb_extended(*v);
-    }
-}
-
-#[arcane]
-fn linear_to_srgb_extended_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = crate::tokens::x4::linear_to_srgb_extended_wasm128(token, *chunk);
-    }
-    for v in remainder {
-        *v = crate::scalar::linear_to_srgb_extended(*v);
-    }
-}
-
-fn linear_to_srgb_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
-    for v in values.iter_mut() {
         *v = crate::scalar::linear_to_srgb_extended(*v);
     }
 }
@@ -668,7 +630,7 @@ fn linear_to_srgb_extended_slice_tier_scalar(_token: ScalarToken, values: &mut [
 pub fn linear_to_srgb_extended_slice(values: &mut [f32]) {
     incant!(
         linear_to_srgb_extended_slice_tier(values),
-        [v3, neon, wasm128, scalar]
+        [v4, v3, neon, wasm128, scalar]
     )
 }
 
