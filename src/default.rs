@@ -113,8 +113,20 @@ pub use crate::tf::{
 
 #[cfg(feature = "transfer")]
 pub use crate::simd::{
-    bt709_to_linear_slice, hlg_to_linear_slice, linear_to_bt709_slice, linear_to_hlg_slice,
-    linear_to_pq_slice, pq_to_linear_slice,
+    // Plain slice (applies TF to every element)
+    bt709_to_linear_slice,
+    hlg_to_linear_slice,
+    linear_to_bt709_slice,
+    linear_to_hlg_slice,
+    linear_to_pq_slice,
+    pq_to_linear_slice,
+    // RGBA variants (alpha-preserving; skip every 4th element)
+    bt709_to_linear_rgba_slice,
+    hlg_to_linear_rgba_slice,
+    linear_to_bt709_rgba_slice,
+    linear_to_hlg_rgba_slice,
+    linear_to_pq_rgba_slice,
+    pq_to_linear_rgba_slice,
 };
 
 // ============================================================================

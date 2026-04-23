@@ -436,6 +436,130 @@ mod old_dispatchers {
     }
 }
 
+// Scalar RGBA fallback: what a caller *had* to write before the _rgba_slice
+// TF variants existed (skipping alpha by hand), so we can measure the gain.
+#[cfg(feature = "transfer")]
+mod old_rgba_fallbacks {
+    use linear_srgb::tf;
+
+    macro_rules! rgba_scalar {
+        ($name:ident, $fn:path) => {
+            #[archmage::autoversion]
+            pub fn $name(values: &mut [f32]) {
+                for pixel in values.chunks_exact_mut(4) {
+                    pixel[0] = $fn(pixel[0]);
+                    pixel[1] = $fn(pixel[1]);
+                    pixel[2] = $fn(pixel[2]);
+                }
+            }
+        };
+    }
+
+    rgba_scalar!(bt709_to_linear_rgba_old, tf::bt709_to_linear);
+    rgba_scalar!(linear_to_bt709_rgba_old, tf::linear_to_bt709);
+    rgba_scalar!(pq_to_linear_rgba_old, tf::pq_to_linear);
+    rgba_scalar!(linear_to_pq_rgba_old, tf::linear_to_pq);
+    rgba_scalar!(hlg_to_linear_rgba_old, tf::hlg_to_linear);
+    rgba_scalar!(linear_to_hlg_rgba_old, tf::linear_to_hlg);
+}
+
+#[cfg(feature = "transfer")]
+fn make_rgba_encoded() -> Vec<f32> {
+    // N pixels, alpha at position 3 kept in [0, 1] so the "apply TF to all
+    // elements" mistake would corrupt it visibly.
+    (0..N)
+        .flat_map(|i| {
+            let t = i as f32 / N as f32;
+            [t, (t * 0.7).min(1.0), (1.0 - t).max(0.0), 0.5_f32]
+        })
+        .collect()
+}
+
+#[cfg(feature = "transfer")]
+fn make_rgba_linear() -> Vec<f32> {
+    make_rgba_encoded()
+        .chunks_exact(4)
+        .flat_map(|px| {
+            [
+                linear_srgb::tf::srgb_to_linear(px[0]),
+                linear_srgb::tf::srgb_to_linear(px[1]),
+                linear_srgb::tf::srgb_to_linear(px[2]),
+                px[3],
+            ]
+        })
+        .collect()
+}
+
+#[cfg(feature = "transfer")]
+fn bench_tf_public_dispatcher_rgba(c: &mut Criterion) {
+    use linear_srgb::default;
+
+    let encoded = make_rgba_encoded();
+    let linear = make_rgba_linear();
+
+    macro_rules! ab_rgba {
+        ($group:expr, $data:expr, $old:path, $new:path) => {
+            let mut g = c.benchmark_group($group);
+            g.throughput(Throughput::Elements(N as u64));
+            g.bench_function("old_scalar_rgba_loop", |b| {
+                let mut buf = $data.clone();
+                b.iter(|| {
+                    buf.copy_from_slice(&$data);
+                    $old(black_box(&mut buf));
+                })
+            });
+            g.bench_function("new_incant_rgba_dispatch", |b| {
+                let mut buf = $data.clone();
+                b.iter(|| {
+                    buf.copy_from_slice(&$data);
+                    $new(black_box(&mut buf));
+                })
+            });
+            g.finish();
+        };
+    }
+
+    ab_rgba!(
+        "tf_rgba_bt709_to_linear",
+        encoded,
+        old_rgba_fallbacks::bt709_to_linear_rgba_old,
+        default::bt709_to_linear_rgba_slice
+    );
+    ab_rgba!(
+        "tf_rgba_linear_to_bt709",
+        linear,
+        old_rgba_fallbacks::linear_to_bt709_rgba_old,
+        default::linear_to_bt709_rgba_slice
+    );
+    ab_rgba!(
+        "tf_rgba_pq_to_linear",
+        encoded,
+        old_rgba_fallbacks::pq_to_linear_rgba_old,
+        default::pq_to_linear_rgba_slice
+    );
+    ab_rgba!(
+        "tf_rgba_linear_to_pq",
+        linear,
+        old_rgba_fallbacks::linear_to_pq_rgba_old,
+        default::linear_to_pq_rgba_slice
+    );
+    ab_rgba!(
+        "tf_rgba_hlg_to_linear",
+        encoded,
+        old_rgba_fallbacks::hlg_to_linear_rgba_old,
+        default::hlg_to_linear_rgba_slice
+    );
+    ab_rgba!(
+        "tf_rgba_linear_to_hlg",
+        linear,
+        old_rgba_fallbacks::linear_to_hlg_rgba_old,
+        default::linear_to_hlg_rgba_slice
+    );
+}
+
+#[cfg(not(feature = "transfer"))]
+fn bench_tf_public_dispatcher_rgba(_c: &mut Criterion) {}
+
 #[cfg(feature = "transfer")]
 fn bench_tf_public_dispatcher(c: &mut Criterion) {
     use linear_srgb::default;
@@ -521,5 +645,6 @@ criterion_group!(
     bench_tf_x8_v4_disabled,
     bench_tf_scalar_via_dispatch,
     bench_tf_public_dispatcher,
+    bench_tf_public_dispatcher_rgba,
 );
 criterion_main!(benches);

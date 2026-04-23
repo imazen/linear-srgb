@@ -46,6 +46,16 @@
   `incant!` over `[v4, v3, neon, wasm128, scalar]` like `srgb_to_linear_slice`.
   Closes #10.
 
+- **New alpha-preserving RGBA variants for BT.709 / PQ / HLG slices:**
+  `bt709_to_linear_rgba_slice`, `linear_to_bt709_rgba_slice`,
+  `pq_to_linear_rgba_slice`, `linear_to_pq_rgba_slice`,
+  `hlg_to_linear_rgba_slice`, `linear_to_hlg_rgba_slice`. Applies the TF
+  to every RGB lane while leaving alpha bit-identical, matching the shape
+  of `srgb_to_linear_rgba_slice`. Full SIMD dispatch across all tiers.
+  Addresses #2 for the HDR transfer functions; docs on the plain `_slice`
+  variants now explicitly warn that alpha is decoded/encoded and point
+  readers at the RGBA counterpart.
+
 ## 0.6.10
 
 Also published as 0.7.0 (unnecessarily bumped — no API was broken).

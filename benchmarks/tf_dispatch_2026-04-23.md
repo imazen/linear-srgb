@@ -81,13 +81,36 @@ linear_to_hlg rite could be improved by branching on `simd_all(mask)`
 to skip the expensive branch when no lane needs it, at the cost of
 adding a runtime test per chunk.
 
+## RGBA variants (added same day, issue #2 followup)
+
+N=10000 **pixels** (40000 f32 elements). Baseline is the RGBA fallback a
+caller would have written before the `_rgba_slice` TF functions existed:
+`for px in chunks_exact_mut(4) { px[0..3] = scalar(px[0..3]); }` under
+`#[archmage::autoversion]`.
+
+| Transfer function | old RGBA scalar loop | **new RGBA incant!** | speedup |
+|-------------------|---------------------:|---------------------:|--------:|
+| bt709_to_linear   |                49.6µs|                24.2µs|   2.05× |
+| linear_to_bt709   |                44.4µs|                20.3µs|   2.19× |
+| pq_to_linear      |                50.8µs|                12.6µs|   4.03× |
+| linear_to_pq      |                81.6µs|                21.3µs|   3.83× |
+| hlg_to_linear     |                35.1µs|                13.7µs|   2.56× |
+| linear_to_hlg     |                16.5µs|                14.5µs|   1.14× |
+
+`linear_to_hlg` RGBA doesn't regress (unlike the plain variant on that
+same data distribution) because the alpha save/restore overhead hides the
+rite's branchy-data weakness. Every one of the six pairs is a strict win
+in RGBA mode.
+
 ## Reproduction
 
 ```sh
 cargo bench --features transfer --bench tf_bench -- tf_dispatch
+cargo bench --features transfer --bench tf_bench -- tf_rgba_
 cargo bench --features transfer --bench tf_bench -- 'tf_x8\b'
 cargo bench --features transfer --bench tf_bench -- tf_scalar
 ```
 
-Raw zenbench output saved to `/tmp/tf_dispatch_bench.log` at run time;
-not committed because it contains absolute timestamps.
+Raw zenbench output saved to `/tmp/tf_dispatch_bench.log` and
+`/tmp/tf_rgba_bench.log` at run time; not committed because they
+contain absolute timestamps.
