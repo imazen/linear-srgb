@@ -8,7 +8,7 @@ use std::hint::black_box;
 
 use linear_srgb::default::{
     bt709_to_linear_slice, hlg_to_linear_slice, linear_to_bt709_slice, linear_to_hlg_slice,
-    linear_to_pq_slice, pq_to_linear_slice,
+    linear_to_pq_slice, linear_to_srgb_u16_slice, pq_to_linear_slice, srgb_u16_to_linear_slice,
 };
 use tango_bench::{IntoBenchmarks, benchmark_fn, tango_benchmarks, tango_main};
 
@@ -97,6 +97,40 @@ fn bench_fn(
     })
 }
 
+/// srgb_u16 → linear f32: input is [u16; N] in sRGB gamma; compares the
+/// new SIMD polynomial decode against 0.6.11's scalar 256 KB LUT loop.
+fn bench_u16_decode() -> impl IntoIterator<Item = tango_bench::Benchmark> {
+    SIZES.iter().map(|&n| {
+        let input: Vec<u16> = (0..n).map(|i| ((i * 65535) / n.max(1)) as u16).collect();
+        let label = leak_label(&format!("srgb_u16_to_linear_{n}"));
+        benchmark_fn(label, move |b| {
+            let src = input.clone();
+            let mut out = vec![0.0f32; src.len()];
+            b.iter(move || {
+                srgb_u16_to_linear_slice(black_box(&src), &mut out);
+            })
+        })
+    })
+}
+
+/// linear f32 → srgb_u16: input is [f32; N] in [0, 1]; compares SIMD
+/// rational polynomial encode against 0.6.11's SIMD-clamp + sqrt-LUT
+/// (same implementation lives on both — this is a parity check, not a
+/// regression target).
+fn bench_u16_encode() -> impl IntoIterator<Item = tango_bench::Benchmark> {
+    SIZES.iter().map(|&n| {
+        let input = dist_uniform(n);
+        let label = leak_label(&format!("linear_to_srgb_u16_{n}"));
+        benchmark_fn(label, move |b| {
+            let src = input.clone();
+            let mut out = vec![0u16; src.len()];
+            b.iter(move || {
+                linear_to_srgb_u16_slice(black_box(&src), &mut out);
+            })
+        })
+    })
+}
+
 fn benchmarks() -> impl IntoBenchmarks {
     let mut out: Vec<tango_bench::Benchmark> = Vec::new();
     out.extend(bench_fn("linear_to_hlg", linear_to_hlg_slice));
@@ -105,6 +139,8 @@ fn benchmarks() -> impl IntoBenchmarks {
     out.extend(bench_fn("bt709_to_linear", bt709_to_linear_slice));
     out.extend(bench_fn("linear_to_pq", linear_to_pq_slice));
     out.extend(bench_fn("pq_to_linear", pq_to_linear_slice));
+    out.extend(bench_u16_decode());
+    out.extend(bench_u16_encode());
     out
 }
 

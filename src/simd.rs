@@ -1034,17 +1034,80 @@ pub fn linear_to_srgb_u8_slice(input: &[f32], output: &mut [u8]) {
 // u16 Batch Functions (LUT-based)
 // ============================================================================
 
-/// Convert sRGB u16 values to linear f32 using a lazily-initialized 65536-entry LUT.
+// ---------- SIMD polynomial path for srgb_u16_to_linear_slice ----------
+//
+// Normalizes u16→f32 via `*(1.0/65535.0)` (auto-vectorizes to
+// vpmovzxwd + vcvtdq2ps + vmulps) and evaluates the `S2L_P/Q` rational
+// polynomial with FMA. No LUT and no cache footprint — trades ~20 f32
+// ops per lane for freeing the 256KB decode LUT from the L2 budget.
+// Cross-tier output may differ by ≤1 u16 LSB (same precision envelope
+// as the encode slice).
+
+#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn srgb_u16_to_linear_slice_tier(token: Token, input: &[u16], output: &mut [f32]) {
+    use crate::rational_poly::{LINEAR_SCALE, S2L_P, S2L_Q, SRGB_THRESHOLD};
+    #[allow(non_camel_case_types)]
+    type f32x16 = g_f32x16<Token>;
+
+    let (in_chunks, in_rem) = input.as_chunks::<16>();
+    let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
+    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+        // u16 → f32, normalized to [0, 1]. Scalar widening auto-vectorizes.
+        let mut f = [0.0f32; 16];
+        for i in 0..16 {
+            f[i] = inp[i] as f32;
+        }
+        let v = f32x16::from_array(token, f) * f32x16::splat(token, 1.0 / 65535.0);
+        let one = f32x16::splat(token, 1.0);
+
+        let linear_result = v * f32x16::splat(token, LINEAR_SCALE);
+
+        let yp = f32x16::splat(token, S2L_P[4]).mul_add(v, f32x16::splat(token, S2L_P[3]));
+        let yp = yp.mul_add(v, f32x16::splat(token, S2L_P[2]));
+        let yp = yp.mul_add(v, f32x16::splat(token, S2L_P[1]));
+        let yp = yp.mul_add(v, f32x16::splat(token, S2L_P[0]));
+
+        let yq = f32x16::splat(token, S2L_Q[4]).mul_add(v, f32x16::splat(token, S2L_Q[3]));
+        let yq = yq.mul_add(v, f32x16::splat(token, S2L_Q[2]));
+        let yq = yq.mul_add(v, f32x16::splat(token, S2L_Q[1]));
+        let yq = yq.mul_add(v, f32x16::splat(token, S2L_Q[0]));
+
+        let power_result = (yp / yq).min(one);
+
+        let mask = v.simd_le(f32x16::splat(token, SRGB_THRESHOLD));
+        let result = f32x16::blend(mask, linear_result, power_result);
+
+        // Match the scalar `srgb_to_linear_fast` early-exit: v >= 1.0 → 1.0.
+        // At u16=65535 the normalized v rounds to 1 + 2^-16 in f32, and the
+        // polynomial alone drifts a few ULP short of 1.0 — snap it back so
+        // srgb_u16_to_linear(65535) == 1.0 bit-exact (as the LUT does).
+        let ge_one = v.simd_ge(one);
+        let result = f32x16::blend(ge_one, one, result);
+        *out = result.to_array();
+    }
+
+    for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
+        *out = crate::scalar::srgb_u16_to_linear(*inp);
+    }
+}
+
+/// Convert sRGB u16 values to linear f32 via rational polynomial (SIMD).
 ///
-/// Pure table lookup, no math. The LUT is 256KB.
+/// Dispatches through `incant!` over `[v4, v3, neon, wasm128, scalar]` so
+/// the polynomial evaluates 4/8/16 wide. No LUT and no cache footprint —
+/// replaces the 256KB decode LUT on the slice path. Boundary values
+/// (0, 65535) map exactly to (0.0, 1.0). Output may differ from the
+/// scalar LUT by ≤1 f32 ULP at interior values.
 ///
 /// # Panics
 /// Panics if `input.len() != output.len()`.
+#[inline]
 pub fn srgb_u16_to_linear_slice(input: &[u16], output: &mut [f32]) {
     assert_eq!(input.len(), output.len());
-    for (inp, out) in input.iter().zip(output.iter_mut()) {
-        *out = crate::scalar::srgb_u16_to_linear(*inp);
-    }
+    incant!(
+        srgb_u16_to_linear_slice_tier(input, output),
+        [v4, v3, neon, wasm128, scalar]
+    )
 }
 
 // ---------- SIMD polynomial + quantize path for linear_to_srgb_u16_slice ----------

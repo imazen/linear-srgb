@@ -32,10 +32,15 @@
 #[allow(unused_imports)]
 use num_traits::Float; // provides powf/sqrt via libm in no_std
 
-// Submodules with implementations
+// Submodules with implementations. sRGB + fast_math are always compiled
+// (the extended-range sRGB slice path in simd.rs is NOT gated on `transfer`
+// and depends on these); bt709/pq/hlg are opt-in via the `transfer` feature.
+#[cfg(feature = "transfer")]
 pub(crate) mod bt709;
 pub(crate) mod fast_math;
+#[cfg(feature = "transfer")]
 pub(crate) mod hlg;
+#[cfg(feature = "transfer")]
 pub(crate) mod pq;
 pub(crate) mod srgb;
 
@@ -63,15 +68,18 @@ pub fn linear_to_srgb(v: f32) -> f32 {
     crate::rational_poly::linear_to_srgb_fast(v)
 }
 
+#[cfg(feature = "transfer")]
 pub use bt709::{bt709_to_linear, linear_to_bt709};
+#[cfg(feature = "transfer")]
 pub use hlg::{hlg_to_linear, linear_to_hlg};
+#[cfg(feature = "transfer")]
 pub use pq::{linear_to_pq, pq_to_linear};
 
 // =============================================================================
 // Tests
 // =============================================================================
 
-#[cfg(test)]
+#[cfg(all(test, feature = "transfer"))]
 mod tests {
     use super::*;
 

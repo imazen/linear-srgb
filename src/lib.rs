@@ -237,8 +237,9 @@ pub mod tokens;
 /// Provides scalar functions for all four transfer curves. SIMD `#[rite]`
 /// versions live in [`tokens`] (x4/x8/x16).
 ///
-/// Requires the `transfer` feature.
-#[cfg(feature = "transfer")]
+/// BT.709 / PQ / HLG scalars and transfer-specific rites require the
+/// `transfer` feature. sRGB-only helpers compile unconditionally so the
+/// extended-range slice functions (not gated on `transfer`) can link.
 pub mod tf;
 
 /// IEC 61966-2-1:1999 textbook sRGB transfer functions.
