@@ -74,3 +74,74 @@ pub(crate) fn linear_to_srgb_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> 
     let mask = v.simd_le(threshold);
     f32x8::blend(mask, linear, poly)
 }
+
+// =============================================================================
+// Extended-range (sign-preserving, 6/6 rational polynomial) — x16
+// =============================================================================
+
+use magetypes::simd::backends::F32x16Backend;
+use magetypes::simd::generic::f32x16;
+
+/// Extended-range sRGB→linear, 16-wide. `sign(v) * eotf(|v|)` per CSS Color 4.
+#[inline(always)]
+pub(crate) fn srgb_to_linear_extended_x16<T: F32x16Backend>(t: T, v: f32x16<T>) -> f32x16<T> {
+    use rational_poly::{EXT_S2L_P as P, EXT_S2L_Q as Q};
+    let zero = f32x16::zero(t);
+    let neg_mask = v.simd_lt(zero);
+    let abs_v = v.abs();
+
+    let linear_result = abs_v * f32x16::splat(t, rational_poly::LINEAR_SCALE);
+
+    let x = abs_v;
+    let yp = f32x16::splat(t, P[6]).mul_add(x, f32x16::splat(t, P[5]));
+    let yp = yp.mul_add(x, f32x16::splat(t, P[4]));
+    let yp = yp.mul_add(x, f32x16::splat(t, P[3]));
+    let yp = yp.mul_add(x, f32x16::splat(t, P[2]));
+    let yp = yp.mul_add(x, f32x16::splat(t, P[1]));
+    let yp = yp.mul_add(x, f32x16::splat(t, P[0]));
+
+    let yq = f32x16::splat(t, Q[6]).mul_add(x, f32x16::splat(t, Q[5]));
+    let yq = yq.mul_add(x, f32x16::splat(t, Q[4]));
+    let yq = yq.mul_add(x, f32x16::splat(t, Q[3]));
+    let yq = yq.mul_add(x, f32x16::splat(t, Q[2]));
+    let yq = yq.mul_add(x, f32x16::splat(t, Q[1]));
+    let yq = yq.mul_add(x, f32x16::splat(t, Q[0]));
+
+    let power_result = yp / yq;
+
+    let thresh_mask = abs_v.simd_lt(f32x16::splat(t, rational_poly::SRGB_THRESHOLD));
+    let result = f32x16::blend(thresh_mask, linear_result, power_result);
+    f32x16::blend(neg_mask, -result, result)
+}
+
+/// Extended-range linear→sRGB, 16-wide. `sign(v) * oetf(|v|)` per CSS Color 4.
+#[inline(always)]
+pub(crate) fn linear_to_srgb_extended_x16<T: F32x16Backend>(t: T, v: f32x16<T>) -> f32x16<T> {
+    use rational_poly::{EXT_L2S_P as P, EXT_L2S_Q as Q};
+    let zero = f32x16::zero(t);
+    let neg_mask = v.simd_lt(zero);
+    let abs_v = v.abs();
+
+    let linear_result = abs_v * f32x16::splat(t, rational_poly::TWELVE_92);
+
+    let x = abs_v.sqrt();
+    let yp = f32x16::splat(t, P[6]).mul_add(x, f32x16::splat(t, P[5]));
+    let yp = yp.mul_add(x, f32x16::splat(t, P[4]));
+    let yp = yp.mul_add(x, f32x16::splat(t, P[3]));
+    let yp = yp.mul_add(x, f32x16::splat(t, P[2]));
+    let yp = yp.mul_add(x, f32x16::splat(t, P[1]));
+    let yp = yp.mul_add(x, f32x16::splat(t, P[0]));
+
+    let yq = f32x16::splat(t, Q[6]).mul_add(x, f32x16::splat(t, Q[5]));
+    let yq = yq.mul_add(x, f32x16::splat(t, Q[4]));
+    let yq = yq.mul_add(x, f32x16::splat(t, Q[3]));
+    let yq = yq.mul_add(x, f32x16::splat(t, Q[2]));
+    let yq = yq.mul_add(x, f32x16::splat(t, Q[1]));
+    let yq = yq.mul_add(x, f32x16::splat(t, Q[0]));
+
+    let power_result = yp / yq;
+
+    let thresh_mask = abs_v.simd_lt(f32x16::splat(t, rational_poly::LINEAR_THRESHOLD));
+    let result = f32x16::blend(thresh_mask, linear_result, power_result);
+    f32x16::blend(neg_mask, -result, result)
+}
