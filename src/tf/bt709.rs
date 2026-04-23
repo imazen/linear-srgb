@@ -42,9 +42,12 @@ pub(crate) fn bt709_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T>
 
     let linear = v * inv_4_5;
 
+    // No MIN_POSITIVE clamp on `normalized`: `power` is always blended away
+    // when v < threshold, and fast_powf never faults on negative input
+    // (all bit-manipulation, finite output), so garbage from out-of-domain
+    // lanes never escapes.
     let normalized = (v + alpha) / one_plus_alpha;
-    let safe = normalized.max(f32x4::splat(t, f32::MIN_POSITIVE));
-    let power = fast_math::fast_powf_x4(t, safe, 1.0 / 0.45);
+    let power = fast_math::fast_powf_x4(t, normalized, 1.0 / 0.45);
 
     let mask = v.simd_lt(threshold);
     f32x4::blend(mask, linear, power)
@@ -60,8 +63,9 @@ pub(crate) fn linear_to_bt709_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T>
 
     let linear = v * scale_4_5;
 
-    let safe = v.max(f32x4::splat(t, f32::MIN_POSITIVE));
-    let power = fast_math::fast_powf_x4(t, safe, 0.45);
+    // See bt709_to_linear_x4: no MIN_POSITIVE clamp needed; `power` is
+    // blended away for v < threshold and fast_powf is branch-free.
+    let power = fast_math::fast_powf_x4(t, v, 0.45);
     let power = one_plus_alpha.mul_add(power, -alpha);
 
     let mask = v.simd_lt(threshold);
@@ -84,9 +88,9 @@ pub(crate) fn bt709_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T>
 
     let linear = v * inv_4_5;
 
+    // See bt709_to_linear_x4: no MIN_POSITIVE clamp needed.
     let normalized = (v + alpha) / one_plus_alpha;
-    let safe = normalized.max(f32x8::splat(t, f32::MIN_POSITIVE));
-    let power = fast_math::fast_powf_x8(t, safe, 1.0 / 0.45);
+    let power = fast_math::fast_powf_x8(t, normalized, 1.0 / 0.45);
 
     let mask = v.simd_lt(threshold);
     f32x8::blend(mask, linear, power)
@@ -101,10 +105,51 @@ pub(crate) fn linear_to_bt709_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T>
 
     let linear = v * scale_4_5;
 
-    let safe = v.max(f32x8::splat(t, f32::MIN_POSITIVE));
-    let power = fast_math::fast_powf_x8(t, safe, 0.45);
+    // See linear_to_bt709_x4: no MIN_POSITIVE clamp needed.
+    let power = fast_math::fast_powf_x8(t, v, 0.45);
     let power = one_plus_alpha.mul_add(power, -alpha);
 
     let mask = v.simd_lt(threshold);
     f32x8::blend(mask, linear, power)
+}
+
+// =============================================================================
+// Generic SIMD — x16
+// =============================================================================
+
+use magetypes::simd::backends::F32x16Convert;
+use magetypes::simd::generic::f32x16;
+
+#[inline(always)]
+pub(crate) fn bt709_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
+    let threshold = f32x16::splat(t, 4.5 * BT709_BETA);
+    let inv_4_5 = f32x16::splat(t, 1.0 / 4.5);
+    let alpha = f32x16::splat(t, BT709_ALPHA);
+    let one_plus_alpha = f32x16::splat(t, 1.0 + BT709_ALPHA);
+
+    let linear = v * inv_4_5;
+
+    // See bt709_to_linear_x4: no MIN_POSITIVE clamp needed.
+    let normalized = (v + alpha) / one_plus_alpha;
+    let power = fast_math::fast_powf_x16(t, normalized, 1.0 / 0.45);
+
+    let mask = v.simd_lt(threshold);
+    f32x16::blend(mask, linear, power)
+}
+
+#[inline(always)]
+pub(crate) fn linear_to_bt709_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
+    let threshold = f32x16::splat(t, BT709_BETA);
+    let scale_4_5 = f32x16::splat(t, 4.5);
+    let one_plus_alpha = f32x16::splat(t, 1.0 + BT709_ALPHA);
+    let alpha = f32x16::splat(t, BT709_ALPHA);
+
+    let linear = v * scale_4_5;
+
+    // See linear_to_bt709_x4: no MIN_POSITIVE clamp needed.
+    let power = fast_math::fast_powf_x16(t, v, 0.45);
+    let power = one_plus_alpha.mul_add(power, -alpha);
+
+    let mask = v.simd_lt(threshold);
+    f32x16::blend(mask, linear, power)
 }
