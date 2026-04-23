@@ -276,3 +276,90 @@ pub(crate) fn fast_powf_x8<T: F32x8Convert>(t: T, base: f32x8<T>, exponent: f32)
     let scaled = log2 * f32x8::splat(t, exponent);
     fast_pow2f_x8(t, scaled)
 }
+
+// --- x16 generics (polyfilled to 2×x8 on V3, 4×x4 on NEON/WASM; native on V4 AVX-512) ---
+
+use magetypes::simd::backends::F32x16Convert;
+use magetypes::simd::generic::{f32x16, i32x16};
+
+/// Evaluate degree-4 rational polynomial P(x)/Q(x) on 16 f32 values via FMA.
+#[inline(always)]
+pub(crate) fn eval_rational_poly_x16<T: F32x16Convert>(
+    t: T,
+    x: f32x16<T>,
+    p: [f32; 5],
+    q: [f32; 5],
+) -> f32x16<T> {
+    let mut yp = f32x16::splat(t, p[4]);
+    yp = yp.mul_add(x, f32x16::splat(t, p[3]));
+    yp = yp.mul_add(x, f32x16::splat(t, p[2]));
+    yp = yp.mul_add(x, f32x16::splat(t, p[1]));
+    yp = yp.mul_add(x, f32x16::splat(t, p[0]));
+
+    let mut yq = f32x16::splat(t, q[4]);
+    yq = yq.mul_add(x, f32x16::splat(t, q[3]));
+    yq = yq.mul_add(x, f32x16::splat(t, q[2]));
+    yq = yq.mul_add(x, f32x16::splat(t, q[1]));
+    yq = yq.mul_add(x, f32x16::splat(t, q[0]));
+
+    yp / yq
+}
+
+/// fast_log2f on 16 f32 values — bit manipulation + rational polynomial.
+#[inline(always)]
+pub(crate) fn fast_log2f_x16<T: F32x16Convert>(t: T, x: f32x16<T>) -> f32x16<T> {
+    let x_bits = x.bitcast_to_i32();
+    let magic = i32x16::splat(t, 0x3f2aaaab_u32 as i32);
+    let exp_bits = x_bits - magic;
+    let exp_shifted = exp_bits.shr_arithmetic_const::<23>();
+
+    let shifted_back = exp_shifted.shl_const::<23>();
+    let mantissa_bits = x_bits - shifted_back;
+    let mantissa = f32x16::from_i32_bitcast(t, mantissa_bits);
+
+    let exp_f = f32x16::from_i32(t, exp_shifted);
+    let one = f32x16::splat(t, 1.0);
+    let m = mantissa - one;
+
+    let mut yp = f32x16::splat(t, LOG2_P[2]);
+    yp = yp.mul_add(m, f32x16::splat(t, LOG2_P[1]));
+    yp = yp.mul_add(m, f32x16::splat(t, LOG2_P[0]));
+
+    let mut yq = f32x16::splat(t, LOG2_Q[2]);
+    yq = yq.mul_add(m, f32x16::splat(t, LOG2_Q[1]));
+    yq = yq.mul_add(m, f32x16::splat(t, LOG2_Q[0]));
+
+    let poly = yp / yq;
+    poly + exp_f
+}
+
+/// fast_pow2f on 16 f32 values — integer bit manipulation + polynomial.
+#[inline(always)]
+pub(crate) fn fast_pow2f_x16<T: F32x16Convert>(t: T, x: f32x16<T>) -> f32x16<T> {
+    let x_floor = x.floor();
+    let frac = x - x_floor;
+
+    let x_floor_i = x_floor.to_i32();
+    let bias = i32x16::splat(t, 127);
+    let exp_bits = (x_floor_i + bias).shl_const::<23>();
+    let exp = f32x16::from_i32_bitcast(t, exp_bits);
+
+    let mut num = frac + f32x16::splat(t, POW2_NUM[0]);
+    num = num.mul_add(frac, f32x16::splat(t, POW2_NUM[1]));
+    num = num.mul_add(frac, f32x16::splat(t, POW2_NUM[2]));
+    num = num * exp;
+
+    let mut den = f32x16::splat(t, POW2_DEN[0]).mul_add(frac, f32x16::splat(t, POW2_DEN[1]));
+    den = den.mul_add(frac, f32x16::splat(t, POW2_DEN[2]));
+    den = den.mul_add(frac, f32x16::splat(t, POW2_DEN[3]));
+
+    num / den
+}
+
+/// fast_powf(base, exp) on 16 f32 values: pow2f(exp * log2f(base)).
+#[inline(always)]
+pub(crate) fn fast_powf_x16<T: F32x16Convert>(t: T, base: f32x16<T>, exponent: f32) -> f32x16<T> {
+    let log2 = fast_log2f_x16(t, base);
+    let scaled = log2 * f32x16::splat(t, exponent);
+    fast_pow2f_x16(t, scaled)
+}

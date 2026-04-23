@@ -211,3 +211,44 @@ pub(crate) fn linear_to_pq_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let pos_mask = v.simd_gt(zero);
     result & pos_mask
 }
+
+// =============================================================================
+// Generic SIMD — x16
+// =============================================================================
+
+use magetypes::simd::backends::F32x16Convert;
+use magetypes::simd::generic::f32x16;
+
+#[inline(always)]
+pub(crate) fn pq_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
+    let zero = f32x16::zero(t);
+    let a = v.max(zero);
+    let x = a.mul_add(a, a);
+
+    let threshold = f32x16::splat(t, 0.25);
+    let large = fast_math::eval_rational_poly_x16(t, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE);
+    let small = fast_math::eval_rational_poly_x16(t, x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL);
+
+    let mask = a.simd_lt(threshold);
+    let result = f32x16::blend(mask, small, large);
+
+    let pos_mask = v.simd_gt(zero);
+    result & pos_mask
+}
+
+#[inline(always)]
+pub(crate) fn linear_to_pq_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
+    let zero = f32x16::zero(t);
+    let a = v.max(zero);
+    let a4 = a.sqrt().sqrt();
+
+    let threshold = f32x16::splat(t, 0.1);
+    let large = fast_math::eval_rational_poly_x16(t, a4, PQ_INV_P_LARGE, PQ_INV_Q_LARGE);
+    let small = fast_math::eval_rational_poly_x16(t, a4, PQ_INV_P_SMALL, PQ_INV_Q_SMALL);
+
+    let mask = a4.simd_lt(threshold);
+    let result = f32x16::blend(mask, small, large);
+
+    let pos_mask = v.simd_gt(zero);
+    result & pos_mask
+}

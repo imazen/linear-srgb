@@ -2146,34 +2146,23 @@ pub fn unpremultiply_linear_to_gamma_rgba_slice(values: &mut [f32], gamma: f32) 
 // Transfer function slice dispatchers (BT.709, PQ, HLG)
 // ============================================================================
 
-// Each public dispatcher calls into the existing `#[rite]` slice functions in
-// `crate::tokens::{x4,x8,x16}`, which already carry the SIMD implementation
-// built on magetypes generics. The tier wrappers here are thin `#[arcane]`
-// adapters so that `incant!` can dispatch by suffix at runtime.
+// Each public dispatcher uses `#[magetypes]` to generate per-tier `#[arcane]`
+// wrappers from a single generic body that drives `g_f32x16<Token>` over the
+// underlying `crate::tf::*_x16` kernels. On V4 this lowers to native
+// AVX-512; on V3 it polyfills to 2×f32x8; on NEON/WASM to 4×f32x4; scalar
+// falls through to the per-element TF function.
 
-#[cfg(all(feature = "transfer", feature = "avx512"))]
-#[arcane]
-fn bt709_to_linear_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
-    crate::tokens::x16::bt709_to_linear_slice_v4(token, values);
-}
 #[cfg(feature = "transfer")]
-#[arcane]
-fn bt709_to_linear_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
-    crate::tokens::x8::bt709_to_linear_slice_v3(token, values);
-}
-#[cfg(feature = "transfer")]
-#[arcane]
-fn bt709_to_linear_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
-    crate::tokens::x4::bt709_to_linear_slice_neon(token, values);
-}
-#[cfg(feature = "transfer")]
-#[arcane]
-fn bt709_to_linear_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
-    crate::tokens::x4::bt709_to_linear_slice_wasm128(token, values);
-}
-#[cfg(feature = "transfer")]
-fn bt709_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
-    for v in values.iter_mut() {
+#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn bt709_to_linear_slice_tier(token: Token, values: &mut [f32]) {
+    #[allow(non_camel_case_types)]
+    type f32x16 = g_f32x16<Token>;
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
+    for chunk in chunks {
+        let v = f32x16::from_array(token, *chunk);
+        *chunk = crate::tf::bt709::bt709_to_linear_x16(token, v).to_array();
+    }
+    for v in remainder {
         *v = crate::tf::bt709_to_linear(*v);
     }
 }
@@ -2195,29 +2184,17 @@ pub fn bt709_to_linear_slice(values: &mut [f32]) {
     )
 }
 
-#[cfg(all(feature = "transfer", feature = "avx512"))]
-#[arcane]
-fn linear_to_bt709_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
-    crate::tokens::x16::linear_to_bt709_slice_v4(token, values);
-}
 #[cfg(feature = "transfer")]
-#[arcane]
-fn linear_to_bt709_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
-    crate::tokens::x8::linear_to_bt709_slice_v3(token, values);
-}
-#[cfg(feature = "transfer")]
-#[arcane]
-fn linear_to_bt709_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
-    crate::tokens::x4::linear_to_bt709_slice_neon(token, values);
-}
-#[cfg(feature = "transfer")]
-#[arcane]
-fn linear_to_bt709_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
-    crate::tokens::x4::linear_to_bt709_slice_wasm128(token, values);
-}
-#[cfg(feature = "transfer")]
-fn linear_to_bt709_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
-    for v in values.iter_mut() {
+#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_bt709_slice_tier(token: Token, values: &mut [f32]) {
+    #[allow(non_camel_case_types)]
+    type f32x16 = g_f32x16<Token>;
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
+    for chunk in chunks {
+        let v = f32x16::from_array(token, *chunk);
+        *chunk = crate::tf::bt709::linear_to_bt709_x16(token, v).to_array();
+    }
+    for v in remainder {
         *v = crate::tf::linear_to_bt709(*v);
     }
 }
@@ -2239,29 +2216,17 @@ pub fn linear_to_bt709_slice(values: &mut [f32]) {
     )
 }
 
-#[cfg(all(feature = "transfer", feature = "avx512"))]
-#[arcane]
-fn pq_to_linear_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
-    crate::tokens::x16::pq_to_linear_slice_v4(token, values);
-}
 #[cfg(feature = "transfer")]
-#[arcane]
-fn pq_to_linear_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
-    crate::tokens::x8::pq_to_linear_slice_v3(token, values);
-}
-#[cfg(feature = "transfer")]
-#[arcane]
-fn pq_to_linear_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
-    crate::tokens::x4::pq_to_linear_slice_neon(token, values);
-}
-#[cfg(feature = "transfer")]
-#[arcane]
-fn pq_to_linear_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
-    crate::tokens::x4::pq_to_linear_slice_wasm128(token, values);
-}
-#[cfg(feature = "transfer")]
-fn pq_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
-    for v in values.iter_mut() {
+#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn pq_to_linear_slice_tier(token: Token, values: &mut [f32]) {
+    #[allow(non_camel_case_types)]
+    type f32x16 = g_f32x16<Token>;
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
+    for chunk in chunks {
+        let v = f32x16::from_array(token, *chunk);
+        *chunk = crate::tf::pq::pq_to_linear_x16(token, v).to_array();
+    }
+    for v in remainder {
         *v = crate::tf::pq_to_linear(*v);
     }
 }
@@ -2283,29 +2248,17 @@ pub fn pq_to_linear_slice(values: &mut [f32]) {
     )
 }
 
-#[cfg(all(feature = "transfer", feature = "avx512"))]
-#[arcane]
-fn linear_to_pq_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
-    crate::tokens::x16::linear_to_pq_slice_v4(token, values);
-}
 #[cfg(feature = "transfer")]
-#[arcane]
-fn linear_to_pq_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
-    crate::tokens::x8::linear_to_pq_slice_v3(token, values);
-}
-#[cfg(feature = "transfer")]
-#[arcane]
-fn linear_to_pq_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
-    crate::tokens::x4::linear_to_pq_slice_neon(token, values);
-}
-#[cfg(feature = "transfer")]
-#[arcane]
-fn linear_to_pq_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
-    crate::tokens::x4::linear_to_pq_slice_wasm128(token, values);
-}
-#[cfg(feature = "transfer")]
-fn linear_to_pq_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
-    for v in values.iter_mut() {
+#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_pq_slice_tier(token: Token, values: &mut [f32]) {
+    #[allow(non_camel_case_types)]
+    type f32x16 = g_f32x16<Token>;
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
+    for chunk in chunks {
+        let v = f32x16::from_array(token, *chunk);
+        *chunk = crate::tf::pq::linear_to_pq_x16(token, v).to_array();
+    }
+    for v in remainder {
         *v = crate::tf::linear_to_pq(*v);
     }
 }
@@ -2327,29 +2280,17 @@ pub fn linear_to_pq_slice(values: &mut [f32]) {
     )
 }
 
-#[cfg(all(feature = "transfer", feature = "avx512"))]
-#[arcane]
-fn hlg_to_linear_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
-    crate::tokens::x16::hlg_to_linear_slice_v4(token, values);
-}
 #[cfg(feature = "transfer")]
-#[arcane]
-fn hlg_to_linear_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
-    crate::tokens::x8::hlg_to_linear_slice_v3(token, values);
-}
-#[cfg(feature = "transfer")]
-#[arcane]
-fn hlg_to_linear_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
-    crate::tokens::x4::hlg_to_linear_slice_neon(token, values);
-}
-#[cfg(feature = "transfer")]
-#[arcane]
-fn hlg_to_linear_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
-    crate::tokens::x4::hlg_to_linear_slice_wasm128(token, values);
-}
-#[cfg(feature = "transfer")]
-fn hlg_to_linear_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
-    for v in values.iter_mut() {
+#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn hlg_to_linear_slice_tier(token: Token, values: &mut [f32]) {
+    #[allow(non_camel_case_types)]
+    type f32x16 = g_f32x16<Token>;
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
+    for chunk in chunks {
+        let v = f32x16::from_array(token, *chunk);
+        *chunk = crate::tf::hlg::hlg_to_linear_x16(token, v).to_array();
+    }
+    for v in remainder {
         *v = crate::tf::hlg_to_linear(*v);
     }
 }
@@ -2371,29 +2312,17 @@ pub fn hlg_to_linear_slice(values: &mut [f32]) {
     )
 }
 
-#[cfg(all(feature = "transfer", feature = "avx512"))]
-#[arcane]
-fn linear_to_hlg_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
-    crate::tokens::x16::linear_to_hlg_slice_v4(token, values);
-}
 #[cfg(feature = "transfer")]
-#[arcane]
-fn linear_to_hlg_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
-    crate::tokens::x8::linear_to_hlg_slice_v3(token, values);
-}
-#[cfg(feature = "transfer")]
-#[arcane]
-fn linear_to_hlg_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
-    crate::tokens::x4::linear_to_hlg_slice_neon(token, values);
-}
-#[cfg(feature = "transfer")]
-#[arcane]
-fn linear_to_hlg_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
-    crate::tokens::x4::linear_to_hlg_slice_wasm128(token, values);
-}
-#[cfg(feature = "transfer")]
-fn linear_to_hlg_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
-    for v in values.iter_mut() {
+#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_hlg_slice_tier(token: Token, values: &mut [f32]) {
+    #[allow(non_camel_case_types)]
+    type f32x16 = g_f32x16<Token>;
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
+    for chunk in chunks {
+        let v = f32x16::from_array(token, *chunk);
+        *chunk = crate::tf::hlg::linear_to_hlg_x16(token, v).to_array();
+    }
+    for v in remainder {
         *v = crate::tf::linear_to_hlg(*v);
     }
 }

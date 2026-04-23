@@ -56,8 +56,10 @@ pub(crate) fn hlg_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let hlg_c = f32x4::splat(t, HLG_C);
     let hlg_inv_a_log2e = f32x4::splat(t, HLG_INV_A_LOG2E);
 
+    // v <= 0 is absorbed by a = max(v, 0) = 0 ⇒ low = 0; the a<=0.5 mask then
+    // already selects `low` for those lanes, so no separate positive mask is
+    // needed (saves a cmp + mask materialize on AVX-512).
     let a = v.max(zero);
-
     let low = (a * a) * third;
 
     let exp_arg = (a - hlg_c) * hlg_inv_a_log2e;
@@ -65,10 +67,7 @@ pub(crate) fn hlg_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let high = (exp_val + hlg_b) * inv_12;
 
     let mask = a.simd_le(half);
-    let result = f32x4::blend(mask, low, high);
-
-    let pos_mask = v.simd_gt(zero);
-    result & pos_mask
+    f32x4::blend(mask, low, high)
 }
 
 #[allow(dead_code)]
@@ -82,20 +81,19 @@ pub(crate) fn linear_to_hlg_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let hlg_b = f32x4::splat(t, HLG_B);
     let hlg_c = f32x4::splat(t, HLG_C);
 
+    // v <= 0 is absorbed by a = max(v, 0) = 0 ⇒ low = sqrt(0) = 0; the
+    // a<=1/12 mask then selects `low` (=0) for those lanes. The `high` path
+    // is always discarded when a<=1/12, so no log-argument clamp is needed
+    // (garbage from fast_log2f on a small or non-positive arg is masked out).
     let a = v.max(zero);
-
     let low = (three * a).sqrt();
 
     let arg = twelve * a - hlg_b;
-    let safe_arg = arg.max(f32x4::splat(t, f32::MIN_POSITIVE));
-    let log2_val = fast_math::fast_log2f_x4(t, safe_arg);
+    let log2_val = fast_math::fast_log2f_x4(t, arg);
     let high = hlg_a_ln2.mul_add(log2_val, hlg_c);
 
     let mask = a.simd_le(threshold);
-    let result = f32x4::blend(mask, low, high);
-
-    let pos_mask = v.simd_gt(zero);
-    result & pos_mask
+    f32x4::blend(mask, low, high)
 }
 
 // =============================================================================
@@ -115,8 +113,8 @@ pub(crate) fn hlg_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let hlg_c = f32x8::splat(t, HLG_C);
     let hlg_inv_a_log2e = f32x8::splat(t, HLG_INV_A_LOG2E);
 
+    // See comments on hlg_to_linear_x4.
     let a = v.max(zero);
-
     let low = (a * a) * third;
 
     let exp_arg = (a - hlg_c) * hlg_inv_a_log2e;
@@ -124,10 +122,7 @@ pub(crate) fn hlg_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let high = (exp_val + hlg_b) * inv_12;
 
     let mask = a.simd_le(half);
-    let result = f32x8::blend(mask, low, high);
-
-    let pos_mask = v.simd_gt(zero);
-    result & pos_mask
+    f32x8::blend(mask, low, high)
 }
 
 #[inline(always)]
@@ -140,18 +135,64 @@ pub(crate) fn linear_to_hlg_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let hlg_b = f32x8::splat(t, HLG_B);
     let hlg_c = f32x8::splat(t, HLG_C);
 
+    // See comments on linear_to_hlg_x4.
     let a = v.max(zero);
-
     let low = (three * a).sqrt();
 
     let arg = twelve * a - hlg_b;
-    let safe_arg = arg.max(f32x8::splat(t, f32::MIN_POSITIVE));
-    let log2_val = fast_math::fast_log2f_x8(t, safe_arg);
+    let log2_val = fast_math::fast_log2f_x8(t, arg);
     let high = hlg_a_ln2.mul_add(log2_val, hlg_c);
 
     let mask = a.simd_le(threshold);
-    let result = f32x8::blend(mask, low, high);
+    f32x8::blend(mask, low, high)
+}
 
-    let pos_mask = v.simd_gt(zero);
-    result & pos_mask
+// =============================================================================
+// Generic SIMD — x16
+// =============================================================================
+
+use magetypes::simd::backends::F32x16Convert;
+use magetypes::simd::generic::f32x16;
+
+#[inline(always)]
+pub(crate) fn hlg_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
+    let zero = f32x16::zero(t);
+    let half = f32x16::splat(t, 0.5);
+    let third = f32x16::splat(t, 1.0 / 3.0);
+    let inv_12 = f32x16::splat(t, 1.0 / 12.0);
+    let hlg_b = f32x16::splat(t, HLG_B);
+    let hlg_c = f32x16::splat(t, HLG_C);
+    let hlg_inv_a_log2e = f32x16::splat(t, HLG_INV_A_LOG2E);
+
+    // See comments on hlg_to_linear_x4.
+    let a = v.max(zero);
+    let low = (a * a) * third;
+
+    let exp_arg = (a - hlg_c) * hlg_inv_a_log2e;
+    let exp_val = fast_math::fast_pow2f_x16(t, exp_arg);
+    let high = (exp_val + hlg_b) * inv_12;
+
+    let mask = a.simd_le(half);
+    f32x16::blend(mask, low, high)
+}
+
+#[inline(always)]
+pub(crate) fn linear_to_hlg_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
+    let zero = f32x16::zero(t);
+    let threshold = f32x16::splat(t, 1.0 / 12.0);
+    let three = f32x16::splat(t, 3.0);
+    let twelve = f32x16::splat(t, 12.0);
+    let hlg_a_ln2 = f32x16::splat(t, HLG_A_INV_LOG2E);
+    let hlg_b = f32x16::splat(t, HLG_B);
+    let hlg_c = f32x16::splat(t, HLG_C);
+    // See comments on linear_to_hlg_x4.
+    let a = v.max(zero);
+    let low = (three * a).sqrt();
+
+    let arg = twelve * a - hlg_b;
+    let log2_val = fast_math::fast_log2f_x16(t, arg);
+    let high = hlg_a_ln2.mul_add(log2_val, hlg_c);
+
+    let mask = a.simd_le(threshold);
+    f32x16::blend(mask, low, high)
 }
