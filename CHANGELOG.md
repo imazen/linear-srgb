@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Public API surface gate** via `cargo-public-api` snapshots in
+  `api-snapshots/` (default + all-features) plus a `cargo semver-checks`
+  job in the new `.github/workflows/api-surface.yml` workflow. Locks the
+  current `pub` surface so internal refactors (issue #23) cannot
+  introduce unintentional public additions or removals without an
+  explicit snapshot update.
+
 ### Changed
 
 - **Base 4/4 scalar rational polynomial coefficients refit** via polyfit

@@ -1,0 +1,252 @@
+pub mod linear_srgb
+pub mod linear_srgb::default
+pub struct linear_srgb::default::SrgbConverter
+impl linear_srgb::lut::SrgbConverter
+pub fn linear_srgb::lut::SrgbConverter::batch_linear_to_srgb(&self, input: &[f32], output: &mut [u8])
+pub fn linear_srgb::lut::SrgbConverter::batch_srgb_to_linear(&self, input: &[u8], output: &mut [f32])
+pub fn linear_srgb::lut::SrgbConverter::linear_to_srgb(&self, linear: f32) -> f32
+pub fn linear_srgb::lut::SrgbConverter::linear_to_srgb_u8(&self, linear: f32) -> u8
+pub const fn linear_srgb::lut::SrgbConverter::new() -> Self
+pub fn linear_srgb::lut::SrgbConverter::srgb_u8_to_linear(&self, value: u8) -> f32
+impl core::default::Default for linear_srgb::lut::SrgbConverter
+pub fn linear_srgb::lut::SrgbConverter::default() -> Self
+impl core::marker::Freeze for linear_srgb::lut::SrgbConverter
+impl core::marker::Send for linear_srgb::lut::SrgbConverter
+impl core::marker::Sync for linear_srgb::lut::SrgbConverter
+impl core::marker::Unpin for linear_srgb::lut::SrgbConverter
+impl core::marker::UnsafeUnpin for linear_srgb::lut::SrgbConverter
+impl core::panic::unwind_safe::RefUnwindSafe for linear_srgb::lut::SrgbConverter
+impl core::panic::unwind_safe::UnwindSafe for linear_srgb::lut::SrgbConverter
+pub fn linear_srgb::default::bt709_to_linear(v: f32) -> f32
+pub fn linear_srgb::default::bt709_to_linear_rgba_slice(values: &mut [f32])
+pub fn linear_srgb::default::bt709_to_linear_slice(values: &mut [f32])
+pub fn linear_srgb::default::gamma_to_linear(encoded: f32, gamma: f32) -> f32
+pub fn linear_srgb::default::gamma_to_linear_premultiply_rgba_slice(values: &mut [f32], gamma: f32)
+pub fn linear_srgb::default::gamma_to_linear_slice(values: &mut [f32], gamma: f32)
+pub fn linear_srgb::default::hlg_to_linear(v: f32) -> f32
+pub fn linear_srgb::default::hlg_to_linear_rgba_slice(values: &mut [f32])
+pub fn linear_srgb::default::hlg_to_linear_slice(values: &mut [f32])
+pub fn linear_srgb::default::linear_to_bt709(v: f32) -> f32
+pub fn linear_srgb::default::linear_to_bt709_rgba_slice(values: &mut [f32])
+pub fn linear_srgb::default::linear_to_bt709_slice(values: &mut [f32])
+pub fn linear_srgb::default::linear_to_gamma(linear: f32, gamma: f32) -> f32
+pub fn linear_srgb::default::linear_to_gamma_slice(values: &mut [f32], gamma: f32)
+pub fn linear_srgb::default::linear_to_hlg(v: f32) -> f32
+pub fn linear_srgb::default::linear_to_hlg_rgba_slice(values: &mut [f32])
+pub fn linear_srgb::default::linear_to_hlg_slice(values: &mut [f32])
+pub fn linear_srgb::default::linear_to_pq(v: f32) -> f32
+pub fn linear_srgb::default::linear_to_pq_rgba_slice(values: &mut [f32])
+pub fn linear_srgb::default::linear_to_pq_slice(values: &mut [f32])
+pub fn linear_srgb::default::linear_to_srgb(linear: f32) -> f32
+pub fn linear_srgb::default::linear_to_srgb_extended_slice(values: &mut [f32])
+pub fn linear_srgb::default::linear_to_srgb_rgba_slice(values: &mut [f32])
+pub fn linear_srgb::default::linear_to_srgb_slice(values: &mut [f32])
+pub fn linear_srgb::default::linear_to_srgb_u16(linear: f32) -> u16
+pub fn linear_srgb::default::linear_to_srgb_u16_fast(linear: f32) -> u16
+pub fn linear_srgb::default::linear_to_srgb_u16_rgba_slice(input: &[f32], output: &mut [u16])
+pub fn linear_srgb::default::linear_to_srgb_u16_rgba_slice_fast(input: &[f32], output: &mut [u16])
+pub fn linear_srgb::default::linear_to_srgb_u16_slice(input: &[f32], output: &mut [u16])
+pub fn linear_srgb::default::linear_to_srgb_u16_slice_fast(input: &[f32], output: &mut [u16])
+pub fn linear_srgb::default::linear_to_srgb_u8(linear: f32) -> u8
+pub fn linear_srgb::default::linear_to_srgb_u8_rgba_slice(input: &[f32], output: &mut [u8])
+pub fn linear_srgb::default::linear_to_srgb_u8_slice(input: &[f32], output: &mut [u8])
+pub fn linear_srgb::default::pq_to_linear(v: f32) -> f32
+pub fn linear_srgb::default::pq_to_linear_rgba_slice(values: &mut [f32])
+pub fn linear_srgb::default::pq_to_linear_slice(values: &mut [f32])
+pub fn linear_srgb::default::srgb_to_linear(gamma: f32) -> f32
+pub fn linear_srgb::default::srgb_to_linear_extended_slice(values: &mut [f32])
+pub fn linear_srgb::default::srgb_to_linear_premultiply_rgba_slice(values: &mut [f32])
+pub fn linear_srgb::default::srgb_to_linear_rgba_slice(values: &mut [f32])
+pub fn linear_srgb::default::srgb_to_linear_slice(values: &mut [f32])
+pub fn linear_srgb::default::srgb_u16_to_linear(value: u16) -> f32
+pub fn linear_srgb::default::srgb_u16_to_linear_rgba_slice(input: &[u16], output: &mut [f32])
+pub fn linear_srgb::default::srgb_u16_to_linear_slice(input: &[u16], output: &mut [f32])
+pub fn linear_srgb::default::srgb_u8_to_linear(value: u8) -> f32
+pub fn linear_srgb::default::srgb_u8_to_linear_premultiply_rgba_slice(input: &[u8], output: &mut [f32])
+pub fn linear_srgb::default::srgb_u8_to_linear_rgba_slice(input: &[u8], output: &mut [f32])
+pub fn linear_srgb::default::srgb_u8_to_linear_slice(input: &[u8], output: &mut [f32])
+pub fn linear_srgb::default::unpremultiply_linear_to_gamma_rgba_slice(values: &mut [f32], gamma: f32)
+pub fn linear_srgb::default::unpremultiply_linear_to_srgb_rgba_slice(values: &mut [f32])
+pub fn linear_srgb::default::unpremultiply_linear_to_srgb_u8_rgba_slice(input: &[f32], output: &mut [u8])
+pub mod linear_srgb::iec
+pub fn linear_srgb::iec::linear_to_srgb(linear: f32) -> f32
+pub fn linear_srgb::iec::linear_to_srgb_f64(linear: f64) -> f64
+pub fn linear_srgb::iec::srgb_to_linear(gamma: f32) -> f32
+pub fn linear_srgb::iec::srgb_to_linear_f64(gamma: f64) -> f64
+pub mod linear_srgb::lut
+pub struct linear_srgb::lut::EncodingTable<const N: usize>
+impl<const N: usize> linear_srgb::lut::EncodingTable<N>
+pub fn linear_srgb::lut::EncodingTable<N>::as_slice(&self) -> &[f32]
+pub fn linear_srgb::lut::EncodingTable<N>::lookup(&self, index: usize) -> f32
+pub fn linear_srgb::lut::EncodingTable<N>::new() -> Self
+impl<const N: usize> core::default::Default for linear_srgb::lut::EncodingTable<N>
+pub fn linear_srgb::lut::EncodingTable<N>::default() -> Self
+impl<const N: usize> core::marker::Freeze for linear_srgb::lut::EncodingTable<N>
+impl<const N: usize> core::marker::Send for linear_srgb::lut::EncodingTable<N>
+impl<const N: usize> core::marker::Sync for linear_srgb::lut::EncodingTable<N>
+impl<const N: usize> core::marker::Unpin for linear_srgb::lut::EncodingTable<N>
+impl<const N: usize> core::marker::UnsafeUnpin for linear_srgb::lut::EncodingTable<N>
+impl<const N: usize> core::panic::unwind_safe::RefUnwindSafe for linear_srgb::lut::EncodingTable<N>
+impl<const N: usize> core::panic::unwind_safe::UnwindSafe for linear_srgb::lut::EncodingTable<N>
+pub struct linear_srgb::lut::LinearizationTable<const N: usize>
+impl<const N: usize> linear_srgb::lut::LinearizationTable<N>
+pub fn linear_srgb::lut::LinearizationTable<N>::as_slice(&self) -> &[f32]
+pub fn linear_srgb::lut::LinearizationTable<N>::lookup(&self, index: usize) -> f32
+pub fn linear_srgb::lut::LinearizationTable<N>::new() -> Self
+impl<const N: usize> core::default::Default for linear_srgb::lut::LinearizationTable<N>
+pub fn linear_srgb::lut::LinearizationTable<N>::default() -> Self
+impl<const N: usize> core::marker::Freeze for linear_srgb::lut::LinearizationTable<N>
+impl<const N: usize> core::marker::Send for linear_srgb::lut::LinearizationTable<N>
+impl<const N: usize> core::marker::Sync for linear_srgb::lut::LinearizationTable<N>
+impl<const N: usize> core::marker::Unpin for linear_srgb::lut::LinearizationTable<N>
+impl<const N: usize> core::marker::UnsafeUnpin for linear_srgb::lut::LinearizationTable<N>
+impl<const N: usize> core::panic::unwind_safe::RefUnwindSafe for linear_srgb::lut::LinearizationTable<N>
+impl<const N: usize> core::panic::unwind_safe::UnwindSafe for linear_srgb::lut::LinearizationTable<N>
+pub struct linear_srgb::lut::SrgbConverter
+impl linear_srgb::lut::SrgbConverter
+pub fn linear_srgb::lut::SrgbConverter::batch_linear_to_srgb(&self, input: &[f32], output: &mut [u8])
+pub fn linear_srgb::lut::SrgbConverter::batch_srgb_to_linear(&self, input: &[u8], output: &mut [f32])
+pub fn linear_srgb::lut::SrgbConverter::linear_to_srgb(&self, linear: f32) -> f32
+pub fn linear_srgb::lut::SrgbConverter::linear_to_srgb_u8(&self, linear: f32) -> u8
+pub const fn linear_srgb::lut::SrgbConverter::new() -> Self
+pub fn linear_srgb::lut::SrgbConverter::srgb_u8_to_linear(&self, value: u8) -> f32
+impl core::default::Default for linear_srgb::lut::SrgbConverter
+pub fn linear_srgb::lut::SrgbConverter::default() -> Self
+impl core::marker::Freeze for linear_srgb::lut::SrgbConverter
+impl core::marker::Send for linear_srgb::lut::SrgbConverter
+impl core::marker::Sync for linear_srgb::lut::SrgbConverter
+impl core::marker::Unpin for linear_srgb::lut::SrgbConverter
+impl core::marker::UnsafeUnpin for linear_srgb::lut::SrgbConverter
+impl core::panic::unwind_safe::RefUnwindSafe for linear_srgb::lut::SrgbConverter
+impl core::panic::unwind_safe::UnwindSafe for linear_srgb::lut::SrgbConverter
+pub fn linear_srgb::lut::lut_interp_linear_float(x: f32, table: &[f32]) -> f32
+pub fn linear_srgb::lut::lut_interp_linear_u16(input_value: u16, table: &[u16]) -> u16
+pub type linear_srgb::lut::EncodeTable12 = linear_srgb::lut::EncodingTable<4096>
+pub type linear_srgb::lut::EncodeTable16 = linear_srgb::lut::EncodingTable<65536>
+pub type linear_srgb::lut::EncodeTable8 = linear_srgb::lut::EncodingTable<256>
+pub type linear_srgb::lut::LinearTable10 = linear_srgb::lut::LinearizationTable<1024>
+pub type linear_srgb::lut::LinearTable12 = linear_srgb::lut::LinearizationTable<4096>
+pub type linear_srgb::lut::LinearTable16 = linear_srgb::lut::LinearizationTable<65536>
+pub type linear_srgb::lut::LinearTable8 = linear_srgb::lut::LinearizationTable<256>
+pub mod linear_srgb::precise
+pub fn linear_srgb::precise::gamma_to_linear_f64(encoded: f64, gamma: f64) -> f64
+pub fn linear_srgb::precise::linear_to_gamma_f64(linear: f64, gamma: f64) -> f64
+pub fn linear_srgb::precise::linear_to_srgb(linear: f32) -> f32
+pub fn linear_srgb::precise::linear_to_srgb_extended(linear: f32) -> f32
+pub fn linear_srgb::precise::linear_to_srgb_f64(linear: f64) -> f64
+pub fn linear_srgb::precise::srgb_to_linear(gamma: f32) -> f32
+pub fn linear_srgb::precise::srgb_to_linear_extended(gamma: f32) -> f32
+pub fn linear_srgb::precise::srgb_to_linear_f64(gamma: f64) -> f64
+pub mod linear_srgb::tf
+pub fn linear_srgb::tf::bt709_to_linear(v: f32) -> f32
+pub fn linear_srgb::tf::hlg_to_linear(v: f32) -> f32
+pub fn linear_srgb::tf::linear_to_bt709(v: f32) -> f32
+pub fn linear_srgb::tf::linear_to_hlg(v: f32) -> f32
+pub fn linear_srgb::tf::linear_to_pq(v: f32) -> f32
+pub fn linear_srgb::tf::linear_to_srgb(v: f32) -> f32
+pub fn linear_srgb::tf::pq_to_linear(v: f32) -> f32
+pub fn linear_srgb::tf::srgb_to_linear(v: f32) -> f32
+pub mod linear_srgb::tokens
+pub use linear_srgb::tokens::X64V3Token
+pub use linear_srgb::tokens::X64V4Token
+pub mod linear_srgb::tokens::x16
+pub use linear_srgb::tokens::x16::X64V4Token
+pub fn linear_srgb::tokens::x16::bt709_to_linear_slice_v4(token: archmage::tokens::generated::x86::X64V4Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x16::bt709_to_linear_v4(token: archmage::tokens::generated::x86::X64V4Token, v: [f32; 16]) -> [f32; 16]
+pub fn linear_srgb::tokens::x16::gamma_to_linear_slice_v4(token: archmage::tokens::generated::x86::X64V4Token, values: &mut [f32], gamma: f32)
+pub fn linear_srgb::tokens::x16::gamma_to_linear_v4(token: archmage::tokens::generated::x86::X64V4Token, encoded: [f32; 16], gamma: f32) -> [f32; 16]
+pub fn linear_srgb::tokens::x16::hlg_to_linear_slice_v4(token: archmage::tokens::generated::x86::X64V4Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x16::hlg_to_linear_v4(token: archmage::tokens::generated::x86::X64V4Token, v: [f32; 16]) -> [f32; 16]
+pub fn linear_srgb::tokens::x16::linear_to_bt709_slice_v4(token: archmage::tokens::generated::x86::X64V4Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x16::linear_to_bt709_v4(token: archmage::tokens::generated::x86::X64V4Token, v: [f32; 16]) -> [f32; 16]
+pub fn linear_srgb::tokens::x16::linear_to_gamma_slice_v4(token: archmage::tokens::generated::x86::X64V4Token, values: &mut [f32], gamma: f32)
+pub fn linear_srgb::tokens::x16::linear_to_gamma_v4(token: archmage::tokens::generated::x86::X64V4Token, linear: [f32; 16], gamma: f32) -> [f32; 16]
+pub fn linear_srgb::tokens::x16::linear_to_hlg_slice_v4(token: archmage::tokens::generated::x86::X64V4Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x16::linear_to_hlg_v4(token: archmage::tokens::generated::x86::X64V4Token, v: [f32; 16]) -> [f32; 16]
+pub fn linear_srgb::tokens::x16::linear_to_pq_slice_v4(token: archmage::tokens::generated::x86::X64V4Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x16::linear_to_pq_v4(token: archmage::tokens::generated::x86::X64V4Token, v: [f32; 16]) -> [f32; 16]
+pub fn linear_srgb::tokens::x16::linear_to_srgb_slice_v4(token: archmage::tokens::generated::x86::X64V4Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x16::linear_to_srgb_u8_slice_v4(token: archmage::tokens::generated::x86::X64V4Token, input: &[f32], output: &mut [u8])
+pub fn linear_srgb::tokens::x16::linear_to_srgb_u8_v4(token: archmage::tokens::generated::x86::X64V4Token, linear: [f32; 16]) -> [u8; 16]
+pub fn linear_srgb::tokens::x16::linear_to_srgb_v4(token: archmage::tokens::generated::x86::X64V4Token, linear: [f32; 16]) -> [f32; 16]
+pub fn linear_srgb::tokens::x16::pq_to_linear_slice_v4(token: archmage::tokens::generated::x86::X64V4Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x16::pq_to_linear_v4(token: archmage::tokens::generated::x86::X64V4Token, v: [f32; 16]) -> [f32; 16]
+pub fn linear_srgb::tokens::x16::srgb_to_linear_slice_v4(token: archmage::tokens::generated::x86::X64V4Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x16::srgb_to_linear_v4(token: archmage::tokens::generated::x86::X64V4Token, srgb: [f32; 16]) -> [f32; 16]
+pub fn linear_srgb::tokens::x16::srgb_u8_to_linear_slice_v4(_token: archmage::tokens::generated::x86::X64V4Token, input: &[u8], output: &mut [f32])
+pub fn linear_srgb::tokens::x16::srgb_u8_to_linear_v4(_token: archmage::tokens::generated::x86::X64V4Token, srgb: [u8; 16]) -> [f32; 16]
+pub fn linear_srgb::tokens::x16::tf_linear_to_srgb_slice_v4(token: archmage::tokens::generated::x86::X64V4Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x16::tf_linear_to_srgb_v4(token: archmage::tokens::generated::x86::X64V4Token, v: [f32; 16]) -> [f32; 16]
+pub fn linear_srgb::tokens::x16::tf_srgb_to_linear_slice_v4(token: archmage::tokens::generated::x86::X64V4Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x16::tf_srgb_to_linear_v4(token: archmage::tokens::generated::x86::X64V4Token, v: [f32; 16]) -> [f32; 16]
+pub mod linear_srgb::tokens::x4
+pub use linear_srgb::tokens::x4::X64V3Token
+pub fn linear_srgb::tokens::x4::bt709_to_linear_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x4::bt709_to_linear_v3(token: archmage::tokens::generated::x86::X64V3Token, v: [f32; 4]) -> [f32; 4]
+pub fn linear_srgb::tokens::x4::gamma_to_linear_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32], gamma: f32)
+pub fn linear_srgb::tokens::x4::gamma_to_linear_v3(token: archmage::tokens::generated::x86::X64V3Token, encoded: [f32; 4], gamma: f32) -> [f32; 4]
+pub fn linear_srgb::tokens::x4::hlg_to_linear_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x4::hlg_to_linear_v3(token: archmage::tokens::generated::x86::X64V3Token, v: [f32; 4]) -> [f32; 4]
+pub fn linear_srgb::tokens::x4::linear_to_bt709_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x4::linear_to_bt709_v3(token: archmage::tokens::generated::x86::X64V3Token, v: [f32; 4]) -> [f32; 4]
+pub fn linear_srgb::tokens::x4::linear_to_gamma_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32], gamma: f32)
+pub fn linear_srgb::tokens::x4::linear_to_gamma_v3(token: archmage::tokens::generated::x86::X64V3Token, linear: [f32; 4], gamma: f32) -> [f32; 4]
+pub fn linear_srgb::tokens::x4::linear_to_hlg_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x4::linear_to_hlg_v3(token: archmage::tokens::generated::x86::X64V3Token, v: [f32; 4]) -> [f32; 4]
+pub fn linear_srgb::tokens::x4::linear_to_pq_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x4::linear_to_pq_v3(token: archmage::tokens::generated::x86::X64V3Token, v: [f32; 4]) -> [f32; 4]
+pub fn linear_srgb::tokens::x4::linear_to_srgb_extended_scalar(token: archmage::tokens::ScalarToken, linear: [f32; 4]) -> [f32; 4]
+pub fn linear_srgb::tokens::x4::linear_to_srgb_extended_v3(token: archmage::tokens::generated::x86::X64V3Token, linear: [f32; 4]) -> [f32; 4]
+pub fn linear_srgb::tokens::x4::linear_to_srgb_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x4::linear_to_srgb_v3(token: archmage::tokens::generated::x86::X64V3Token, linear: [f32; 4]) -> [f32; 4]
+pub fn linear_srgb::tokens::x4::pq_to_linear_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x4::pq_to_linear_v3(token: archmage::tokens::generated::x86::X64V3Token, v: [f32; 4]) -> [f32; 4]
+pub fn linear_srgb::tokens::x4::srgb_to_linear_extended_scalar(token: archmage::tokens::ScalarToken, srgb: [f32; 4]) -> [f32; 4]
+pub fn linear_srgb::tokens::x4::srgb_to_linear_extended_v3(token: archmage::tokens::generated::x86::X64V3Token, srgb: [f32; 4]) -> [f32; 4]
+pub fn linear_srgb::tokens::x4::srgb_to_linear_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x4::srgb_to_linear_v3(token: archmage::tokens::generated::x86::X64V3Token, srgb: [f32; 4]) -> [f32; 4]
+pub fn linear_srgb::tokens::x4::tf_linear_to_srgb_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x4::tf_linear_to_srgb_v3(token: archmage::tokens::generated::x86::X64V3Token, v: [f32; 4]) -> [f32; 4]
+pub fn linear_srgb::tokens::x4::tf_srgb_to_linear_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x4::tf_srgb_to_linear_v3(token: archmage::tokens::generated::x86::X64V3Token, v: [f32; 4]) -> [f32; 4]
+pub mod linear_srgb::tokens::x8
+pub use linear_srgb::tokens::x8::NeonToken
+pub use linear_srgb::tokens::x8::Wasm128Token
+pub use linear_srgb::tokens::x8::X64V3Token
+pub fn linear_srgb::tokens::x8::bt709_to_linear_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x8::bt709_to_linear_v3(token: archmage::tokens::generated::x86::X64V3Token, v: [f32; 8]) -> [f32; 8]
+pub fn linear_srgb::tokens::x8::gamma_to_linear_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32], gamma: f32)
+pub fn linear_srgb::tokens::x8::gamma_to_linear_v3(token: archmage::tokens::generated::x86::X64V3Token, encoded: [f32; 8], gamma: f32) -> [f32; 8]
+pub fn linear_srgb::tokens::x8::hlg_to_linear_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x8::hlg_to_linear_v3(token: archmage::tokens::generated::x86::X64V3Token, v: [f32; 8]) -> [f32; 8]
+pub fn linear_srgb::tokens::x8::linear_to_bt709_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x8::linear_to_bt709_v3(token: archmage::tokens::generated::x86::X64V3Token, v: [f32; 8]) -> [f32; 8]
+pub fn linear_srgb::tokens::x8::linear_to_gamma_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32], gamma: f32)
+pub fn linear_srgb::tokens::x8::linear_to_gamma_v3(token: archmage::tokens::generated::x86::X64V3Token, linear: [f32; 8], gamma: f32) -> [f32; 8]
+pub fn linear_srgb::tokens::x8::linear_to_hlg_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x8::linear_to_hlg_v3(token: archmage::tokens::generated::x86::X64V3Token, v: [f32; 8]) -> [f32; 8]
+pub fn linear_srgb::tokens::x8::linear_to_pq_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x8::linear_to_pq_v3(token: archmage::tokens::generated::x86::X64V3Token, v: [f32; 8]) -> [f32; 8]
+pub fn linear_srgb::tokens::x8::linear_to_srgb_extended_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x8::linear_to_srgb_extended_v3(token: archmage::tokens::generated::x86::X64V3Token, linear: [f32; 8]) -> [f32; 8]
+pub fn linear_srgb::tokens::x8::linear_to_srgb_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x8::linear_to_srgb_u16_scalar(token: archmage::tokens::ScalarToken, linear: [f32; 8]) -> [u16; 8]
+pub fn linear_srgb::tokens::x8::linear_to_srgb_u16_v3(token: archmage::tokens::generated::x86::X64V3Token, linear: [f32; 8]) -> [u16; 8]
+pub fn linear_srgb::tokens::x8::linear_to_srgb_u8_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, input: &[f32], output: &mut [u8])
+pub fn linear_srgb::tokens::x8::linear_to_srgb_u8_v3(token: archmage::tokens::generated::x86::X64V3Token, linear: [f32; 8]) -> [u8; 8]
+pub fn linear_srgb::tokens::x8::linear_to_srgb_v3(token: archmage::tokens::generated::x86::X64V3Token, linear: [f32; 8]) -> [f32; 8]
+pub fn linear_srgb::tokens::x8::pq_to_linear_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x8::pq_to_linear_v3(token: archmage::tokens::generated::x86::X64V3Token, v: [f32; 8]) -> [f32; 8]
+pub fn linear_srgb::tokens::x8::srgb_to_linear_extended_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x8::srgb_to_linear_extended_v3(token: archmage::tokens::generated::x86::X64V3Token, srgb: [f32; 8]) -> [f32; 8]
+pub fn linear_srgb::tokens::x8::srgb_to_linear_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x8::srgb_to_linear_v3(token: archmage::tokens::generated::x86::X64V3Token, srgb: [f32; 8]) -> [f32; 8]
+pub fn linear_srgb::tokens::x8::srgb_u16_to_linear_scalar(token: archmage::tokens::ScalarToken, srgb: [u16; 8]) -> [f32; 8]
+pub fn linear_srgb::tokens::x8::srgb_u16_to_linear_v3(token: archmage::tokens::generated::x86::X64V3Token, srgb: [u16; 8]) -> [f32; 8]
+pub fn linear_srgb::tokens::x8::srgb_u8_to_linear_slice_v3(_token: archmage::tokens::generated::x86::X64V3Token, input: &[u8], output: &mut [f32])
+pub fn linear_srgb::tokens::x8::srgb_u8_to_linear_v3(_token: archmage::tokens::generated::x86::X64V3Token, srgb: [u8; 8]) -> [f32; 8]
+pub fn linear_srgb::tokens::x8::tf_linear_to_srgb_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x8::tf_linear_to_srgb_v3(token: archmage::tokens::generated::x86::X64V3Token, v: [f32; 8]) -> [f32; 8]
+pub fn linear_srgb::tokens::x8::tf_srgb_to_linear_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
+pub fn linear_srgb::tokens::x8::tf_srgb_to_linear_v3(token: archmage::tokens::generated::x86::X64V3Token, v: [f32; 8]) -> [f32; 8]
+pub const linear_srgb::UNPREMUL_ALPHA_THRESHOLD: f32

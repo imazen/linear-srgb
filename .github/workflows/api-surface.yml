@@ -1,0 +1,64 @@
+name: API surface
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  public-api:
+    name: cargo public-api (snapshot diff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust (stable + nightly for rustdoc JSON)
+        uses: dtolnay/rust-toolchain@stable
+      - run: rustup toolchain install nightly --profile minimal
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-public-api
+
+      - name: Generate default-features snapshot
+        run: cargo public-api --simplified --features "std,avx512" > /tmp/api-default.txt 2>/dev/null
+
+      - name: Diff default-features snapshot
+        run: |
+          if ! diff -u api-snapshots/default-features.txt /tmp/api-default.txt; then
+            echo ""
+            echo "::error::Public API surface changed (default features)."
+            echo "If this is intentional, regenerate the snapshot:"
+            echo "  cargo public-api --simplified --features \"std,avx512\" 2>/dev/null > api-snapshots/default-features.txt"
+            exit 1
+          fi
+
+      - name: Generate all-features snapshot
+        run: cargo public-api --simplified --all-features > /tmp/api-all.txt 2>/dev/null
+
+      - name: Diff all-features snapshot
+        run: |
+          if ! diff -u api-snapshots/all-features.txt /tmp/api-all.txt; then
+            echo ""
+            echo "::error::Public API surface changed (all features)."
+            echo "If this is intentional, regenerate the snapshot:"
+            echo "  cargo public-api --simplified --all-features 2>/dev/null > api-snapshots/all-features.txt"
+            exit 1
+          fi
+
+  semver-checks:
+    name: cargo semver-checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          feature-group: all-features
