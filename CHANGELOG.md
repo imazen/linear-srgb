@@ -13,6 +13,19 @@
 
 ### Changed
 
+- **Internal dedup of `src/simd.rs` via archmage 0.9.22 magetypes flags**
+  (issue #23, public API unchanged). 4153 → 4043 lines so far (Pattern 2
+  pending). Bumps `archmage` 0.9.19 → 0.9.22 and `magetypes` 0.9.21 → 0.9.22.
+  - Pattern 3 (`define(f32x16)`): replaced 18 manual
+    `type f32x16 = g_f32x16<Token>;` boilerplate sites with the new
+    `define(...)` flag in the existing `#[magetypes]` attributes.
+  - Pattern 1 (`rite, define`): collapsed 8 hand-written `#[rite]` helpers
+    (`srgb_to_linear_mt`/`_x16`, `linear_to_srgb_mt`/`_x16`,
+    `gamma_to_linear_mt`/`_x16_2x8`, `linear_to_gamma_mt`/`_x16_2x8`)
+    into 4 unified `#[magetypes(rite, define(f32x16), v4(cfg(avx512)), v3)]`
+    functions. The `pow_midp` polyfill on `f32x16<X64V4Token>` eliminates
+    the `token.v3()` 2×x8 split helpers entirely.
+
 - **Base 4/4 scalar rational polynomial coefficients refit** via polyfit
   (Sanathanan-Koerner + Levenberg-Marquardt with Nielsen damping, 8 restarts,
   f32 ULP local search). Exhaustive sweep over all 1.07B f32 values in [0, 1]:
