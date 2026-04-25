@@ -27,6 +27,24 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      # `cargo asm --example=asm-stub` builds a binary, which means linking.
+      # Cross-targets need a cross linker; ubuntu-latest doesn't have one
+      # by default. wasm32 is fine (wasm-ld ships with rustc); aarch64 needs
+      # gcc-aarch64-linux-gnu and a cargo config pointing at it.
+      - name: Install cross-linker for aarch64
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          mkdir -p .cargo
+          # Append (don't overwrite — repo may have a checked-in config).
+          if ! grep -q 'aarch64-unknown-linux-gnu.*linker' .cargo/config.toml 2>/dev/null; then
+            cat >> .cargo/config.toml <<'EOF'
+          [target.aarch64-unknown-linux-gnu]
+          linker = "aarch64-linux-gnu-gcc"
+          EOF
+          fi
+
       - uses: Swatinem/rust-cache@v2
 
       - uses: taiki-e/install-action@v2

@@ -63,12 +63,13 @@ for entry in "${TARGETS[@]}"; do
     out_dir="asm-snapshots/$target"
     mkdir -p "$out_dir"
 
-    # Pre-build once so cargo-asm doesn't recompile per stub.
+    # Pre-build once so cargo-asm doesn't recompile per stub. Errors from this
+    # step (missing cross linker, feature mismatch, etc.) are surfaced to the
+    # CI log — silencing them once cost a debugging round.
     RUSTFLAGS="$rustflags" cargo build --release \
         --example asm-stub \
         --features "$features" \
-        --target "$target" \
-        > /dev/null 2>&1
+        --target "$target"
 
     for stub in "${STUBS[@]}"; do
         out_file="$out_dir/${stub}.s"
