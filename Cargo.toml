@@ -72,3 +72,10 @@ required-features = ["std", "alt"]
 [[example]]
 name = "generate_all_luts"
 required-features = ["std"]
+
+# `asm-stub` is built (not run) by `scripts/dump-asm.sh` and the
+# `.github/workflows/asm-snapshots.yml` CI gate to capture per-target
+# codegen of the public dispatchers (issue #23 Pattern 2 verification).
+[[example]]
+name = "asm-stub"
+required-features = ["std", "transfer"]

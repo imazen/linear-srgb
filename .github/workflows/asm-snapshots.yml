@@ -1,0 +1,51 @@
+name: ASM snapshots
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  asm-diff:
+    name: ASM snapshot diff
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - aarch64-unknown-linux-gnu
+          - wasm32-unknown-unknown
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust + target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-show-asm
+
+      - name: Re-dump and diff
+        run: |
+          if ! scripts/dump-asm.sh "${{ matrix.target }}"; then
+            echo "::error::cargo asm dump failed"
+            exit 1
+          fi
+          if ! git diff --exit-code asm-snapshots/${{ matrix.target }}; then
+            echo ""
+            echo "::error::ASM codegen drifted on ${{ matrix.target }}."
+            echo "Inspect the diff above. If the change is intentional"
+            echo "(e.g., a deliberate refactor), regenerate the snapshot:"
+            echo "  scripts/dump-asm.sh ${{ matrix.target }}"
+            echo "and commit the result. See asm-snapshots/README.md for"
+            echo "what counts as 'OK drift' vs 'load-bearing diff'."
+            exit 1
+          fi
