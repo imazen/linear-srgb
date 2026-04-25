@@ -8,9 +8,10 @@
 
 use archmage::rite;
 
-pub use archmage::X64V3Token;
+pub use archmage::{NeonToken, Wasm128Token, X64V3Token};
 
 use magetypes::simd::f32x8 as mt_f32x8;
+use magetypes::simd::generic::f32x8 as gen_f32x8;
 
 // sRGB transfer function constants (C0-continuous moxcms, matching rational polynomial)
 const SRGB_LINEAR_THRESHOLD: f32 = 0.039_293_37;
@@ -243,6 +244,59 @@ pub fn srgb_u8_to_linear_slice_v3(_token: X64V3Token, input: &[u8], output: &mut
     }
 }
 
+// ============================================================================
+// x8 SIMD functions — u16↔f32 (rational polynomial, no LUT)
+// ============================================================================
+
+/// Convert 8 sRGB u16 values to linear f32 via rational polynomial.
+///
+/// Pure SIMD — no LUT, no cache footprint. Normalizes u16 to [0, 1] via
+/// `*(1.0/65535.0)` and applies the C0-continuous `S2L_P/Q` rational
+/// polynomial. Boundary values (0, 65535) map exactly to (0.0, 1.0).
+///
+/// The `#[magetypes(...)]` macro generates `_v3`, `_neon`, `_wasm128`
+/// variants from this single body; f32x8 is native on V3 and polyfills
+/// to 2×f32x4 on NEON / WASM128 (fully inlined). Call from inside an
+/// `#[arcane]` function for zero-overhead inlining.
+#[archmage::magetypes(v3, neon, wasm128)]
+#[rite]
+pub fn srgb_u16_to_linear(token: Token, srgb: [u16; 8]) -> [f32; 8] {
+    use crate::rational_poly::{S2L_P, S2L_Q};
+    #[allow(non_camel_case_types)]
+    type f32x8 = gen_f32x8<Token>;
+
+    // u16 → f32 / 65535: auto-vectorizes to vpmovzxwd + vcvtdq2ps + vmulps
+    // (or the NEON / WASM equivalents).
+    let mut f = [0.0f32; 8];
+    for i in 0..8 {
+        f[i] = srgb[i] as f32;
+    }
+    let v = f32x8::from_array(token, f) * f32x8::splat(token, 1.0 / 65535.0);
+    let one = f32x8::splat(token, 1.0);
+
+    let linear_result = v * f32x8::splat(token, LINEAR_SCALE);
+
+    let yp = f32x8::splat(token, S2L_P[4]).mul_add(v, f32x8::splat(token, S2L_P[3]));
+    let yp = yp.mul_add(v, f32x8::splat(token, S2L_P[2]));
+    let yp = yp.mul_add(v, f32x8::splat(token, S2L_P[1]));
+    let yp = yp.mul_add(v, f32x8::splat(token, S2L_P[0]));
+
+    let yq = f32x8::splat(token, S2L_Q[4]).mul_add(v, f32x8::splat(token, S2L_Q[3]));
+    let yq = yq.mul_add(v, f32x8::splat(token, S2L_Q[2]));
+    let yq = yq.mul_add(v, f32x8::splat(token, S2L_Q[1]));
+    let yq = yq.mul_add(v, f32x8::splat(token, S2L_Q[0]));
+
+    let power_result = (yp / yq).min(one);
+
+    let mask = v.simd_lt(f32x8::splat(token, SRGB_LINEAR_THRESHOLD));
+    let result = f32x8::blend(mask, linear_result, power_result);
+    // Match the scalar `srgb_to_linear_fast` early-exit so u16=65535 → 1.0
+    // bit-exact: the normalized v rounds to 1 + 2^-16 in f32 and the
+    // polynomial alone drifts a few ULP short of 1.0 at v=1.
+    let ge_one = v.simd_ge(one);
+    f32x8::blend(ge_one, one, result).to_array()
+}
+
 /// Convert 8 linear f32 values to sRGB u8 via LUT. Input clamped to \[0, 1\].
 ///
 /// Uses a 4096-entry const LUT with bitmask indexing (`& 0xFFF`) for
@@ -268,6 +322,66 @@ pub fn linear_to_srgb_u8_v3(token: X64V3Token, linear: [f32; 8]) -> [u8; 8] {
         lut[arr[5] as usize & 0xFFF],
         lut[arr[6] as usize & 0xFFF],
         lut[arr[7] as usize & 0xFFF],
+    ]
+}
+
+/// Convert 8 linear f32 values to sRGB u16 via rational polynomial.
+///
+/// Pure SIMD — no LUT, no cache footprint. Clamps to [0, 1], applies the
+/// C0-continuous `L2S_P/Q` rational polynomial on √x, then scales by
+/// 65535 + 0.5 and truncates to u16. Perfect roundtrip with the decode
+/// polynomial. Inputs ≥ 1.0 map to 65535 bit-exact; inputs ≤ 0.0 map to 0.
+///
+/// The `#[magetypes(...)]` macro generates `_v3`, `_neon`, `_wasm128`
+/// variants from this single body; f32x8 is native on V3 and polyfills
+/// to 2×f32x4 on NEON / WASM128 (fully inlined). Call from inside an
+/// `#[arcane]` function for zero-overhead inlining.
+#[archmage::magetypes(v3, neon, wasm128)]
+#[rite]
+pub fn linear_to_srgb_u16(token: Token, linear: [f32; 8]) -> [u16; 8] {
+    use crate::rational_poly::{L2S_P, L2S_Q};
+    #[allow(non_camel_case_types)]
+    type f32x8 = gen_f32x8<Token>;
+
+    let v = f32x8::from_array(token, linear);
+    let zero = f32x8::zero(token);
+    let one = f32x8::splat(token, 1.0);
+    let clamped = v.max(zero).min(one);
+
+    let linear_result = clamped * f32x8::splat(token, TWELVE_92);
+
+    let x = clamped.sqrt();
+    let yp = f32x8::splat(token, L2S_P[4]).mul_add(x, f32x8::splat(token, L2S_P[3]));
+    let yp = yp.mul_add(x, f32x8::splat(token, L2S_P[2]));
+    let yp = yp.mul_add(x, f32x8::splat(token, L2S_P[1]));
+    let yp = yp.mul_add(x, f32x8::splat(token, L2S_P[0]));
+
+    let yq = f32x8::splat(token, L2S_Q[4]).mul_add(x, f32x8::splat(token, L2S_Q[3]));
+    let yq = yq.mul_add(x, f32x8::splat(token, L2S_Q[2]));
+    let yq = yq.mul_add(x, f32x8::splat(token, L2S_Q[1]));
+    let yq = yq.mul_add(x, f32x8::splat(token, L2S_Q[0]));
+
+    let power_result = (yp / yq).min(one);
+
+    let thresh_mask = clamped.simd_lt(f32x8::splat(token, LINEAR_THRESHOLD));
+    let srgb = f32x8::blend(thresh_mask, linear_result, power_result);
+
+    // Force 1.0 for inputs >= 1.0 so the u16 endpoint lands exactly on 65535
+    // (mirrors the clamp in linear_to_srgb_u16_slice_tier).
+    let ge_one = v.simd_ge(one);
+    let srgb = f32x8::blend(ge_one, one, srgb);
+
+    let scaled = srgb.mul_add(f32x8::splat(token, 65535.0), f32x8::splat(token, 0.5));
+    let idx = scaled.to_i32().to_array();
+    [
+        idx[0] as u16,
+        idx[1] as u16,
+        idx[2] as u16,
+        idx[3] as u16,
+        idx[4] as u16,
+        idx[5] as u16,
+        idx[6] as u16,
+        idx[7] as u16,
     ]
 }
 

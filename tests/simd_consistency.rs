@@ -11,7 +11,7 @@ use linear_srgb::default::{
     linear_to_srgb_slice, linear_to_srgb_u8_rgba_slice, linear_to_srgb_u8_slice,
     linear_to_srgb_u16_rgba_slice, linear_to_srgb_u16_rgba_slice_fast, linear_to_srgb_u16_slice,
     linear_to_srgb_u16_slice_fast, srgb_to_linear_slice, srgb_u8_to_linear_slice,
-    unpremultiply_linear_to_srgb_u8_rgba_slice,
+    srgb_u16_to_linear_slice, unpremultiply_linear_to_srgb_u8_rgba_slice,
 };
 
 /// Hash a byte slice deterministically (FNV-1a).
@@ -90,6 +90,62 @@ fn max_u16_diff(a: &[u16], b: &[u16]) -> u16 {
         .map(|(x, y)| x.abs_diff(*y))
         .max()
         .unwrap_or(0)
+}
+
+/// Max absolute f32 ULP difference between two slices (in ULPs at 1.0).
+fn max_f32_abs_diff(a: &[f32], b: &[f32]) -> f32 {
+    a.iter()
+        .zip(b.iter())
+        .map(|(x, y)| (x - y).abs())
+        .fold(0.0f32, f32::max)
+}
+
+#[test]
+fn srgb_u16_to_linear_all_tiers_close() {
+    // New SIMD polynomial path — cross-tier precision envelope matches the
+    // encode direction (~1 f32 ULP of cross-tier variance). Reference here
+    // is the first tier; others must be within a few ULPs.
+    let input: Vec<u16> = (0..4096u32).map(|i| (i * 16) as u16).collect();
+    let mut reference: Option<Vec<f32>> = None;
+
+    let _ = for_each_token_permutation(CompileTimePolicy::Warn, |perm| {
+        let mut output = vec![0.0f32; input.len()];
+        srgb_u16_to_linear_slice(&input, &mut output);
+
+        if let Some(ref ref_out) = reference {
+            let diff = max_f32_abs_diff(ref_out, &output);
+            // 1 f32 ULP at 1.0 is 2^-23 ≈ 1.19e-7; allow a few ULPs for
+            // FMA rounding differences across tiers.
+            assert!(
+                diff < 5e-7,
+                "srgb_u16_to_linear under '{}': max_f32_abs_diff={diff:.2e} (expected < 5e-7)",
+                perm.label,
+            );
+        } else {
+            reference = Some(output);
+        }
+    });
+}
+
+#[test]
+fn srgb_u16_to_linear_roundtrip_boundaries() {
+    // Boundary values must map exactly: 0 → 0.0, 65535 → 1.0 on every tier.
+    let input: Vec<u16> = vec![0, 1, 65534, 65535];
+
+    let _ = for_each_token_permutation(CompileTimePolicy::Warn, |perm| {
+        let mut output = vec![0.0f32; input.len()];
+        srgb_u16_to_linear_slice(&input, &mut output);
+        assert_eq!(
+            output[0], 0.0,
+            "srgb_u16_to_linear(0) != 0.0 under '{}': got {}",
+            perm.label, output[0]
+        );
+        assert_eq!(
+            output[3], 1.0,
+            "srgb_u16_to_linear(65535) != 1.0 under '{}': got {}",
+            perm.label, output[3]
+        );
+    });
 }
 
 #[test]
