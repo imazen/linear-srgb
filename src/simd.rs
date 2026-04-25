@@ -33,12 +33,6 @@ use archmage::{
 // to other arches excludes the helpers entirely, so the alias is unused
 // there — but we still need it defined to satisfy reference inside the
 // cfg-in scope on x86_64.
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
-use magetypes::simd::v4::f32x16 as mt_f32x16;
-// Generic 16-wide width — referenced by the unified `mt_*` rites' signatures
-// (their auto-emitted scalar variant is built on every arch, hence no x86 gate)
-// and by the V3/V4 dispatchers that feed those rites.
-use magetypes::simd::generic::f32x16 as g_f32x16;
 
 // ============================================================================
 // Unified magetypes #[rite] helpers — single source per algorithm, per-tier
@@ -49,14 +43,17 @@ use magetypes::simd::generic::f32x16 as g_f32x16;
 // `crate::tokens::x4::*` rite helpers (still per-arch, by design).
 // ============================================================================
 
-// Scalar variant is auto-emitted by archmage's `resolve_tiers` as a fallback;
-// our V3/V4 dispatchers don't route through it (they fall back to
-// `crate::scalar::*` per-element for remainder loops), hence `dead_code`.
+// Pattern 2 dispatchers route to these via `incant!` inside their tier
+// bodies. Scalar is auto-emitted as a fallback by archmage's `resolve_tiers`
+// even when omitted from the list; our family dispatchers fall back to
+// `crate::scalar::*` per-element for remainder loops, leaving the rite
+// scalar variant unused on x86_64 — hence `dead_code` allow.
 #[allow(dead_code)]
-#[archmage::magetypes(rite, define(f32x16), v4(cfg(avx512)), v3)]
-fn mt_srgb_to_linear(token: Token, srgb: g_f32x16<Token>) -> g_f32x16<Token> {
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128)]
+fn mt_srgb_to_linear(token: Token, srgb: [f32; 16]) -> [f32; 16] {
     use crate::rational_poly::{S2L_P, S2L_Q, SRGB_THRESHOLD};
 
+    let srgb = f32x16::from_array(token, srgb);
     let zero = f32x16::zero(token);
     let one = f32x16::splat(token, 1.0);
     let clamped = srgb.max(zero).min(one);
@@ -80,17 +77,20 @@ fn mt_srgb_to_linear(token: Token, srgb: g_f32x16<Token>) -> g_f32x16<Token> {
     let result = f32x16::blend(mask, linear_result, power_result);
     // Force exact 1.0 for inputs >= 1.0 (polynomial may undershoot at boundary)
     let ge_one = srgb.simd_ge(one);
-    f32x16::blend(ge_one, one, result)
+    f32x16::blend(ge_one, one, result).to_array()
 }
 
-// Scalar variant is auto-emitted by archmage's `resolve_tiers` as a fallback;
-// our V3/V4 dispatchers don't route through it (they fall back to
-// `crate::scalar::*` per-element for remainder loops), hence `dead_code`.
+// Pattern 2 dispatchers route to these via `incant!` inside their tier
+// bodies. Scalar is auto-emitted as a fallback by archmage's `resolve_tiers`
+// even when omitted from the list; our family dispatchers fall back to
+// `crate::scalar::*` per-element for remainder loops, leaving the rite
+// scalar variant unused on x86_64 — hence `dead_code` allow.
 #[allow(dead_code)]
-#[archmage::magetypes(rite, define(f32x16), v4(cfg(avx512)), v3)]
-fn mt_linear_to_srgb(token: Token, linear: g_f32x16<Token>) -> g_f32x16<Token> {
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128)]
+fn mt_linear_to_srgb(token: Token, linear: [f32; 16]) -> [f32; 16] {
     use crate::rational_poly::{L2S_P, L2S_Q, LINEAR_THRESHOLD};
 
+    let linear = f32x16::from_array(token, linear);
     let zero = f32x16::zero(token);
     let one = f32x16::splat(token, 1.0);
     let clamped = linear.max(zero).min(one);
@@ -113,226 +113,68 @@ fn mt_linear_to_srgb(token: Token, linear: g_f32x16<Token>) -> g_f32x16<Token> {
     let mask = clamped.simd_lt(f32x16::splat(token, LINEAR_THRESHOLD));
     let result = f32x16::blend(mask, linear_result, power_result);
     let ge_one = linear.simd_ge(one);
-    f32x16::blend(ge_one, one, result)
+    f32x16::blend(ge_one, one, result).to_array()
 }
 
-// Scalar variant is auto-emitted by archmage's `resolve_tiers` as a fallback;
-// our V3/V4 dispatchers don't route through it (they fall back to
-// `crate::scalar::*` per-element for remainder loops), hence `dead_code`.
+// Pattern 2 dispatchers route to these via `incant!` inside their tier
+// bodies. Scalar is auto-emitted as a fallback by archmage's `resolve_tiers`
+// even when omitted from the list; our family dispatchers fall back to
+// `crate::scalar::*` per-element for remainder loops, leaving the rite
+// scalar variant unused on x86_64 — hence `dead_code` allow.
 #[allow(dead_code)]
-#[archmage::magetypes(rite, define(f32x16), v4(cfg(avx512)), v3)]
-fn mt_gamma_to_linear(token: Token, encoded: g_f32x16<Token>, gamma: f32) -> g_f32x16<Token> {
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128)]
+fn mt_gamma_to_linear(token: Token, encoded: [f32; 16], gamma: f32) -> [f32; 16] {
+    let encoded = f32x16::from_array(token, encoded);
     let zero = f32x16::zero(token);
     let one = f32x16::splat(token, 1.0);
     let encoded = encoded.max(zero).min(one);
-    encoded.pow_midp(gamma)
+    encoded.pow_midp(gamma).to_array()
 }
 
-// Scalar variant is auto-emitted by archmage's `resolve_tiers` as a fallback;
-// our V3/V4 dispatchers don't route through it (they fall back to
-// `crate::scalar::*` per-element for remainder loops), hence `dead_code`.
+// Pattern 2 dispatchers route to these via `incant!` inside their tier
+// bodies. Scalar is auto-emitted as a fallback by archmage's `resolve_tiers`
+// even when omitted from the list; our family dispatchers fall back to
+// `crate::scalar::*` per-element for remainder loops, leaving the rite
+// scalar variant unused on x86_64 — hence `dead_code` allow.
 #[allow(dead_code)]
-#[archmage::magetypes(rite, define(f32x16), v4(cfg(avx512)), v3)]
-fn mt_linear_to_gamma(token: Token, linear: g_f32x16<Token>, gamma: f32) -> g_f32x16<Token> {
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128)]
+fn mt_linear_to_gamma(token: Token, linear: [f32; 16], gamma: f32) -> [f32; 16] {
+    let linear = f32x16::from_array(token, linear);
     let zero = f32x16::zero(token);
     let one = f32x16::splat(token, 1.0);
     let linear = linear.max(zero).min(one);
-    linear.pow_midp(1.0 / gamma)
+    linear.pow_midp(1.0 / gamma).to_array()
 }
 
 // ============================================================================
-// Slice tier macros — generate plain and RGBA variants from a single rite
+// sRGB ↔ Linear Slice Functions (plain + RGBA, magetypes-unified)
 // ============================================================================
 
-/// Generate x86_64 AVX-512 (16-wide) slice tier functions (plain + RGBA).
-macro_rules! x16_slice_tiers {
-    ($plain:ident, $rgba:ident, $rite:ident, $scalar:path) => {
-        #[cfg(feature = "avx512")]
-        #[arcane]
-        fn $plain(token: X64V4Token, values: &mut [f32]) {
-            let (chunks, remainder) = values.as_chunks_mut::<16>();
-            for chunk in chunks {
-                let v = mt_f32x16::from_array(token, *chunk);
-                *chunk = $rite(token, v).to_array();
-            }
-            for v in remainder {
-                *v = $scalar(*v);
-            }
-        }
-
-        #[cfg(feature = "avx512")]
-        #[arcane]
-        fn $rgba(token: X64V4Token, values: &mut [f32]) {
-            let (chunks, remainder) = values.as_chunks_mut::<16>();
-            for chunk in chunks {
-                let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
-                let v = mt_f32x16::from_array(token, *chunk);
-                *chunk = $rite(token, v).to_array();
-                [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
-            }
-            for pixel in remainder.chunks_exact_mut(4) {
-                pixel[0] = $scalar(pixel[0]);
-                pixel[1] = $scalar(pixel[1]);
-                pixel[2] = $scalar(pixel[2]);
-            }
-        }
-    };
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn srgb_to_linear_slice_tier(_token: Token, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
+    for chunk in chunks {
+        *chunk = incant!(mt_srgb_to_linear(*chunk));
+    }
+    for v in remainder {
+        *v = crate::scalar::srgb_to_linear(*v);
+    }
 }
 
-/// Generate x86_64 AVX2+FMA slice tier functions (plain + RGBA).
-///
-/// Chunks 16-wide via the polyfilled `f32x16<X64V3Token>` (= 2× f32x8 internally),
-/// matching the unified `mt_*_v3` rite signatures.
-macro_rules! x8_slice_tiers {
-    ($plain:ident, $rgba:ident, $rite:ident, $scalar:path) => {
-        #[arcane]
-        fn $plain(token: X64V3Token, values: &mut [f32]) {
-            let (chunks, remainder) = values.as_chunks_mut::<16>();
-            for chunk in chunks {
-                let v = g_f32x16::<X64V3Token>::from_array(token, *chunk);
-                *chunk = $rite(token, v).to_array();
-            }
-            for v in remainder {
-                *v = $scalar(*v);
-            }
-        }
-
-        #[arcane]
-        fn $rgba(token: X64V3Token, values: &mut [f32]) {
-            let (chunks, remainder) = values.as_chunks_mut::<16>();
-            for chunk in chunks {
-                let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
-                let v = g_f32x16::<X64V3Token>::from_array(token, *chunk);
-                *chunk = $rite(token, v).to_array();
-                [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
-            }
-            for pixel in remainder.chunks_exact_mut(4) {
-                pixel[0] = $scalar(pixel[0]);
-                pixel[1] = $scalar(pixel[1]);
-                pixel[2] = $scalar(pixel[2]);
-            }
-        }
-    };
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn srgb_to_linear_rgba_slice_tier(_token: Token, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
+    for chunk in chunks {
+        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
+        *chunk = incant!(mt_srgb_to_linear(*chunk));
+        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
+    }
+    for pixel in remainder.chunks_exact_mut(4) {
+        pixel[0] = crate::scalar::srgb_to_linear(pixel[0]);
+        pixel[1] = crate::scalar::srgb_to_linear(pixel[1]);
+        pixel[2] = crate::scalar::srgb_to_linear(pixel[2]);
+    }
 }
-
-/// Generate WebAssembly SIMD128 (4-wide) slice tier functions (plain + RGBA).
-macro_rules! wasm128_slice_tiers {
-    ($plain:ident, $rgba:ident, $rite_fn:path, $scalar:path) => {
-        #[arcane]
-        fn $plain(token: Wasm128Token, values: &mut [f32]) {
-            let (chunks, remainder) = values.as_chunks_mut::<4>();
-            for chunk in chunks {
-                *chunk = $rite_fn(token, *chunk);
-            }
-            for v in remainder {
-                *v = $scalar(*v);
-            }
-        }
-
-        #[arcane]
-        fn $rgba(token: Wasm128Token, values: &mut [f32]) {
-            let (chunks, remainder) = values.as_chunks_mut::<4>();
-            for chunk in chunks {
-                let a = chunk[3];
-                *chunk = $rite_fn(token, *chunk);
-                chunk[3] = a;
-            }
-            // No remainder — 4-wide chunks already match RGBA pixel stride.
-            // But if the slice length isn't a multiple of 4, handle trailing scalars.
-            for pixel in remainder.chunks_exact_mut(4) {
-                pixel[0] = $scalar(pixel[0]);
-                pixel[1] = $scalar(pixel[1]);
-                pixel[2] = $scalar(pixel[2]);
-            }
-        }
-    };
-}
-
-/// Generate AArch64 NEON (4-wide) slice tier functions (plain + RGBA).
-macro_rules! neon_slice_tiers {
-    ($plain:ident, $rgba:ident, $rite_fn:path, $scalar:path) => {
-        #[arcane]
-        fn $plain(token: NeonToken, values: &mut [f32]) {
-            let (chunks, remainder) = values.as_chunks_mut::<4>();
-            for chunk in chunks {
-                *chunk = $rite_fn(token, *chunk);
-            }
-            for v in remainder {
-                *v = $scalar(*v);
-            }
-        }
-
-        #[arcane]
-        fn $rgba(token: NeonToken, values: &mut [f32]) {
-            let (chunks, remainder) = values.as_chunks_mut::<4>();
-            for chunk in chunks {
-                let a = chunk[3];
-                *chunk = $rite_fn(token, *chunk);
-                chunk[3] = a;
-            }
-            // No remainder — 4-wide chunks already match RGBA pixel stride.
-            // But if the slice length isn't a multiple of 4, handle trailing scalars.
-            for pixel in remainder.chunks_exact_mut(4) {
-                pixel[0] = $scalar(pixel[0]);
-                pixel[1] = $scalar(pixel[1]);
-                pixel[2] = $scalar(pixel[2]);
-            }
-        }
-    };
-}
-
-/// Generate scalar fallback slice tier functions (plain + RGBA).
-macro_rules! scalar_slice_tiers {
-    ($plain:ident, $rgba:ident, $scalar:path) => {
-        fn $plain(_token: ScalarToken, values: &mut [f32]) {
-            for v in values.iter_mut() {
-                *v = $scalar(*v);
-            }
-        }
-
-        fn $rgba(_token: ScalarToken, values: &mut [f32]) {
-            for pixel in values.chunks_exact_mut(4) {
-                pixel[0] = $scalar(pixel[0]);
-                pixel[1] = $scalar(pixel[1]);
-                pixel[2] = $scalar(pixel[2]);
-            }
-        }
-    };
-}
-
-// ============================================================================
-// sRGB ↔ Linear Slice Functions (plain + RGBA, generated from macros)
-// ============================================================================
-
-x16_slice_tiers!(
-    srgb_to_linear_slice_tier_v4,
-    srgb_to_linear_rgba_slice_tier_v4,
-    mt_srgb_to_linear_v4,
-    crate::scalar::srgb_to_linear
-);
-x8_slice_tiers!(
-    srgb_to_linear_slice_tier_v3,
-    srgb_to_linear_rgba_slice_tier_v3,
-    mt_srgb_to_linear_v3,
-    crate::scalar::srgb_to_linear
-);
-neon_slice_tiers!(
-    srgb_to_linear_slice_tier_neon,
-    srgb_to_linear_rgba_slice_tier_neon,
-    crate::tokens::x4::srgb_to_linear_neon,
-    crate::scalar::srgb_to_linear
-);
-wasm128_slice_tiers!(
-    srgb_to_linear_slice_tier_wasm128,
-    srgb_to_linear_rgba_slice_tier_wasm128,
-    crate::tokens::x4::srgb_to_linear_wasm128,
-    crate::scalar::srgb_to_linear
-);
-scalar_slice_tiers!(
-    srgb_to_linear_slice_tier_scalar,
-    srgb_to_linear_rgba_slice_tier_scalar,
-    crate::scalar::srgb_to_linear
-);
 
 /// Convert sRGB f32 values to linear in-place.
 ///
@@ -375,35 +217,31 @@ pub fn srgb_to_linear_rgba_slice(values: &mut [f32]) {
     )
 }
 
-x16_slice_tiers!(
-    linear_to_srgb_slice_tier_v4,
-    linear_to_srgb_rgba_slice_tier_v4,
-    mt_linear_to_srgb_v4,
-    crate::scalar::linear_to_srgb
-);
-x8_slice_tiers!(
-    linear_to_srgb_slice_tier_v3,
-    linear_to_srgb_rgba_slice_tier_v3,
-    mt_linear_to_srgb_v3,
-    crate::scalar::linear_to_srgb
-);
-neon_slice_tiers!(
-    linear_to_srgb_slice_tier_neon,
-    linear_to_srgb_rgba_slice_tier_neon,
-    crate::tokens::x4::linear_to_srgb_neon,
-    crate::scalar::linear_to_srgb
-);
-wasm128_slice_tiers!(
-    linear_to_srgb_slice_tier_wasm128,
-    linear_to_srgb_rgba_slice_tier_wasm128,
-    crate::tokens::x4::linear_to_srgb_wasm128,
-    crate::scalar::linear_to_srgb
-);
-scalar_slice_tiers!(
-    linear_to_srgb_slice_tier_scalar,
-    linear_to_srgb_rgba_slice_tier_scalar,
-    crate::scalar::linear_to_srgb
-);
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_srgb_slice_tier(_token: Token, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
+    for chunk in chunks {
+        *chunk = incant!(mt_linear_to_srgb(*chunk));
+    }
+    for v in remainder {
+        *v = crate::scalar::linear_to_srgb(*v);
+    }
+}
+
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_srgb_rgba_slice_tier(_token: Token, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
+    for chunk in chunks {
+        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
+        *chunk = incant!(mt_linear_to_srgb(*chunk));
+        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
+    }
+    for pixel in remainder.chunks_exact_mut(4) {
+        pixel[0] = crate::scalar::linear_to_srgb(pixel[0]);
+        pixel[1] = crate::scalar::linear_to_srgb(pixel[1]);
+        pixel[2] = crate::scalar::linear_to_srgb(pixel[2]);
+    }
+}
 
 /// Convert linear f32 values to sRGB in-place.
 ///
@@ -560,15 +398,14 @@ pub fn linear_to_srgb_extended_slice(values: &mut [f32]) {
 // sRGB→Linear + Premultiply RGBA f32 (SIMD-fused single-pass)
 // ============================================================================
 
-#[cfg(feature = "avx512")]
-#[arcane]
-fn srgb_to_linear_premultiply_rgba_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn srgb_to_linear_premultiply_rgba_slice_tier(token: Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
-        let v = mt_f32x16::from_array(token, *chunk);
-        let converted = mt_srgb_to_linear_v4(token, v);
-        let alpha = mt_f32x16::from_array(
+        let converted_arr = incant!(mt_srgb_to_linear(*chunk));
+        let converted = f32x16::from_array(token, converted_arr);
+        let alpha = f32x16::from_array(
             token,
             [
                 a[0], a[0], a[0], 1.0, a[1], a[1], a[1], 1.0, a[2], a[2], a[2], 1.0, a[3], a[3],
@@ -579,66 +416,6 @@ fn srgb_to_linear_premultiply_rgba_slice_tier_v4(token: X64V4Token, values: &mut
         [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
     }
     for pixel in remainder.chunks_exact_mut(4) {
-        let a = pixel[3];
-        pixel[0] = crate::scalar::srgb_to_linear(pixel[0]) * a;
-        pixel[1] = crate::scalar::srgb_to_linear(pixel[1]) * a;
-        pixel[2] = crate::scalar::srgb_to_linear(pixel[2]) * a;
-    }
-}
-
-#[arcane]
-fn srgb_to_linear_premultiply_rgba_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<16>();
-    for chunk in chunks {
-        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
-        let v = g_f32x16::<X64V3Token>::from_array(token, *chunk);
-        let converted = mt_srgb_to_linear_v3(token, v);
-        let alpha = g_f32x16::<X64V3Token>::from_array(
-            token,
-            [
-                a[0], a[0], a[0], 1.0, a[1], a[1], a[1], 1.0, a[2], a[2], a[2], 1.0, a[3], a[3],
-                a[3], 1.0,
-            ],
-        );
-        *chunk = (converted * alpha).to_array();
-        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
-    }
-    for pixel in remainder.chunks_exact_mut(4) {
-        let a = pixel[3];
-        pixel[0] = crate::scalar::srgb_to_linear(pixel[0]) * a;
-        pixel[1] = crate::scalar::srgb_to_linear(pixel[1]) * a;
-        pixel[2] = crate::scalar::srgb_to_linear(pixel[2]) * a;
-    }
-}
-
-#[arcane]
-fn srgb_to_linear_premultiply_rgba_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
-    let (chunks, _remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        let a = chunk[3];
-        *chunk = crate::tokens::x4::srgb_to_linear_neon(token, *chunk);
-        chunk[0] *= a;
-        chunk[1] *= a;
-        chunk[2] *= a;
-        chunk[3] = a;
-    }
-}
-
-#[arcane]
-fn srgb_to_linear_premultiply_rgba_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
-    let (chunks, _remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        let a = chunk[3];
-        *chunk = crate::tokens::x4::srgb_to_linear_wasm128(token, *chunk);
-        chunk[0] *= a;
-        chunk[1] *= a;
-        chunk[2] *= a;
-        chunk[3] = a;
-    }
-}
-
-fn srgb_to_linear_premultiply_rgba_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
-    for pixel in values.chunks_exact_mut(4) {
         let a = pixel[3];
         pixel[0] = crate::scalar::srgb_to_linear(pixel[0]) * a;
         pixel[1] = crate::scalar::srgb_to_linear(pixel[1]) * a;
@@ -679,151 +456,30 @@ pub fn srgb_to_linear_premultiply_rgba_slice(values: &mut [f32]) {
 // Unpremultiply + Linear→sRGB RGBA f32 (SIMD-fused single-pass)
 // ============================================================================
 
-#[cfg(feature = "avx512")]
-#[arcane]
-fn unpremultiply_linear_to_srgb_rgba_slice_tier_v4(token: X64V4Token, values: &mut [f32]) {
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn unpremultiply_linear_to_srgb_rgba_slice_tier(token: Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
         let inv = [
-            if a[0] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[0]
-            } else {
-                0.0
-            },
-            if a[1] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[1]
-            } else {
-                0.0
-            },
-            if a[2] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[2]
-            } else {
-                0.0
-            },
-            if a[3] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[3]
-            } else {
-                0.0
-            },
+            if a[0] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[0] } else { 0.0 },
+            if a[1] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[1] } else { 0.0 },
+            if a[2] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[2] } else { 0.0 },
+            if a[3] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[3] } else { 0.0 },
         ];
-        let inv_alpha = mt_f32x16::from_array(
+        let v = f32x16::from_array(token, *chunk);
+        let inv_alpha = f32x16::from_array(
             token,
             [
                 inv[0], inv[0], inv[0], 1.0, inv[1], inv[1], inv[1], 1.0, inv[2], inv[2], inv[2],
                 1.0, inv[3], inv[3], inv[3], 1.0,
             ],
         );
-        let v = mt_f32x16::from_array(token, *chunk);
-        *chunk = mt_linear_to_srgb_v4(token, v * inv_alpha).to_array();
+        let unpremul = (v * inv_alpha).to_array();
+        *chunk = incant!(mt_linear_to_srgb(unpremul));
         [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
     }
     for pixel in remainder.chunks_exact_mut(4) {
-        let a = pixel[3];
-        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
-            let inv_a = 1.0 / a;
-            pixel[0] = crate::scalar::linear_to_srgb(pixel[0] * inv_a);
-            pixel[1] = crate::scalar::linear_to_srgb(pixel[1] * inv_a);
-            pixel[2] = crate::scalar::linear_to_srgb(pixel[2] * inv_a);
-        } else {
-            pixel[0] = 0.0;
-            pixel[1] = 0.0;
-            pixel[2] = 0.0;
-        }
-    }
-}
-
-#[arcane]
-fn unpremultiply_linear_to_srgb_rgba_slice_tier_v3(token: X64V3Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<16>();
-    for chunk in chunks {
-        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
-        let inv = [
-            if a[0] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[0]
-            } else {
-                0.0
-            },
-            if a[1] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[1]
-            } else {
-                0.0
-            },
-            if a[2] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[2]
-            } else {
-                0.0
-            },
-            if a[3] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[3]
-            } else {
-                0.0
-            },
-        ];
-        let inv_alpha = g_f32x16::<X64V3Token>::from_array(
-            token,
-            [
-                inv[0], inv[0], inv[0], 1.0, inv[1], inv[1], inv[1], 1.0, inv[2], inv[2], inv[2],
-                1.0, inv[3], inv[3], inv[3], 1.0,
-            ],
-        );
-        let v = g_f32x16::<X64V3Token>::from_array(token, *chunk);
-        *chunk = mt_linear_to_srgb_v3(token, v * inv_alpha).to_array();
-        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
-    }
-    for pixel in remainder.chunks_exact_mut(4) {
-        let a = pixel[3];
-        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
-            let inv_a = 1.0 / a;
-            pixel[0] = crate::scalar::linear_to_srgb(pixel[0] * inv_a);
-            pixel[1] = crate::scalar::linear_to_srgb(pixel[1] * inv_a);
-            pixel[2] = crate::scalar::linear_to_srgb(pixel[2] * inv_a);
-        } else {
-            pixel[0] = 0.0;
-            pixel[1] = 0.0;
-            pixel[2] = 0.0;
-        }
-    }
-}
-
-#[arcane]
-fn unpremultiply_linear_to_srgb_rgba_slice_tier_neon(token: NeonToken, values: &mut [f32]) {
-    let (chunks, _remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        let a = chunk[3];
-        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
-            let inv_a = 1.0 / a;
-            let unpremul = [chunk[0] * inv_a, chunk[1] * inv_a, chunk[2] * inv_a, 1.0];
-            *chunk = crate::tokens::x4::linear_to_srgb_neon(token, unpremul);
-            chunk[3] = a;
-        } else {
-            chunk[0] = 0.0;
-            chunk[1] = 0.0;
-            chunk[2] = 0.0;
-        }
-    }
-}
-
-#[arcane]
-fn unpremultiply_linear_to_srgb_rgba_slice_tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
-    let (chunks, _remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        let a = chunk[3];
-        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
-            let inv_a = 1.0 / a;
-            let unpremul = [chunk[0] * inv_a, chunk[1] * inv_a, chunk[2] * inv_a, 1.0];
-            *chunk = crate::tokens::x4::linear_to_srgb_wasm128(token, unpremul);
-            chunk[3] = a;
-        } else {
-            chunk[0] = 0.0;
-            chunk[1] = 0.0;
-            chunk[2] = 0.0;
-        }
-    }
-}
-
-fn unpremultiply_linear_to_srgb_rgba_slice_tier_scalar(_token: ScalarToken, values: &mut [f32]) {
-    for pixel in values.chunks_exact_mut(4) {
         let a = pixel[3];
         if a > crate::UNPREMUL_ALPHA_THRESHOLD {
             let inv_a = 1.0 / a;
@@ -1693,119 +1349,28 @@ pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
 // Custom Gamma + Premultiply RGBA f32 (SIMD-fused single-pass)
 // ============================================================================
 
-#[cfg(feature = "avx512")]
-#[arcane]
-fn gamma_to_linear_premultiply_rgba_slice_tier_v4(
-    token: X64V4Token,
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn gamma_to_linear_premultiply_rgba_slice_tier(
+    token: Token,
     values: &mut [f32],
     gamma: f32,
 ) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
-        let v = mt_f32x16::from_array(token, *chunk);
-        *chunk = mt_gamma_to_linear_v4(token, v, gamma).to_array();
-        chunk[0] *= a[0];
-        chunk[1] *= a[0];
-        chunk[2] *= a[0];
-        chunk[3] = a[0];
-        chunk[4] *= a[1];
-        chunk[5] *= a[1];
-        chunk[6] *= a[1];
-        chunk[7] = a[1];
-        chunk[8] *= a[2];
-        chunk[9] *= a[2];
-        chunk[10] *= a[2];
-        chunk[11] = a[2];
-        chunk[12] *= a[3];
-        chunk[13] *= a[3];
-        chunk[14] *= a[3];
-        chunk[15] = a[3];
+        *chunk = incant!(mt_gamma_to_linear(*chunk, gamma));
+        let v = f32x16::from_array(token, *chunk);
+        let alpha = f32x16::from_array(
+            token,
+            [
+                a[0], a[0], a[0], 1.0, a[1], a[1], a[1], 1.0, a[2], a[2], a[2], 1.0, a[3], a[3],
+                a[3], 1.0,
+            ],
+        );
+        *chunk = (v * alpha).to_array();
+        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
     }
     for pixel in remainder.chunks_exact_mut(4) {
-        let a = pixel[3];
-        pixel[0] = crate::scalar::gamma_to_linear(pixel[0], gamma) * a;
-        pixel[1] = crate::scalar::gamma_to_linear(pixel[1], gamma) * a;
-        pixel[2] = crate::scalar::gamma_to_linear(pixel[2], gamma) * a;
-    }
-}
-
-#[arcane]
-fn gamma_to_linear_premultiply_rgba_slice_tier_v3(
-    token: X64V3Token,
-    values: &mut [f32],
-    gamma: f32,
-) {
-    let (chunks, remainder) = values.as_chunks_mut::<16>();
-    for chunk in chunks {
-        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
-        let v = g_f32x16::<X64V3Token>::from_array(token, *chunk);
-        *chunk = mt_gamma_to_linear_v3(token, v, gamma).to_array();
-        chunk[0] *= a[0];
-        chunk[1] *= a[0];
-        chunk[2] *= a[0];
-        chunk[3] = a[0];
-        chunk[4] *= a[1];
-        chunk[5] *= a[1];
-        chunk[6] *= a[1];
-        chunk[7] = a[1];
-        chunk[8] *= a[2];
-        chunk[9] *= a[2];
-        chunk[10] *= a[2];
-        chunk[11] = a[2];
-        chunk[12] *= a[3];
-        chunk[13] *= a[3];
-        chunk[14] *= a[3];
-        chunk[15] = a[3];
-    }
-    for pixel in remainder.chunks_exact_mut(4) {
-        let a = pixel[3];
-        pixel[0] = crate::scalar::gamma_to_linear(pixel[0], gamma) * a;
-        pixel[1] = crate::scalar::gamma_to_linear(pixel[1], gamma) * a;
-        pixel[2] = crate::scalar::gamma_to_linear(pixel[2], gamma) * a;
-    }
-}
-
-#[arcane]
-fn gamma_to_linear_premultiply_rgba_slice_tier_neon(
-    token: NeonToken,
-    values: &mut [f32],
-    gamma: f32,
-) {
-    let (chunks, _remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        let a = chunk[3];
-        *chunk = crate::tokens::x4::gamma_to_linear_neon(token, *chunk, gamma);
-        chunk[0] *= a;
-        chunk[1] *= a;
-        chunk[2] *= a;
-        chunk[3] = a;
-    }
-}
-
-#[arcane]
-fn gamma_to_linear_premultiply_rgba_slice_tier_wasm128(
-    token: Wasm128Token,
-    values: &mut [f32],
-    gamma: f32,
-) {
-    let (chunks, _remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        let a = chunk[3];
-        *chunk = crate::tokens::x4::gamma_to_linear_wasm128(token, *chunk, gamma);
-        chunk[0] *= a;
-        chunk[1] *= a;
-        chunk[2] *= a;
-        chunk[3] = a;
-    }
-}
-
-fn gamma_to_linear_premultiply_rgba_slice_tier_scalar(
-    _token: ScalarToken,
-    values: &mut [f32],
-    gamma: f32,
-) {
-    for pixel in values.chunks_exact_mut(4) {
         let a = pixel[3];
         pixel[0] = crate::scalar::gamma_to_linear(pixel[0], gamma) * a;
         pixel[1] = crate::scalar::gamma_to_linear(pixel[1], gamma) * a;
@@ -1852,10 +1417,9 @@ pub fn gamma_to_linear_premultiply_rgba_slice(values: &mut [f32], gamma: f32) {
 // Unpremultiply + Linear→Gamma RGBA f32 (SIMD-fused single-pass)
 // ============================================================================
 
-#[cfg(feature = "avx512")]
-#[arcane]
-fn unpremultiply_linear_to_gamma_rgba_slice_tier_v4(
-    token: X64V4Token,
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn unpremultiply_linear_to_gamma_rgba_slice_tier(
+    token: Token,
     values: &mut [f32],
     gamma: f32,
 ) {
@@ -1863,160 +1427,24 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier_v4(
     for chunk in chunks {
         let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
         let inv = [
-            if a[0] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[0]
-            } else {
-                0.0
-            },
-            if a[1] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[1]
-            } else {
-                0.0
-            },
-            if a[2] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[2]
-            } else {
-                0.0
-            },
-            if a[3] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[3]
-            } else {
-                0.0
-            },
+            if a[0] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[0] } else { 0.0 },
+            if a[1] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[1] } else { 0.0 },
+            if a[2] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[2] } else { 0.0 },
+            if a[3] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[3] } else { 0.0 },
         ];
-        let inv_alpha = mt_f32x16::from_array(
+        let v = f32x16::from_array(token, *chunk);
+        let inv_alpha = f32x16::from_array(
             token,
             [
                 inv[0], inv[0], inv[0], 1.0, inv[1], inv[1], inv[1], 1.0, inv[2], inv[2], inv[2],
                 1.0, inv[3], inv[3], inv[3], 1.0,
             ],
         );
-        let v = mt_f32x16::from_array(token, *chunk);
-        *chunk = mt_linear_to_gamma_v4(token, v * inv_alpha, gamma).to_array();
+        let unpremul = (v * inv_alpha).to_array();
+        *chunk = incant!(mt_linear_to_gamma(unpremul, gamma));
         [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
     }
     for pixel in remainder.chunks_exact_mut(4) {
-        let a = pixel[3];
-        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
-            let inv_a = 1.0 / a;
-            pixel[0] = crate::scalar::linear_to_gamma(pixel[0] * inv_a, gamma);
-            pixel[1] = crate::scalar::linear_to_gamma(pixel[1] * inv_a, gamma);
-            pixel[2] = crate::scalar::linear_to_gamma(pixel[2] * inv_a, gamma);
-        } else {
-            pixel[0] = 0.0;
-            pixel[1] = 0.0;
-            pixel[2] = 0.0;
-        }
-    }
-}
-
-#[arcane]
-fn unpremultiply_linear_to_gamma_rgba_slice_tier_v3(
-    token: X64V3Token,
-    values: &mut [f32],
-    gamma: f32,
-) {
-    let (chunks, remainder) = values.as_chunks_mut::<16>();
-    for chunk in chunks {
-        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
-        let inv = [
-            if a[0] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[0]
-            } else {
-                0.0
-            },
-            if a[1] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[1]
-            } else {
-                0.0
-            },
-            if a[2] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[2]
-            } else {
-                0.0
-            },
-            if a[3] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[3]
-            } else {
-                0.0
-            },
-        ];
-        let inv_alpha = g_f32x16::<X64V3Token>::from_array(
-            token,
-            [
-                inv[0], inv[0], inv[0], 1.0, inv[1], inv[1], inv[1], 1.0, inv[2], inv[2], inv[2],
-                1.0, inv[3], inv[3], inv[3], 1.0,
-            ],
-        );
-        let v = g_f32x16::<X64V3Token>::from_array(token, *chunk);
-        *chunk = mt_linear_to_gamma_v3(token, v * inv_alpha, gamma).to_array();
-        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
-    }
-    for pixel in remainder.chunks_exact_mut(4) {
-        let a = pixel[3];
-        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
-            let inv_a = 1.0 / a;
-            pixel[0] = crate::scalar::linear_to_gamma(pixel[0] * inv_a, gamma);
-            pixel[1] = crate::scalar::linear_to_gamma(pixel[1] * inv_a, gamma);
-            pixel[2] = crate::scalar::linear_to_gamma(pixel[2] * inv_a, gamma);
-        } else {
-            pixel[0] = 0.0;
-            pixel[1] = 0.0;
-            pixel[2] = 0.0;
-        }
-    }
-}
-
-#[arcane]
-fn unpremultiply_linear_to_gamma_rgba_slice_tier_neon(
-    token: NeonToken,
-    values: &mut [f32],
-    gamma: f32,
-) {
-    let (chunks, _remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        let a = chunk[3];
-        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
-            let inv_a = 1.0 / a;
-            let unpremul = [chunk[0] * inv_a, chunk[1] * inv_a, chunk[2] * inv_a, 1.0];
-            *chunk = crate::tokens::x4::linear_to_gamma_neon(token, unpremul, gamma);
-            chunk[3] = a;
-        } else {
-            chunk[0] = 0.0;
-            chunk[1] = 0.0;
-            chunk[2] = 0.0;
-        }
-    }
-}
-
-#[arcane]
-fn unpremultiply_linear_to_gamma_rgba_slice_tier_wasm128(
-    token: Wasm128Token,
-    values: &mut [f32],
-    gamma: f32,
-) {
-    let (chunks, _remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        let a = chunk[3];
-        if a > crate::UNPREMUL_ALPHA_THRESHOLD {
-            let inv_a = 1.0 / a;
-            let unpremul = [chunk[0] * inv_a, chunk[1] * inv_a, chunk[2] * inv_a, 1.0];
-            *chunk = crate::tokens::x4::linear_to_gamma_wasm128(token, unpremul, gamma);
-            chunk[3] = a;
-        } else {
-            chunk[0] = 0.0;
-            chunk[1] = 0.0;
-            chunk[2] = 0.0;
-        }
-    }
-}
-
-fn unpremultiply_linear_to_gamma_rgba_slice_tier_scalar(
-    _token: ScalarToken,
-    values: &mut [f32],
-    gamma: f32,
-) {
-    for pixel in values.chunks_exact_mut(4) {
         let a = pixel[3];
         if a > crate::UNPREMUL_ALPHA_THRESHOLD {
             let inv_a = 1.0 / a;
@@ -2074,7 +1502,8 @@ pub fn unpremultiply_linear_to_gamma_rgba_slice(values: &mut [f32], gamma: f32) 
 // ============================================================================
 
 // Each public dispatcher uses `#[magetypes]` to generate per-tier `#[arcane]`
-// wrappers from a single generic body that drives `g_f32x16<Token>` over the
+// wrappers from a single generic body that drives `f32x16<Token>` (the
+// magetypes generic alias auto-injected by `define(f32x16)`) over the
 // underlying `crate::tf::*_x16` kernels. On V4 this lowers to native
 // AVX-512; on V3 it polyfills to 2×f32x8; on NEON/WASM to 4×f32x4; scalar
 // falls through to the per-element TF function.
