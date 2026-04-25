@@ -462,10 +462,26 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier(token: Token, values: &mut [f32]
     for chunk in chunks {
         let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
         let inv = [
-            if a[0] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[0] } else { 0.0 },
-            if a[1] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[1] } else { 0.0 },
-            if a[2] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[2] } else { 0.0 },
-            if a[3] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[3] } else { 0.0 },
+            if a[0] > crate::UNPREMUL_ALPHA_THRESHOLD {
+                1.0 / a[0]
+            } else {
+                0.0
+            },
+            if a[1] > crate::UNPREMUL_ALPHA_THRESHOLD {
+                1.0 / a[1]
+            } else {
+                0.0
+            },
+            if a[2] > crate::UNPREMUL_ALPHA_THRESHOLD {
+                1.0 / a[2]
+            } else {
+                0.0
+            },
+            if a[3] > crate::UNPREMUL_ALPHA_THRESHOLD {
+                1.0 / a[3]
+            } else {
+                0.0
+            },
         ];
         let v = f32x16::from_array(token, *chunk);
         let inv_alpha = f32x16::from_array(
@@ -1350,11 +1366,7 @@ pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
 // ============================================================================
 
 #[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
-fn gamma_to_linear_premultiply_rgba_slice_tier(
-    token: Token,
-    values: &mut [f32],
-    gamma: f32,
-) {
+fn gamma_to_linear_premultiply_rgba_slice_tier(token: Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
@@ -1418,19 +1430,31 @@ pub fn gamma_to_linear_premultiply_rgba_slice(values: &mut [f32], gamma: f32) {
 // ============================================================================
 
 #[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
-fn unpremultiply_linear_to_gamma_rgba_slice_tier(
-    token: Token,
-    values: &mut [f32],
-    gamma: f32,
-) {
+fn unpremultiply_linear_to_gamma_rgba_slice_tier(token: Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
         let inv = [
-            if a[0] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[0] } else { 0.0 },
-            if a[1] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[1] } else { 0.0 },
-            if a[2] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[2] } else { 0.0 },
-            if a[3] > crate::UNPREMUL_ALPHA_THRESHOLD { 1.0 / a[3] } else { 0.0 },
+            if a[0] > crate::UNPREMUL_ALPHA_THRESHOLD {
+                1.0 / a[0]
+            } else {
+                0.0
+            },
+            if a[1] > crate::UNPREMUL_ALPHA_THRESHOLD {
+                1.0 / a[1]
+            } else {
+                0.0
+            },
+            if a[2] > crate::UNPREMUL_ALPHA_THRESHOLD {
+                1.0 / a[2]
+            } else {
+                0.0
+            },
+            if a[3] > crate::UNPREMUL_ALPHA_THRESHOLD {
+                1.0 / a[3]
+            } else {
+                0.0
+            },
         ];
         let v = f32x16::from_array(token, *chunk);
         let inv_alpha = f32x16::from_array(

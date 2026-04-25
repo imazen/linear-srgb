@@ -23,11 +23,11 @@
 
 use archmage::testing::{CompileTimePolicy, for_each_token_permutation};
 
+use linear_srgb::UNPREMUL_ALPHA_THRESHOLD;
 use linear_srgb::default::{
     gamma_to_linear_premultiply_rgba_slice, srgb_to_linear_premultiply_rgba_slice,
     unpremultiply_linear_to_gamma_rgba_slice, unpremultiply_linear_to_srgb_rgba_slice,
 };
-use linear_srgb::UNPREMUL_ALPHA_THRESHOLD;
 
 /// Max absolute element-wise difference between two equally-sized slices.
 fn max_abs_diff(a: &[f32], b: &[f32]) -> f32 {
