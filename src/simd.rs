@@ -35,9 +35,9 @@ use archmage::{
 // cfg-in scope on x86_64.
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 use magetypes::simd::v4::f32x16 as mt_f32x16;
-// Generic 16-wide width used by V3 dispatchers that feed the unified
-// `mt_*_v3` rites (V3 polyfills f32x16 as 2× f32x8 internally).
-#[cfg(target_arch = "x86_64")]
+// Generic 16-wide width — referenced by the unified `mt_*` rites' signatures
+// (their auto-emitted scalar variant is built on every arch, hence no x86 gate)
+// and by the V3/V4 dispatchers that feed those rites.
 use magetypes::simd::generic::f32x16 as g_f32x16;
 
 // ============================================================================
