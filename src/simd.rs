@@ -38,13 +38,6 @@ use magetypes::simd::f32x8 as mt_f32x8;
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 use magetypes::simd::v4::f32x16 as mt_f32x16;
 
-// Generic magetypes type for `#[archmage::magetypes(...)]` bodies. `f32x16`
-// is native on X64V4Token and polyfilled on X64V3Token / NeonToken /
-// Wasm128Token / ScalarToken; using it as the common width lets one body
-// cover every tier. The `Token` placeholder inside each body expands
-// per-tier via the macro.
-use magetypes::simd::generic::f32x16 as g_f32x16;
-
 // ============================================================================
 // magetypes #[rite] helpers (x86-64 only) — real AVX2+FMA SIMD
 // ============================================================================
@@ -524,10 +517,8 @@ pub fn linear_to_srgb_rgba_slice(values: &mut [f32]) {
 // Extended-range sRGB ↔ Linear Slice Functions (no clamping)
 // ============================================================================
 
-#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn srgb_to_linear_extended_slice_tier(token: Token, values: &mut [f32]) {
-    #[allow(non_camel_case_types)]
-    type f32x16 = g_f32x16<Token>;
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         let v = f32x16::from_array(token, *chunk);
@@ -580,10 +571,8 @@ pub fn srgb_to_linear_extended_slice(values: &mut [f32]) {
     )
 }
 
-#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn linear_to_srgb_extended_slice_tier(token: Token, values: &mut [f32]) {
-    #[allow(non_camel_case_types)]
-    type f32x16 = g_f32x16<Token>;
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         let v = f32x16::from_array(token, *chunk);
@@ -977,14 +966,12 @@ pub fn srgb_u8_to_linear_slice(input: &[u8], output: &mut [f32]) {
 // single body. `f32x8` is native on x86-V3 / x86-V4; on NEON / WASM128
 // it's polyfilled as 2×f32x4 (inlined, no runtime overhead).
 
-#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn linear_to_srgb_u8_slice_tier(token: Token, input: &[f32], output: &mut [u8]) {
     // f32x16 is native on V4 (AVX-512) and polyfilled on V3 (2×f32x8), NEON
     // (4×f32x4), Wasm128 (4×f32x4), and scalar. F32x8Backend isn't impl'd
     // for X64V4Token in published magetypes 0.9.19, so f32x16 is the
     // natural common width across all tiers.
-    #[allow(non_camel_case_types)]
-    type f32x16 = g_f32x16<Token>;
     let lut = crate::const_luts::linear_to_srgb_u8();
     let (in_chunks, in_rem) = input.as_chunks::<16>();
     let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
@@ -1043,11 +1030,9 @@ pub fn linear_to_srgb_u8_slice(input: &[f32], output: &mut [u8]) {
 // Cross-tier output may differ by ≤1 u16 LSB (same precision envelope
 // as the encode slice).
 
-#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn srgb_u16_to_linear_slice_tier(token: Token, input: &[u16], output: &mut [f32]) {
     use crate::rational_poly::{LINEAR_SCALE, S2L_P, S2L_Q, SRGB_THRESHOLD};
-    #[allow(non_camel_case_types)]
-    type f32x16 = g_f32x16<Token>;
 
     let (in_chunks, in_rem) = input.as_chunks::<16>();
     let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
@@ -1118,11 +1103,9 @@ pub fn srgb_u16_to_linear_slice(input: &[u16], output: &mut [f32]) {
 // on NEON / WASM (inlined, no runtime overhead). Cross-tier output may
 // differ by ≤1 u16 LSB — see `linear_to_srgb_u16_all_tiers_within_one_lsb`.
 
-#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn linear_to_srgb_u16_slice_tier(token: Token, input: &[f32], output: &mut [u16]) {
     use crate::rational_poly::{L2S_P, L2S_Q, LINEAR_THRESHOLD};
-    #[allow(non_camel_case_types)]
-    type f32x16 = g_f32x16<Token>;
 
     let (in_chunks, in_rem) = input.as_chunks::<16>();
     let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
@@ -1188,10 +1171,8 @@ pub fn linear_to_srgb_u16_slice(input: &[f32], output: &mut [u16]) {
 // In `no_std` the scalar fallback uses the full polynomial (no LUT).
 
 #[cfg(feature = "std")]
-#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn linear_to_srgb_u16_slice_fast_tier(token: Token, input: &[f32], output: &mut [u16]) {
-    #[allow(non_camel_case_types)]
-    type f32x16 = g_f32x16<Token>;
     let lut = crate::u16_lut::encode_lut();
     let max_idx = crate::u16_lut::ENCODE_LUT_N - 1;
     let scale = crate::u16_lut::ENCODE_SQRT_SCALE;
@@ -1315,10 +1296,8 @@ pub fn srgb_u8_to_linear_rgba_slice(input: &[u8], output: &mut [f32]) {
 // 25%-wasted-SIMD-lanes pattern as the other RGBA paths — wins come from
 // parallelizing the LUT loads.
 
-#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn linear_to_srgb_u8_rgba_slice_tier(token: Token, input: &[f32], output: &mut [u8]) {
-    #[allow(non_camel_case_types)]
-    type f32x16 = g_f32x16<Token>;
     let lut = crate::const_luts::linear_to_srgb_u8();
     let (in_chunks, in_rem) = input.as_chunks::<16>();
     let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
@@ -1445,10 +1424,8 @@ fn inv_alpha_or_zero(a: f32) -> f32 {
 }
 
 #[allow(clippy::needless_range_loop)]
-#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn unpremultiply_linear_to_srgb_u8_rgba_slice_tier(token: Token, input: &[f32], output: &mut [u8]) {
-    #[allow(non_camel_case_types)]
-    type f32x16 = g_f32x16<Token>;
     let lut = crate::const_luts::linear_to_srgb_u8();
     let (in_chunks, in_rem) = input.as_chunks::<16>();
     let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
@@ -1559,11 +1536,9 @@ pub fn srgb_u16_to_linear_rgba_slice(input: &[u16], output: &mut [f32]) {
 // `(alpha * 65535 + 0.5) as u16` direct cast). Same 25% lane-waste pattern
 // as other memory-based RGBA paths.
 
-#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn linear_to_srgb_u16_rgba_slice_tier(token: Token, input: &[f32], output: &mut [u16]) {
     use crate::rational_poly::{L2S_P, L2S_Q, LINEAR_THRESHOLD};
-    #[allow(non_camel_case_types)]
-    type f32x16 = g_f32x16<Token>;
 
     let (in_chunks, in_rem) = input.as_chunks::<16>();
     let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
@@ -1634,10 +1609,8 @@ pub fn linear_to_srgb_u16_rgba_slice(input: &[f32], output: &mut [u16]) {
 // bit-exact across tiers.
 
 #[cfg(feature = "std")]
-#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn linear_to_srgb_u16_rgba_slice_fast_tier(token: Token, input: &[f32], output: &mut [u16]) {
-    #[allow(non_camel_case_types)]
-    type f32x16 = g_f32x16<Token>;
     let lut = crate::u16_lut::encode_lut();
     let max_idx = crate::u16_lut::ENCODE_LUT_N - 1;
     let scale = crate::u16_lut::ENCODE_SQRT_SCALE;
@@ -1700,10 +1673,8 @@ pub fn linear_to_srgb_u16_rgba_slice_fast(input: &[f32], output: &mut [u16]) {
 // Custom Gamma Slice Functions
 // ============================================================================
 
-#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn gamma_to_linear_slice_tier(token: Token, values: &mut [f32], gamma: f32) {
-    #[allow(non_camel_case_types)]
-    type f32x16 = g_f32x16<Token>;
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         let v = f32x16::from_array(token, *chunk);
@@ -1734,10 +1705,8 @@ pub fn gamma_to_linear_slice(values: &mut [f32], gamma: f32) {
     )
 }
 
-#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn linear_to_gamma_slice_tier(token: Token, values: &mut [f32], gamma: f32) {
-    #[allow(non_camel_case_types)]
-    type f32x16 = g_f32x16<Token>;
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         let v = f32x16::from_array(token, *chunk);
@@ -2178,10 +2147,8 @@ pub fn unpremultiply_linear_to_gamma_rgba_slice(values: &mut [f32], gamma: f32) 
 // falls through to the per-element TF function.
 
 #[cfg(feature = "transfer")]
-#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn bt709_to_linear_slice_tier(token: Token, values: &mut [f32]) {
-    #[allow(non_camel_case_types)]
-    type f32x16 = g_f32x16<Token>;
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         let v = f32x16::from_array(token, *chunk);
@@ -2210,10 +2177,8 @@ pub fn bt709_to_linear_slice(values: &mut [f32]) {
 }
 
 #[cfg(feature = "transfer")]
-#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn linear_to_bt709_slice_tier(token: Token, values: &mut [f32]) {
-    #[allow(non_camel_case_types)]
-    type f32x16 = g_f32x16<Token>;
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         let v = f32x16::from_array(token, *chunk);
@@ -2242,10 +2207,8 @@ pub fn linear_to_bt709_slice(values: &mut [f32]) {
 }
 
 #[cfg(feature = "transfer")]
-#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn pq_to_linear_slice_tier(token: Token, values: &mut [f32]) {
-    #[allow(non_camel_case_types)]
-    type f32x16 = g_f32x16<Token>;
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         let v = f32x16::from_array(token, *chunk);
@@ -2274,10 +2237,8 @@ pub fn pq_to_linear_slice(values: &mut [f32]) {
 }
 
 #[cfg(feature = "transfer")]
-#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn linear_to_pq_slice_tier(token: Token, values: &mut [f32]) {
-    #[allow(non_camel_case_types)]
-    type f32x16 = g_f32x16<Token>;
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         let v = f32x16::from_array(token, *chunk);
@@ -2306,10 +2267,8 @@ pub fn linear_to_pq_slice(values: &mut [f32]) {
 }
 
 #[cfg(feature = "transfer")]
-#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn hlg_to_linear_slice_tier(token: Token, values: &mut [f32]) {
-    #[allow(non_camel_case_types)]
-    type f32x16 = g_f32x16<Token>;
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         let v = f32x16::from_array(token, *chunk);
@@ -2338,10 +2297,8 @@ pub fn hlg_to_linear_slice(values: &mut [f32]) {
 }
 
 #[cfg(feature = "transfer")]
-#[archmage::magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn linear_to_hlg_slice_tier(token: Token, values: &mut [f32]) {
-    #[allow(non_camel_case_types)]
-    type f32x16 = g_f32x16<Token>;
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     for chunk in chunks {
         let v = f32x16::from_array(token, *chunk);
