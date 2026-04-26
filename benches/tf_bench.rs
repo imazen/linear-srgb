@@ -1,6 +1,6 @@
 //! Benchmarks for all transfer functions across tiers (scalar, x8, x16).
 
-use linear_srgb::tf;
+use linear_srgb::default as tf;
 use linear_srgb::tokens;
 use std::hint::black_box;
 use zenbench::criterion_compat::*;
@@ -396,7 +396,7 @@ fn bench_tf_scalar_via_dispatch(_c: &mut Criterion) {}
 
 #[cfg(feature = "transfer")]
 mod old_dispatchers {
-    use linear_srgb::tf;
+    use linear_srgb::default as tf;
 
     #[archmage::autoversion]
     pub fn bt709_to_linear_slice_old(values: &mut [f32]) {
@@ -440,7 +440,7 @@ mod old_dispatchers {
 // TF variants existed (skipping alpha by hand), so we can measure the gain.
 #[cfg(feature = "transfer")]
 mod old_rgba_fallbacks {
-    use linear_srgb::tf;
+    use linear_srgb::default as tf;
 
     macro_rules! rgba_scalar {
         ($name:ident, $fn:path) => {
@@ -481,9 +481,9 @@ fn make_rgba_linear() -> Vec<f32> {
         .chunks_exact(4)
         .flat_map(|px| {
             [
-                linear_srgb::tf::srgb_to_linear(px[0]),
-                linear_srgb::tf::srgb_to_linear(px[1]),
-                linear_srgb::tf::srgb_to_linear(px[2]),
+                linear_srgb::default::srgb_to_linear(px[0]),
+                linear_srgb::default::srgb_to_linear(px[1]),
+                linear_srgb::default::srgb_to_linear(px[2]),
                 px[3],
             ]
         })

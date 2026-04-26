@@ -7,9 +7,9 @@
 Internally a major refactor of `src/simd.rs` (issue #23) that **does not
 change the public API surface in any breaking way** — `cargo semver-checks`
 reports 196/196 pass against 0.6.11, and the only API diff is additive
-(8 new public items listed below). Plus several SIMD perf improvements
-on existing public functions and the polynomial-coefficient refit that
-landed between 0.6.10 and 0.6.11 but never made the changelog.
+(4 new `pub fn`s in `tokens::x8`, listed below). Plus several SIMD perf
+improvements on existing public functions and the polynomial-coefficient
+refit that landed between 0.6.10 and 0.6.11 but never made the changelog.
 
 ### Added
 
@@ -45,15 +45,12 @@ landed between 0.6.10 and 0.6.11 but never made the changelog.
   `hlg_to_linear_rgba_slice`, `linear_to_hlg_rgba_slice`. Applies the TF
   to every RGB lane while leaving alpha bit-identical (e4685e8).
 
-- **`tokens::x8` u16 polynomial rites** — `srgb_u16_to_linear_v3`,
-  `srgb_u16_to_linear_scalar`, `linear_to_srgb_u16_v3`,
-  `linear_to_srgb_u16_scalar` are now `pub`. Plus `pub use NeonToken`,
-  `pub use Wasm128Token` re-exports in the `tokens::x8` namespace
-  (7ab2e61, closes #20). Closes #18 (HLG regression on small slices).
-
-- **`pub mod tf`** with `srgb_to_linear` / `linear_to_srgb` free fns
-  exposing the precise scalar transfer functions outside the `precise`
-  module path (7ab2e61).
+- **`tokens::x8` u16 polynomial rites** are now `pub`:
+  `srgb_u16_to_linear_v3`, `srgb_u16_to_linear_scalar`,
+  `linear_to_srgb_u16_v3`, `linear_to_srgb_u16_scalar`. Lets downstream
+  pipelines invoke u16↔linear inside their own `#[arcane]` blocks
+  without going through the slice dispatcher (7ab2e61, closes #20).
+  Closes #18 (HLG regression on small slices).
 
 - **Fitter script `scripts/fit_srgb_fast.py`** committed with the inputs
   used to produce the current rational-polynomial coefficients (degrees,

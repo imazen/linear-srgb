@@ -114,9 +114,6 @@ pub fn linear_srgb::precise::linear_to_srgb_f64(linear: f64) -> f64
 pub fn linear_srgb::precise::srgb_to_linear(gamma: f32) -> f32
 pub fn linear_srgb::precise::srgb_to_linear_extended(gamma: f32) -> f32
 pub fn linear_srgb::precise::srgb_to_linear_f64(gamma: f64) -> f64
-pub mod linear_srgb::tf
-pub fn linear_srgb::tf::linear_to_srgb(v: f32) -> f32
-pub fn linear_srgb::tf::srgb_to_linear(v: f32) -> f32
 pub mod linear_srgb::tokens
 pub use linear_srgb::tokens::X64V3Token
 pub use linear_srgb::tokens::X64V4Token
@@ -149,8 +146,6 @@ pub fn linear_srgb::tokens::x4::srgb_to_linear_extended_v3(token: archmage::toke
 pub fn linear_srgb::tokens::x4::srgb_to_linear_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32])
 pub fn linear_srgb::tokens::x4::srgb_to_linear_v3(token: archmage::tokens::generated::x86::X64V3Token, srgb: [f32; 4]) -> [f32; 4]
 pub mod linear_srgb::tokens::x8
-pub use linear_srgb::tokens::x8::NeonToken
-pub use linear_srgb::tokens::x8::Wasm128Token
 pub use linear_srgb::tokens::x8::X64V3Token
 pub fn linear_srgb::tokens::x8::gamma_to_linear_slice_v3(token: archmage::tokens::generated::x86::X64V3Token, values: &mut [f32], gamma: f32)
 pub fn linear_srgb::tokens::x8::gamma_to_linear_v3(token: archmage::tokens::generated::x86::X64V3Token, encoded: [f32; 8], gamma: f32) -> [f32; 8]

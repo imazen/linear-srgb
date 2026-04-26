@@ -8,7 +8,8 @@
 
 use archmage::rite;
 
-pub use archmage::{NeonToken, Wasm128Token, X64V3Token};
+// 8-wide is AVX2/V3-only; NEON and Wasm128 are 4-wide and live in `tokens::x4`.
+pub use archmage::X64V3Token;
 
 use magetypes::simd::f32x8 as mt_f32x8;
 use magetypes::simd::generic::f32x8 as gen_f32x8;
