@@ -6,10 +6,17 @@
 
 Internally a major refactor of `src/simd.rs` (issue #23) that **does not
 change the public API surface in any breaking way** — `cargo semver-checks`
-reports 196/196 pass against 0.6.11, and the only API diff is additive
-(4 new `pub fn`s in `tokens::x8`, listed below). Plus several SIMD perf
-improvements on existing public functions and the polynomial-coefficient
-refit that landed between 0.6.10 and 0.6.11 but never made the changelog.
+reports 196/196 pass against 0.6.11. The only API diff vs 0.6.11 is
+additive: 4 new `pub fn`s in `tokens::x8` (listed below). Plus several
+SIMD perf improvements on existing public functions and the polynomial-
+coefficient refit that landed between 0.6.10 and 0.6.11 but never made
+the changelog.
+
+> **Note on `linear_srgb::tf`:** the module remains `pub` for compatibility
+> with 0.6.11 callers that import through it. New code should prefer
+> `linear_srgb::default::*` — every scalar function in `tf` is also
+> re-exported there with the same name. The `tf` path is documented as a
+> backward-compat path; a future major release may make it `pub(crate)`.
 
 ### Added
 

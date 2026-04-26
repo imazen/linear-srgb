@@ -232,12 +232,19 @@ pub mod lut;
 /// name collisions with the rational polynomial sRGB rites).
 pub mod tokens;
 
-// Internal organization for the per-curve scalar implementations consumed
-// by `crate::tokens::{x4, x8, x16}`. Not public — every user-facing scalar
-// function this module hosts is already re-exported by `default` (sRGB +
-// BT.709/PQ/HLG when `transfer` is on); a second pub path would only create
-// name-overlap confusion.
-pub(crate) mod tf;
+/// Transfer functions: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).
+///
+/// **Prefer [`default`]** — every scalar in this module is already
+/// re-exported there with the same name (gated on `transfer` for the HDR
+/// curves). `tf` exists primarily for internal organization of the
+/// per-curve implementations consumed by [`tokens`]; it is `pub` for
+/// backward compatibility with 0.6.x callers that imported through this
+/// path. New code should use `linear_srgb::default::*`.
+///
+/// BT.709 / PQ / HLG scalars require the `transfer` feature. sRGB-only
+/// helpers compile unconditionally so the extended-range slice functions
+/// (not gated on `transfer`) can link.
+pub mod tf;
 
 /// IEC 61966-2-1:1999 textbook sRGB transfer functions.
 ///

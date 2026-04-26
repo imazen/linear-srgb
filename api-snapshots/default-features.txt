@@ -114,6 +114,9 @@ pub fn linear_srgb::precise::linear_to_srgb_f64(linear: f64) -> f64
 pub fn linear_srgb::precise::srgb_to_linear(gamma: f32) -> f32
 pub fn linear_srgb::precise::srgb_to_linear_extended(gamma: f32) -> f32
 pub fn linear_srgb::precise::srgb_to_linear_f64(gamma: f64) -> f64
+pub mod linear_srgb::tf
+pub fn linear_srgb::tf::linear_to_srgb(v: f32) -> f32
+pub fn linear_srgb::tf::srgb_to_linear(v: f32) -> f32
 pub mod linear_srgb::tokens
 pub use linear_srgb::tokens::X64V3Token
 pub use linear_srgb::tokens::X64V4Token
