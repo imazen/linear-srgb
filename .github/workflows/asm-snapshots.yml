@@ -1,12 +1,24 @@
 name: ASM snapshots
 
-# Informational-only: re-dumps per-target ASM and surfaces any diff vs the
-# committed baseline as a job summary + uploaded artifact. Does NOT fail
-# the build — ASM is rustc-version-deterministic but not stable across
-# toolchain bumps, label numbering shifts on cosmetic body reorders, and
-# `cargo asm` output format itself moves. Treating drift as a hard error
-# created false-positive CI failures on harmless changes; the snapshots
-# are most useful as a "what changed" signal during code review.
+# Two-tier gate (issue #24 hardening):
+#
+#   1. `*.essence` — opcode-only normalized form. Stripped of registers,
+#      immediates, basic-block labels, .cfi_* directives, and section
+#      metadata; what remains is the instruction *shape*. **Asserted as
+#      a hard gate** via `git diff --exit-code` — drift here means
+#      something genuinely changed in codegen (new instruction types,
+#      altered instruction count, memory-access pattern shift), not just
+#      register renaming or label renumbering.
+#
+#   2. `*.s` — full assembly listing. Diff is rendered into the GitHub
+#      job summary for human review, and the regenerated files are
+#      uploaded as a per-target artifact. **Not a hard gate** — these
+#      drift on cosmetic toolchain reshuffles that the essence form
+#      normalizes away.
+#
+# The dump itself runs under `continue-on-error: true` — if linker /
+# tooling format issues break the dump, the failure shows in the summary
+# instead of blocking the PR. Real fixes get tracked in issue #24.
 
 on:
   push:
@@ -55,9 +67,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # Pin cargo-show-asm so output-format changes between releases don't
+      # spuriously break the gate. Bump the pin in the same PR that
+      # regenerates snapshots after verifying the format diff is benign.
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-show-asm
+          tool: cargo-show-asm@0.2.58
 
       - name: Re-dump
         # Don't fail the job if the dump itself errors — surface the failure
@@ -67,7 +82,7 @@ jobs:
         id: dump
         run: scripts/dump-asm.sh "${{ matrix.target }}"
 
-      - name: Surface diff in job summary
+      - name: Render diff in job summary
         if: always()
         run: |
           {
@@ -77,28 +92,38 @@ jobs:
               echo "**\`scripts/dump-asm.sh\` failed on this target.** See the"
               echo "step log above for the actual error. Snapshot comparison"
               echo "is skipped this run."
-              echo ""
               exit 0
             fi
             if git diff --quiet asm-snapshots/${{ matrix.target }}; then
-              echo "No drift — codegen unchanged from the committed baseline."
+              echo "No drift — codegen and essence both unchanged."
               exit 0
             fi
-            echo "**Codegen drifted from the committed baseline.** This is"
-            echo "informational only (not a CI failure). Common harmless"
-            echo "causes: rustc toolchain bump, basic-block label renumbering"
-            echo "after a body edit, register-allocator reshuffle. Read the"
-            echo "diff and decide whether the change is load-bearing — see"
-            echo "\`asm-snapshots/README.md\` for the rubric."
+            essence_drifted=no
+            full_drifted=no
+            git diff --quiet "asm-snapshots/${{ matrix.target }}/*.essence" \
+              || essence_drifted=yes
+            git diff --quiet "asm-snapshots/${{ matrix.target }}/*.s" \
+              || full_drifted=yes
+            if [[ "$essence_drifted" == "yes" ]]; then
+              echo "**Opcode-essence drifted.** This is the hard-gated form;"
+              echo "drift here means real codegen change (new instructions,"
+              echo "different instruction count, altered memory-access shape)."
+              echo "The job will fail in the next step."
+            elif [[ "$full_drifted" == "yes" ]]; then
+              echo "**Cosmetic .s drift only.** Essence is unchanged →"
+              echo "register renaming / label renumbering / scheduling reshuffle."
+              echo "Not a CI failure; review at your leisure and regenerate"
+              echo "the .s files when convenient."
+            fi
             echo ""
-            echo "If the change is intentional, regenerate:"
+            echo "Regenerate locally if the change is intentional:"
             echo ""
             echo '```'
             echo "scripts/dump-asm.sh ${{ matrix.target }}"
             echo '```'
             echo ""
-            echo "and commit. The full diff and the regenerated snapshots"
-            echo "are attached as the \`asm-${{ matrix.target }}\` artifact."
+            echo "Full snapshots are attached as the"
+            echo "\`asm-${{ matrix.target }}\` artifact."
             echo ""
             echo "<details><summary>Files with drift</summary>"
             echo ""
@@ -107,13 +132,35 @@ jobs:
             echo '```'
             echo "</details>"
             echo ""
-            echo "<details><summary>Full unified diff</summary>"
+            echo "<details><summary>Essence diff (the gated form)</summary>"
             echo ""
             echo '```diff'
-            git diff asm-snapshots/${{ matrix.target }}
+            git diff -- "asm-snapshots/${{ matrix.target }}/*.essence" || true
+            echo '```'
+            echo "</details>"
+            echo ""
+            echo "<details><summary>Full .s diff (review only)</summary>"
+            echo ""
+            echo '```diff'
+            git diff -- "asm-snapshots/${{ matrix.target }}/*.s" || true
             echo '```'
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # Hard gate on the opcode-essence files.
+      - name: Assert essence unchanged (hard gate)
+        if: steps.dump.outcome == 'success'
+        run: |
+          if ! git diff --exit-code -- "asm-snapshots/${{ matrix.target }}/*.essence"; then
+            echo ""
+            echo "::error::Opcode essence drifted on ${{ matrix.target }}."
+            echo "If the change is intentional (e.g., a deliberate refactor),"
+            echo "regenerate locally and commit:"
+            echo "  scripts/dump-asm.sh ${{ matrix.target }}"
+            echo "See asm-snapshots/README.md for what counts as a real"
+            echo "codegen change vs cosmetic noise."
+            exit 1
+          fi
 
       - name: Upload regenerated snapshots
         if: always()

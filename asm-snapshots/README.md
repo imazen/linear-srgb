@@ -5,21 +5,64 @@ captured by `cargo asm` and re-checked in CI. Each `stub_<fn>` is
 `#[inline(never)] #[no_mangle]` so it survives as its own symbol in the
 example binary, with the public dispatcher's per-tier code inlined into it.
 
-**Informational, not a hard CI gate.** The
-[`asm-snapshots.yml`](../.github/workflows/asm-snapshots.yml) workflow
-re-dumps on every PR and main push, surfaces any diff in the job summary,
-and uploads the regenerated files as artifacts. **It does not fail the
-build on drift.** ASM is rustc-version-deterministic but not stable across
-toolchain bumps, label numbering shifts on cosmetic body reorders, and
-`cargo asm`'s output format itself is a moving target — treating drift as
-a hard error produced more false positives than real catches.
+## Two files per stub
 
-The committed snapshots are still load-bearing as a "last-known-good"
-reference: reviewers can see exactly what changed in codegen during a PR
-without running anything locally. For the original Pattern 2 verification
-(chunk-size unification on NEON/WASM), the snapshots showed the expected
-4× loop unrolling with identical per-pixel ops — the signal landed even
-without the hard gate.
+For each `(target, stub)` pair we commit two files:
+
+| File | Role | Gate behavior |
+|---|---|---|
+| `<stub>.s` | Full assembly listing — registers, immediates, labels, `.cfi_*` directives, section metadata, all of it. Useful for human review when the essence drifts. | **Not asserted.** Diff is rendered into the GitHub job summary and the regenerated files are uploaded as a per-target artifact (`asm-<target>`, 30-day retention). |
+| `<stub>.essence` | Opcode-only normalized form. Each line is `MNEMONIC` + optional ` MEM`/` IMM` tags reflecting the operand shape. Stripped of registers, labels, immediate values, addressing-mode offsets, directives. | **Hard gate.** CI runs `git diff --exit-code` on the `.essence` files. Drift here means real codegen change (new instruction types, instruction-count delta, memory-access pattern shift) — not just register renaming or label renumbering. |
+
+The two-tier scheme came out of issue #24. The original single-tier gate
+asserted on the full `.s` files and triggered false positives on every
+toolchain bump, basic-block label renumbering after a cosmetic body
+reorder, or `cargo-show-asm` output-format change. Normalizing to opcode
+shape kills those false positives while still catching the codegen
+changes we actually want a gate for.
+
+## What the essence form catches
+
+- New instruction types appearing — e.g., a stray `call panic_bounds_check` indicates we lost a fixed-size-array bounds-check elimination.
+- Instruction-count change — different unrolling factor, body inlined twice, etc.
+- Memory-access pattern change — a `LDR` becoming `LDR MEM IMM` (pre-indexed), or a load disappearing entirely.
+- Branch-shape change — new conditional branches, different basic-block count.
+
+## What it lets through
+
+- Register renaming (`v22.4s` → `v23.4s`).
+- Basic-block label renumbering (`.LBB12_2` → `.LBB14_5`).
+- Immediate constant changes that don't alter semantics (offset reshuffles after a function-prologue reorder).
+- Instruction scheduling within an opcode-equivalent sequence.
+
+These are all things the LLVM backend can do across rustc versions
+without changing what the code does. The essence diff is invariant to
+them; the full `.s` diff isn't.
+
+## Regenerating
+
+```bash
+scripts/dump-asm.sh                # all targets
+scripts/dump-asm.sh aarch64        # one target (substring match)
+```
+
+This rebuilds the example binary, dumps each stub's full assembly via
+`cargo asm`, and produces the corresponding `.essence` alongside. Both
+files commit together — never regenerate one without the other.
+
+When CI flags an essence drift you believe is intentional (a real
+refactor that changes instruction shape), regenerate both, review the
+full `.s` diff to sanity-check what changed, then commit.
+
+## Targets
+
+`aarch64-unknown-linux-gnu` (NEON) and `wasm32-unknown-unknown`
+(SIMD128) — the two paths where Pattern 2 of issue #23 produced new
+codegen via the `f32x16` polyfill (4-wide → 16-wide outer loops via
+4× f32x4). x86_64 V3/V4 are intentionally not snapshotted: their
+chunk size didn't change in Pattern 2, and on x86_64 the SIMD body
+lives in separate `__arcane_*_v3 / _v4` symbols not reachable from the
+example stubs.
 
 ## Targets
 
