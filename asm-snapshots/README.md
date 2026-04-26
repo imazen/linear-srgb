@@ -5,10 +5,21 @@ captured by `cargo asm` and re-checked in CI. Each `stub_<fn>` is
 `#[inline(never)] #[no_mangle]` so it survives as its own symbol in the
 example binary, with the public dispatcher's per-tier code inlined into it.
 
-This is the **codegen gate** for issue #23 Pattern 2 — the chunk-size
-unification (4-wide → 16-wide via `f32x16` polyfill on NEON/WASM) MUST
-produce equivalent machine code to the hand-written 4-wide loops it
-replaces. ASM diff against committed snapshots is the deterministic answer.
+**Informational, not a hard CI gate.** The
+[`asm-snapshots.yml`](../.github/workflows/asm-snapshots.yml) workflow
+re-dumps on every PR and main push, surfaces any diff in the job summary,
+and uploads the regenerated files as artifacts. **It does not fail the
+build on drift.** ASM is rustc-version-deterministic but not stable across
+toolchain bumps, label numbering shifts on cosmetic body reorders, and
+`cargo asm`'s output format itself is a moving target — treating drift as
+a hard error produced more false positives than real catches.
+
+The committed snapshots are still load-bearing as a "last-known-good"
+reference: reviewers can see exactly what changed in codegen during a PR
+without running anything locally. For the original Pattern 2 verification
+(chunk-size unification on NEON/WASM), the snapshots showed the expected
+4× loop unrolling with identical per-pixel ops — the signal landed even
+without the hard gate.
 
 ## Targets
 

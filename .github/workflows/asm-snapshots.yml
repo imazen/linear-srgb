@@ -1,5 +1,13 @@
 name: ASM snapshots
 
+# Informational-only: re-dumps per-target ASM and surfaces any diff vs the
+# committed baseline as a job summary + uploaded artifact. Does NOT fail
+# the build — ASM is rustc-version-deterministic but not stable across
+# toolchain bumps, label numbering shifts on cosmetic body reorders, and
+# `cargo asm` output format itself moves. Treating drift as a hard error
+# created false-positive CI failures on harmless changes; the snapshots
+# are most useful as a "what changed" signal during code review.
+
 on:
   push:
     branches: [main]
@@ -11,7 +19,7 @@ env:
 
 jobs:
   asm-diff:
-    name: ASM snapshot diff
+    name: ASM snapshot diff (informational)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -51,19 +59,67 @@ jobs:
         with:
           tool: cargo-show-asm
 
-      - name: Re-dump and diff
+      - name: Re-dump
+        # Don't fail the job if the dump itself errors — surface the failure
+        # in the summary. Real reasons it might fail (linker missing, cargo
+        # asm output format change) are worth seeing without blocking PRs.
+        continue-on-error: true
+        id: dump
+        run: scripts/dump-asm.sh "${{ matrix.target }}"
+
+      - name: Surface diff in job summary
+        if: always()
         run: |
-          if ! scripts/dump-asm.sh "${{ matrix.target }}"; then
-            echo "::error::cargo asm dump failed"
-            exit 1
-          fi
-          if ! git diff --exit-code asm-snapshots/${{ matrix.target }}; then
+          {
+            echo "## ASM snapshot diff — \`${{ matrix.target }}\`"
             echo ""
-            echo "::error::ASM codegen drifted on ${{ matrix.target }}."
-            echo "Inspect the diff above. If the change is intentional"
-            echo "(e.g., a deliberate refactor), regenerate the snapshot:"
-            echo "  scripts/dump-asm.sh ${{ matrix.target }}"
-            echo "and commit the result. See asm-snapshots/README.md for"
-            echo "what counts as 'OK drift' vs 'load-bearing diff'."
-            exit 1
-          fi
+            if [[ "${{ steps.dump.outcome }}" == "failure" ]]; then
+              echo "**\`scripts/dump-asm.sh\` failed on this target.** See the"
+              echo "step log above for the actual error. Snapshot comparison"
+              echo "is skipped this run."
+              echo ""
+              exit 0
+            fi
+            if git diff --quiet asm-snapshots/${{ matrix.target }}; then
+              echo "No drift — codegen unchanged from the committed baseline."
+              exit 0
+            fi
+            echo "**Codegen drifted from the committed baseline.** This is"
+            echo "informational only (not a CI failure). Common harmless"
+            echo "causes: rustc toolchain bump, basic-block label renumbering"
+            echo "after a body edit, register-allocator reshuffle. Read the"
+            echo "diff and decide whether the change is load-bearing — see"
+            echo "\`asm-snapshots/README.md\` for the rubric."
+            echo ""
+            echo "If the change is intentional, regenerate:"
+            echo ""
+            echo '```'
+            echo "scripts/dump-asm.sh ${{ matrix.target }}"
+            echo '```'
+            echo ""
+            echo "and commit. The full diff and the regenerated snapshots"
+            echo "are attached as the \`asm-${{ matrix.target }}\` artifact."
+            echo ""
+            echo "<details><summary>Files with drift</summary>"
+            echo ""
+            echo '```'
+            git diff --stat asm-snapshots/${{ matrix.target }}
+            echo '```'
+            echo "</details>"
+            echo ""
+            echo "<details><summary>Full unified diff</summary>"
+            echo ""
+            echo '```diff'
+            git diff asm-snapshots/${{ matrix.target }}
+            echo '```'
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload regenerated snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asm-${{ matrix.target }}
+          path: asm-snapshots/${{ matrix.target }}/
+          if-no-files-found: warn
+          retention-days: 30
