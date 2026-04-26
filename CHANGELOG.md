@@ -2,91 +2,120 @@
 
 ## [Unreleased]
 
+## [0.6.12] - 2026-04-25
+
+Internally a major refactor of `src/simd.rs` (issue #23) that **does not
+change the public API surface in any breaking way** — `cargo semver-checks`
+reports 196/196 pass against 0.6.11, and the only API diff is additive
+(8 new public items listed below). Plus several SIMD perf improvements
+on existing public functions and the polynomial-coefficient refit that
+landed between 0.6.10 and 0.6.11 but never made the changelog.
+
 ### Added
 
 - **Public API surface gate** via `cargo-public-api` snapshots in
   `api-snapshots/` (default + all-features) plus a `cargo semver-checks`
-  job in the new `.github/workflows/api-surface.yml` workflow. Locks the
-  current `pub` surface so internal refactors (issue #23) cannot
-  introduce unintentional public additions or removals without an
-  explicit snapshot update.
+  job in `.github/workflows/api-surface.yml`. Locks the `pub` surface
+  so internal refactors cannot introduce unintentional additions or
+  removals without an explicit snapshot update (a48e84b).
+
+- **Per-target ASM snapshot CI gate** in `.github/workflows/asm-snapshots.yml`
+  + `scripts/dump-asm.sh` + `examples/asm-stub.rs`. Cross-compiles to
+  `aarch64-unknown-linux-gnu` (NEON) and `wasm32-unknown-unknown`
+  (SIMD128), dumps codegen for each public dispatcher via `cargo asm`,
+  and `git diff --exit-code`s against committed baselines (0595cd9, bb64deb).
+
+- **Cross-tier f32 RGBA consistency tests** (`tests/rgba_premultiply_consistency.rs`).
+  Drives each tier permutation via `archmage::testing::for_each_token_permutation`
+  and asserts all tiers produce equivalent f32 output within
+  architecture-appropriate tolerance (FMA vs separate mul+add accounts
+  for ~1 ULP at unit magnitude; bounds calibrated per family). Closes
+  the gap where u8 RGBA cross-tier tests existed but f32 RGBA didn't,
+  letting sub-LSB f32 drift escape detection (b131556).
+
+- **Tango paired-benchmark regression gate** in `tango/`. Compares the
+  local WIP against the published `=0.6.11` crate via `tango-bench`,
+  interleaving both versions in the same process for paired statistics.
+  Six TF slice dispatchers × four input distributions × three sizes
+  (67329f3, b573290).
+
+- **Alpha-preserving RGBA variants for BT.709 / PQ / HLG slices:**
+  `bt709_to_linear_rgba_slice`, `linear_to_bt709_rgba_slice`,
+  `pq_to_linear_rgba_slice`, `linear_to_pq_rgba_slice`,
+  `hlg_to_linear_rgba_slice`, `linear_to_hlg_rgba_slice`. Applies the TF
+  to every RGB lane while leaving alpha bit-identical (e4685e8).
+
+- **`tokens::x8` u16 polynomial rites** — `srgb_u16_to_linear_v3`,
+  `srgb_u16_to_linear_scalar`, `linear_to_srgb_u16_v3`,
+  `linear_to_srgb_u16_scalar` are now `pub`. Plus `pub use NeonToken`,
+  `pub use Wasm128Token` re-exports in the `tokens::x8` namespace
+  (7ab2e61, closes #20). Closes #18 (HLG regression on small slices).
+
+- **`pub mod tf`** with `srgb_to_linear` / `linear_to_srgb` free fns
+  exposing the precise scalar transfer functions outside the `precise`
+  module path (7ab2e61).
+
+- **Fitter script `scripts/fit_srgb_fast.py`** committed with the inputs
+  used to produce the current rational-polynomial coefficients (degrees,
+  domain, weights, restarts). Reproducible from a clean checkout:
+  `python scripts/fit_srgb_fast.py` (04f0e1f).
 
 ### Changed
 
 - **Internal dedup of `src/simd.rs` via archmage 0.9.22 magetypes flags**
-  (issue #23, public API unchanged). 4153 → 4043 lines so far (Pattern 2
-  pending). Bumps `archmage` 0.9.19 → 0.9.22 and `magetypes` 0.9.21 → 0.9.22.
-  - Pattern 3 (`define(f32x16)`): replaced 18 manual
-    `type f32x16 = g_f32x16<Token>;` boilerplate sites with the new
-    `define(...)` flag in the existing `#[magetypes]` attributes.
-  - Pattern 1 (`rite, define`): collapsed 8 hand-written `#[rite]` helpers
+  (issue #23). simd.rs went from 4153 → 3472 lines (-681, -16%). Public
+  API unchanged.
+  - Pattern 3 — `define(f32x16)`: 18 manual
+    `type f32x16 = g_f32x16<Token>;` boilerplate sites collapsed into the
+    new `define(...)` flag inside the existing `#[magetypes(...)]`
+    attributes (0f8f944).
+  - Pattern 1 — `rite, define`: 8 hand-written `#[rite]` helpers
     (`srgb_to_linear_mt`/`_x16`, `linear_to_srgb_mt`/`_x16`,
     `gamma_to_linear_mt`/`_x16_2x8`, `linear_to_gamma_mt`/`_x16_2x8`)
-    into 4 unified `#[magetypes(rite, define(f32x16), v4(cfg(avx512)), v3)]`
+    collapsed into 4 unified `#[magetypes(rite, define(f32x16), ...)]`
     functions. The `pow_midp` polyfill on `f32x16<X64V4Token>` eliminates
-    the `token.v3()` 2×x8 split helpers entirely.
+    the `token.v3()` 2×x8 split helpers (82433fd, eb25e7b cross-arch fix).
+  - Pattern 2 — family-level magetypes: 8 dispatcher families collapsed
+    from 5 hand-written tier dispatchers each (V3, V4, NEON, WASM, scalar)
+    into single `#[magetypes(...)]` bodies. NEON / WASM outer loop changes
+    from 4-wide → 16-wide via `f32x16` polyfill = 4× f32x4; same per-pixel
+    SIMD ops, expected unrolling difference verified by ASM snapshots
+    (1b2f936).
 
-- **Base 4/4 scalar rational polynomial coefficients refit** via polyfit
-  (Sanathanan-Koerner + Levenberg-Marquardt with Nielsen damping, 8 restarts,
-  f32 ULP local search). Exhaustive sweep over all 1.07B f32 values in [0, 1]:
-  - `srgb_to_linear` fast: 11 → **8** ULP max (−27%)
-  - `linear_to_srgb` fast: 14 → **10** ULP max (−29%)
-  - `fast vs precise linear_to_srgb`: 16 → **12** ULP max (−25%)
-  - `fast vs precise srgb_to_linear`: 12 → 12 ULP max (unchanged)
-
-### Tradeoffs (honest)
-
-- **Roundtrip absolute error grew** in a narrow region: fwd 4.17e-7 → 6.56e-7
-  (+57%), inverse 1.01e-6 → 1.49e-6 (+47%). Still well under 1 u16 step (1.53e-5).
-  **No u16 roundtrip regression**: 0 values round-trip to a different u16,
-  same as before.
-- **L2S piecewise threshold gap widened** 1 → 3 ULP. Under the 4 ULP test
-  tolerance, but the margin is narrower.
-- **S2L piecewise threshold gap** unchanged at 1 ULP.
-- **30,273 of 65,536 u16 inputs** now produce different f32 linear values vs
-  the previous release. Any caller with baked test-vector hashes will see
-  failures. Maximum absolute change: 4.99e-7 (well below u16 LSB).
-- Average ULP went up (≤1 → ~3.2) because the peak error was reduced by
-  *spreading* residual error more uniformly. This is expected for a lower
-  max-ULP fit.
-
-### Added
-
-- Fitter script `scripts/fit_srgb_fast.py` committed with the inputs used
-  to produce the current coefficients (degrees, domain, weights, restarts).
-  Coefficients are reproducible from a clean checkout:
-  `python scripts/fit_srgb_fast.py`.
-
-### Changed
-
-- **Linear → sRGB integer quantization paths now SIMD-dispatched**
-  (`linear_to_srgb_u8_slice`, `linear_to_srgb_u8_rgba_slice`,
-  `linear_to_srgb_u16_slice`, `linear_to_srgb_u16_rgba_slice`). Previously
-  scalar loops that serialized on `cvtss2si` → LUT load or on the per-pixel
-  polynomial. Now dispatch through `incant!` over
-  `[v4, v3, neon, wasm128, scalar]`, evaluating the polynomial / LUT index
-  4/8/16-wide per chunk. Measured on Ryzen 7950X, N=10000 elements:
+- **`linear_to_srgb_u8_slice` / `_rgba` / `linear_to_srgb_u16_slice` / `_rgba`
+  now SIMD-dispatched.** Previously scalar loops that serialized on
+  `cvtss2si` → LUT load or on the per-pixel polynomial. Now dispatch
+  through `incant!` over `[v4, v3, neon, wasm128, scalar]`, evaluating
+  the polynomial / LUT index 4/8/16-wide per chunk. On Ryzen 7950X,
+  N=10000 elements (9a2dcc3):
   - `linear_to_srgb_u8_slice`: 10.5µs → 2.9µs (**3.6×**)
   - `linear_to_srgb_u16_slice`: 117µs → 2.3µs (**~51×**)
   - `linear_to_srgb_u8_rgba_slice`: 8.3µs → 3.6µs (**2.3×**)
   - `linear_to_srgb_u16_rgba_slice`: 86µs → 5.6µs (**~15×**)
 
   u8 paths use the 4096-entry LUT with SIMD-computed indices (bit-exact
-  output across all tiers). u16 paths evaluate the rational polynomial in
-  SIMD, then quantize — cross-tier output may differ by ±1 u16 LSB at
-  polynomial boundaries (same ~1-ULP tier tolerance as `linear_to_srgb_slice`
-  has always had on f32 output). Alpha lanes in the RGBA variants remain
-  bit-exact across tiers.
+  across tiers). u16 paths evaluate the rational polynomial in SIMD then
+  quantize — cross-tier output may differ by ±1 u16 LSB at polynomial
+  boundaries. Alpha lanes in the RGBA variants remain bit-exact.
 
-- **Alpha-preserving RGBA variants for BT.709 / PQ / HLG slices:**
-  `bt709_to_linear_rgba_slice`, `linear_to_bt709_rgba_slice`,
-  `pq_to_linear_rgba_slice`, `linear_to_pq_rgba_slice`,
-  `hlg_to_linear_rgba_slice`, `linear_to_hlg_rgba_slice`. Applies the TF
-  to every RGB lane while leaving alpha bit-identical, matching the shape
-  of `srgb_to_linear_rgba_slice`. Full SIMD dispatch across all tiers.
-  Addresses #2 for the HDR transfer functions; docs on the plain `_slice`
-  variants now explicitly warn that alpha is decoded/encoded and point
-  readers at the RGBA counterpart.
+- **Base 4/4 scalar rational polynomial coefficients refit** via polyfit
+  (Sanathanan-Koerner + Levenberg-Marquardt with Nielsen damping, 8 restarts,
+  f32 ULP local search). Exhaustive sweep over all 1.07B f32 values in
+  `[0, 1]` (ebbfc9c):
+  - `srgb_to_linear` fast: 11 → **8** ULP max (−27%)
+  - `linear_to_srgb` fast: 14 → **10** ULP max (−29%)
+  - `fast vs precise linear_to_srgb`: 16 → **12** ULP max (−25%)
+  - `fast vs precise srgb_to_linear`: 12 → 12 ULP max (unchanged)
+
+- **`archmage` 0.9.19 → 0.9.22 / `magetypes` 0.9.21 → 0.9.22** to access
+  the new `magetypes(rite, define(...))` flags used by the issue #23
+  refactor (b052f87).
+
+- **Refactor commits collapsing per-tier slice wrappers via `#[magetypes]`**
+  (no behavior change, structural cleanup) — gamma slice tier wrappers
+  (b399c18), tokens/x4.rs core helpers (736b5de), sRGB extended-range
+  slice tier wrappers (ca95391), BT.709/PQ/HLG slice tier wrappers
+  (ce9b0ce).
 
 ### Fixed
 
@@ -94,10 +123,31 @@
   `bt709_to_linear_slice`, `linear_to_bt709_slice`, `pq_to_linear_slice`,
   `linear_to_pq_slice`, `hlg_to_linear_slice`, and `linear_to_hlg_slice`
   functions were scalar loops with only `#[autoversion]`, so HDR/video
-  callers never reached the AVX-512 / AVX2+FMA / NEON / WASM SIMD128 rites
-  in `tokens::{x4,x8,x16}` that already existed. They now dispatch through
-  `incant!` over `[v4, v3, neon, wasm128, scalar]` like
-  `srgb_to_linear_slice`. Closes #10.
+  callers never reached the AVX-512 / AVX2+FMA / NEON / WASM SIMD128
+  rites in `tokens::{x4,x8,x16}` that already existed. They now dispatch
+  through `incant!` over `[v4, v3, neon, wasm128, scalar]` like
+  `srgb_to_linear_slice`. Closes #10 (54e03b4).
+
+- **Alpha threshold for unpremultiply** moved from a stricter cutoff to
+  the spec'd 1/1024 (74a42a8 — actually shipped in 0.6.11 but not noted
+  there).
+
+### Tradeoffs (honest)
+
+- **Roundtrip absolute error grew** in a narrow region from the polynomial
+  refit: fwd 4.17e-7 → 6.56e-7 (+57%), inverse 1.01e-6 → 1.49e-6 (+47%).
+  Still well under 1 u16 step (1.53e-5). No u16 roundtrip regression: 0
+  values round-trip to a different u16, same as before.
+- **L2S piecewise threshold gap widened** 1 → 3 ULP (under the 4 ULP test
+  tolerance, but the margin is narrower).
+- **30,273 of 65,536 u16 inputs** produce different f32 linear values vs
+  0.6.10. Any caller with baked test-vector hashes will see failures.
+  Maximum absolute change: 4.99e-7 (well below u16 LSB).
+- **NEON / WASM outer-loop unrolling** changed from 4-wide to 16-wide via
+  `f32x16` polyfill. Same per-pixel SIMD instruction sequences; ASM-diff
+  CI gate verified equivalence (no `panic_bounds_check`, no scalar fallback,
+  same `fmla`/`fmin`/`fmax`/`fcmgt`/`bsl` ops on aarch64; same `f32x4.*`
+  on wasm32). Bench verification on aarch64 / wasm32 runtime lives in CI.
 
 ## 0.6.10
 
