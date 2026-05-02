@@ -10,7 +10,7 @@ use magetypes::simd::generic::f32x4;
 
 #[allow(dead_code)]
 #[inline(always)]
-pub(crate) fn srgb_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
+pub fn srgb_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let one = f32x4::splat(t, 1.0);
     let threshold = f32x4::splat(t, rational_poly::SRGB_THRESHOLD);
     let inv_12_92 = f32x4::splat(t, rational_poly::LINEAR_SCALE);
@@ -26,7 +26,7 @@ pub(crate) fn srgb_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> 
 
 #[allow(dead_code)]
 #[inline(always)]
-pub(crate) fn linear_to_srgb_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
+pub fn linear_to_srgb_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let one = f32x4::splat(t, 1.0);
     let threshold = f32x4::splat(t, rational_poly::LINEAR_THRESHOLD);
     let scale = f32x4::splat(t, rational_poly::TWELVE_92);
@@ -45,7 +45,7 @@ use magetypes::simd::backends::F32x8Convert;
 use magetypes::simd::generic::f32x8;
 
 #[inline(always)]
-pub(crate) fn srgb_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
+pub fn srgb_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let one = f32x8::splat(t, 1.0);
     let threshold = f32x8::splat(t, rational_poly::SRGB_THRESHOLD);
     let inv_12_92 = f32x8::splat(t, rational_poly::LINEAR_SCALE);
@@ -60,7 +60,7 @@ pub(crate) fn srgb_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> 
 }
 
 #[inline(always)]
-pub(crate) fn linear_to_srgb_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
+pub fn linear_to_srgb_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let one = f32x8::splat(t, 1.0);
     let threshold = f32x8::splat(t, rational_poly::LINEAR_THRESHOLD);
     let scale = f32x8::splat(t, rational_poly::TWELVE_92);
@@ -76,15 +76,52 @@ pub(crate) fn linear_to_srgb_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> 
 }
 
 // =============================================================================
+// Clamped sRGB — x16
+// =============================================================================
+
+use magetypes::simd::backends::F32x16Convert;
+use magetypes::simd::generic::f32x16;
+
+#[inline(always)]
+pub fn srgb_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
+    let one = f32x16::splat(t, 1.0);
+    let threshold = f32x16::splat(t, rational_poly::SRGB_THRESHOLD);
+    let inv_12_92 = f32x16::splat(t, rational_poly::LINEAR_SCALE);
+
+    let linear = v * inv_12_92;
+    let poly =
+        super::fast_math::eval_rational_poly_x16(t, v, rational_poly::S2L_P, rational_poly::S2L_Q)
+            .min(one);
+
+    let mask = v.simd_le(threshold);
+    f32x16::blend(mask, linear, poly)
+}
+
+#[inline(always)]
+pub fn linear_to_srgb_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
+    let one = f32x16::splat(t, 1.0);
+    let threshold = f32x16::splat(t, rational_poly::LINEAR_THRESHOLD);
+    let scale = f32x16::splat(t, rational_poly::TWELVE_92);
+
+    let linear = v * scale;
+    let s = v.sqrt();
+    let poly =
+        super::fast_math::eval_rational_poly_x16(t, s, rational_poly::L2S_P, rational_poly::L2S_Q)
+            .min(one);
+
+    let mask = v.simd_le(threshold);
+    f32x16::blend(mask, linear, poly)
+}
+
+// =============================================================================
 // Extended-range (sign-preserving, 6/6 rational polynomial) — x16
 // =============================================================================
 
 use magetypes::simd::backends::F32x16Backend;
-use magetypes::simd::generic::f32x16;
 
 /// Extended-range sRGB→linear, 16-wide. `sign(v) * eotf(|v|)` per CSS Color 4.
 #[inline(always)]
-pub(crate) fn srgb_to_linear_extended_x16<T: F32x16Backend>(t: T, v: f32x16<T>) -> f32x16<T> {
+pub fn srgb_to_linear_extended_x16<T: F32x16Backend>(t: T, v: f32x16<T>) -> f32x16<T> {
     use rational_poly::{EXT_S2L_P as P, EXT_S2L_Q as Q};
     let zero = f32x16::zero(t);
     let neg_mask = v.simd_lt(zero);
@@ -116,7 +153,7 @@ pub(crate) fn srgb_to_linear_extended_x16<T: F32x16Backend>(t: T, v: f32x16<T>) 
 
 /// Extended-range linear→sRGB, 16-wide. `sign(v) * oetf(|v|)` per CSS Color 4.
 #[inline(always)]
-pub(crate) fn linear_to_srgb_extended_x16<T: F32x16Backend>(t: T, v: f32x16<T>) -> f32x16<T> {
+pub fn linear_to_srgb_extended_x16<T: F32x16Backend>(t: T, v: f32x16<T>) -> f32x16<T> {
     use rational_poly::{EXT_L2S_P as P, EXT_L2S_Q as Q};
     let zero = f32x16::zero(t);
     let neg_mask = v.simd_lt(zero);

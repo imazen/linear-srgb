@@ -47,7 +47,7 @@ use magetypes::simd::generic::f32x4;
 
 #[allow(dead_code)]
 #[inline(always)]
-pub(crate) fn hlg_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
+pub fn hlg_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let zero = f32x4::zero(t);
     let half = f32x4::splat(t, 0.5);
     let third = f32x4::splat(t, 1.0 / 3.0);
@@ -72,7 +72,7 @@ pub(crate) fn hlg_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
 
 #[allow(dead_code)]
 #[inline(always)]
-pub(crate) fn linear_to_hlg_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
+pub fn linear_to_hlg_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let zero = f32x4::zero(t);
     let threshold = f32x4::splat(t, 1.0 / 12.0);
     let three = f32x4::splat(t, 3.0);
@@ -104,7 +104,7 @@ use magetypes::simd::backends::F32x8Convert;
 use magetypes::simd::generic::f32x8;
 
 #[inline(always)]
-pub(crate) fn hlg_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
+pub fn hlg_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let zero = f32x8::zero(t);
     let half = f32x8::splat(t, 0.5);
     let third = f32x8::splat(t, 1.0 / 3.0);
@@ -126,7 +126,7 @@ pub(crate) fn hlg_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
 }
 
 #[inline(always)]
-pub(crate) fn linear_to_hlg_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
+pub fn linear_to_hlg_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let zero = f32x8::zero(t);
     let threshold = f32x8::splat(t, 1.0 / 12.0);
     let three = f32x8::splat(t, 3.0);
@@ -155,7 +155,7 @@ use magetypes::simd::backends::F32x16Convert;
 use magetypes::simd::generic::f32x16;
 
 #[inline(always)]
-pub(crate) fn hlg_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
+pub fn hlg_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
     let zero = f32x16::zero(t);
     let half = f32x16::splat(t, 0.5);
     let third = f32x16::splat(t, 1.0 / 3.0);
@@ -177,7 +177,7 @@ pub(crate) fn hlg_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<
 }
 
 #[inline(always)]
-pub(crate) fn linear_to_hlg_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
+pub fn linear_to_hlg_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
     let zero = f32x16::zero(t);
     let threshold = f32x16::splat(t, 1.0 / 12.0);
     let three = f32x16::splat(t, 3.0);

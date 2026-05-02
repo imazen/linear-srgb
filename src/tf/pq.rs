@@ -137,7 +137,7 @@ use magetypes::simd::generic::f32x4;
 
 #[allow(dead_code)]
 #[inline(always)]
-pub(crate) fn pq_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
+pub fn pq_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let zero = f32x4::zero(t);
     let a = v.max(zero);
     let x = a.mul_add(a, a);
@@ -155,7 +155,7 @@ pub(crate) fn pq_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
 
 #[allow(dead_code)]
 #[inline(always)]
-pub(crate) fn linear_to_pq_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
+pub fn linear_to_pq_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let zero = f32x4::zero(t);
     let a = v.max(zero);
     let a4 = a.sqrt().sqrt();
@@ -179,7 +179,7 @@ use magetypes::simd::backends::F32x8Convert;
 use magetypes::simd::generic::f32x8;
 
 #[inline(always)]
-pub(crate) fn pq_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
+pub fn pq_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let zero = f32x8::zero(t);
     let a = v.max(zero);
     let x = a.mul_add(a, a);
@@ -196,7 +196,7 @@ pub(crate) fn pq_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
 }
 
 #[inline(always)]
-pub(crate) fn linear_to_pq_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
+pub fn linear_to_pq_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let zero = f32x8::zero(t);
     let a = v.max(zero);
     let a4 = a.sqrt().sqrt();
@@ -220,7 +220,7 @@ use magetypes::simd::backends::F32x16Convert;
 use magetypes::simd::generic::f32x16;
 
 #[inline(always)]
-pub(crate) fn pq_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
+pub fn pq_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
     let zero = f32x16::zero(t);
     let a = v.max(zero);
     let x = a.mul_add(a, a);
@@ -237,7 +237,7 @@ pub(crate) fn pq_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T
 }
 
 #[inline(always)]
-pub(crate) fn linear_to_pq_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
+pub fn linear_to_pq_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
     let zero = f32x16::zero(t);
     let a = v.max(zero);
     let a4 = a.sqrt().sqrt();

@@ -36,13 +36,15 @@ use num_traits::Float; // provides powf/sqrt via libm in no_std
 // (the extended-range sRGB slice path in simd.rs is NOT gated on `transfer`
 // and depends on these); bt709/pq/hlg are opt-in via the `transfer` feature.
 #[cfg(feature = "transfer")]
-pub(crate) mod bt709;
-pub(crate) mod fast_math;
+pub mod bt709;
+pub mod fast_math;
 #[cfg(feature = "transfer")]
-pub(crate) mod hlg;
+pub mod gamma;
 #[cfg(feature = "transfer")]
-pub(crate) mod pq;
-pub(crate) mod srgb;
+pub mod hlg;
+#[cfg(feature = "transfer")]
+pub mod pq;
+pub mod srgb;
 
 // SIMD rites for TFs are now in `crate::tokens::{x4, x8, x16}` (behind `transfer` feature).
 
