@@ -42,6 +42,8 @@ pub(crate) mod fast_math;
 pub(crate) mod hlg;
 #[cfg(feature = "transfer")]
 pub(crate) mod pq;
+#[cfg(feature = "transfer")]
+pub(crate) mod pu;
 pub(crate) mod srgb;
 
 // SIMD rites for TFs are now in `crate::tokens::{x4, x8, x16}` (behind `transfer` feature).
@@ -74,6 +76,11 @@ pub use bt709::{bt709_to_linear, linear_to_bt709};
 pub use hlg::{hlg_to_linear, linear_to_hlg};
 #[cfg(feature = "transfer")]
 pub use pq::{linear_to_pq, pq_to_linear};
+#[cfg(feature = "transfer")]
+pub use pu::{
+    PU_LUMINANCE_MAX_CD_M2, PU_LUMINANCE_MIN_CD_M2, PU_PEAK, PU_REF_WHITE_BT2408, pu_decode,
+    pu_encode,
+};
 
 // =============================================================================
 // Tests

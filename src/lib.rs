@@ -246,6 +246,13 @@ pub mod tokens;
 /// (not gated on `transfer`) can link.
 pub mod tf;
 
+/// Named luma coefficients (BT.2020 NCL, BT.709, BT.601).
+///
+/// Public, always-compiled `[f32; 3]` constants for downstream code
+/// that wants the canonical luma matrix without re-deriving it from
+/// primaries. See module docs for spec references.
+pub mod luma;
+
 /// IEC 61966-2-1:1999 textbook sRGB transfer functions.
 ///
 /// Provides the original specification constants (threshold 0.04045, offset 0.055)
