@@ -540,6 +540,22 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
             },
         );
 
+        // Fast-poly scalar (same C0-continuous curve as the SIMD body — this is
+        // the path a small-N fast-path branch in srgb_to_linear_slice would take)
+        group.bench_with_input(
+            BenchmarkId::new("s2l_scalar_fast", size),
+            &f32_data,
+            |b, data| {
+                let mut output = data.clone();
+                b.iter(|| {
+                    for v in output.iter_mut() {
+                        *v = default::srgb_to_linear(*v);
+                    }
+                    black_box(&output);
+                })
+            },
+        );
+
         // === Linear → sRGB ===
 
         let linear_data: Vec<f32> = f32_data.iter().map(|&v| srgb_to_linear(v)).collect();
@@ -566,6 +582,21 @@ fn bench_dispatch_overhead(c: &mut Criterion) {
                 b.iter(|| {
                     for v in output.iter_mut() {
                         *v = linear_to_srgb(*v);
+                    }
+                    black_box(&output);
+                })
+            },
+        );
+
+        // Fast-poly scalar (same C0-continuous curve as the SIMD body)
+        group.bench_with_input(
+            BenchmarkId::new("l2s_scalar_fast", size),
+            &linear_data,
+            |b, data| {
+                let mut output = data.clone();
+                b.iter(|| {
+                    for v in output.iter_mut() {
+                        *v = default::linear_to_srgb(*v);
                     }
                     black_box(&output);
                 })

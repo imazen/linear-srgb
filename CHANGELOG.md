@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Benchmarks: added `s2l_scalar_fast` / `l2s_scalar_fast` arms** to the
+  `dispatch_overhead` group measuring the C0-continuous fast-poly scalar
+  (`default::srgb_to_linear` / `linear_to_srgb`) per element. Used to falsify
+  the proposed small-slice SIMD/scalar crossover fix on Neoverse-N1: the only
+  correctness-safe scalar (the f64-intermediate rational poly) is slower than
+  the SIMD slice at every size except N=8 (a sub-noise 0.6–1.6 ns gap), and
+  LLVM already hoists the coefficient splats out of the chunk loop, so neither
+  candidate fix produces a measurable win. No `src/` change. Full data:
+  `benchmarks/arm_neoverse_n1_baseline_2026-05-31.md` §6.
+
 ### Fixed
 
 - **Slice tail used a different transfer curve than the SIMD body.** The
