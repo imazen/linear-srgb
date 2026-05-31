@@ -157,7 +157,15 @@ fn srgb_to_linear_slice_tier(_token: Token, values: &mut [f32]) {
         *chunk = incant!(mt_srgb_to_linear(*chunk));
     }
     for v in remainder {
-        *v = crate::scalar::srgb_to_linear(*v);
+        // Match the SIMD body's curve: `srgb_to_linear_fast` is the same
+        // C0-continuous rational polynomial the chunk loop evaluates. The
+        // old `srgb_to_linear` here was the `powf`-based IEC curve — a
+        // different transfer function with a different piecewise threshold,
+        // so a slice whose length isn't a multiple of 16 had a tail of up
+        // to 15 elements converted on a *different* curve than the body
+        // (a real cross-path pixel divergence), and each tail element paid
+        // for a `powf` call.
+        *v = crate::scalar::srgb_to_linear_fast(*v);
     }
 }
 
@@ -170,9 +178,11 @@ fn srgb_to_linear_rgba_slice_tier(_token: Token, values: &mut [f32]) {
         [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
     }
     for pixel in remainder.chunks_exact_mut(4) {
-        pixel[0] = crate::scalar::srgb_to_linear(pixel[0]);
-        pixel[1] = crate::scalar::srgb_to_linear(pixel[1]);
-        pixel[2] = crate::scalar::srgb_to_linear(pixel[2]);
+        // Fast C0-continuous polynomial to match the SIMD body (see
+        // `srgb_to_linear_slice_tier`).
+        pixel[0] = crate::scalar::srgb_to_linear_fast(pixel[0]);
+        pixel[1] = crate::scalar::srgb_to_linear_fast(pixel[1]);
+        pixel[2] = crate::scalar::srgb_to_linear_fast(pixel[2]);
     }
 }
 
@@ -224,7 +234,9 @@ fn linear_to_srgb_slice_tier(_token: Token, values: &mut [f32]) {
         *chunk = incant!(mt_linear_to_srgb(*chunk));
     }
     for v in remainder {
-        *v = crate::scalar::linear_to_srgb(*v);
+        // Match the SIMD body's C0-continuous polynomial (see
+        // `srgb_to_linear_slice_tier`). Was `linear_to_srgb` (powf/IEC).
+        *v = crate::scalar::linear_to_srgb_fast(*v);
     }
 }
 
@@ -237,9 +249,10 @@ fn linear_to_srgb_rgba_slice_tier(_token: Token, values: &mut [f32]) {
         [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
     }
     for pixel in remainder.chunks_exact_mut(4) {
-        pixel[0] = crate::scalar::linear_to_srgb(pixel[0]);
-        pixel[1] = crate::scalar::linear_to_srgb(pixel[1]);
-        pixel[2] = crate::scalar::linear_to_srgb(pixel[2]);
+        // Fast C0-continuous polynomial to match the SIMD body.
+        pixel[0] = crate::scalar::linear_to_srgb_fast(pixel[0]);
+        pixel[1] = crate::scalar::linear_to_srgb_fast(pixel[1]);
+        pixel[2] = crate::scalar::linear_to_srgb_fast(pixel[2]);
     }
 }
 

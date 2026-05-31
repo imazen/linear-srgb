@@ -4,25 +4,15 @@
 .type	stub_srgb_to_linear_slice,@function
 stub_srgb_to_linear_slice:
 	.cfi_startproc
-	str d12, [sp, #-80]!
-	.cfi_def_cfa_offset 80
-	stp d11, d10, [sp, #8]
-	stp d9, d8, [sp, #24]
-	stp x29, x30, [sp, #40]
-	str x21, [sp, #56]
-	stp x20, x19, [sp, #64]
-	add x29, sp, #40
-	.cfi_def_cfa w29, 40
-	.cfi_offset w19, -8
-	.cfi_offset w20, -16
-	.cfi_offset w21, -24
-	.cfi_offset w30, -32
-	.cfi_offset w29, -40
-	.cfi_offset b8, -48
-	.cfi_offset b9, -56
-	.cfi_offset b10, -64
-	.cfi_offset b11, -72
-	.cfi_offset b12, -80
+	str d12, [sp, #-48]!
+	.cfi_def_cfa_offset 48
+	stp d11, d10, [sp, #16]
+	stp d9, d8, [sp, #32]
+	.cfi_offset b8, -8
+	.cfi_offset b9, -16
+	.cfi_offset b10, -24
+	.cfi_offset b11, -32
+	.cfi_offset b12, -48
 	lsl x8, x1, #2
 	ands x9, x8, #0x7fffffffffffffc0
 	b.eq .LBB14_3
@@ -170,63 +160,66 @@ stub_srgb_to_linear_slice:
 	cmp x10, x9
 	b.ne .LBB14_2
 .LBB14_3:
-	ands x19, x8, #0x3c
+	ands x8, x8, #0x3c
 	b.eq .LBB14_11
-	and x8, x1, #0x1ffffffffffffff0
-	mov w9, #61974
+	adrp x10, .LCPI14_0
+	adrp x11, .LCPI14_1
+	and x9, x1, #0x1ffffffffffffff0
+	ldr d0, [x10, :lo12:.LCPI14_0]
+	adrp x10, .LCPI14_2
+	ldr d1, [x11, :lo12:.LCPI14_1]
+	ldr d2, [x10, :lo12:.LCPI14_2]
+	adrp x10, .LCPI14_3
+	adrp x11, .LCPI14_4
+	ldr q3, [x10, :lo12:.LCPI14_3]
+	adrp x10, .LCPI14_5
+	ldr q4, [x11, :lo12:.LCPI14_4]
+	mov w11, #61974
+	ldr q5, [x10, :lo12:.LCPI14_5]
 	mov w10, #33681
-	add x20, x0, x8, lsl #2
-	mov w8, #21227
-	movk w9, #15648, lsl #16
-	movk w8, #15713, lsl #16
-	fmov s9, w9
-	mov w9, #39322
-	fmov s11, w8
-	mov w8, #2711
+	movk w11, #15648, lsl #16
 	movk w10, #15774, lsl #16
-	movk w8, #16263, lsl #16
-	movk w9, #16409, lsl #16
-	fmov s10, w10
-	fmov s12, w8
-	fmov s8, w9
-	mov x21, x20
+	add x9, x0, x9, lsl #2
+	fmov s6, w11
+	fmov s7, w10
+	mov x10, x9
 	b .LBB14_7
 .LBB14_5:
-	fmul s0, s1, s10
+	fcvt d16, s17
+	fmadd d17, d16, d1, d0
+	fadd d18, d16, d2
+	mov v17.d[1], v18.d[0]
+	mov v18.16b, v3.16b
+	fmla v18.2d, v17.2d, v16.d[0]
+	mov v17.16b, v4.16b
+	fmla v17.2d, v18.2d, v16.d[0]
+	mov v18.16b, v5.16b
+	fmla v18.2d, v17.2d, v16.d[0]
+	dup v16.2d, v18.d[1]
+	fdiv v16.2d, v18.2d, v16.2d
+	fcvt s16, d16
 .LBB14_6:
-	subs x19, x19, #4
-	str s0, [x20]
-	mov x20, x21
+	subs x8, x8, #4
+	str s16, [x9]
+	mov x9, x10
 	b.eq .LBB14_11
 .LBB14_7:
-	ldr s1, [x21], #4
-	movi d0, #0000000000000000
-	fcmp s1, #0.0
+	ldr s17, [x10], #4
+	movi d16, #0000000000000000
+	fcmp s17, #0.0
 	b.mi .LBB14_6
-	fcmp s1, s9
-	b.mi .LBB14_5
-	fmov s0, #1.00000000
-	fcmp s1, s0
-	b.pl .LBB14_6
-	fadd s0, s1, s11
-	fmov s1, s8
-	fdiv s0, s0, s12
-	bl powf
+	fmov s16, #1.00000000
+	fcmp s17, s16
+	b.ge .LBB14_6
+	fcmp s17, s6
+	b.hi .LBB14_5
+	fmul s16, s17, s7
 	b .LBB14_6
 .LBB14_11:
-	.cfi_def_cfa wsp, 80
-	ldp x20, x19, [sp, #64]
-	ldr x21, [sp, #56]
-	ldp x29, x30, [sp, #40]
-	ldp d9, d8, [sp, #24]
-	ldp d11, d10, [sp, #8]
-	ldr d12, [sp], #80
+	ldp d9, d8, [sp, #32]
+	ldp d11, d10, [sp, #16]
+	ldr d12, [sp], #48
 	.cfi_def_cfa_offset 0
-	.cfi_restore w19
-	.cfi_restore w20
-	.cfi_restore w21
-	.cfi_restore w30
-	.cfi_restore w29
 	.cfi_restore b8
 	.cfi_restore b9
 	.cfi_restore b10

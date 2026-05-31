@@ -4,24 +4,15 @@
 .type	stub_srgb_to_linear_rgba_slice,@function
 stub_srgb_to_linear_rgba_slice:
 	.cfi_startproc
-	stp d13, d12, [sp, #-80]!
-	.cfi_def_cfa_offset 80
+	str d12, [sp, #-48]!
+	.cfi_def_cfa_offset 48
 	stp d11, d10, [sp, #16]
 	stp d9, d8, [sp, #32]
-	stp x29, x30, [sp, #48]
-	stp x20, x19, [sp, #64]
-	add x29, sp, #48
-	.cfi_def_cfa w29, 32
-	.cfi_offset w19, -8
-	.cfi_offset w20, -16
-	.cfi_offset w30, -24
-	.cfi_offset w29, -32
-	.cfi_offset b8, -40
-	.cfi_offset b9, -48
-	.cfi_offset b10, -56
-	.cfi_offset b11, -64
-	.cfi_offset b12, -72
-	.cfi_offset b13, -80
+	.cfi_offset b8, -8
+	.cfi_offset b9, -16
+	.cfi_offset b10, -24
+	.cfi_offset b11, -32
+	.cfi_offset b12, -48
 	lsl x8, x1, #2
 	ands x8, x8, #0x7fffffffffffffc0
 	b.eq .LBB13_3
@@ -181,101 +172,127 @@ stub_srgb_to_linear_rgba_slice:
 .LBB13_3:
 	tst x1, #0xc
 	b.eq .LBB13_21
-	mov w10, #61974
+	adrp x10, .LCPI13_0
+	adrp x11, .LCPI13_1
 	and x8, x1, #0x1ffffffffffffff0
+	ldr d0, [x10, :lo12:.LCPI13_0]
+	adrp x10, .LCPI13_2
+	ldr d1, [x11, :lo12:.LCPI13_1]
+	ldr d2, [x10, :lo12:.LCPI13_2]
+	adrp x10, .LCPI13_3
+	adrp x11, .LCPI13_4
+	ldr q3, [x10, :lo12:.LCPI13_3]
+	adrp x10, .LCPI13_5
+	ldr q4, [x11, :lo12:.LCPI13_4]
+	mov w11, #61974
+	ldr q5, [x10, :lo12:.LCPI13_5]
+	mov w10, #33681
+	movk w11, #15648, lsl #16
+	movk w10, #15774, lsl #16
 	and x9, x1, #0xc
-	movk w10, #15648, lsl #16
-	mov w11, #33681
-	add x19, x0, x8, lsl #2
-	neg x20, x9
-	fmov s10, w10
-	mov w8, #21227
-	mov w9, #2711
-	mov w10, #39322
-	movk w11, #15774, lsl #16
-	movk w8, #15713, lsl #16
-	movk w9, #16263, lsl #16
-	movk w10, #16409, lsl #16
-	fmov s11, w11
-	fmov s12, w8
-	fmov s13, w9
-	fmov s8, w10
+	fmov s6, w11
+	fmov s7, w10
+	add x8, x0, x8, lsl #2
+	neg x9, x9
 	b .LBB13_7
 .LBB13_5:
-	fmul s0, s1, s11
+	fcvt d16, s18
+	fmadd d17, d16, d1, d0
+	fadd d18, d16, d2
+	mov v17.d[1], v18.d[0]
+	mov v18.16b, v3.16b
+	fmla v18.2d, v17.2d, v16.d[0]
+	mov v17.16b, v4.16b
+	fmla v17.2d, v18.2d, v16.d[0]
+	mov v18.16b, v5.16b
+	fmla v18.2d, v17.2d, v16.d[0]
+	dup v16.2d, v18.d[1]
+	fdiv v16.2d, v18.2d, v16.2d
+	fcvt s17, d16
 .LBB13_6:
-	adds x20, x20, #4
-	str s0, [x19, #8]
-	add x19, x19, #16
+	adds x9, x9, #4
+	str s17, [x8, #8]
+	add x8, x8, #16
 	b.eq .LBB13_21
 .LBB13_7:
-	ldr s1, [x19]
-	movi d9, #0000000000000000
-	movi d0, #0000000000000000
-	fcmp s1, #0.0
-	b.mi .LBB13_12
-	fcmp s1, s10
-	b.pl .LBB13_10
-	fmul s0, s1, s11
-	b .LBB13_12
-.LBB13_10:
-	fmov s0, #1.00000000
-	fcmp s1, s0
-	b.pl .LBB13_12
-	fadd s0, s1, s12
-	fmov s1, s8
-	fdiv s0, s0, s13
-	bl powf
-.LBB13_12:
-	ldr s1, [x19, #4]
-	str s0, [x19]
-	fcmp s1, #0.0
+	ldr s17, [x8]
+	movi d16, #0000000000000000
+	movi d18, #0000000000000000
+	fcmp s17, #0.0
+	b.mi .LBB13_11
+	fmov s18, #1.00000000
+	fcmp s17, s18
+	b.ge .LBB13_11
+	fcmp s17, s6
+	b.ls .LBB13_15
+	fcvt d17, s17
+	fmadd d18, d17, d1, d0
+	fadd d19, d17, d2
+	mov v18.d[1], v19.d[0]
+	mov v19.16b, v3.16b
+	fmla v19.2d, v18.2d, v17.d[0]
+	mov v18.16b, v4.16b
+	fmla v18.2d, v19.2d, v17.d[0]
+	mov v19.16b, v5.16b
+	fmla v19.2d, v18.2d, v17.d[0]
+	dup v17.2d, v19.d[1]
+	fdiv v17.2d, v19.2d, v17.2d
+	fcvt s18, d17
+.LBB13_11:
+	ldr s17, [x8, #4]
+	str s18, [x8]
+	fcmp s17, #0.0
 	b.mi .LBB13_17
-	fcmp s1, s10
-	b.pl .LBB13_15
-	fmul s9, s1, s11
+.LBB13_12:
+	fmov s16, #1.00000000
+	fcmp s17, s16
+	b.ge .LBB13_17
+	fcmp s17, s6
+	b.ls .LBB13_16
+	fcvt d16, s17
+	fmadd d17, d16, d1, d0
+	fadd d18, d16, d2
+	mov v17.d[1], v18.d[0]
+	mov v18.16b, v3.16b
+	fmla v18.2d, v17.2d, v16.d[0]
+	mov v17.16b, v4.16b
+	fmla v17.2d, v18.2d, v16.d[0]
+	mov v18.16b, v5.16b
+	fmla v18.2d, v17.2d, v16.d[0]
+	dup v16.2d, v18.d[1]
+	fdiv v16.2d, v18.2d, v16.2d
+	fcvt s16, d16
 	b .LBB13_17
 .LBB13_15:
-	fmov s9, #1.00000000
-	fcmp s1, s9
-	b.pl .LBB13_17
-	fadd s0, s1, s12
-	fmov s1, s8
-	fdiv s0, s0, s13
-	bl powf
-	fmov s9, s0
+	fmul s18, s17, s7
+	ldr s17, [x8, #4]
+	str s18, [x8]
+	fcmp s17, #0.0
+	b.pl .LBB13_12
+	b .LBB13_17
+.LBB13_16:
+	fmul s16, s17, s7
 .LBB13_17:
-	ldr s1, [x19, #8]
-	movi d0, #0000000000000000
-	str s9, [x19, #4]
-	fcmp s1, #0.0
+	ldr s18, [x8, #8]
+	movi d17, #0000000000000000
+	str s16, [x8, #4]
+	fcmp s18, #0.0
 	b.mi .LBB13_6
-	fcmp s1, s10
-	b.mi .LBB13_5
-	fmov s0, #1.00000000
-	fcmp s1, s0
-	b.pl .LBB13_6
-	fadd s0, s1, s12
-	fmov s1, s8
-	fdiv s0, s0, s13
-	bl powf
+	fmov s17, #1.00000000
+	fcmp s18, s17
+	b.ge .LBB13_6
+	fcmp s18, s6
+	b.hi .LBB13_5
+	fmul s17, s18, s7
 	b .LBB13_6
 .LBB13_21:
-	.cfi_def_cfa wsp, 80
-	ldp x20, x19, [sp, #64]
-	ldp x29, x30, [sp, #48]
 	ldp d9, d8, [sp, #32]
 	ldp d11, d10, [sp, #16]
-	ldp d13, d12, [sp], #80
+	ldr d12, [sp], #48
 	.cfi_def_cfa_offset 0
-	.cfi_restore w19
-	.cfi_restore w20
-	.cfi_restore w30
-	.cfi_restore w29
 	.cfi_restore b8
 	.cfi_restore b9
 	.cfi_restore b10
 	.cfi_restore b11
 	.cfi_restore b12
-	.cfi_restore b13
 	ret

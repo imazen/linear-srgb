@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Slice tail used a different transfer curve than the SIMD body.** The
+  remainder loops in `srgb_to_linear_slice` / `linear_to_srgb_slice` (and
+  their RGBA variants) converted the trailing up-to-15 elements of any
+  slice whose length isn't a multiple of 16 with the `powf`-based IEC
+  curve (`scalar::srgb_to_linear` / `linear_to_srgb`), while the SIMD
+  chunk loop used the C0-continuous rational polynomial. Different
+  transfer function, different piecewise threshold — a cross-path pixel
+  divergence on unaligned slices. The tail now calls
+  `scalar::srgb_to_linear_fast` / `scalar::linear_to_srgb_fast` (the same
+  polynomial), so the whole slice is on one curve. Also a measured
+  2.3–2.7× speedup on the tail on Neoverse-N1 (e.g. a 15-element slice:
+  188.8 → 69.5 ns/call); aligned-size throughput is unchanged. Benchmark
+  provenance: `benchmarks/arm_neoverse_n1_baseline_2026-05-31.md`.
+
 ## [0.6.12] - 2026-04-25
 
 Internally a major refactor of `src/simd.rs` (issue #23) that **does not
