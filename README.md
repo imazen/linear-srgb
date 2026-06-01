@@ -211,17 +211,25 @@ let linear = bt709_to_linear(0.5);    // BT.709 → linear
 
 ### LUT for custom bit depths
 
-```rust
-use linear_srgb::lut::{LinearTable16, EncodingTable16, lut_interp_linear_float};
+Build your own tables for 8/10/12-bit depths (`LinearTable8`/`10`/`12`,
+`EncodeTable8`/`12`):
 
-// 16-bit linearization (65536 entries)
-let lut = LinearTable16::new();
-let linear = lut.lookup(32768);
+```rust
+use linear_srgb::lut::{LinearTable12, EncodeTable12, lut_interp_linear_float};
+
+// 12-bit linearization (4096 entries)
+let lut = LinearTable12::new();
+let linear = lut.lookup(2048);
 
 // Interpolated encoding
-let encode_lut = EncodingTable16::new();
+let encode_lut = EncodeTable12::new();
 let srgb = lut_interp_linear_float(0.5, encode_lut.as_slice());
 ```
+
+For 16-bit, skip the const tables: `LinearTable16` / `EncodeTable16` are
+deprecated (each adds ~1s of const-eval compile time). Use
+`default::srgb_u16_to_linear` and `default::linear_to_srgb_u16` instead —
+they share a SIMD-generated `OnceLock` LUT.
 
 ## API Summary
 
