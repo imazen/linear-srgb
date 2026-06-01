@@ -22,6 +22,23 @@ exclude = [
     "justfile",
     "Cargo.toml.original.txt",
     "fuzz/",
+    # CI assembly/API snapshots — dev-only, not needed by crate consumers
+    "asm-snapshots/",
+    "api-snapshots/",
+    # Dev scripts and Python curve-fitting utilities
+    "scripts/",
+    # Committed benchmark result docs — historical, not needed by consumers
+    "benchmarks/",
+    # Root scratch/historical performance notes
+    "perf.md",
+    # Dev-only reference notes
+    "docs/",
+    # Test suite — not needed in the published package
+    "tests/",
+    # Benchmark source — not needed in the published package
+    "benches/",
+    # Root .gitignore — not needed by consumers
+    ".gitignore",
 ]
 
 [package.metadata.docs.rs]
@@ -51,19 +68,6 @@ unsafe_simd = []
 transfer = []
 # IEC 61966-2-1 textbook constants (legacy, for interop with software that uses the original spec)
 iec = []
-
-[[bench]]
-name = "benchmarks"
-harness = false
-
-[[bench]]
-name = "tf_bench"
-harness = false
-required-features = ["transfer"]
-
-[[bench]]
-name = "rgba_approach"
-harness = false
 
 [[example]]
 name = "accuracy_comparison"

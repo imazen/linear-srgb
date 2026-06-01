@@ -4,6 +4,8 @@
 
 ### Changed
 
+- **Packaging: exclude `asm-snapshots/`, `api-snapshots/`, `scripts/`, `benchmarks/`, `docs/`, `tests/`, `benches/`, `perf.md`, `.gitignore` from published crate.** Reduces package from ~1.1 MB to 579 KiB (126 KiB compressed). `src/data/*.bin` lookup tables remain included (load-bearing `include_bytes!`). Removed `perf.md` from git (historical scratch, superseded by README).
+
 - **Benchmarks: added `s2l_scalar_fast` / `l2s_scalar_fast` arms** to the
   `dispatch_overhead` group measuring the C0-continuous fast-poly scalar
   (`default::srgb_to_linear` / `linear_to_srgb`) per element. Used to falsify
