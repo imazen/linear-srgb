@@ -35,11 +35,13 @@ exclude = [
     "docs/",
     # Test suite — not needed in the published package
     "tests/",
-    # Benchmark source — not needed in the published package
-    "benches/",
     # Root .gitignore — not needed by consumers
     ".gitignore",
 ]
+# NOTE: benches/ is intentionally NOT excluded. The three benches below are
+# `harness = false` (zenbench/criterion-compat), so they MUST be declared as
+# explicit `[[bench]]` targets — and a declared target whose source file is
+# excluded makes `cargo package` verification fail. Benches are small (~76 KB).
 
 [package.metadata.docs.rs]
 all-features = true
@@ -83,3 +85,16 @@ required-features = ["std"]
 [[example]]
 name = "asm-stub"
 required-features = ["std", "transfer"]
+
+[[bench]]
+name = "benchmarks"
+harness = false
+
+[[bench]]
+name = "tf_bench"
+harness = false
+required-features = ["transfer"]
+
+[[bench]]
+name = "rgba_approach"
+harness = false
