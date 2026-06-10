@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Versioned public-API surface snapshot at `docs/public-api/linear-srgb.txt`, regenerated on every `cargo test` by `tests/public_api_doc.rs` (`ZEN_API_DOC=check` verifies in CI, `=off` skips); `justfile` recipes `fmt` / `api-doc` / `api-doc-check`. Replaces the manual `api-snapshots/{default,all}-features.txt` diff gate in `api-surface.yml` with the same strictness (item counts carried over exactly: 173 default / 250 all-features) plus local auto-regen — intentional API changes now land the snapshot in the same commit as the code. The `semver-checks` job is unchanged. Dev-only — not part of the published package.
+
 ### Changed
 
 - **Packaging: exclude `asm-snapshots/`, `api-snapshots/`, `scripts/`, `benchmarks/`, `docs/`, `tests/`, `benches/`, `perf.md`, `.gitignore` from published crate.** Reduces package from ~1.1 MB to 579 KiB (126 KiB compressed). `src/data/*.bin` lookup tables remain included (load-bearing `include_bytes!`). Removed `perf.md` from git (historical scratch, superseded by README).

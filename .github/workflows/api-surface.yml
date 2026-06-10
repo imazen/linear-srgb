@@ -10,47 +10,26 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # The committed snapshot at docs/public-api/linear-srgb.txt is regenerated
+  # by tests/public_api_doc.rs on every local `cargo test`; this job re-runs
+  # it in `check` mode, which fails on any drift (same strictness as the old
+  # api-snapshots/ diff gate it replaces — intentional changes land the
+  # regenerated snapshot in the same commit as the code).
   public-api:
-    name: cargo public-api (snapshot diff)
+    name: cargo public-api (snapshot check)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - name: Install Rust (stable + nightly for rustdoc JSON)
-        uses: dtolnay/rust-toolchain@stable
-      - run: rustup toolchain install nightly --profile minimal
-
+      - uses: dtolnay/rust-toolchain@nightly # rustdoc JSON for cargo-public-api
+      - uses: dtolnay/rust-toolchain@stable # restore stable as default
       - uses: Swatinem/rust-cache@v2
-
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-public-api
-
-      - name: Generate default-features snapshot
-        run: cargo public-api --simplified --features "std,avx512" > /tmp/api-default.txt 2>/dev/null
-
-      - name: Diff default-features snapshot
-        run: |
-          if ! diff -u api-snapshots/default-features.txt /tmp/api-default.txt; then
-            echo ""
-            echo "::error::Public API surface changed (default features)."
-            echo "If this is intentional, regenerate the snapshot:"
-            echo "  cargo public-api --simplified --features \"std,avx512\" 2>/dev/null > api-snapshots/default-features.txt"
-            exit 1
-          fi
-
-      - name: Generate all-features snapshot
-        run: cargo public-api --simplified --all-features > /tmp/api-all.txt 2>/dev/null
-
-      - name: Diff all-features snapshot
-        run: |
-          if ! diff -u api-snapshots/all-features.txt /tmp/api-all.txt; then
-            echo ""
-            echo "::error::Public API surface changed (all features)."
-            echo "If this is intentional, regenerate the snapshot:"
-            echo "  cargo public-api --simplified --all-features 2>/dev/null > api-snapshots/all-features.txt"
-            exit 1
-          fi
+      - name: Public-API snapshot is current
+        run: cargo test --test public_api_doc
+        env:
+          ZEN_API_DOC: check
 
   semver-checks:
     name: cargo semver-checks
