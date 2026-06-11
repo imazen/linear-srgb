@@ -52,10 +52,6 @@ bytemuck = "1.21"
 archmage = { version = "0.9.22", default-features = false, features = ["macros"] }
 magetypes = { version = "0.9.22", default-features = false, features = ["w512"] }
 
-[dev-dependencies]
-# cargo metadata parsing for tests/public_api_doc.rs
-serde_json = "1.0.150"
-
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 zenbench = { version = "0.1.2", features = ["criterion-compat"] }
 

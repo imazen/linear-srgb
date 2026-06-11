@@ -1,0 +1,73 @@
+# linear-srgb public API — doc(hidden) items and excluded-feature surface
+# excluded features: (none)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   pub modules                                 4
+#   pub types (struct/enum/trait/alias)         2
+#   pub consts/statics                          1
+#   free functions                             17
+#   inherent methods                            7
+#   struct fields                               6
+#   trait roster entries (type × trait)         4
+#   auto-trait-complete types                   2
+#
+# per-module pub lines:
+#   (root)                            2
+#   alt                              33
+#   u16_lut                           2
+
+## items (37 lines)
+
+pub fn alt::accuracy::UlpStats::avg_ulp(&self) -> f64
+pub fn alt::accuracy::UlpStats::clone(&self) -> alt::accuracy::UlpStats
+pub fn alt::accuracy::UlpStats::default() -> alt::accuracy::UlpStats
+pub fn alt::accuracy::UlpStats::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn alt::accuracy::compare_f32_to_f64_reference<F, G>(F, G, f32, f32, u32) -> alt::accuracy::UlpStats where F: core::ops::function::Fn(f32) -> f32, G: core::ops::function::Fn(f64) -> f64
+pub fn alt::accuracy::naive_linear_to_srgb_f32(f32) -> f32
+pub fn alt::accuracy::naive_linear_to_srgb_f64(f64) -> f64
+pub fn alt::accuracy::naive_srgb_to_linear_f32(f32) -> f32
+pub fn alt::accuracy::naive_srgb_to_linear_f64(f64) -> f64
+pub fn alt::accuracy::ulp_distance_f32(f32, f32) -> u32
+pub fn alt::accuracy::ulp_distance_f64(f64, f64) -> u64
+pub fn alt::imageflow::SrgbToLinearLut::default() -> Self
+pub fn alt::imageflow::SrgbToLinearLut::lookup(&self, u8) -> f32
+pub fn alt::imageflow::SrgbToLinearLut::new() -> Self
+pub fn alt::imageflow::fastpow(f32, f32) -> f32
+pub fn alt::imageflow::linear_to_srgb(f32) -> f32
+pub fn alt::imageflow::linear_to_srgb_lut(f32) -> u8
+pub fn alt::imageflow::linear_to_srgb_raw(f32) -> f32
+pub fn alt::imageflow::linear_to_srgb_u8_fastpow(f32) -> u8
+pub fn alt::imageflow::srgb_to_linear(f32) -> f32
+pub fn alt::imageflow::srgb_u8_to_linear(u8) -> f32
+pub fn alt::imageflow::uchar_clamp_ff(f32) -> u8
+pub fn u16_lut::generate_decode_lut() -> alloc::boxed::Box<[f32; 65536]>
+pub fn u16_lut::generate_encode_lut() -> alloc::boxed::Box<[u16; 65537]>
+pub alt::accuracy::UlpStats::count: u64
+pub alt::accuracy::UlpStats::max_ulp: u64
+pub alt::accuracy::UlpStats::max_ulp_actual: f64
+pub alt::accuracy::UlpStats::max_ulp_expected: f64
+pub alt::accuracy::UlpStats::max_ulp_input: f64
+pub alt::accuracy::UlpStats::total_ulp: u128
+pub mod alt
+pub mod alt::accuracy
+pub mod alt::imageflow
+pub mod u16_lut
+pub static alt::imageflow::LINEAR_TO_SRGB_LUT: std::sync::lazy_lock::LazyLock<[u8; 16384]>
+pub struct alt::accuracy::UlpStats
+pub struct alt::imageflow::SrgbToLinearLut
+
+## trait impls (2 types)
+
+alt::accuracy::UlpStats: Clone, Debug, Default
+alt::imageflow::SrgbToLinearLut: Default
+
+## auto traits
+
+2 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe

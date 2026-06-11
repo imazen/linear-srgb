@@ -17,27 +17,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # The committed snapshot at docs/public-api/linear-srgb.txt is regenerated
-  # by tests/public_api_doc.rs on every local `cargo test`; this job re-runs
-  # it in `check` mode, which fails on any drift (same strictness as the old
-  # api-snapshots/ diff gate it replaces — intentional changes land the
-  # regenerated snapshot in the same commit as the code).
-  public-api:
-    name: cargo public-api (snapshot check)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@nightly # rustdoc JSON for cargo-public-api
-      - uses: dtolnay/rust-toolchain@stable # restore stable as default
-      - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-public-api
-      - name: Public-API snapshot is current
-        run: cargo test --test public_api_doc
-        env:
-          ZEN_API_DOC: check
-
   semver-checks:
     name: cargo semver-checks
     runs-on: ubuntu-latest

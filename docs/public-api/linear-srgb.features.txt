@@ -1,0 +1,86 @@
+# linear-srgb public API — additions from non-default features
+# features: alt,avx512,iec,std,transfer,unsafe_simd
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   pub modules                                 1
+#   free functions                             76
+#
+# per-module pub lines:
+#   (root)                            1
+#   default                          18
+#   iec                               4
+#   tf                                6
+#   tokens                           48
+
+## items (63 lines)
+
+pub fn default::bt709_to_linear_rgba_slice(&mut [f32])
+pub fn default::bt709_to_linear_slice(&mut [f32])
+pub fn default::hlg_to_linear_rgba_slice(&mut [f32])
+pub fn default::hlg_to_linear_slice(&mut [f32])
+pub fn default::linear_to_bt709_rgba_slice(&mut [f32])
+pub fn default::linear_to_bt709_slice(&mut [f32])
+pub fn default::linear_to_hlg_rgba_slice(&mut [f32])
+pub fn default::linear_to_hlg_slice(&mut [f32])
+pub fn default::linear_to_pq_rgba_slice(&mut [f32])
+pub fn default::linear_to_pq_slice(&mut [f32])
+pub fn default::pq_to_linear_rgba_slice(&mut [f32])
+pub fn default::pq_to_linear_slice(&mut [f32])
+pub mod iec
+pub fn iec::linear_to_srgb(f32) -> f32
+pub fn iec::linear_to_srgb_f64(f64) -> f64
+pub fn iec::srgb_to_linear(f32) -> f32
+pub fn iec::srgb_to_linear_f64(f64) -> f64
+pub fn tf::bt709_to_linear(f32) -> f32 [also: default]
+pub fn tf::hlg_to_linear(f32) -> f32 [also: default]
+pub fn tf::linear_to_bt709(f32) -> f32 [also: default]
+pub fn tf::linear_to_hlg(f32) -> f32 [also: default]
+pub fn tf::linear_to_pq(f32) -> f32 [also: default]
+pub fn tf::pq_to_linear(f32) -> f32 [also: default]
+pub fn tokens::x16::bt709_to_linear_slice_v4(archmage::tokens::generated::x86::X64V4Token, &mut [f32])
+pub fn tokens::x16::bt709_to_linear_v4(archmage::tokens::generated::x86::X64V4Token, [f32; 16]) -> [f32; 16]
+pub fn tokens::x16::hlg_to_linear_slice_v4(archmage::tokens::generated::x86::X64V4Token, &mut [f32])
+pub fn tokens::x16::hlg_to_linear_v4(archmage::tokens::generated::x86::X64V4Token, [f32; 16]) -> [f32; 16]
+pub fn tokens::x16::linear_to_bt709_slice_v4(archmage::tokens::generated::x86::X64V4Token, &mut [f32])
+pub fn tokens::x16::linear_to_bt709_v4(archmage::tokens::generated::x86::X64V4Token, [f32; 16]) -> [f32; 16]
+pub fn tokens::x16::linear_to_hlg_slice_v4(archmage::tokens::generated::x86::X64V4Token, &mut [f32])
+pub fn tokens::x16::linear_to_hlg_v4(archmage::tokens::generated::x86::X64V4Token, [f32; 16]) -> [f32; 16]
+pub fn tokens::x16::linear_to_pq_slice_v4(archmage::tokens::generated::x86::X64V4Token, &mut [f32])
+pub fn tokens::x16::linear_to_pq_v4(archmage::tokens::generated::x86::X64V4Token, [f32; 16]) -> [f32; 16]
+pub fn tokens::x16::pq_to_linear_slice_v4(archmage::tokens::generated::x86::X64V4Token, &mut [f32])
+pub fn tokens::x16::pq_to_linear_v4(archmage::tokens::generated::x86::X64V4Token, [f32; 16]) -> [f32; 16]
+pub fn tokens::x16::tf_linear_to_srgb_slice_v4(archmage::tokens::generated::x86::X64V4Token, &mut [f32])
+pub fn tokens::x16::tf_linear_to_srgb_v4(archmage::tokens::generated::x86::X64V4Token, [f32; 16]) -> [f32; 16]
+pub fn tokens::x16::tf_srgb_to_linear_slice_v4(archmage::tokens::generated::x86::X64V4Token, &mut [f32])
+pub fn tokens::x16::tf_srgb_to_linear_v4(archmage::tokens::generated::x86::X64V4Token, [f32; 16]) -> [f32; 16]
+pub fn tokens::x4::bt709_to_linear_slice_v3(archmage::tokens::generated::x86::X64V3Token, &mut [f32]) [also: tokens::x8]
+pub fn tokens::x4::bt709_to_linear_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 4]) -> [f32; 4]
+pub fn tokens::x4::hlg_to_linear_slice_v3(archmage::tokens::generated::x86::X64V3Token, &mut [f32]) [also: tokens::x8]
+pub fn tokens::x4::hlg_to_linear_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 4]) -> [f32; 4]
+pub fn tokens::x4::linear_to_bt709_slice_v3(archmage::tokens::generated::x86::X64V3Token, &mut [f32]) [also: tokens::x8]
+pub fn tokens::x4::linear_to_bt709_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 4]) -> [f32; 4]
+pub fn tokens::x4::linear_to_hlg_slice_v3(archmage::tokens::generated::x86::X64V3Token, &mut [f32]) [also: tokens::x8]
+pub fn tokens::x4::linear_to_hlg_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 4]) -> [f32; 4]
+pub fn tokens::x4::linear_to_pq_slice_v3(archmage::tokens::generated::x86::X64V3Token, &mut [f32]) [also: tokens::x8]
+pub fn tokens::x4::linear_to_pq_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 4]) -> [f32; 4]
+pub fn tokens::x4::pq_to_linear_slice_v3(archmage::tokens::generated::x86::X64V3Token, &mut [f32]) [also: tokens::x8]
+pub fn tokens::x4::pq_to_linear_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 4]) -> [f32; 4]
+pub fn tokens::x4::tf_linear_to_srgb_slice_v3(archmage::tokens::generated::x86::X64V3Token, &mut [f32]) [also: tokens::x8]
+pub fn tokens::x4::tf_linear_to_srgb_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 4]) -> [f32; 4]
+pub fn tokens::x4::tf_srgb_to_linear_slice_v3(archmage::tokens::generated::x86::X64V3Token, &mut [f32]) [also: tokens::x8]
+pub fn tokens::x4::tf_srgb_to_linear_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 4]) -> [f32; 4]
+pub fn tokens::x8::bt709_to_linear_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 8]) -> [f32; 8]
+pub fn tokens::x8::hlg_to_linear_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 8]) -> [f32; 8]
+pub fn tokens::x8::linear_to_bt709_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 8]) -> [f32; 8]
+pub fn tokens::x8::linear_to_hlg_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 8]) -> [f32; 8]
+pub fn tokens::x8::linear_to_pq_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 8]) -> [f32; 8]
+pub fn tokens::x8::pq_to_linear_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 8]) -> [f32; 8]
+pub fn tokens::x8::tf_linear_to_srgb_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 8]) -> [f32; 8]
+pub fn tokens::x8::tf_srgb_to_linear_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 8]) -> [f32; 8]
