@@ -69,6 +69,15 @@ let srgb_u16: Vec<u16> = (0..256).map(|i| (i * 256) as u16).collect();
 srgb_u16_to_linear_slice(&srgb_u16, &mut u16_linear);
 ```
 
+**Length contract.** The two-slice converters (those taking a separate `input`
+and `output`, e.g. `srgb_u8_to_linear_slice`) require `input.len() == output.len()`
+and **panic** otherwise — size the destination to exactly the source. The in-place
+single-slice converters (e.g. `srgb_to_linear_slice(&mut values)`) have no such
+constraint. The `_rgba_` variants treat the buffer as tightly-packed RGBA
+(4 components per pixel, so the length should be a multiple of 4): R/G/B are
+sRGB-decoded and the alpha component is passed through (as `a/255` for the u8
+variants), not sRGB-decoded.
+
 ### u16 encode: exact vs fast
 
 Two paths for linear f32 → sRGB u16, depending on whether you need perfect
