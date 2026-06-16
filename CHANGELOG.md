@@ -22,6 +22,14 @@
 
 ### Fixed
 
+- docs(readme): state f32 linear normalization range `[0, 1]` + u8 encoder
+  rounding/round-trip exactness — found by insulated-developer test. The
+  README documented the u16 encode precision but left the f32 linear range
+  implied and the u8 encode behavior unstated; now the Type-conversions
+  section notes the `[0.0, 1.0]` normalization (u8/u16 LUT decode + f32
+  single-value API) and the u8 encode (rounds to nearest, `u8 → linear → u8`
+  exact within ±1 level, unlike the bit-exact `linear_to_srgb_u16` path).
+
 - **Slice tail used a different transfer curve than the SIMD body.** The
   remainder loops in `srgb_to_linear_slice` / `linear_to_srgb_slice` (and
   their RGBA variants) converted the trailing up-to-15 elements of any
