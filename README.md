@@ -78,6 +78,14 @@ constraint. The `_rgba_` variants treat the buffer as tightly-packed RGBA
 sRGB-decoded and the alpha component is passed through (as `a/255` for the u8
 variants), not sRGB-decoded.
 
+**Linear range is normalized `[0.0, 1.0]`.** The u8/u16 LUT decode paths map the
+integer black point to `0.0` and the integer white point to `1.0` (u8: `0 → 0.0`,
+`255 → 1.0`; u16: `0 → 0.0`, `65535 → 1.0`), so the linear f32 output lands in
+`[0.0, 1.0]`. The single-value f32 API (`srgb_to_linear` / `linear_to_srgb`)
+expects and returns the same normalized `[0, 1]` range and clamps inputs to it.
+For values outside `[0, 1]` (HDR, cross-gamut matrix output), use the
+extended-range functions below instead.
+
 ### u16 encode: exact vs fast
 
 Two paths for linear f32 → sRGB u16, depending on whether you need perfect
@@ -97,6 +105,14 @@ let fast = linear_to_srgb_u16_fast(linear);
 
 Slice variants: `linear_to_srgb_u16_slice` / `linear_to_srgb_u16_slice_fast`,
 `linear_to_srgb_u16_rgba_slice` / `linear_to_srgb_u16_rgba_slice_fast`.
+
+**u8 encode** (`linear_to_srgb_u8` / `linear_to_srgb_u8_slice`) rounds to the
+nearest level (LUT index `linear * 4095 + 0.5`) and is accurate to within ±1 u8
+level vs exact computation. The `u8 → linear → u8` round-trip is exact to within
+**±1 level** (not bit-exact 0 like the `linear_to_srgb_u16` polynomial path) —
+the LUT-quantized encode can land one level off near segment boundaries. For most
+8-bit image work this is invisible; if you need a guaranteed-exact round-trip,
+stay in u16.
 
 ### Premultiplied alpha (fused, single-pass)
 
