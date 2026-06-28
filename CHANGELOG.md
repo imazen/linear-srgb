@@ -8,6 +8,8 @@
 
 ### Changed
 
+- **Docs: README overhauled to the zen-family convention** — standardized badge row (flat-square, no `branch=`, MSRV/license/codecov order, `#license` anchor), `## Quick start` restructure, `docs/iec.md` link made absolute, a skip-wrapped `## Benchmarks` section, and the canonical crosslink footer (placed last, stale crate refs dropped). Split the crates.io README into a generated `README.crates.md` (`readme = "README.crates.md"` in `Cargo.toml`; CI badge only, heavy sections stripped) and added `benchmarks/README.md` documenting the bench methodology and reproduction.
+
 - **Packaging: exclude `asm-snapshots/`, `api-snapshots/`, `scripts/`, `benchmarks/`, `docs/`, `tests/`, `benches/`, `perf.md`, `.gitignore` from published crate.** Reduces package from ~1.1 MB to 579 KiB (126 KiB compressed). `src/data/*.bin` lookup tables remain included (load-bearing `include_bytes!`). Removed `perf.md` from git (historical scratch, superseded by README).
 
 - **Benchmarks: added `s2l_scalar_fast` / `l2s_scalar_fast` arms** to the

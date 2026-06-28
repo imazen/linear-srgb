@@ -7,6 +7,7 @@ rust-version = "1.89"
 license = "MIT OR Apache-2.0"
 description = "Fast linear↔sRGB color space conversion with FMA acceleration and LUT support"
 repository = "https://github.com/imazen/linear-srgb"
+readme = "README.crates.md"
 keywords = ["color", "srgb", "linear", "gamma", "conversion"]
 categories = ["graphics", "multimedia::images", "no-std"]
 exclude = [

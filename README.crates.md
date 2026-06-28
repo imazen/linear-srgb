@@ -1,4 +1,6 @@
-# linear-srgb [![CI](https://img.shields.io/github/actions/workflow/status/imazen/linear-srgb/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/linear-srgb/actions/workflows/ci.yml) [![crates.io](https://img.shields.io/crates/v/linear-srgb?style=flat-square)](https://crates.io/crates/linear-srgb) [![lib.rs](https://img.shields.io/crates/v/linear-srgb?style=flat-square&label=lib.rs&color=blue)](https://lib.rs/crates/linear-srgb) [![docs.rs](https://img.shields.io/docsrs/linear-srgb?style=flat-square)](https://docs.rs/linear-srgb) [![MSRV](https://img.shields.io/badge/MSRV-1.89-blue?style=flat-square)](https://doc.rust-lang.org/cargo/reference/manifest.html#the-rust-version-field) [![license](https://img.shields.io/crates/l/linear-srgb?style=flat-square)](#license) [![codecov](https://img.shields.io/codecov/c/github/imazen/linear-srgb?style=flat-square)](https://codecov.io/gh/imazen/linear-srgb)
+<!-- GENERATED FROM README.md by zenutils gen-readme-crates.sh — DO NOT EDIT. -->
+
+# linear-srgb [![CI](https://img.shields.io/github/actions/workflow/status/imazen/linear-srgb/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/linear-srgb/actions/workflows/ci.yml)
 
 Fast, SIMD-accelerated sRGB↔linear conversion for image processing pipelines.
 Pure Rust, `#![forbid(unsafe_code)]`, `no_std`-compatible.
@@ -367,33 +369,6 @@ fn my_pipeline(token: X64V3Token, data: &mut [f32]) {
 }
 ```
 
-<!-- crates.io:skip-start -->
-## Benchmarks
-
-The benches are interleaved [zenbench](https://github.com/imazen/zenbench) A/B
-comparisons of linear-srgb's own strategies — scalar `powf` vs rational
-polynomial vs LUT vs SIMD slice, plus an in-file imageflow-style reference
-baseline. No third-party crate is timed. Inputs are built into RAM before the
-timed region (no file I/O), output is consumed so it isn't optimized away, and
-builds use runtime SIMD dispatch — **no `-C target-cpu=native`**, which is what
-ships.
-
-```bash
-git clone https://github.com/imazen/linear-srgb && cd linear-srgb
-cargo bench --bench benchmarks                    # throughput by type / strategy
-cargo bench --features transfer --bench tf_bench  # BT.709 / PQ / HLG dispatch
-cargo bench --bench rgba_approach                 # RGBA alpha-handling strategies
-```
-
-Full methodology, host details, and pinned-commit reproduction:
-**[benchmarks/README.md](https://github.com/imazen/linear-srgb/blob/main/benchmarks/README.md)**.
-Committed result files (the numbers live here — not reproduced inline):
-
-| File | What it covers |
-|------|----------------|
-| [`arm_neoverse_n1_baseline_2026-05-31.md`](https://github.com/imazen/linear-srgb/blob/main/benchmarks/arm_neoverse_n1_baseline_2026-05-31.md) | ARM Neoverse-N1 throughput baseline, slice-tail curve fix, x86 cross-check |
-| [`tf_dispatch_2026-04-23.md`](https://github.com/imazen/linear-srgb/blob/main/benchmarks/tf_dispatch_2026-04-23.md) | BT.709 / PQ / HLG `incant!` SIMD dispatch A/B (issue #10) |
-<!-- crates.io:skip-end -->
 
 ## License
 
