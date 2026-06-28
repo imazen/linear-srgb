@@ -1,6 +1,6 @@
 <!-- GENERATED FROM README.md by zenutils gen-readme-crates.sh — DO NOT EDIT. -->
 
-# linear-srgb [![CI](https://img.shields.io/github/actions/workflow/status/imazen/linear-srgb/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/linear-srgb/actions/workflows/ci.yml)
+# linear-srgb
 
 Fast, SIMD-accelerated sRGB↔linear conversion for image processing pipelines.
 Pure Rust, `#![forbid(unsafe_code)]`, `no_std`-compatible.
