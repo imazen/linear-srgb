@@ -55,6 +55,10 @@ magetypes = { version = "0.9.22", default-features = false, features = ["w512"] 
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 zenbench = { version = "0.1.2", features = ["criterion-compat"] }
+# `testable_dispatch` lets the tier-isolation benches disable a compile-time
+# guaranteed baseline token (NEON on aarch64) so the scalar tier is actually
+# measurable there, instead of silently reporting NEON numbers as "scalar".
+archmage = { version = "0.9.22", features = ["testable_dispatch"] }
 
 [features]
 default = ["std", "avx512"]

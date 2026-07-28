@@ -1,0 +1,44 @@
+# linear-srgb NEON vs scalar tier isolation — first ARM tier measurement
+date:    2026-07-28
+host:    Apple M4 Pro (12 core), macOS, aarch64
+command: cargo bench --bench benchmarks -- 'tier_'
+build:   release, NO -C target-cpu=native
+
+## Why this file exists
+
+Before this run, `bench_dispatched_at_tier` could not measure NEON. It handled
+only x86 tiers; on aarch64 it printed "Non-x86_64: only scalar tier available"
+for v3/v4 and, worse, ran the "scalar" group WITHOUT disabling any token — so
+the scalar row was silently re-measuring the NEON path and reporting it under
+the scalar name. Adding archmage/testable_dispatch to dev-deps plus a NEON arm
+makes both tiers real on ARM.
+
+## Result — tier_neon vs tier_scalar (mean, BATCH_SIZE elements)
+
+| op                                | NEON    | scalar  | speedup |
+|-----------------------------------|---------|---------|---------|
+| linear_to_srgb_u16_slice_fast     |  2.93us | 19.25us |  6.57x  |
+| linear_to_srgb_u16_slice          |  3.59us | 19.17us |  5.34x  |
+| linear_to_srgb_u16_rgba_slice_f   |  3.84us | 19.87us |  5.17x  |
+| linear_to_srgb_u16_rgba_slice     |  5.34us | 25.84us |  4.84x  |
+| linear_to_srgb_slice              |  4.95us | 19.93us |  4.03x  |
+| gamma_to_linear_slice_2.2         |  8.70us | 28.93us |  3.33x  |
+| linear_to_gamma_slice_2.2         |  8.69us | 28.52us |  3.28x  |
+| srgb_u16_to_linear_slice          |  2.93us |  4.94us |  1.69x  |
+| srgb_to_linear_slice              |  3.09us |  4.66us |  1.51x  |
+| linear_to_srgb_u8_slice           |  2.27us |  2.45us |  1.08x  |
+| srgb_u8_to_linear_slice           |  1.23us |  1.27us |  1.03x  |
+| linear_to_srgb_u8_rgba_slice      |  3.20us |  3.27us |  1.02x  |
+| srgb_u8_to_linear_rgba_slice      |  1.32us |  1.31us |  0.99x  |
+| srgb_u16_to_linear_rgba_slice     |  3.35us |  3.28us |  0.98x  |
+| unpremultiply_linear_to_srgb      |  4.13us |  3.88us |  0.94x  |  <-- REGRESSION
+
+The transfer-function paths are in good shape (3-6.6x). The u8 paths sit at
+~1.0x because they are LUT lookups, which are not SIMD work — expected, not a
+defect.
+
+## Open item
+
+`unpremultiply_linear_to_srgb` is ~6% SLOWER through the NEON tier than with
+NEON disabled. Dispatching to NEON actively costs there. Not yet fixed; it was
+invisible until this bench could tell the two tiers apart on ARM.

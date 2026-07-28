@@ -1,0 +1,464 @@
+   Compiling archmage v0.9.28
+   Compiling magetypes v0.9.28
+   Compiling linear-srgb v0.6.12 (/Users/lilith/work/zen/linear-srgb)
+    Finished `bench` profile [optimized] target(s) in 2.60s
+     Running benches/benchmarks.rs (target/release/deps/benchmarks-19c4fcffe00f21f4)
+
+  srgb_to_linear  0 rounds ⚠ only 0 rounds
+                              mean ±mad µs  95% CI vs base
+  ├─ f32_f32/simd_slice        5.1 ±1.1µs  [4.8–5.4]µs    [1]
+  ├─ f32_f32/scalar_powf       6.0 ±0.5µs                
+  ├─ f32_f32/lut12_interp      8.3 ±0.1µs                
+  ├─ u8_f32/lut8_direct        2.6 ±0.0µs                
+  ├─ u8_f32/simd_lut8_slice    1.2 ±0.0µs                
+  ├─ u8_f32/scalar_powf       26.8 ±0.3µs                
+  ├─ u16_f32/lut16_direct      3.2 ±0.0µs                
+  ├─ u16_f32/scalar_powf      27.0 ±0.1µs                
+  ╰─ u16_f32/lut8_quantized    2.5 ±0.0µs                
+
+  u8_f32/simd_lut8_slice  ██ 1.24µs
+  u16_f32/lut8_quantized  ████ 2.54µs
+  u8_f32/lut8_direct      ████ 2.56µs
+  u16_f32/lut16_direct    █████ 3.16µs
+  f32_f32/simd_slice      ████████ 5.07µs
+  f32_f32/scalar_powf     ██████████ 5.95µs
+  f32_f32/lut12_interp    ██████████████ 8.29µs
+  u8_f32/scalar_powf      █████████████████████████████████████████████ 26.80µs
+  u16_f32/scalar_powf     █████████████████████████████████████████████ 26.96µs
+  [1] CV=28%
+
+  linear_to_srgb  0 rounds ⚠ only 0 rounds
+                              mean ±mad µs  95% CI vs base
+  ├─ f32_f32/simd_slice        4.4 ±0.0µs  [4.4–4.4]µs   
+  ├─ f32_f32/scalar_powf      24.4 ±0.1µs                
+  ├─ f32_f32/lut12_interp      8.3 ±0.1µs                
+  ├─ f32_f32/lut16_interp      9.0 ±0.1µs                
+  ├─ f32_u8/simd_slice         2.3 ±0.1µs                
+  ├─ f32_u8/scalar_powf       26.3 ±0.1µs                
+  ├─ f32_u8/lut12_interp      10.7 ±0.1µs                
+  ├─ f32_u8/converter_lut12    2.2 ±0.0µs                
+  ├─ f32_u16/scalar_powf      25.8 ±0.3µs                
+  ├─ f32_u16/simd_slice        3.6 ±0.0µs                
+  ╰─ f32_u16/lut16_interp     10.6 ±0.1µs                
+
+  f32_u8/converter_lut12  ████ 2.22µs
+  f32_u8/simd_slice       ████ 2.27µs
+  f32_u16/simd_slice      ██████ 3.57µs
+  f32_f32/simd_slice      ████████ 4.40µs
+  f32_f32/lut12_interp    ██████████████ 8.33µs
+  f32_f32/lut16_interp    ███████████████ 8.98µs
+  f32_u16/lut16_interp    ██████████████████ 10.56µs
+  f32_u8/lut12_interp     ██████████████████ 10.68µs
+  f32_f32/scalar_powf     ██████████████████████████████████████████ 24.35µs
+  f32_u16/scalar_powf     ████████████████████████████████████████████ 25.78µs
+  f32_u8/scalar_powf      █████████████████████████████████████████████ 26.28µs
+
+  roundtrip  0 rounds ⚠ only 0 rounds
+                                  mean ±mad µs  95% CI vs base
+  ├─ u8_f32_u8/simd_lut_slice      3.4 ±0.0µs  [3.4–3.4]µs   
+  ├─ u8_f32_u8/lut8_scalar_powf   26.9 ±0.1µs                
+  ├─ u8_f32_u8/lut8_lut12         10.9 ±0.1µs                
+  ├─ u16_f32_u16/lut16_scalar_…   27.4 ±0.1µs                
+  ├─ u16_f32_u16/lut16_lut16      11.4 ±0.1µs                
+  ╰─ u16_f32_u16/scalar_powf_b…   72.0 ±1.2µs                
+
+  u8_f32_u8/simd_lut_slice    ██ 3.43µs
+  u8_f32_u8/lut8_lut12        ██████ 10.94µs
+  u16_f32_u16/lut16_lut16     ██████ 11.38µs
+  u8_f32_u8/lut8_scalar_powf  ███████████████ 26.92µs
+  u16_f32_u16/lut16_scalar_…  ████████████████ 27.37µs
+  u16_f32_u16/scalar_powf_b…  █████████████████████████████████████████ 72.03µs
+
+  scaling  0 rounds ⚠ only 0 rounds
+                               mean ±mad ns  95% CI vs base 
+  ├─ simd_s2l/100               27.2 ±1.8ns  [26.9–27.5]ns  
+  ├─ scalar_s2l/100             35.4 ±2.7ns                 
+  ├─ simd_s2l/1000             270.7 ±3.3ns                 
+  ├─ scalar_s2l/1000          372.6 ±23.8ns                 
+  ├─ simd_s2l/10000          2714.4 ±23.1ns                 
+  ├─ scalar_s2l/10000       4778.4 ±211.4ns                 
+  ├─ simd_s2l/100000       27550.7 ±176.5ns                 
+  ╰─ scalar_s2l/100000   204104.0 ±1441.6ns                 
+
+  simd_s2l/100       █ 27.2ns
+  scalar_s2l/100     █ 35.4ns
+  simd_s2l/1000      █ 270.7ns
+  scalar_s2l/1000    █ 372.6ns
+  simd_s2l/10000     █ 2.71µs
+  scalar_s2l/10000   █ 4.78µs
+  simd_s2l/100000    ███████ 27.55µs
+  scalar_s2l/100000  █████████████████████████████████████████████████ 204.10µs
+
+  dispatch_overhead  0 rounds ⚠ only 0 rounds
+                                     mean ±mad ns  95% CI vs base 
+  ├─ s2l_slice/8                     4.27 ±0.18ns  [4.23–4.31]ns  
+  ├─ s2l_scalar/8                    4.46 ±0.23ns                 
+  ├─ s2l_scalar_fast/8               3.43 ±0.04ns                 
+  ├─ l2s_slice/8                    15.19 ±0.04ns                 
+  ├─ l2s_scalar/8                   21.36 ±0.38ns                 
+  ├─ l2s_scalar_fast/8              15.20 ±0.05ns                 
+  ├─ s2l_lut12_interp/8             11.36 ±0.14ns                 
+  ├─ l2s_lut12_interp/8             11.26 ±0.56ns                 
+  ├─ s2l_u8_lut8_direct/8            1.87 ±0.00ns                 
+  ├─ s2l_u8_scalar/8                19.85 ±0.04ns                 
+  ├─ s2l_u8_lut_slice/8              1.27 ±0.01ns                 
+  ├─ l2s_u8_lut12/8                  4.18 ±0.02ns                 
+  ├─ l2s_u8_scalar/8                19.21 ±0.05ns                 
+  ├─ l2s_u8_simd_slice/8             4.24 ±0.00ns                 
+  ├─ s2l_u16_lut16_direct/8          2.83 ±0.01ns                 
+  ├─ s2l_u16_scalar/8               19.74 ±0.25ns                 
+  ├─ l2s_u16_lut16_interp/8          8.65 ±0.08ns                 
+  ├─ l2s_u16_scalar/8               19.42 ±0.05ns                 
+  ├─ s2l_slice/16                    9.95 ±0.02ns                 
+  ├─ s2l_scalar/16                   5.61 ±0.02ns                 
+  ├─ s2l_scalar_fast/16              6.41 ±0.01ns                 
+  ├─ l2s_slice/16                   12.30 ±0.02ns                 
+  ├─ l2s_scalar/16                  37.06 ±0.02ns                 
+  ├─ l2s_scalar_fast/16             23.76 ±0.04ns                 
+  ├─ s2l_lut12_interp/16            20.28 ±0.70ns                 
+  ├─ l2s_lut12_interp/16            20.45 ±0.64ns                 
+  ├─ s2l_u8_lut8_direct/16           3.27 ±0.01ns                 
+  ├─ s2l_u8_scalar/16               42.36 ±0.20ns                 
+  ├─ s2l_u8_lut_slice/16             2.18 ±0.01ns                 
+  ├─ l2s_u8_lut12/16                 8.27 ±0.02ns                 
+  ├─ l2s_u8_scalar/16               41.01 ±0.02ns                 
+  ├─ l2s_u8_simd_slice/16            3.45 ±0.02ns                 
+  ├─ s2l_u16_lut16_direct/16         7.50 ±0.30ns                 
+  ├─ s2l_u16_scalar/16              42.33 ±0.04ns                 
+  ├─ l2s_u16_lut16_interp/16        16.99 ±0.17ns                 
+  ├─ l2s_u16_scalar/16              40.99 ±0.07ns                 
+  ├─ s2l_slice/32                   11.30 ±0.42ns                 
+  ├─ s2l_scalar/32                  11.66 ±0.62ns                 
+  ├─ s2l_scalar_fast/32             13.00 ±0.49ns                 
+  ├─ l2s_slice/32                   14.95 ±0.22ns                 
+  ├─ l2s_scalar/32                  79.16 ±1.24ns                 
+  ├─ l2s_scalar_fast/32             42.79 ±0.01ns                 
+  ├─ s2l_lut12_interp/32            26.62 ±0.94ns                 
+  ├─ l2s_lut12_interp/32            27.24 ±0.30ns                 
+  ├─ s2l_u8_lut8_direct/32           6.30 ±0.01ns                 
+  ├─ s2l_u8_scalar/32               84.75 ±0.05ns                 
+  ├─ s2l_u8_lut_slice/32             4.07 ±0.00ns                 
+  ├─ l2s_u8_lut12/32                16.41 ±0.04ns                 
+  ├─ l2s_u8_scalar/32               82.29 ±0.08ns                 
+  ├─ l2s_u8_simd_slice/32            8.33 ±0.02ns                 
+  ├─ s2l_u16_lut16_direct/32        16.13 ±0.63ns                 
+  ├─ s2l_u16_scalar/32              84.59 ±0.68ns                 
+  ├─ l2s_u16_lut16_interp/32        34.26 ±0.64ns                 
+  ├─ l2s_u16_scalar/32              82.08 ±0.09ns                 
+  ├─ s2l_slice/64                   18.06 ±0.99ns                 
+  ├─ s2l_scalar/64                  22.77 ±1.12ns                 
+  ├─ s2l_scalar_fast/64             25.71 ±0.69ns                 
+  ├─ l2s_slice/64                   28.17 ±0.02ns                 
+  ├─ l2s_scalar/64                 157.75 ±0.84ns                 
+  ├─ l2s_scalar_fast/64             86.63 ±0.02ns                 
+  ├─ s2l_lut12_interp/64            53.37 ±0.47ns                 
+  ├─ l2s_lut12_interp/64            56.70 ±0.74ns                 
+  ├─ s2l_u8_lut8_direct/64          12.12 ±0.01ns                 
+  ├─ s2l_u8_scalar/64              173.18 ±0.18ns                 
+  ├─ s2l_u8_lut_slice/64             7.99 ±0.01ns                 
+  ├─ l2s_u8_lut12/64                32.15 ±0.55ns                 
+  ├─ l2s_u8_scalar/64              167.49 ±1.34ns                 
+  ├─ l2s_u8_simd_slice/64           15.74 ±0.28ns                 
+  ├─ s2l_u16_lut16_direct/64        34.60 ±0.54ns                 
+  ├─ s2l_u16_scalar/64             171.96 ±0.50ns                 
+  ├─ l2s_u16_lut16_interp/64        68.16 ±1.00ns                 
+  ├─ l2s_u16_scalar/64             165.56 ±1.42ns                 
+  ├─ s2l_slice/128                  34.68 ±1.19ns                 
+  ├─ s2l_scalar/128                 51.55 ±3.29ns                 
+  ├─ s2l_scalar_fast/128            67.75 ±1.99ns                 
+  ├─ l2s_slice/128                  56.44 ±1.02ns                 
+  ├─ l2s_scalar/128                312.02 ±3.02ns                 
+  ├─ l2s_scalar_fast/128           175.53 ±0.03ns                 
+  ├─ s2l_lut12_interp/128          107.53 ±0.71ns                 
+  ├─ l2s_lut12_interp/128          112.24 ±3.93ns                 
+  ├─ s2l_u8_lut8_direct/128         23.77 ±0.04ns                 
+  ├─ s2l_u8_scalar/128             342.35 ±5.56ns                 
+  ├─ s2l_u8_lut_slice/128           16.05 ±0.69ns                 
+  ├─ l2s_u8_lut12/128               66.38 ±1.05ns                 
+  ├─ l2s_u8_scalar/128             335.86 ±0.10ns                 
+  ├─ l2s_u8_simd_slice/128          32.85 ±0.06ns                 
+  ├─ s2l_u16_lut16_direct/128       75.57 ±1.91ns                 
+  ├─ s2l_u16_scalar/128            345.25 ±1.83ns                 
+  ├─ l2s_u16_lut16_interp/128      136.96 ±2.26ns                 
+  ├─ l2s_u16_scalar/128            333.30 ±1.17ns                 
+  ├─ s2l_slice/256                  70.36 ±2.27ns                 
+  ├─ s2l_scalar/256                 82.63 ±2.29ns                 
+  ├─ s2l_scalar_fast/256           114.44 ±5.08ns                 
+  ├─ l2s_slice/256                 110.95 ±0.04ns                 
+  ├─ l2s_scalar/256                627.49 ±2.94ns                 
+  ├─ l2s_scalar_fast/256           355.92 ±4.11ns                 
+  ├─ s2l_lut12_interp/256          216.31 ±1.79ns                 
+  ├─ l2s_lut12_interp/256          224.79 ±2.38ns                 
+  ├─ s2l_u8_lut8_direct/256         51.25 ±0.74ns                 
+  ├─ s2l_u8_scalar/256             686.34 ±3.74ns                 
+  ├─ s2l_u8_lut_slice/256           31.62 ±0.05ns                 
+  ├─ l2s_u8_lut12/256              130.64 ±2.58ns                 
+  ├─ l2s_u8_scalar/256             674.21 ±3.40ns                 
+  ├─ l2s_u8_simd_slice/256          62.37 ±2.81ns                 
+  ├─ s2l_u16_lut16_direct/256      147.71 ±3.50ns                 
+  ├─ s2l_u16_scalar/256            689.81 ±0.35ns                 
+  ├─ l2s_u16_lut16_interp/256      279.96 ±4.54ns                 
+  ├─ l2s_u16_scalar/256            662.90 ±8.02ns                 
+  ├─ s2l_slice/512                 139.67 ±1.85ns                 
+  ├─ s2l_scalar/512                192.44 ±8.10ns                 
+  ├─ s2l_scalar_fast/512           219.74 ±3.98ns                 
+  ├─ l2s_slice/512                 222.84 ±1.66ns                 
+  ├─ l2s_scalar/512               1254.13 ±4.32ns                 
+  ├─ l2s_scalar_fast/512          718.86 ±16.32ns                 
+  ├─ s2l_lut12_interp/512          432.18 ±2.80ns                 
+  ├─ l2s_lut12_interp/512          439.01 ±3.66ns                 
+  ├─ s2l_u8_lut8_direct/512         97.65 ±2.11ns                 
+  ├─ s2l_u8_scalar/512            1367.87 ±9.58ns                 
+  ├─ s2l_u8_lut_slice/512           63.07 ±0.73ns                 
+  ├─ l2s_u8_lut12/512              261.50 ±1.58ns                 
+  ├─ l2s_u8_scalar/512            1336.23 ±7.24ns                 
+  ├─ l2s_u8_simd_slice/512         122.98 ±5.95ns                 
+  ├─ s2l_u16_lut16_direct/512      288.59 ±4.87ns                 
+  ├─ s2l_u16_scalar/512           1385.09 ±1.24ns                 
+  ├─ l2s_u16_lut16_interp/512      536.82 ±8.38ns                 
+  ├─ l2s_u16_scalar/512           1339.37 ±6.61ns                 
+  ├─ s2l_slice/1024                278.53 ±4.16ns                 
+  ├─ s2l_scalar/1024              383.96 ±22.08ns                 
+  ├─ s2l_scalar_fast/1024          425.56 ±5.78ns                 
+  ├─ l2s_slice/1024                446.52 ±5.98ns                 
+  ├─ l2s_scalar/1024             2468.47 ±24.44ns                 
+  ├─ l2s_scalar_fast/1024        1435.55 ±34.54ns                 
+  ├─ s2l_lut12_interp/1024         860.99 ±6.22ns                 
+  ├─ l2s_lut12_interp/1024        863.91 ±10.19ns                 
+  ├─ s2l_u8_lut8_direct/1024       193.62 ±2.63ns                 
+  ├─ s2l_u8_scalar/1024          2764.83 ±12.15ns                 
+  ├─ s2l_u8_lut_slice/1024         132.31 ±0.19ns                 
+  ├─ l2s_u8_lut12/1024             514.11 ±6.68ns                 
+  ├─ l2s_u8_scalar/1024           2695.51 ±1.78ns                 
+  ├─ l2s_u8_simd_slice/1024        242.96 ±4.36ns                 
+  ├─ s2l_u16_lut16_direct/1024     577.29 ±7.26ns                 
+  ├─ s2l_u16_scalar/1024         2756.57 ±26.41ns                 
+  ├─ l2s_u16_lut16_interp/1024   1209.61 ±24.34ns                 
+  ╰─ l2s_u16_scalar/1024         2677.69 ±10.32ns                 
+
+  s2l_u8_lut_slice/8         █ 1.3ns
+  s2l_u8_lut8_direct/8       █ 1.9ns
+  s2l_u8_lut_slice/16        █ 2.2ns
+  s2l_u16_lut16_direct/8     █ 2.8ns
+  s2l_u8_lut8_direct/16      █ 3.3ns
+  s2l_scalar_fast/8          █ 3.4ns
+  l2s_u8_simd_slice/16       █ 3.5ns
+  s2l_u8_lut_slice/32        █ 4.1ns
+  l2s_u8_lut12/8             █ 4.2ns
+  l2s_u8_simd_slice/8        █ 4.2ns
+  s2l_slice/8                █ 4.3ns
+  s2l_scalar/8               █ 4.5ns
+  s2l_scalar/16              █ 5.6ns
+  s2l_u8_lut8_direct/32      █ 6.3ns
+  s2l_scalar_fast/16         █ 6.4ns
+  s2l_u16_lut16_direct/16    █ 7.5ns
+  s2l_u8_lut_slice/64        █ 8.0ns
+  l2s_u8_lut12/16            █ 8.3ns
+  l2s_u8_simd_slice/32       █ 8.3ns
+  l2s_u16_lut16_interp/8     █ 8.7ns
+  s2l_slice/16               █ 10.0ns
+  l2s_lut12_interp/8         █ 11.3ns
+  s2l_slice/32               █ 11.3ns
+  s2l_lut12_interp/8         █ 11.4ns
+  s2l_scalar/32              █ 11.7ns
+  s2l_u8_lut8_direct/64      █ 12.1ns
+  l2s_slice/16               █ 12.3ns
+  s2l_scalar_fast/32         █ 13.0ns
+  l2s_slice/32               █ 14.9ns
+  l2s_slice/8                █ 15.2ns
+  l2s_scalar_fast/8          █ 15.2ns
+  l2s_u8_simd_slice/64       █ 15.7ns
+  s2l_u8_lut_slice/128       █ 16.0ns
+  s2l_u16_lut16_direct/32    █ 16.1ns
+  l2s_u8_lut12/32            █ 16.4ns
+  l2s_u16_lut16_interp/16    █ 17.0ns
+  s2l_slice/64               █ 18.1ns
+  l2s_u8_scalar/8            █ 19.2ns
+  l2s_u16_scalar/8           █ 19.4ns
+  s2l_u16_scalar/8           █ 19.7ns
+  s2l_u8_scalar/8            █ 19.9ns
+  s2l_lut12_interp/16        █ 20.3ns
+  l2s_lut12_interp/16        █ 20.4ns
+  l2s_scalar/8               █ 21.4ns
+  s2l_scalar/64              █ 22.8ns
+  l2s_scalar_fast/16         █ 23.8ns
+  s2l_u8_lut8_direct/128     █ 23.8ns
+  s2l_scalar_fast/64         █ 25.7ns
+  s2l_lut12_interp/32        █ 26.6ns
+  l2s_lut12_interp/32        █ 27.2ns
+  l2s_slice/64               █ 28.2ns
+  s2l_u8_lut_slice/256       █ 31.6ns
+  l2s_u8_lut12/64            █ 32.2ns
+  l2s_u8_simd_slice/128      █ 32.9ns
+  l2s_u16_lut16_interp/32    █ 34.3ns
+  s2l_u16_lut16_direct/64    █ 34.6ns
+  s2l_slice/128              █ 34.7ns
+  l2s_scalar/16              █ 37.1ns
+  l2s_u16_scalar/16          █ 41.0ns
+  l2s_u8_scalar/16           █ 41.0ns
+  s2l_u16_scalar/16          █ 42.3ns
+  s2l_u8_scalar/16           █ 42.4ns
+  l2s_scalar_fast/32         █ 42.8ns
+  s2l_u8_lut8_direct/256     █ 51.2ns
+  s2l_scalar/128             █ 51.5ns
+  s2l_lut12_interp/64        █ 53.4ns
+  l2s_slice/128              █ 56.4ns
+  l2s_lut12_interp/64        █ 56.7ns
+  l2s_u8_simd_slice/256      █ 62.4ns
+  s2l_u8_lut_slice/512       █ 63.1ns
+  l2s_u8_lut12/128           █ 66.4ns
+  s2l_scalar_fast/128        █ 67.8ns
+  l2s_u16_lut16_interp/64    █ 68.2ns
+  s2l_slice/256              █ 70.4ns
+  s2l_u16_lut16_direct/128   █ 75.6ns
+  l2s_scalar/32              █ 79.2ns
+  l2s_u16_scalar/32          █ 82.1ns
+  l2s_u8_scalar/32           █ 82.3ns
+  s2l_scalar/256             █ 82.6ns
+  s2l_u16_scalar/32          █ 84.6ns
+  s2l_u8_scalar/32           █ 84.8ns
+  l2s_scalar_fast/64         █ 86.6ns
+  s2l_u8_lut8_direct/512     ██ 97.6ns
+  s2l_lut12_interp/128       ██ 107.5ns
+  l2s_slice/256              ██ 111.0ns
+  l2s_lut12_interp/128       ██ 112.2ns
+  s2l_scalar_fast/256        ██ 114.4ns
+  l2s_u8_simd_slice/512      ██ 123.0ns
+  l2s_u8_lut12/256           ██ 130.6ns
+  s2l_u8_lut_slice/1024      ██ 132.3ns
+  l2s_u16_lut16_interp/128   ██ 137.0ns
+  s2l_slice/512              ██ 139.7ns
+  s2l_u16_lut16_direct/256   ██ 147.7ns
+  l2s_scalar/64              ██ 157.8ns
+  l2s_u16_scalar/64          ███ 165.6ns
+  l2s_u8_scalar/64           ███ 167.5ns
+  s2l_u16_scalar/64          ███ 172.0ns
+  s2l_u8_scalar/64           ███ 173.2ns
+  l2s_scalar_fast/128        ███ 175.5ns
+  s2l_scalar/512             ███ 192.4ns
+  s2l_u8_lut8_direct/1024    ███ 193.6ns
+  s2l_lut12_interp/256       ███ 216.3ns
+  s2l_scalar_fast/512        ███ 219.7ns
+  l2s_slice/512              ███ 222.8ns
+  l2s_lut12_interp/256       ███ 224.8ns
+  l2s_u8_simd_slice/1024     ████ 243.0ns
+  l2s_u8_lut12/512           ████ 261.5ns
+  s2l_slice/1024             ████ 278.5ns
+  l2s_u16_lut16_interp/256   ████ 280.0ns
+  s2l_u16_lut16_direct/512   ████ 288.6ns
+  l2s_scalar/128             █████ 312.0ns
+  l2s_u16_scalar/128         █████ 333.3ns
+  l2s_u8_scalar/128          █████ 335.9ns
+  s2l_u8_scalar/128          █████ 342.3ns
+  s2l_u16_scalar/128         █████ 345.2ns
+  l2s_scalar_fast/256        ██████ 355.9ns
+  s2l_scalar/1024            ██████ 384.0ns
+  s2l_scalar_fast/1024       ███████ 425.6ns
+  s2l_lut12_interp/512       ███████ 432.2ns
+  l2s_lut12_interp/512       ███████ 439.0ns
+  l2s_slice/1024             ███████ 446.5ns
+  l2s_u8_lut12/1024          ████████ 514.1ns
+  l2s_u16_lut16_interp/512   ████████ 536.8ns
+  s2l_u16_lut16_direct/1024  █████████ 577.3ns
+  l2s_scalar/256             ██████████ 627.5ns
+  l2s_u16_scalar/256         ██████████ 662.9ns
+  l2s_u8_scalar/256          ██████████ 674.2ns
+  s2l_u8_scalar/256          ███████████ 686.3ns
+  s2l_u16_scalar/256         ███████████ 689.8ns
+  l2s_scalar_fast/512        ███████████ 718.9ns
+  s2l_lut12_interp/1024      █████████████ 861.0ns
+  l2s_lut12_interp/1024      █████████████ 863.9ns
+  l2s_u16_lut16_interp/1024  ███████████████████ 1.21µs
+  l2s_scalar/512             ████████████████████ 1.25µs
+  l2s_u8_scalar/512          █████████████████████ 1.34µs
+  l2s_u16_scalar/512         █████████████████████ 1.34µs
+  s2l_u8_scalar/512          █████████████████████ 1.37µs
+  s2l_u16_scalar/512         ██████████████████████ 1.39µs
+  l2s_scalar_fast/1024       ██████████████████████ 1.44µs
+  l2s_scalar/1024            ██████████████████████████████████████ 2.47µs
+  l2s_u16_scalar/1024        ██████████████████████████████████████████ 2.68µs
+  l2s_u8_scalar/1024         ██████████████████████████████████████████ 2.70µs
+  s2l_u16_scalar/1024        ███████████████████████████████████████████ 2.76µs
+  s2l_u8_scalar/1024         ███████████████████████████████████████████ 2.76µs
+aarch64: v4 is an x86 tier. Skipping.
+aarch64: v3 is an x86 tier. Skipping.
+
+  tier_neon  0 rounds ⚠ only 0 rounds
+                                 mean ±mad µs  95% CI vs base
+  ├─ srgb_to_linear_slice         3.1 ±0.0µs  [3.1–3.1]µs   
+  ├─ linear_to_srgb_slice         5.0 ±0.0µs                
+  ├─ gamma_to_linear_slice_2.2    8.7 ±0.1µs                
+  ├─ linear_to_gamma_slice_2.2    8.7 ±0.2µs                
+  ├─ srgb_u8_to_linear_slice      1.2 ±0.0µs                
+  ├─ linear_to_srgb_u8_slice      2.3 ±0.0µs                
+  ├─ srgb_u16_to_linear_slice     2.9 ±0.0µs                
+  ├─ linear_to_srgb_u16_slice     3.6 ±0.0µs                
+  ├─ linear_to_srgb_u8_rgba_sl…   3.2 ±0.0µs                
+  ├─ linear_to_srgb_u16_rgba_s…   5.3 ±0.0µs                
+  ├─ linear_to_srgb_u16_slice_…   2.9 ±0.2µs                
+  ├─ linear_to_srgb_u16_rgba_s…   3.8 ±0.0µs                
+  ├─ unpremultiply_linear_to_s…   4.1 ±0.0µs                
+  ├─ srgb_u16_to_linear_rgba_s…   3.3 ±0.0µs                
+  ╰─ srgb_u8_to_linear_rgba_sl…   1.3 ±0.0µs                
+
+  srgb_u8_to_linear_slice     ██████ 1.23µs
+  srgb_u8_to_linear_rgba_sl…  ██████ 1.32µs
+  linear_to_srgb_u8_slice     ███████████ 2.27µs
+  srgb_u16_to_linear_slice    ██████████████ 2.93µs
+  linear_to_srgb_u16_slice_…  ██████████████ 2.93µs
+  srgb_to_linear_slice        ███████████████ 3.09µs
+  linear_to_srgb_u8_rgba_sl…  ███████████████ 3.20µs
+  srgb_u16_to_linear_rgba_s…  ████████████████ 3.35µs
+  linear_to_srgb_u16_slice    █████████████████ 3.59µs
+  linear_to_srgb_u16_rgba_s…  ███████████████████ 3.84µs
+  unpremultiply_linear_to_s…  ████████████████████ 4.13µs
+  linear_to_srgb_slice        ████████████████████████ 4.95µs
+  linear_to_srgb_u16_rgba_s…  ██████████████████████████ 5.34µs
+  linear_to_gamma_slice_2.2   ██████████████████████████████████████████ 8.69µs
+  gamma_to_linear_slice_2.2   ██████████████████████████████████████████ 8.70µs
+
+  tier_scalar  0 rounds ⚠ only 0 rounds
+                                  mean ±mad µs  95% CI vs base
+  ├─ srgb_to_linear_slice          4.7 ±0.1µs  [4.6–4.7]µs   
+  ├─ linear_to_srgb_slice         19.9 ±0.3µs                
+  ├─ gamma_to_linear_slice_2.2    28.9 ±0.2µs                
+  ├─ linear_to_gamma_slice_2.2    28.5 ±0.3µs                
+  ├─ srgb_u8_to_linear_slice       1.3 ±0.0µs                
+  ├─ linear_to_srgb_u8_slice       2.4 ±0.1µs                
+  ├─ srgb_u16_to_linear_slice      4.9 ±0.1µs                
+  ├─ linear_to_srgb_u16_slice     19.2 ±0.3µs                
+  ├─ linear_to_srgb_u8_rgba_sl…    3.3 ±0.1µs                
+  ├─ linear_to_srgb_u16_rgba_s…   25.8 ±0.3µs                
+  ├─ linear_to_srgb_u16_slice_…   19.3 ±0.1µs                
+  ├─ linear_to_srgb_u16_rgba_s…   19.9 ±0.1µs                
+  ├─ unpremultiply_linear_to_s…    3.9 ±0.0µs                
+  ├─ srgb_u16_to_linear_rgba_s…    3.3 ±0.1µs                
+  ╰─ srgb_u8_to_linear_rgba_sl…    1.3 ±0.0µs                
+
+  srgb_u8_to_linear_slice     ██ 1.27µs
+  srgb_u8_to_linear_rgba_sl…  ██ 1.31µs
+  linear_to_srgb_u8_slice     ███ 2.45µs
+  linear_to_srgb_u8_rgba_sl…  █████ 3.27µs
+  srgb_u16_to_linear_rgba_s…  █████ 3.28µs
+  unpremultiply_linear_to_s…  ██████ 3.88µs
+  srgb_to_linear_slice        ███████ 4.66µs
+  srgb_u16_to_linear_slice    ███████ 4.94µs
+  linear_to_srgb_u16_slice    ███████████████████████████ 19.17µs
+  linear_to_srgb_u16_slice_…  ███████████████████████████ 19.25µs
+  linear_to_srgb_u16_rgba_s…  ████████████████████████████ 19.87µs
+  linear_to_srgb_slice        ████████████████████████████ 19.93µs
+  linear_to_srgb_u16_rgba_s…  █████████████████████████████████████ 25.84µs
+  linear_to_gamma_slice_2.2   ████████████████████████████████████████ 28.52µs
+  gamma_to_linear_slice_2.2   █████████████████████████████████████████ 28.93µs
+[zenbench] calibration: int=0.27ns/iter mem_bw=107.5GiB/s mem_lat=7.3ns
+[zenbench] timer resolution: 41ns, loop overhead: 0.22ns/iter, TSC: 1.000 ticks/ns (invariant)
+[zenbench] results → /var/folders/sc/m9jbk0qj0jz4w09h7gg8v3p80000gn/T/zenbench/zenbench-1785241248-15ae4.txt
+
+═══════════════════════════════════════════════════════════════
+  zenbench  1785241248-15ae4
+  git: 6bae33ee657d0cc29eaae6fd869894ec78a41b1c
+═══════════════════════════════════════════════════════════════
+
+  total: 0.0s
+═══════════════════════════════════════════════════════════════
+  filter: cargo bench -- --group=NAME  format: --format=llm|csv|md|json

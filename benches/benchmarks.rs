@@ -837,9 +837,38 @@ fn bench_dispatched_at_tier(c: &mut Criterion, tier: &str) {
             _ => {}
         }
     }
-    #[cfg(not(target_arch = "x86_64"))]
+    // aarch64: NEON is the baseline tier. Disabling it is what makes the
+    // "scalar" row meaningful — without this the scalar group silently
+    // re-measured the NEON path and reported it under the scalar name.
+    #[cfg(target_arch = "aarch64")]
+    {
+        use archmage::SimdToken;
+        let _ = archmage::NeonToken::dangerously_disable_token_process_wide(false);
+        match tier {
+            "scalar" => {
+                if archmage::NeonToken::dangerously_disable_token_process_wide(true).is_err() {
+                    eprintln!(
+                        "Cannot disable NEON (compile-time guaranteed). \
+                         Enable archmage/testable_dispatch to measure the scalar tier."
+                    );
+                    return;
+                }
+            }
+            "neon" => {
+                if archmage::NeonToken::summon().is_none() {
+                    eprintln!("NEON not available on this CPU. Skipping.");
+                    return;
+                }
+            }
+            _ => {
+                eprintln!("aarch64: {tier} is an x86 tier. Skipping.");
+                return;
+            }
+        }
+    }
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     if tier != "scalar" {
-        eprintln!("Non-x86_64: only scalar tier available. Skipping {tier}.");
+        eprintln!("This target has only the scalar tier. Skipping {tier}.");
         return;
     }
 
@@ -991,7 +1020,19 @@ fn bench_dispatched_at_tier(c: &mut Criterion, tier: &str) {
         let _ = archmage::X64V3Token::dangerously_disable_token_process_wide(false);
         let _ = archmage::X64V4Token::dangerously_disable_token_process_wide(false);
     }
+    #[cfg(target_arch = "aarch64")]
+    {
+        let _ = archmage::NeonToken::dangerously_disable_token_process_wide(false);
+    }
 }
+
+#[cfg(target_arch = "aarch64")]
+fn bench_tier_neon(c: &mut Criterion) {
+    bench_dispatched_at_tier(c, "neon");
+}
+
+#[cfg(not(target_arch = "aarch64"))]
+fn bench_tier_neon(_c: &mut Criterion) {}
 
 fn bench_tier_v4(c: &mut Criterion) {
     bench_dispatched_at_tier(c, "v4");
@@ -1014,6 +1055,7 @@ criterion_group!(
     bench_dispatch_overhead,
     bench_tier_v4,
     bench_tier_v3,
+    bench_tier_neon,
     bench_tier_scalar,
 );
 
