@@ -37,8 +37,45 @@ The transfer-function paths are in good shape (3-6.6x). The u8 paths sit at
 ~1.0x because they are LUT lookups, which are not SIMD work — expected, not a
 defect.
 
-## Open item
+## Open item — unpremultiply_linear_to_srgb NEON regression (root-caused, NOT fixed)
 
 `unpremultiply_linear_to_srgb` is ~6% SLOWER through the NEON tier than with
-NEON disabled. Dispatching to NEON actively costs there. Not yet fixed; it was
-invisible until this bench could tell the two tiers apart on ARM.
+NEON disabled (4.13us vs 3.88us). It was invisible until this bench could tell
+the two tiers apart on ARM.
+
+ROOT CAUSE — src/simd.rs, unpremultiply_linear_to_srgb_rgba_slice_tier.
+Per 4-pixel chunk the alpha handling is entirely scalar:
+
+  - 4 scalar extracts        (chunk[3], chunk[7], chunk[11], chunk[15])
+  - 4 scalar branches        (if a[i] > UNPREMUL_ALPHA_THRESHOLD)
+  - 4 scalar divisions       (1.0 / a[i])
+  - then `f32x16::from_array(token, [16 scalar values])`, which stores 16 f32
+    to a stack buffer and reloads them as vectors.
+
+On AVX-512 f32x16 is a single register and that scalar prologue is amortised
+against wide vector work. On NEON f32x16 is emulated as 4 x f32x4, so the
+stack round-trip is 4 vector loads off a just-written buffer (store-forwarding
+stall) and the scalar prologue dominates — the kernel ends up slower than not
+dispatching to SIMD at all. This is why the regression is ARM-only.
+
+FIX SKETCH (vectorise the alpha path, no stack round-trip):
+  let (lo8, hi8) = v.split();  let (p0,p1) = lo8.split();  let (p2,p3) = hi8.split();
+  let [r,g,b,a] = f32x4::deinterleave_4ch([p0,p1,p2,p3]);
+  let inv = blend(a.simd_gt(splat(THRESHOLD)), splat(1.0)/a, splat(0.0));
+  let [q0,q1,q2,q3] = f32x4::interleave_4ch([inv, inv, inv, splat(1.0)]);
+  let inv_alpha = f32x16::from_halves(f32x8::from_halves(q0,q1),
+                                      f32x8::from_halves(q2,q3));
+
+NOT APPLIED, deliberately. `#[magetypes(...)]` generates one body for every
+tier, so this rewrite changes the AVX2 and AVX-512 paths too — and splitting an
+f32x16 into four f32x4 forces lane extraction on AVX-512, where it is currently
+a single register. That could easily regress x86 more than it gains on ARM.
+This host is aarch64 only (Apple M4 Pro); the change must not land until it has
+been measured on an AVX2 and an AVX-512 machine.
+
+A cleaner alternative worth considering first: magetypes has deinterleave_4ch /
+interleave_4ch for f32x4 and f32x8 but NOT for f32x16 (see
+magetypes/src/simd/generic/generated/block_ops_*.rs). Adding native f32x16
+4-channel block ops would let this kernel stay one-register-wide on AVX-512
+while still vectorising the alpha path on NEON — fixing ARM without touching
+x86 codegen shape. That is the recommended route.
