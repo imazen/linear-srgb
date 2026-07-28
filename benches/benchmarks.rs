@@ -883,6 +883,32 @@ fn bench_dispatched_at_tier(c: &mut Criterion, tier: &str) {
     let lut8 = LinearTable8::new();
     let linear_from_u8: Vec<f32> = u8_data.iter().map(|&v| lut8.lookup(v as usize)).collect();
 
+    // --- Control: identical work in EVERY tier group ---
+    //
+    // This row runs the same pure-scalar loop no matter which tier group it is
+    // in, so whatever it reports is measurement bias BETWEEN the groups, not a
+    // property of any kernel. Read every other row in this bench relative to
+    // it: a kernel is only faster/slower than another tier if it beats this
+    // control's spread.
+    //
+    // This exists because it caught a false finding. On 2026-07-28 the
+    // `unpremultiply_linear_to_srgb_slice` row read ~6% slower in tier_neon
+    // than in tier_scalar and was reported as a NEON regression. Substituting
+    // the identical scalar function into BOTH groups still produced 4.30 vs
+    // 4.05us — i.e. the entire 6% was group bias (the scalar group runs every
+    // preceding row on a slower path, arriving at this point in a different
+    // machine state). There was no regression. Without a control there is no
+    // way to tell a real few-percent difference from this.
+    group.bench_function("control_identical_scalar", |b| {
+        let mut buf = f32_srgb.clone();
+        b.iter(|| {
+            for v in buf.iter_mut() {
+                *v = crate::black_box(*v) * 1.0000001;
+            }
+            crate::black_box(&buf);
+        });
+    });
+
     // --- Dispatched f32 in-place (incant! → v3 or scalar) ---
 
     group.bench_function("srgb_to_linear_slice", |b| {

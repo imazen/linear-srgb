@@ -37,6 +37,46 @@ The transfer-function paths are in good shape (3-6.6x). The u8 paths sit at
 ~1.0x because they are LUT lookups, which are not SIMD work — expected, not a
 defect.
 
+## CORRECTION (same day) — the unpremultiply "NEON regression" is NOT attributable to the NEON kernel
+
+The section below was written first and OVERCLAIMED. It reported
+`unpremultiply_linear_to_srgb` as a ~6% NEON regression and attributed it to
+the kernel's scalar alpha prologue + f32x16 stack round-trip. Two experiments
+refute that attribution:
+
+1. **Vectorising the alpha path did not change the ratio.** A hand-written
+   aarch64 kernel (vld4q_f32 -> planes, vcgtq_f32 + vbslq_f32 threshold, ONE
+   vdivq_f32 per 4 pixels instead of 4 scalar divides, vst4q_f32 back) was
+   written and verified BIT-EXACT against the generic tier across every alpha
+   branch (0, below/at/above UNPREMUL_ALPHA_THRESHOLD) and chunk-tail length.
+   It removed the entire scalar prologue and the 16-element stack build.
+   Ratio before: 4.13 / 3.88 = 1.064. After: 4.34 / 4.07 = 1.066. No change.
+   So the scalar prologue was NOT the cause.
+
+2. **Bypassing NEON entirely did not change the ratio either.** Dispatching
+   aarch64 straight to the scalar tier still measured 4.30 in the tier_neon
+   group vs 4.05 in tier_scalar — the same ~6% — while running the same
+   kernel. A difference that survives removing the SIMD cannot be caused by
+   the SIMD.
+
+A `control_identical_scalar` row was added to every tier group to test for
+inter-group measurement bias directly. It reads 3.3us in BOTH groups, i.e. it
+does NOT show a uniform group bias, so "it's all bias" is not established
+either.
+
+**Honest status: unexplained, ~5%, and NOT a demonstrated NEON defect.** Both
+attempted fixes were reverted (kept recoverable in git stash) because neither
+improved anything. What is now known:
+  - it is not the alpha prologue (removing it changed nothing),
+  - it is not the NEON kernel (bypassing it changed nothing),
+  - it is not a uniform group bias (the control is flat).
+The next step is a per-row control or an interleaved harness that A/B's the two
+tiers within one group, not across groups — measuring this at 5% needs a
+harness designed for 5%, which the current cross-group layout is not.
+
+Do NOT cite the section below as a confirmed NEON regression. It is retained
+verbatim as the original (wrong) reasoning.
+
 ## Open item — unpremultiply_linear_to_srgb NEON regression (root-caused, NOT fixed)
 
 `unpremultiply_linear_to_srgb` is ~6% SLOWER through the NEON tier than with
