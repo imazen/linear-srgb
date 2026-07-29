@@ -91,6 +91,60 @@ fn bench(suite: &mut Suite) {
     outplace!("unpremul_linear_to_srgb_u8_rgba", N * 4, vec![0u8; N],
         |o: &mut Vec<u8>| linear_srgb::default::unpremultiply_linear_to_srgb_u8_rgba_slice(f32src, o));
 
+    // ---- the remaining 20 slice kernels ----
+    // The first pass covered 10 of the crate's 30 and found one regression in
+    // that sample, so the rest are swept too rather than assumed healthy.
+
+    // f32 in-place, no extra parameter.
+    inplace!("linear_to_bt709_slice", linear_srgb::default::linear_to_bt709_slice);
+    inplace!("linear_to_hlg_slice", linear_srgb::default::linear_to_hlg_slice);
+    inplace!("linear_to_pq_slice", linear_srgb::default::linear_to_pq_slice);
+    inplace!("linear_to_srgb_rgba_slice", linear_srgb::default::linear_to_srgb_rgba_slice);
+    inplace!("linear_to_srgb_extended_slice", linear_srgb::default::linear_to_srgb_extended_slice);
+    inplace!("srgb_to_linear_extended_slice", linear_srgb::default::srgb_to_linear_extended_slice);
+    inplace!("srgb_to_linear_premultiply_rgba", linear_srgb::default::srgb_to_linear_premultiply_rgba_slice);
+    inplace!("unpremul_linear_to_srgb_rgba", linear_srgb::default::unpremultiply_linear_to_srgb_rgba_slice);
+
+    // f32 in-place taking a gamma argument.
+    macro_rules! inplace_gamma {
+        ($name:expr, $call:path) => {
+            suite.compare($name, |g| {
+                g.throughput(Throughput::Bytes((N * 4) as u64));
+                for (arm, simd) in [(TIER_NAME, true), ("scalar", false)] {
+                    g.bench(arm, move |b| {
+                        b.with_input(move || { set_simd(simd); f32src.to_vec() })
+                            .run(move |mut v| { $call(&mut v, 2.2); v })
+                    });
+                }
+            });
+        };
+    }
+    inplace_gamma!("gamma_to_linear_slice", linear_srgb::default::gamma_to_linear_slice);
+    inplace_gamma!("linear_to_gamma_slice", linear_srgb::default::linear_to_gamma_slice);
+    inplace_gamma!("gamma_to_linear_premul_rgba", linear_srgb::default::gamma_to_linear_premultiply_rgba_slice);
+    inplace_gamma!("unpremul_linear_to_gamma_rgba", linear_srgb::default::unpremultiply_linear_to_gamma_rgba_slice);
+
+    // Out-of-place conversions.
+    let u16src: &'static [u16] =
+        Box::leak((0..N).map(|i| (i % 65521) as u16).collect::<Vec<_>>().into_boxed_slice());
+
+    outplace!("linear_to_srgb_u8_rgba_slice", N * 4, vec![0u8; N],
+        |o: &mut Vec<u8>| linear_srgb::default::linear_to_srgb_u8_rgba_slice(f32src, o));
+    outplace!("linear_to_srgb_u16_slice", N * 4, vec![0u16; N],
+        |o: &mut Vec<u16>| linear_srgb::default::linear_to_srgb_u16_slice(f32src, o));
+    outplace!("linear_to_srgb_u16_slice_fast", N * 4, vec![0u16; N],
+        |o: &mut Vec<u16>| linear_srgb::default::linear_to_srgb_u16_slice_fast(f32src, o));
+    outplace!("linear_to_srgb_u16_rgba_slice", N * 4, vec![0u16; N],
+        |o: &mut Vec<u16>| linear_srgb::default::linear_to_srgb_u16_rgba_slice(f32src, o));
+    outplace!("linear_to_srgb_u16_rgba_fast", N * 4, vec![0u16; N],
+        |o: &mut Vec<u16>| linear_srgb::default::linear_to_srgb_u16_rgba_slice_fast(f32src, o));
+    outplace!("srgb_u16_to_linear_slice", N * 2, vec![0f32; N],
+        |o: &mut Vec<f32>| linear_srgb::default::srgb_u16_to_linear_slice(u16src, o));
+    outplace!("srgb_u16_to_linear_rgba_slice", N * 2, vec![0f32; N],
+        |o: &mut Vec<f32>| linear_srgb::default::srgb_u16_to_linear_rgba_slice(u16src, o));
+    outplace!("srgb_u8_to_linear_premul_rgba", N, vec![0f32; N],
+        |o: &mut Vec<f32>| linear_srgb::default::srgb_u8_to_linear_premultiply_rgba_slice(u8src, o));
+
     set_simd(true);
 }
 
