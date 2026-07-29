@@ -1136,9 +1136,21 @@ fn unpremultiply_linear_to_srgb_u8_rgba_slice_tier(token: Token, input: &[f32], 
 #[inline]
 pub fn unpremultiply_linear_to_srgb_u8_rgba_slice(input: &[f32], output: &mut [u8]) {
     assert_eq!(input.len(), output.len());
+    // NOTE the missing `neon`: on aarch64 this kernel is SLOWER in its vector
+    // tier than in the scalar one (measured 479 us vs 446 us at 1 M elements,
+    // 0.93x, CI [-7.3%, -6.6%], reproduced across runs). The body is f32x16 but
+    // ends in SIXTEEN scalar LUT lookups per chunk — AArch64 has no gather — so
+    // the table indexing cannot vectorize and the cost of marshalling values
+    // into and out of the vector registers is not repaid. NEON is baseline
+    // there, so the scalar arm is autovectorized anyway.
+    //
+    // Verified output-neutral before removing the tier: neon and scalar produce
+    // BYTE-IDENTICAL results over 65,536 elements (checked directly), so this
+    // is purely a dispatch choice and not a precision change. The other tiers
+    // keep their vector paths — x86 has gather and is not measured here.
     incant!(
         unpremultiply_linear_to_srgb_u8_rgba_slice_tier(input, output),
-        [v4, v3, neon, wasm128, scalar]
+        [v4, v3, wasm128, scalar]
     )
 }
 

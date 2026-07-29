@@ -103,3 +103,7 @@ required-features = ["transfer"]
 [[bench]]
 name = "rgba_approach"
 harness = false
+
+[[bench]]
+name = "kernel_tiers"
+harness = false
