@@ -16,12 +16,10 @@ use num_traits::Float; // provides powf/sqrt/mul_add via libm in no_std
 // At u8 precision both constant sets are indistinguishable.
 
 /// Linear threshold for linearization: 12.92 * 0.0030412825601275209 ≈ 0.03929
-#[allow(clippy::excessive_precision)]
 const SRGB_LINEAR_THRESHOLD: f64 = 12.92 * 0.003_041_282_560_127_521;
 pub(crate) const SRGB_LINEAR_THRESHOLD_F32: f32 = SRGB_LINEAR_THRESHOLD as f32;
 
 /// Linear threshold for encoding (the inverse cutoff point)
-#[allow(clippy::excessive_precision)]
 const LINEAR_THRESHOLD: f64 = 0.003_041_282_560_127_521;
 pub(crate) const LINEAR_THRESHOLD_F32: f32 = LINEAR_THRESHOLD as f32;
 

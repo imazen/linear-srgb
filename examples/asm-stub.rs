@@ -12,8 +12,6 @@
 //! NOT a runtime example — the `main` does nothing useful, it just exists
 //! so the binary links.
 
-#![allow(clippy::missing_safety_doc)]
-
 use std::hint::black_box;
 
 #[cfg(feature = "transfer")]

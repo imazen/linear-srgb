@@ -1845,7 +1845,6 @@ fn horner7(x: f64, c: &[f64; 7]) -> f64 {
 
 /// Evaluate extended S2L 6/6 rational polynomial in f64 (matches SIMD coefficients).
 fn eval_s2l_poly(x: f64) -> f64 {
-    #[allow(clippy::excessive_precision)]
     let p: [f64; 7] = [
         1.802_136_5e1,
         9.110_411_4e2,
@@ -1855,7 +1854,6 @@ fn eval_s2l_poly(x: f64) -> f64 {
         1.338_269_2e5,
         1.706_519_4e4,
     ];
-    #[allow(clippy::excessive_precision)]
     let q: [f64; 7] = [
         2.159_401_7e4,
         1.508_555_1e5,
@@ -1873,7 +1871,6 @@ fn eval_s2l_poly(x: f64) -> f64 {
 
 /// Evaluate extended L2S 6/6 rational polynomial in f64 (matches SIMD coefficients).
 fn eval_l2s_poly(lin: f64) -> f64 {
-    #[allow(clippy::excessive_precision)]
     let p: [f64; 7] = [
         -1.025_467_4,
         -3.075_361_5e-1,
@@ -1883,7 +1880,6 @@ fn eval_l2s_poly(lin: f64) -> f64 {
         3.230_716e3,
         1.769_130_4e2,
     ];
-    #[allow(clippy::excessive_precision)]
     let q: [f64; 7] = [
         1.977_460_5e1,
         8.308_271e2,
