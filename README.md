@@ -269,6 +269,7 @@ they share a SIMD-generated `OnceLock` LUT.
 | Extended range `&mut [f32]` | `srgb_to_linear_extended_slice` / `linear_to_srgb_extended_slice` |
 | Extended range RGBA `&mut [f32]` | `srgb_to_linear_extended_rgba_slice` / `linear_to_srgb_extended_rgba_slice` |
 | Custom gamma `&mut [f32]` | `gamma_to_linear_slice` / `linear_to_gamma_slice` |
+| Custom gamma RGBA `&mut [f32]` | `gamma_to_linear_rgba_slice` / `linear_to_gamma_rgba_slice` |
 | Custom gamma RGBA premul | `gamma_to_linear_premultiply_rgba_slice` / `unpremultiply_linear_to_gamma_rgba_slice` |
 | Single f32 | `srgb_to_linear` / `linear_to_srgb` |
 | Single u8 | `srgb_u8_to_linear` / `linear_to_srgb_u8` |

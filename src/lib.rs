@@ -85,6 +85,8 @@
 //! | Extended range (HDR) | [`precise::srgb_to_linear_extended`] |
 //! | Extended range f32 slice (SIMD) | [`default::srgb_to_linear_extended_slice`] |
 //! | Extended range RGBA f32 slice (alpha-preserving) | [`default::srgb_to_linear_extended_rgba_slice`] |
+//! | Custom gamma f32 slice | [`default::gamma_to_linear_slice`] |
+//! | Custom gamma RGBA f32 slice (alpha-preserving) | [`default::gamma_to_linear_rgba_slice`] |
 //! | Inside `#[arcane]` | `tokens::x8::srgb_to_linear_v3` |
 //! | Custom bit depth LUT | [`lut::LinearTable16`] |
 //!

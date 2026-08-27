@@ -1453,6 +1453,10 @@ fn gamma_to_linear_slice_tier(token: Token, values: &mut [f32], gamma: f32) {
 
 /// Convert gamma-encoded f32 values to linear in-place using a custom gamma.
 ///
+/// Applies the power function to **every element of the slice** — if you
+/// pass RGBA data, alpha will be decoded too. Use
+/// [`gamma_to_linear_rgba_slice`] for alpha-preserving RGBA conversion.
+///
 /// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), NEON (4-wide), WASM SIMD128 (4-wide), or scalar depending on CPU.
 ///
 /// # Example
@@ -1485,6 +1489,10 @@ fn linear_to_gamma_slice_tier(token: Token, values: &mut [f32], gamma: f32) {
 
 /// Convert linear f32 values to gamma-encoded in-place using a custom gamma.
 ///
+/// Applies the power function to **every element of the slice** — if you
+/// pass RGBA data, alpha will be encoded too. Use
+/// [`linear_to_gamma_rgba_slice`] for alpha-preserving RGBA conversion.
+///
 /// Uses AVX-512 (16-wide), AVX2+FMA (8-wide), NEON (4-wide), WASM SIMD128 (4-wide), or scalar depending on CPU.
 ///
 /// # Example
@@ -1498,6 +1506,117 @@ fn linear_to_gamma_slice_tier(token: Token, values: &mut [f32], gamma: f32) {
 pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
     incant!(
         linear_to_gamma_slice_tier(values, gamma),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+// ============================================================================
+// Custom Gamma RGBA Slice Functions (alpha-preserving, no premultiply)
+// ============================================================================
+//
+// Same SIMD body as the plain gamma slices above (clamp to [0, 1], then
+// `pow_midp`); alpha lanes (3, 7, 11, 15 of every 16-float chunk) are
+// stashed before the SIMD step and restored bit-identical afterwards. The
+// remainder is handled per pixel with the scalar functions, matching the
+// plain slice's tail — so R/G/B come out bit-identical to
+// `gamma_to_linear_slice` on the same data (see
+// `tests::gamma_rgba_matches_plain_slice_on_rgb`). The `gamma: f32`
+// argument is why these don't go through `tf_rgba_slice_dispatcher!`.
+
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn gamma_to_linear_rgba_slice_tier(token: Token, values: &mut [f32], gamma: f32) {
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
+    for chunk in chunks {
+        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
+        let v = f32x16::from_array(token, *chunk);
+        let clamped = v.max(f32x16::zero(token)).min(f32x16::splat(token, 1.0));
+        *chunk = clamped.pow_midp(gamma).to_array();
+        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
+    }
+    // `.0` = the complete 4-float pixels; a trailing partial pixel is ignored.
+    for pixel in remainder.as_chunks_mut::<4>().0 {
+        pixel[0] = crate::scalar::gamma_to_linear(pixel[0], gamma);
+        pixel[1] = crate::scalar::gamma_to_linear(pixel[1], gamma);
+        pixel[2] = crate::scalar::gamma_to_linear(pixel[2], gamma);
+    }
+}
+
+/// Convert gamma-encoded RGBA f32 values to linear in-place using a custom
+/// gamma, preserving alpha.
+///
+/// Expects interleaved RGBA data (`[R, G, B, A, R, G, B, A, ...]`).
+/// Every 4th element (alpha) is left unchanged. R/G/B are clamped to
+/// \[0, 1\] and decoded via `x.powf(gamma)`, exactly as
+/// [`gamma_to_linear_slice`] does for every element. Trailing elements
+/// that don't form a complete RGBA pixel are ignored.
+///
+/// Straight (non-premultiplied) alpha in, straight alpha out. For the
+/// fused decode-and-premultiply form see
+/// [`srgb_to_linear_premultiply_rgba_slice`].
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::gamma_to_linear_rgba_slice;
+///
+/// let mut rgba = vec![0.5f32, 0.5, 0.5, 0.75, 1.0, 1.0, 1.0, 2.0];
+/// gamma_to_linear_rgba_slice(&mut rgba, 2.2);
+/// assert!((rgba[0] - 0.5f32.powf(2.2)).abs() < 1e-3);
+/// assert_eq!(rgba[3], 0.75); // alpha untouched
+/// assert_eq!(rgba[7], 2.0);  // alpha untouched, not clamped
+/// ```
+#[inline]
+pub fn gamma_to_linear_rgba_slice(values: &mut [f32], gamma: f32) {
+    incant!(
+        gamma_to_linear_rgba_slice_tier(values, gamma),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_gamma_rgba_slice_tier(token: Token, values: &mut [f32], gamma: f32) {
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
+    for chunk in chunks {
+        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
+        let v = f32x16::from_array(token, *chunk);
+        let clamped = v.max(f32x16::zero(token)).min(f32x16::splat(token, 1.0));
+        *chunk = clamped.pow_midp(1.0 / gamma).to_array();
+        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
+    }
+    // `.0` = the complete 4-float pixels; a trailing partial pixel is ignored.
+    for pixel in remainder.as_chunks_mut::<4>().0 {
+        pixel[0] = crate::scalar::linear_to_gamma(pixel[0], gamma);
+        pixel[1] = crate::scalar::linear_to_gamma(pixel[1], gamma);
+        pixel[2] = crate::scalar::linear_to_gamma(pixel[2], gamma);
+    }
+}
+
+/// Convert linear RGBA f32 values to gamma-encoded in-place using a custom
+/// gamma, preserving alpha.
+///
+/// Expects interleaved RGBA data (`[R, G, B, A, R, G, B, A, ...]`).
+/// Every 4th element (alpha) is left unchanged. R/G/B are clamped to
+/// \[0, 1\] and encoded via `x.powf(1.0 / gamma)`, exactly as
+/// [`linear_to_gamma_slice`] does for every element. Trailing elements
+/// that don't form a complete RGBA pixel are ignored.
+///
+/// Straight (non-premultiplied) alpha in, straight alpha out. For the
+/// fused unpremultiply-and-encode form see
+/// [`unpremultiply_linear_to_srgb_rgba_slice`].
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::linear_to_gamma_rgba_slice;
+///
+/// let mut rgba = vec![0.2f32, 0.2, 0.2, 0.75, 0.8, 0.8, 0.8, 2.0];
+/// linear_to_gamma_rgba_slice(&mut rgba, 2.2);
+/// assert!((rgba[0] - 0.2f32.powf(1.0 / 2.2)).abs() < 1e-3);
+/// assert_eq!(rgba[3], 0.75); // alpha untouched
+/// assert_eq!(rgba[7], 2.0);  // alpha untouched, not clamped
+/// ```
+#[inline]
+pub fn linear_to_gamma_rgba_slice(values: &mut [f32], gamma: f32) {
+    incant!(
+        linear_to_gamma_rgba_slice_tier(values, gamma),
         [v4, v3, neon, wasm128, scalar]
     )
 }
@@ -3264,6 +3383,160 @@ mod tests {
         assert_eq!(rgba[0], 0.0);
         assert_eq!(rgba[3], 0.0);
         assert!((rgba[4] - 0.8).abs() < 2e-3);
+    }
+
+    /// Deterministic RGBA sweep for the custom-gamma RGBA slices. R/G/B
+    /// include values outside [0, 1] (which the gamma path clamps) and
+    /// alpha is outside [0, 1] and never a fixed point of x^g, so any
+    /// accidental transform (or clamp!) of the alpha lane shows up.
+    /// 257 pixels = 1028 floats exercises chunk + remainder for every width.
+    fn gamma_rgba_sweep() -> Vec<f32> {
+        let mut v = Vec::with_capacity(257 * 4);
+        for i in 0..257 {
+            let t = i as f32 / 256.0;
+            v.push(t * 1.2 - 0.1); // R: [-0.1, 1.1]
+            v.push((t * 0.5).min(1.0)); // G
+            v.push((1.0 - t).max(0.0)); // B
+            v.push(1.5 + t * 0.3); // A: (1.5, 1.8] — a clamp would flatten it
+        }
+        v
+    }
+
+    fn check_gamma_rgba<F, G>(name: &str, gamma: f32, rgba_fn: F, scalar_fn: G, tol: f32)
+    where
+        F: Fn(&mut [f32], f32),
+        G: Fn(f32, f32) -> f32,
+    {
+        let input = gamma_rgba_sweep();
+        let mut out = input.clone();
+        rgba_fn(&mut out, gamma);
+        let in_px_all = input.as_chunks::<4>().0;
+        let out_px_all = out.as_chunks::<4>().0;
+        for (px, (in_px, out_px)) in in_px_all.iter().zip(out_px_all).enumerate() {
+            for ch in 0..3 {
+                let expect = scalar_fn(in_px[ch], gamma);
+                assert!(
+                    (out_px[ch] - expect).abs() <= tol,
+                    "{name} g={gamma} RGB mismatch at px {px} ch {ch}: input={}, simd={}, scalar={}",
+                    in_px[ch],
+                    out_px[ch],
+                    expect
+                );
+            }
+            assert_eq!(
+                out_px[3].to_bits(),
+                in_px[3].to_bits(),
+                "{name} g={gamma} alpha clobbered at px {px}: was {}, now {}",
+                in_px[3],
+                out_px[3]
+            );
+        }
+    }
+
+    #[test]
+    fn gamma_to_linear_rgba_slice_matches_scalar_and_preserves_alpha() {
+        for gamma in [1.0, 1.8, 2.2, 2.4] {
+            check_gamma_rgba(
+                "gamma_to_linear_rgba_slice",
+                gamma,
+                gamma_to_linear_rgba_slice,
+                crate::scalar::gamma_to_linear,
+                1e-3,
+            );
+        }
+    }
+
+    #[test]
+    fn linear_to_gamma_rgba_slice_matches_scalar_and_preserves_alpha() {
+        for gamma in [1.0, 1.8, 2.2, 2.4] {
+            check_gamma_rgba(
+                "linear_to_gamma_rgba_slice",
+                gamma,
+                linear_to_gamma_rgba_slice,
+                crate::scalar::linear_to_gamma,
+                1e-3,
+            );
+        }
+    }
+
+    /// The RGBA variants must produce bit-identical R/G/B to the plain
+    /// gamma slice on the same data — same SIMD body, same scalar tail —
+    /// for every length from 1 to 20 pixels (scalar remainder, x4, x8, x16).
+    #[test]
+    fn gamma_rgba_matches_plain_slice_on_rgb() {
+        let sweep = gamma_rgba_sweep();
+        for num_pixels in 1..=20 {
+            let base = &sweep[..num_pixels * 4];
+            for (name, rgba_fn, plain_fn) in [
+                (
+                    "gamma_to_linear",
+                    gamma_to_linear_rgba_slice as fn(&mut [f32], f32),
+                    gamma_to_linear_slice as fn(&mut [f32], f32),
+                ),
+                (
+                    "linear_to_gamma",
+                    linear_to_gamma_rgba_slice as fn(&mut [f32], f32),
+                    linear_to_gamma_slice as fn(&mut [f32], f32),
+                ),
+            ] {
+                let mut via_rgba = base.to_vec();
+                let mut via_plain = base.to_vec();
+                rgba_fn(&mut via_rgba, 2.2);
+                plain_fn(&mut via_plain, 2.2);
+                for (i, (&r, &p)) in via_rgba.iter().zip(via_plain.iter()).enumerate() {
+                    if i % 4 == 3 {
+                        assert_eq!(
+                            r.to_bits(),
+                            base[i].to_bits(),
+                            "{name} rgba alpha changed at {i}/{num_pixels}"
+                        );
+                    } else {
+                        assert_eq!(
+                            r.to_bits(),
+                            p.to_bits(),
+                            "{name} rgba vs plain diverge at {i}/{num_pixels}: {r} vs {p}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn gamma_rgba_roundtrip_preserves_alpha() {
+        for num_pixels in 1..=17 {
+            let original: Vec<f32> = gamma_rgba_sweep()[..num_pixels * 4].to_vec();
+            let mut rgba = original.clone();
+            gamma_to_linear_rgba_slice(&mut rgba, 1.8);
+            linear_to_gamma_rgba_slice(&mut rgba, 1.8);
+            for (i, (&orig, &conv)) in original.iter().zip(rgba.iter()).enumerate() {
+                if i % 4 == 3 {
+                    assert_eq!(orig.to_bits(), conv.to_bits(), "alpha at {i}/{num_pixels}");
+                } else {
+                    // Gamma path clamps R/G/B to [0, 1] before the power.
+                    let expect = orig.clamp(0.0, 1.0);
+                    assert!(
+                        (expect - conv).abs() < 1e-3,
+                        "gamma 1.8 rgba roundtrip at {i}/{num_pixels}: {orig} -> {conv}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn gamma_rgba_ignores_partial_trailing_pixel() {
+        let mut v = vec![0.5f32, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5];
+        gamma_to_linear_rgba_slice(&mut v, 2.2);
+        assert_eq!(v[3], 0.5);
+        assert_eq!(
+            &v[4..],
+            &[0.5, 0.5, 0.5],
+            "trailing partial pixel untouched"
+        );
+        let mut empty: Vec<f32> = vec![];
+        gamma_to_linear_rgba_slice(&mut empty, 2.2);
+        linear_to_gamma_rgba_slice(&mut empty, 2.2);
     }
 
     #[test]

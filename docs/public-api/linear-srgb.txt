@@ -6,14 +6,14 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: linear-srgb.txt 129 lines (supported surface) | linear-srgb.features.txt 63 added (features: alt,avx512,iec,std,transfer,unsafe_simd) | linear-srgb.internal.txt 40 lines (57 hidden + 0 excluded-feature)
+# files: linear-srgb.txt 131 lines (supported surface) | linear-srgb.features.txt 63 added (features: alt,avx512,iec,std,transfer,unsafe_simd) | linear-srgb.internal.txt 40 lines (57 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 9
 #   pub types (struct/enum/trait/alias)        11
 #   pub consts/statics                          3
-#   free functions                             91
+#   free functions                             93
 #   inherent methods                           16
 #   re-exports                                  5
 #   trait roster entries (type × trait)         3
@@ -21,13 +21,13 @@
 #
 # per-module pub lines:
 #   (root)                            9
-#   default                          36
+#   default                          38
 #   lut                              28
 #   precise                           8
 #   tf                                2
 #   tokens                           52
 
-## items (125 lines)
+## items (127 lines)
 
 pub mod linear_srgb
 pub mod default
@@ -39,8 +39,10 @@ pub const fn lut::SrgbConverter::new() -> Self [also: (root)]
 pub fn lut::SrgbConverter::srgb_u8_to_linear(&self, u8) -> f32
 pub fn default::gamma_to_linear(f32, f32) -> f32
 pub fn default::gamma_to_linear_premultiply_rgba_slice(&mut [f32], f32)
+pub fn default::gamma_to_linear_rgba_slice(&mut [f32], f32)
 pub fn default::gamma_to_linear_slice(&mut [f32], f32)
 pub fn default::linear_to_gamma(f32, f32) -> f32
+pub fn default::linear_to_gamma_rgba_slice(&mut [f32], f32)
 pub fn default::linear_to_gamma_slice(&mut [f32], f32)
 pub fn default::linear_to_srgb_extended_rgba_slice(&mut [f32])
 pub fn default::linear_to_srgb_extended_slice(&mut [f32])

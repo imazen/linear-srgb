@@ -51,8 +51,11 @@ pub use crate::scalar::{
 // ============================================================================
 
 pub use crate::simd::{
+    // Custom gamma RGBA slices (alpha-preserving)
+    gamma_to_linear_rgba_slice,
     // Custom gamma slices
     gamma_to_linear_slice,
+    linear_to_gamma_rgba_slice,
     linear_to_gamma_slice,
     // Extended-range f32 RGBA slices (no clamping, alpha-preserving)
     linear_to_srgb_extended_rgba_slice,
