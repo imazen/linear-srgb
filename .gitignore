@@ -63,3 +63,4 @@ Cargo.toml.original.txt
 *.profdata
 fuzz-*.log
 .workongoing
+.jj/

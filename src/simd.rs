@@ -315,6 +315,10 @@ fn srgb_to_linear_extended_slice_tier(token: Token, values: &mut [f32]) {
 
 /// Convert sRGB f32 values to linear in-place without clamping (extended range).
 ///
+/// Applies the transfer function to **every element of the slice** — if you
+/// pass RGBA data, alpha will be decoded too. Use
+/// [`srgb_to_linear_extended_rgba_slice`] for alpha-preserving RGBA conversion.
+///
 /// Uses sign-preserving extension per CSS Color 4: `sign(v) * eotf(|v|)`.
 /// Pure SIMD polynomial on x86-64 (AVX2+FMA), AArch64 (NEON), and
 /// WebAssembly (SIMD128). Scalar `powf` fallback on other architectures.
@@ -369,6 +373,10 @@ fn linear_to_srgb_extended_slice_tier(token: Token, values: &mut [f32]) {
 
 /// Convert linear f32 values to sRGB in-place without clamping (extended range).
 ///
+/// Applies the transfer function to **every element of the slice** — if you
+/// pass RGBA data, alpha will be encoded too. Use
+/// [`linear_to_srgb_extended_rgba_slice`] for alpha-preserving RGBA conversion.
+///
 /// Uses sign-preserving extension per CSS Color 4: `sign(v) * oetf(|v|)`.
 /// Pure SIMD polynomial on x86-64 (AVX2+FMA), AArch64 (NEON), and
 /// WebAssembly (SIMD128). Scalar `powf` fallback on other architectures.
@@ -403,6 +411,114 @@ fn linear_to_srgb_extended_slice_tier(token: Token, values: &mut [f32]) {
 pub fn linear_to_srgb_extended_slice(values: &mut [f32]) {
     incant!(
         linear_to_srgb_extended_slice_tier(values),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+// ============================================================================
+// Extended-range sRGB ↔ Linear RGBA Slice Functions (alpha-preserving)
+// ============================================================================
+//
+// Same x16 rites as the plain extended slices above; alpha lanes (3, 7, 11,
+// 15 of every 16-float chunk) are stashed before the SIMD step and restored
+// bit-identical afterwards. The remainder is handled per pixel with the
+// scalar `_extended` functions so tail pixels see the same curve as the
+// body (the x16 rites are the SIMD form of the same sign-preserving
+// polynomial; see `tests::extended_rgba_matches_plain_slice_on_rgb`).
+
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn srgb_to_linear_extended_rgba_slice_tier(token: Token, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
+    for chunk in chunks {
+        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
+        let v = f32x16::from_array(token, *chunk);
+        *chunk = crate::tf::srgb::srgb_to_linear_extended_x16(token, v).to_array();
+        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
+    }
+    // `.0` = the complete 4-float pixels; a trailing partial pixel is ignored.
+    for pixel in remainder.as_chunks_mut::<4>().0 {
+        pixel[0] = crate::scalar::srgb_to_linear_extended(pixel[0]);
+        pixel[1] = crate::scalar::srgb_to_linear_extended(pixel[1]);
+        pixel[2] = crate::scalar::srgb_to_linear_extended(pixel[2]);
+    }
+}
+
+/// Convert sRGB RGBA f32 values to linear in-place without clamping
+/// (extended range), preserving alpha.
+///
+/// Expects interleaved RGBA data (`[R, G, B, A, R, G, B, A, ...]`).
+/// Every 4th element (alpha) is left unchanged. Trailing elements that
+/// don't form a complete RGBA pixel are ignored.
+///
+/// R/G/B use the same sign-preserving CSS Color 4 extension and the same
+/// SIMD polynomial as [`srgb_to_linear_extended_slice`] — see that
+/// function for the accuracy table and the intended cross-gamut / scRGB
+/// use cases. This is the variant to reach for on the interleaved RGBA
+/// output of a wide-gamut decode.
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::srgb_to_linear_extended_rgba_slice;
+///
+/// let mut rgba = vec![-0.1f32, 0.5, 1.5, 0.75, 1.0, 1.0, 1.0, 2.0];
+/// srgb_to_linear_extended_rgba_slice(&mut rgba);
+/// assert!(rgba[0] < 0.0);   // negative preserved
+/// assert!(rgba[2] > 1.0);   // super-white preserved
+/// assert_eq!(rgba[3], 0.75); // alpha untouched
+/// assert_eq!(rgba[7], 2.0);  // alpha untouched, even out of [0, 1]
+/// ```
+#[inline]
+pub fn srgb_to_linear_extended_rgba_slice(values: &mut [f32]) {
+    incant!(
+        srgb_to_linear_extended_rgba_slice_tier(values),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_srgb_extended_rgba_slice_tier(token: Token, values: &mut [f32]) {
+    let (chunks, remainder) = values.as_chunks_mut::<16>();
+    for chunk in chunks {
+        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
+        let v = f32x16::from_array(token, *chunk);
+        *chunk = crate::tf::srgb::linear_to_srgb_extended_x16(token, v).to_array();
+        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
+    }
+    // `.0` = the complete 4-float pixels; a trailing partial pixel is ignored.
+    for pixel in remainder.as_chunks_mut::<4>().0 {
+        pixel[0] = crate::scalar::linear_to_srgb_extended(pixel[0]);
+        pixel[1] = crate::scalar::linear_to_srgb_extended(pixel[1]);
+        pixel[2] = crate::scalar::linear_to_srgb_extended(pixel[2]);
+    }
+}
+
+/// Convert linear RGBA f32 values to sRGB in-place without clamping
+/// (extended range), preserving alpha.
+///
+/// Expects interleaved RGBA data (`[R, G, B, A, R, G, B, A, ...]`).
+/// Every 4th element (alpha) is left unchanged. Trailing elements that
+/// don't form a complete RGBA pixel are ignored.
+///
+/// R/G/B use the same sign-preserving CSS Color 4 extension and the same
+/// SIMD polynomial as [`linear_to_srgb_extended_slice`] — see that
+/// function for the accuracy table and the intended cross-gamut / scRGB
+/// use cases.
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::linear_to_srgb_extended_rgba_slice;
+///
+/// let mut rgba = vec![-0.1f32, 0.5, 1.5, 0.75, 1.0, 1.0, 1.0, 2.0];
+/// linear_to_srgb_extended_rgba_slice(&mut rgba);
+/// assert!(rgba[0] < 0.0);   // negative preserved
+/// assert!(rgba[2] > 1.0);   // super-white preserved
+/// assert_eq!(rgba[3], 0.75); // alpha untouched
+/// assert_eq!(rgba[7], 2.0);  // alpha untouched, even out of [0, 1]
+/// ```
+#[inline]
+pub fn linear_to_srgb_extended_rgba_slice(values: &mut [f32]) {
+    incant!(
+        linear_to_srgb_extended_rgba_slice_tier(values),
         [v4, v3, neon, wasm128, scalar]
     )
 }
@@ -2239,6 +2355,157 @@ mod tests {
         assert_eq!(output[3], 65535);
         // alpha 0.5: (0.5 * 65535 + 0.5) as u16 = 32768
         assert_eq!(output[7], 32768);
+    }
+
+    /// Deterministic RGBA sweep with out-of-[0,1] R/G/B (the whole point of
+    /// the extended path) and alpha values outside [0,1] so any accidental
+    /// TF application on the alpha lane can't hide behind a fixed point.
+    /// 257 pixels = 1028 floats exercises chunk + remainder for every width.
+    fn extended_rgba_sweep() -> Vec<f32> {
+        let mut v = Vec::with_capacity(257 * 4);
+        for i in 0..257 {
+            let t = i as f32 / 256.0;
+            v.push(t * 3.0 - 1.0); // R: [-1, 2]
+            v.push(t * 1.5); // G: [0, 1.5]
+            v.push(0.25 - t); // B: [-0.75, 0.25]
+            v.push(-0.125 - t * 0.3); // A: never a TF fixed point
+        }
+        v
+    }
+
+    fn check_extended_rgba<F, G>(name: &str, rgba_fn: F, scalar_fn: G, tol: f32)
+    where
+        F: Fn(&mut [f32]),
+        G: Fn(f32) -> f32,
+    {
+        let input = extended_rgba_sweep();
+        let mut out = input.clone();
+        rgba_fn(&mut out);
+        let in_px_all = input.as_chunks::<4>().0;
+        let out_px_all = out.as_chunks::<4>().0;
+        for (px, (in_px, out_px)) in in_px_all.iter().zip(out_px_all).enumerate() {
+            for ch in 0..3 {
+                let expect = scalar_fn(in_px[ch]);
+                assert!(
+                    (out_px[ch] - expect).abs() <= tol * expect.abs().max(1.0),
+                    "{name} RGB mismatch at px {px} ch {ch}: input={}, simd={}, scalar={}",
+                    in_px[ch],
+                    out_px[ch],
+                    expect
+                );
+            }
+            assert_eq!(
+                out_px[3].to_bits(),
+                in_px[3].to_bits(),
+                "{name} alpha clobbered at px {px}: was {}, now {}",
+                in_px[3],
+                out_px[3]
+            );
+        }
+    }
+
+    #[test]
+    fn srgb_to_linear_extended_rgba_slice_matches_scalar_and_preserves_alpha() {
+        check_extended_rgba(
+            "srgb_to_linear_extended_rgba_slice",
+            srgb_to_linear_extended_rgba_slice,
+            crate::scalar::srgb_to_linear_extended,
+            1e-5,
+        );
+    }
+
+    #[test]
+    fn linear_to_srgb_extended_rgba_slice_matches_scalar_and_preserves_alpha() {
+        check_extended_rgba(
+            "linear_to_srgb_extended_rgba_slice",
+            linear_to_srgb_extended_rgba_slice,
+            crate::scalar::linear_to_srgb_extended,
+            1e-5,
+        );
+    }
+
+    /// The RGBA variants must produce bit-identical R/G/B to the plain
+    /// extended slice on the same data — same rites, same curve — for
+    /// every length from 1 to 20 pixels (scalar remainder, x4, x8, x16).
+    #[test]
+    fn extended_rgba_matches_plain_slice_on_rgb() {
+        let sweep = extended_rgba_sweep();
+        for num_pixels in 1..=20 {
+            let base = &sweep[..num_pixels * 4];
+            for (name, rgba_fn, plain_fn) in [
+                (
+                    "srgb_to_linear",
+                    srgb_to_linear_extended_rgba_slice as fn(&mut [f32]),
+                    srgb_to_linear_extended_slice as fn(&mut [f32]),
+                ),
+                (
+                    "linear_to_srgb",
+                    linear_to_srgb_extended_rgba_slice as fn(&mut [f32]),
+                    linear_to_srgb_extended_slice as fn(&mut [f32]),
+                ),
+            ] {
+                let mut via_rgba = base.to_vec();
+                let mut via_plain = base.to_vec();
+                rgba_fn(&mut via_rgba);
+                plain_fn(&mut via_plain);
+                for (i, (&r, &p)) in via_rgba.iter().zip(via_plain.iter()).enumerate() {
+                    if i % 4 == 3 {
+                        assert_eq!(
+                            r.to_bits(),
+                            base[i].to_bits(),
+                            "{name} extended rgba alpha changed at {i}/{num_pixels}"
+                        );
+                    } else {
+                        assert_eq!(
+                            r.to_bits(),
+                            p.to_bits(),
+                            "{name} extended rgba vs plain diverge at {i}/{num_pixels}: {r} vs {p}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn extended_rgba_roundtrip_out_of_range() {
+        // Roundtrip through the extended RGBA pair keeps negatives and
+        // super-whites (the clamped RGBA pair would flatten them).
+        // Last 17 pixels of the sweep: R in [1.81, 2.0], B in [-0.75, -0.69].
+        let original: Vec<f32> = extended_rgba_sweep()[240 * 4..].to_vec();
+        assert_eq!(original.len(), 17 * 4);
+        let mut rgba = original.clone();
+        srgb_to_linear_extended_rgba_slice(&mut rgba);
+        assert!(rgba[0] > 1.0, "super-white R must survive decode");
+        assert!(rgba[2] < 0.0, "negative B must survive decode");
+        linear_to_srgb_extended_rgba_slice(&mut rgba);
+        for (i, (&orig, &conv)) in original.iter().zip(rgba.iter()).enumerate() {
+            if i % 4 == 3 {
+                assert_eq!(orig.to_bits(), conv.to_bits(), "alpha at pixel {}", i / 4);
+            } else {
+                assert!(
+                    (orig - conv).abs() < 2e-5 * orig.abs().max(1.0),
+                    "extended RGB roundtrip at {i}: {orig} -> {conv}"
+                );
+            }
+        }
+        assert!(rgba[0] > 1.0, "super-white R must survive the roundtrip");
+        assert!(rgba[2] < 0.0, "negative B must survive the roundtrip");
+    }
+
+    #[test]
+    fn extended_rgba_ignores_partial_trailing_pixel() {
+        let mut v = vec![0.5f32, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5];
+        srgb_to_linear_extended_rgba_slice(&mut v);
+        assert_eq!(v[3], 0.5);
+        assert_eq!(
+            &v[4..],
+            &[0.5, 0.5, 0.5],
+            "trailing partial pixel untouched"
+        );
+        let mut empty: Vec<f32> = vec![];
+        srgb_to_linear_extended_rgba_slice(&mut empty);
+        linear_to_srgb_extended_rgba_slice(&mut empty);
     }
 
     #[test]

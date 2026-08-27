@@ -4,6 +4,8 @@
 
 ### Added
 
+- `default::srgb_to_linear_extended_rgba_slice` / `default::linear_to_srgb_extended_rgba_slice` — alpha-preserving RGBA forms of the extended-range (unclamped, sign-preserving) slice conversions, for interleaved RGBA f32 from wide-gamut / scRGB decodes. Same x16 rites and `[v4, v3, neon, wasm128, scalar]` dispatch as the plain `_extended_slice` pair; R/G/B are bit-identical to the plain slice, alpha is untouched. The plain `*_extended_slice` docs now warn that they transform alpha too. Also corrects the `lib.rs` "No SIMD extended-range variants exist yet" paragraph, which was stale. (#12)
+
 - Versioned public-API surface snapshot at `docs/public-api/linear-srgb.txt`, regenerated on every `cargo test` by `tests/public_api_doc.rs` (`ZEN_API_DOC=check` verifies in CI, `=off` skips); `justfile` recipes `fmt` / `api-doc` / `api-doc-check`. Replaces the manual `api-snapshots/{default,all}-features.txt` diff gate in `api-surface.yml` with the same strictness (item counts carried over exactly: 173 default / 250 all-features) plus local auto-regen — intentional API changes now land the snapshot in the same commit as the code. The `semver-checks` job is unchanged. Dev-only — not part of the published package.
 
 ### Changed

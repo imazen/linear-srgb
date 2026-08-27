@@ -83,6 +83,8 @@
 //! | f32 → u16 (fast, ±1 RT) | [`default::linear_to_srgb_u16_fast`] |
 //! | Exact f32/f64 (powf) | [`precise::srgb_to_linear`] |
 //! | Extended range (HDR) | [`precise::srgb_to_linear_extended`] |
+//! | Extended range f32 slice (SIMD) | [`default::srgb_to_linear_extended_slice`] |
+//! | Extended range RGBA f32 slice (alpha-preserving) | [`default::srgb_to_linear_extended_rgba_slice`] |
 //! | Inside `#[arcane]` | `tokens::x8::srgb_to_linear_v3` |
 //! | Custom bit depth LUT | [`lut::LinearTable16`] |
 //!
@@ -148,19 +150,20 @@
 //!
 //! | Function | Range | Pipeline |
 //! |----------|-------|----------|
-//! | All `default::*_slice`, `tokens::*`, `lut::*` | \[0, 1\] | Same-gamut batch processing |
+//! | All non-`_extended` `default::*_slice`, `tokens::*`, `lut::*` | \[0, 1\] | Same-gamut batch processing |
 //! | [`default::srgb_to_linear`] | \[0, 1\] | Same-gamut single values |
 //! | [`default::linear_to_srgb`] | \[0, 1\] | Same-gamut single values |
 //! | [`precise::srgb_to_linear_extended`] | Unbounded | Cross-gamut, scRGB, HDR |
 //! | [`precise::linear_to_srgb_extended`] | Unbounded | Cross-gamut, scRGB, HDR |
+//! | [`default::srgb_to_linear_extended_slice`] / [`default::srgb_to_linear_extended_rgba_slice`] | Unbounded (SIMD) | Cross-gamut, scRGB batch |
+//! | [`default::linear_to_srgb_extended_slice`] / [`default::linear_to_srgb_extended_rgba_slice`] | Unbounded (SIMD) | Cross-gamut, scRGB batch |
 //! | All u8/u16 paths | \[0, 1\] | Final quantization (clamp inherent) |
 //!
-//! **No SIMD extended-range variants exist yet.** The fast polynomial
-//! approximation is fitted to \[0, 1\] and produces garbage outside that
-//! domain. Extended-range SIMD would use `pow` instead of the polynomial
-//! (~3× slower, still faster than scalar for `linear_to_srgb`). For batch
-//! extended-range conversion today, loop over the [`precise`] `_extended`
-//! functions.
+//! The SIMD `_extended_slice` variants use a wider-domain rational
+//! polynomial (fitted to \[0, 8\] / \[0, 64\] — see the per-function
+//! accuracy tables) rather than the \[0, 1\] polynomial of the clamped
+//! path, so they stay accurate on the out-of-gamut values a 3×3 gamut
+//! matrix produces. The `_rgba_slice` forms leave alpha bit-identical.
 //!
 //! # Feature Flags
 //!
