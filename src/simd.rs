@@ -177,7 +177,7 @@ fn srgb_to_linear_rgba_slice_tier(_token: Token, values: &mut [f32]) {
         *chunk = incant!(mt_srgb_to_linear(*chunk));
         [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
     }
-    for pixel in remainder.chunks_exact_mut(4) {
+    for pixel in remainder.as_chunks_mut::<4>().0.iter_mut() {
         // Fast C0-continuous polynomial to match the SIMD body (see
         // `srgb_to_linear_slice_tier`).
         pixel[0] = crate::scalar::srgb_to_linear_fast(pixel[0]);
@@ -248,7 +248,7 @@ fn linear_to_srgb_rgba_slice_tier(_token: Token, values: &mut [f32]) {
         *chunk = incant!(mt_linear_to_srgb(*chunk));
         [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
     }
-    for pixel in remainder.chunks_exact_mut(4) {
+    for pixel in remainder.as_chunks_mut::<4>().0.iter_mut() {
         // Fast C0-continuous polynomial to match the SIMD body.
         pixel[0] = crate::scalar::linear_to_srgb_fast(pixel[0]);
         pixel[1] = crate::scalar::linear_to_srgb_fast(pixel[1]);
@@ -544,7 +544,7 @@ fn srgb_to_linear_premultiply_rgba_slice_tier(token: Token, values: &mut [f32]) 
         *chunk = (converted * alpha).to_array();
         [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
     }
-    for pixel in remainder.chunks_exact_mut(4) {
+    for pixel in remainder.as_chunks_mut::<4>().0.iter_mut() {
         let a = pixel[3];
         pixel[0] = crate::scalar::srgb_to_linear(pixel[0]) * a;
         pixel[1] = crate::scalar::srgb_to_linear(pixel[1]) * a;
@@ -624,7 +624,7 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier(token: Token, values: &mut [f32]
         *chunk = incant!(mt_linear_to_srgb(unpremul));
         [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
     }
-    for pixel in remainder.chunks_exact_mut(4) {
+    for pixel in remainder.as_chunks_mut::<4>().0.iter_mut() {
         let a = pixel[3];
         if a > crate::UNPREMUL_ALPHA_THRESHOLD {
             let inv_a = 1.0 / a;
@@ -1013,8 +1013,8 @@ pub fn srgb_u8_to_linear_rgba_slice(input: &[u8], output: &mut [f32]) {
     }
 
     // Remainder: at most one RGBA pixel (4 elements)
-    let in_rem_pixels = in_remainder.chunks_exact(4);
-    let out_rem_pixels = out_remainder.chunks_exact_mut(4);
+    let in_rem_pixels = in_remainder.as_chunks::<4>().0.iter();
+    let out_rem_pixels = out_remainder.as_chunks_mut::<4>().0.iter_mut();
     for (inp, out) in in_rem_pixels.zip(out_rem_pixels) {
         out[0] = crate::scalar::srgb_u8_to_linear(inp[0]);
         out[1] = crate::scalar::srgb_u8_to_linear(inp[1]);
@@ -1067,7 +1067,12 @@ fn linear_to_srgb_u8_rgba_slice_tier(token: Token, input: &[f32], output: &mut [
             out[base + 3] = (inp[base + 3].clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
         }
     }
-    for (inp, out) in in_rem.chunks_exact(4).zip(out_rem.chunks_exact_mut(4)) {
+    for (inp, out) in in_rem
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(out_rem.as_chunks_mut::<4>().0.iter_mut())
+    {
         for i in 0..3 {
             let clamped = inp[i].clamp(0.0, 1.0);
             let idx = (clamped * 4095.0 + 0.5) as usize & 0xFFF;
@@ -1141,8 +1146,8 @@ pub fn srgb_u8_to_linear_premultiply_rgba_slice(input: &[u8], output: &mut [f32]
     }
 
     // Remainder: at most one RGBA pixel
-    let in_rem_pixels = in_remainder.chunks_exact(4);
-    let out_rem_pixels = out_remainder.chunks_exact_mut(4);
+    let in_rem_pixels = in_remainder.as_chunks::<4>().0.iter();
+    let out_rem_pixels = out_remainder.as_chunks_mut::<4>().0.iter_mut();
     for (inp, out) in in_rem_pixels.zip(out_rem_pixels) {
         let a = inp[3] as f32 / 255.0;
         out[0] = crate::scalar::srgb_u8_to_linear(inp[0]) * a;
@@ -1210,7 +1215,12 @@ fn unpremultiply_linear_to_srgb_u8_rgba_slice_tier(token: Token, input: &[f32], 
             out[base + 3] = (a[px].clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
         }
     }
-    for (inp, out) in in_rem.chunks_exact(4).zip(out_rem.chunks_exact_mut(4)) {
+    for (inp, out) in in_rem
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(out_rem.as_chunks_mut::<4>().0.iter_mut())
+    {
         let a = inp[3];
         let inv_a = inv_alpha_or_zero(a);
         for i in 0..3 {
@@ -1284,8 +1294,8 @@ pub fn unpremultiply_linear_to_srgb_u8_rgba_slice(input: &[f32], output: &mut [u
 /// Panics if `input.len() != output.len()`.
 pub fn srgb_u16_to_linear_rgba_slice(input: &[u16], output: &mut [f32]) {
     assert_eq!(input.len(), output.len());
-    let in_pixels = input.chunks_exact(4);
-    let out_pixels = output.chunks_exact_mut(4);
+    let in_pixels = input.as_chunks::<4>().0.iter();
+    let out_pixels = output.as_chunks_mut::<4>().0.iter_mut();
     for (inp, out) in in_pixels.zip(out_pixels) {
         out[0] = crate::scalar::srgb_u16_to_linear(inp[0]);
         out[1] = crate::scalar::srgb_u16_to_linear(inp[1]);
@@ -1338,7 +1348,12 @@ fn linear_to_srgb_u16_rgba_slice_tier(token: Token, input: &[f32], output: &mut 
             out[base + 3] = (inp[base + 3].clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
         }
     }
-    for (inp, out) in in_rem.chunks_exact(4).zip(out_rem.chunks_exact_mut(4)) {
+    for (inp, out) in in_rem
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(out_rem.as_chunks_mut::<4>().0.iter_mut())
+    {
         out[0] = crate::scalar::linear_to_srgb_u16(inp[0]);
         out[1] = crate::scalar::linear_to_srgb_u16(inp[1]);
         out[2] = crate::scalar::linear_to_srgb_u16(inp[2]);
@@ -1397,7 +1412,12 @@ fn linear_to_srgb_u16_rgba_slice_fast_tier(token: Token, input: &[f32], output: 
             out[base + 3] = (inp[base + 3].clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
         }
     }
-    for (inp, out) in in_rem.chunks_exact(4).zip(out_rem.chunks_exact_mut(4)) {
+    for (inp, out) in in_rem
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(out_rem.as_chunks_mut::<4>().0.iter_mut())
+    {
         out[0] = crate::scalar::linear_to_srgb_u16_fast(inp[0]);
         out[1] = crate::scalar::linear_to_srgb_u16_fast(inp[1]);
         out[2] = crate::scalar::linear_to_srgb_u16_fast(inp[2]);
@@ -1423,8 +1443,8 @@ pub fn linear_to_srgb_u16_rgba_slice_fast(input: &[f32], output: &mut [u16]) {
     }
     #[cfg(not(feature = "std"))]
     {
-        let in_pixels = input.chunks_exact(4);
-        let out_pixels = output.chunks_exact_mut(4);
+        let in_pixels = input.as_chunks::<4>().0.iter();
+        let out_pixels = output.as_chunks_mut::<4>().0.iter_mut();
         for (inp, out) in in_pixels.zip(out_pixels) {
             out[0] = crate::scalar::linear_to_srgb_u16_fast(inp[0]);
             out[1] = crate::scalar::linear_to_srgb_u16_fast(inp[1]);
@@ -1642,7 +1662,7 @@ fn gamma_to_linear_premultiply_rgba_slice_tier(token: Token, values: &mut [f32],
         *chunk = (v * alpha).to_array();
         [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
     }
-    for pixel in remainder.chunks_exact_mut(4) {
+    for pixel in remainder.as_chunks_mut::<4>().0.iter_mut() {
         let a = pixel[3];
         pixel[0] = crate::scalar::gamma_to_linear(pixel[0], gamma) * a;
         pixel[1] = crate::scalar::gamma_to_linear(pixel[1], gamma) * a;
@@ -1728,7 +1748,7 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier(token: Token, values: &mut [f32
         *chunk = incant!(mt_linear_to_gamma(unpremul, gamma));
         [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
     }
-    for pixel in remainder.chunks_exact_mut(4) {
+    for pixel in remainder.as_chunks_mut::<4>().0.iter_mut() {
         let a = pixel[3];
         if a > crate::UNPREMUL_ALPHA_THRESHOLD {
             let inv_a = 1.0 / a;
@@ -2008,7 +2028,7 @@ macro_rules! tf_rgba_slice_dispatcher {
                 *chunk = $x16_v4(token, *chunk);
                 [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
             }
-            for pixel in remainder.chunks_exact_mut(4) {
+            for pixel in remainder.as_chunks_mut::<4>().0.iter_mut() {
                 pixel[0] = $scalar(pixel[0]);
                 pixel[1] = $scalar(pixel[1]);
                 pixel[2] = $scalar(pixel[2]);
@@ -2023,7 +2043,7 @@ macro_rules! tf_rgba_slice_dispatcher {
                 *chunk = $x8_v3(token, *chunk);
                 [chunk[3], chunk[7]] = a;
             }
-            for pixel in remainder.chunks_exact_mut(4) {
+            for pixel in remainder.as_chunks_mut::<4>().0.iter_mut() {
                 pixel[0] = $scalar(pixel[0]);
                 pixel[1] = $scalar(pixel[1]);
                 pixel[2] = $scalar(pixel[2]);
@@ -2051,7 +2071,7 @@ macro_rules! tf_rgba_slice_dispatcher {
         }
 
         fn $tier_scalar(_token: ScalarToken, values: &mut [f32]) {
-            for pixel in values.chunks_exact_mut(4) {
+            for pixel in values.as_chunks_mut::<4>().0.iter_mut() {
                 pixel[0] = $scalar(pixel[0]);
                 pixel[1] = $scalar(pixel[1]);
                 pixel[2] = $scalar(pixel[2]);
@@ -3975,8 +3995,12 @@ mod tests {
             let input = rgba_sweep();
             let mut out = input.clone();
             rgba_fn(&mut out);
-            for (px_idx, (in_px, out_px)) in
-                input.chunks_exact(4).zip(out.chunks_exact(4)).enumerate()
+            for (px_idx, (in_px, out_px)) in input
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(out.as_chunks::<4>().0.iter())
+                .enumerate()
             {
                 for ch in 0..3 {
                     let expect = scalar_fn(in_px[ch]);

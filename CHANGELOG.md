@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `clippy::chunks_exact_to_as_chunks` at 27 sites in `src/simd.rs` — every one is
+  a scalar tail loop after a SIMD body (`remainder.chunks_exact_mut(4)` and
+  friends), now `as_chunks_mut::<4>().0.iter_mut()` / `as_chunks::<4>().0.iter()`.
+  Newer clippy errors on these under `-D warnings`, which is why the `Lint` job
+  has been failing since before the dependency work (runs 33066008894 and
+  33275471520 fail identically). `src/simd.rs` contains no `target_arch` cfgs —
+  it is one arch-generic magetypes source — and the rewritten loops are scalar,
+  so this is verifiable on any host. **Pixel output unchanged:** 2,446 cases /
+  3,387,989 bytes, SHA-256
+  `2d63258b3176b01eaef9dc4f16ca05ad89246275288df3e28ae88ebd89efaa7a` before and
+  after, over a length grid chosen to straddle SIMD block boundaries — i.e.
+  exactly the lengths that exercise these remainder loops.
+
 ### Changed
 
 - Dependency requirements written out in full instead of truncated to two
