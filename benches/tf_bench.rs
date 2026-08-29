@@ -446,7 +446,7 @@ mod old_rgba_fallbacks {
         ($name:ident, $fn:path) => {
             #[archmage::autoversion]
             pub fn $name(values: &mut [f32]) {
-                for pixel in values.chunks_exact_mut(4) {
+                for pixel in values.as_chunks_mut::<4>().0.iter_mut() {
                     pixel[0] = $fn(pixel[0]);
                     pixel[1] = $fn(pixel[1]);
                     pixel[2] = $fn(pixel[2]);
@@ -478,7 +478,9 @@ fn make_rgba_encoded() -> Vec<f32> {
 #[cfg(feature = "transfer")]
 fn make_rgba_linear() -> Vec<f32> {
     make_rgba_encoded()
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .flat_map(|px| {
             [
                 linear_srgb::default::srgb_to_linear(px[0]),

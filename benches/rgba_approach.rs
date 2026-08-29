@@ -36,7 +36,7 @@ fn create_rgba_srgb(num_pixels: usize) -> Vec<f32> {
 fn create_rgba_linear(num_pixels: usize) -> Vec<f32> {
     let mut data = create_rgba_srgb(num_pixels);
     // Convert RGB channels to linear, leave alpha as-is
-    for pixel in data.chunks_exact_mut(4) {
+    for pixel in data.as_chunks_mut::<4>().0.iter_mut() {
         pixel[0] = default::srgb_to_linear(pixel[0]);
         pixel[1] = default::srgb_to_linear(pixel[1]);
         pixel[2] = default::srgb_to_linear(pixel[2]);
@@ -66,7 +66,7 @@ fn linear_to_srgb_rgba_save_vec(values: &mut [f32]) {
 }
 
 fn srgb_to_linear_rgba_chunked_slice(values: &mut [f32]) {
-    for pixel in values.chunks_exact_mut(4) {
+    for pixel in values.as_chunks_mut::<4>().0.iter_mut() {
         let a = pixel[3];
         default::srgb_to_linear_slice(pixel);
         pixel[3] = a;
@@ -74,7 +74,7 @@ fn srgb_to_linear_rgba_chunked_slice(values: &mut [f32]) {
 }
 
 fn linear_to_srgb_rgba_chunked_slice(values: &mut [f32]) {
-    for pixel in values.chunks_exact_mut(4) {
+    for pixel in values.as_chunks_mut::<4>().0.iter_mut() {
         let a = pixel[3];
         default::linear_to_srgb_slice(pixel);
         pixel[3] = a;
@@ -105,7 +105,7 @@ fn linear_to_srgb_rgba_inverse(values: &mut [f32]) {
 // ============================================================================
 
 fn srgb_to_linear_rgba_rgb_only(values: &mut [f32]) {
-    for pixel in values.chunks_exact_mut(4) {
+    for pixel in values.as_chunks_mut::<4>().0.iter_mut() {
         pixel[0] = default::srgb_to_linear(pixel[0]);
         pixel[1] = default::srgb_to_linear(pixel[1]);
         pixel[2] = default::srgb_to_linear(pixel[2]);
@@ -113,7 +113,7 @@ fn srgb_to_linear_rgba_rgb_only(values: &mut [f32]) {
 }
 
 fn linear_to_srgb_rgba_rgb_only(values: &mut [f32]) {
-    for pixel in values.chunks_exact_mut(4) {
+    for pixel in values.as_chunks_mut::<4>().0.iter_mut() {
         pixel[0] = default::linear_to_srgb(pixel[0]);
         pixel[1] = default::linear_to_srgb(pixel[1]);
         pixel[2] = default::linear_to_srgb(pixel[2]);
@@ -311,7 +311,7 @@ fn bench_rgba_linear_to_srgb(c: &mut Criterion) {
 // ============================================================================
 
 fn premultiply_loop(values: &mut [f32]) {
-    for pixel in values.chunks_exact_mut(4) {
+    for pixel in values.as_chunks_mut::<4>().0.iter_mut() {
         let a = pixel[3];
         pixel[0] *= a;
         pixel[1] *= a;
@@ -320,7 +320,7 @@ fn premultiply_loop(values: &mut [f32]) {
 }
 
 fn unpremultiply_loop(values: &mut [f32]) {
-    for pixel in values.chunks_exact_mut(4) {
+    for pixel in values.as_chunks_mut::<4>().0.iter_mut() {
         let a = pixel[3];
         if a > 0.0 {
             let inv_a = 1.0 / a;

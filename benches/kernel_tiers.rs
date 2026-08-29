@@ -29,7 +29,6 @@ const TIER_NAME: &str = if cfg!(target_arch = "aarch64") {
 
 #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
 fn set_simd(on: bool) -> bool {
-    use archmage::SimdToken;
     TierToken::dangerously_disable_token_process_wide(!on).is_ok()
 }
 #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
@@ -39,6 +38,12 @@ fn set_simd(_on: bool) -> bool {
 
 const N: usize = 1 << 20;
 
+// `gamma_to_linear_premultiply_rgba_slice` and
+// `unpremultiply_linear_to_gamma_rgba_slice` are deprecated but still shipped,
+// and this bench exists precisely to measure them against their sRGB
+// replacements until they are removed. Benchmarking a deprecated API is not the
+// accidental use the lint is aimed at.
+#[allow(deprecated)]
 fn bench(suite: &mut Suite) {
     if !set_simd(true) || !set_simd(false) {
         eprintln!("[kernel_tiers] SIMD tier not toggleable here. Skipping.");
