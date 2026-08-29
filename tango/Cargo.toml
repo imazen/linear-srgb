@@ -13,14 +13,14 @@ publish = false
 # mode against the saved baseline.
 
 [dependencies]
-linear-srgb = { version = "=0.6.11", default-features = false, features = [
+linear-srgb = { version = "=0.6.12", default-features = false, features = [
     "std",
     "avx512",
     "transfer",
 ] }
 
 [dev-dependencies]
-tango-bench = "0.7.2"
+tango-bench = "0.8.0"
 
 [[bench]]
 name = "regression"

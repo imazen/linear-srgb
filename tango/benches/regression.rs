@@ -10,7 +10,7 @@ use linear_srgb::default::{
     bt709_to_linear_slice, hlg_to_linear_slice, linear_to_bt709_slice, linear_to_hlg_slice,
     linear_to_pq_slice, linear_to_srgb_u16_slice, pq_to_linear_slice, srgb_u16_to_linear_slice,
 };
-use tango_bench::{IntoBenchmarks, benchmark_fn, tango_benchmarks, tango_main};
+use tango_bench::{IntoBenchmarks, benchmark_fn, tango_benchmarks};
 
 // Sizes chosen to probe three regimes that behave differently in the issue #18
 // regression: per-call overhead (256), typical tile-scanline (4096), and
@@ -145,4 +145,3 @@ fn benchmarks() -> impl IntoBenchmarks {
 }
 
 tango_benchmarks!(benchmarks());
-tango_main!();

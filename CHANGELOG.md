@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Dependency requirements written out in full instead of truncated to two
+  components, at the versions already locked and tested: `num-traits` 0.2 →
+  0.2.19, `bytemuck` 1.21 → 1.25.2. `zenutils-apidoc` 0.1.0 → 0.1.1 in the
+  workspace-excluded apidoc runner. `archmage`, `magetypes` and `zenbench`
+  requirements are deliberately untouched.
+- `tango/` regression-benchmark package: `tango-bench` 0.7.2 → 0.8.0 and its
+  baseline pin `linear-srgb` `=0.6.11` → `=0.6.12` (the current release).
+  `tango_main!()` is a deprecated no-op in 0.8, so it and its import were
+  dropped — the bench now builds warning-free.
+- **Library build is unaffected.** A package-by-package lock diff shows the only
+  movement is `clap` 4.6.4 → 4.6.6 and `syn` 3.0.3 → 3.0.4, and `cargo tree -i`
+  confirms both reach the tree only through the `zenbench` dev-dependency; the
+  library itself still compiles against `syn` 2.0.119 via `archmage-macros`,
+  with `num-traits` 0.2.19 / `bytemuck` 1.25.2 / `archmage` 0.9.28 /
+  `magetypes` 0.9.28 unchanged on both sides. Pixel output re-hashed anyway over
+  a length x value grid across every slice entry point plus exhaustive u8/u16
+  sweeps — 2,446 cases, 3,387,989 bytes, SHA-256
+  `2d63258b3176b01eaef9dc4f16ca05ad89246275288df3e28ae88ebd89efaa7a`, identical
+  either side. Test suite unchanged at 5 suites / 257 passed / 0 failed.
+
 ### Added
 
 - `default::srgb_to_linear_extended_rgba_slice` / `default::linear_to_srgb_extended_rgba_slice` — alpha-preserving RGBA forms of the extended-range (unclamped, sign-preserving) slice conversions, for interleaved RGBA f32 from wide-gamut / scRGB decodes. Same x16 rites and `[v4, v3, neon, wasm128, scalar]` dispatch as the plain `_extended_slice` pair; R/G/B are bit-identical to the plain slice, alpha is untouched. The plain `*_extended_slice` docs now warn that they transform alpha too. Also corrects the `lib.rs` "No SIMD extended-range variants exist yet" paragraph, which was stale. (#12)
