@@ -269,7 +269,9 @@ they share a SIMD-generated `OnceLock` LUT.
 | RGBA u8↔f32 premultiply | `srgb_u8_to_linear_premultiply_rgba_slice` / `unpremultiply_linear_to_srgb_u8_rgba_slice` |
 | `&[u16]` ↔ `&mut [f32]` | `srgb_u16_to_linear_slice` / `linear_to_srgb_u16_slice` |
 | Extended range `&mut [f32]` | `srgb_to_linear_extended_slice` / `linear_to_srgb_extended_slice` |
+| Extended range RGBA `&mut [f32]` | `srgb_to_linear_extended_rgba_slice` / `linear_to_srgb_extended_rgba_slice` |
 | Custom gamma `&mut [f32]` | `gamma_to_linear_slice` / `linear_to_gamma_slice` |
+| Custom gamma RGBA `&mut [f32]` | `gamma_to_linear_rgba_slice` / `linear_to_gamma_rgba_slice` |
 | Custom gamma RGBA premul | `gamma_to_linear_premultiply_rgba_slice` / `unpremultiply_linear_to_gamma_rgba_slice` |
 | Single f32 | `srgb_to_linear` / `linear_to_srgb` |
 | Single u8 | `srgb_u8_to_linear` / `linear_to_srgb_u8` |
@@ -382,21 +384,22 @@ Developed with Claude (Anthropic). All code has been reviewed and benchmarked, b
 
 | | |
 |:--|:--|
-| **Codecs** ¹ | [zenjpeg] · [zenpng] · [zenwebp] · [zengif] · [zenavif] · [zenjxl] · [zenbitmaps] · [heic] · [zentiff] · [zenpdf] · [zensvg] · [zenjp2] · [zenraw] · [ultrahdr] |
-| Codec internals | [zenjxl-decoder] · [jxl-encoder] · [zenrav1e] · [rav1d-safe] · [zenavif-parse] · [zenavif-serialize] |
+| **Codecs** ¹ | [zenjpeg] · [zenpng] · [zenwebp] · [zengif] · [zenavif] · [zenjxl] · [zenjxl-decoder] · [jxl-encoder] · [zenbitmaps] · [heic] · [zentiff] · [zenpdf] · [zensvg] · [zenjp2] · [zenraw] · [ultrahdr] |
+| Codec internals | [zenrav1e] · [rav1d-safe] · [zenravif] · [zenavif-parse] · [zenavif-serialize] |
 | Compression | [zenflate] · [zenzop] · [zenzstd] |
 | Processing | [zenresize] · [zenquant] · [zenblend] · [zenfilters] · [zensally] · [zentone] |
-| Pixels & color | [zenpixels] · [zenpixels-convert] · **linear-srgb** · [garb] |
+| Pixels & color | [zenpixels] · [zenpixels-convert] · **linear-srgb** · [garb] · [zenyuv] |
 | Pipeline & framework | [zenpipe] · [zencodec] · [zencodecs] · [zenlayout] · [zennode] · [zenwasm] · [zentract] |
 | Metrics | [zensim] · [fast-ssim2] · [butteraugli] · [zenmetrics] · [resamplescope-rs] |
-| Pickers & ML | [zenanalyze] · [zenpredict] · [zenpicker] |
+| Pickers & ML | [zenanalyze] · [zenpredict] · [zenpicker] · [zenanalyze-api] |
+| Test corpora | [codec-corpus] · [imazen-26] |
 | Products | [Imageflow] image engine ([.NET][imageflow-dotnet] · [Node][imageflow-node] · [Go][imageflow-go]) · [Imageflow Server] · [ImageResizer] (C#) |
 
 <sub>¹ pure-Rust, `#![forbid(unsafe_code)]` codecs, as of 2026</sub>
 
 ### General Rust awesomeness
 
-[zenbench] · [archmage] · [magetypes] · [enough] · [whereat] · [cargo-copter]
+[zenbench] · [archmage] · [magetypes] · [enough] · [whereat] · [cargo-copter] · [zenutils]
 
 [Open source](https://www.imazen.io/open-source) · [@imazen](https://github.com/imazen) · [@lilith](https://github.com/lilith) · [lib.rs/~lilith](https://lib.rs/~lilith)
 
@@ -406,36 +409,38 @@ Developed with Claude (Anthropic). All code has been reviewed and benchmarked, b
 [zengif]: https://github.com/imazen/zengif
 [zenavif]: https://github.com/imazen/zenavif
 [zenjxl]: https://github.com/imazen/zenjxl
+[zenjxl-decoder]: https://github.com/imazen/zenjxl-decoder
+[jxl-encoder]: https://github.com/imazen/jxl-encoder
 [zenbitmaps]: https://github.com/imazen/zenbitmaps
 [heic]: https://github.com/imazen/heic
-[zentiff]: https://github.com/imazen/zentiff
-[zenpdf]: https://github.com/imazen/zenpdf
+[zentiff]: https://github.com/imazen/zenextras
+[zenpdf]: https://github.com/imazen/zenextras
 [zensvg]: https://github.com/imazen/zenextras
 [zenjp2]: https://github.com/imazen/zenextras
 [zenraw]: https://github.com/imazen/zenraw
 [ultrahdr]: https://github.com/imazen/ultrahdr
-[zenjxl-decoder]: https://github.com/imazen/zenjxl-decoder
-[jxl-encoder]: https://github.com/imazen/jxl-encoder
 [zenrav1e]: https://github.com/imazen/zenrav1e
 [rav1d-safe]: https://github.com/imazen/rav1d-safe
-[zenavif-parse]: https://github.com/imazen/zenavif-parse
-[zenavif-serialize]: https://github.com/imazen/zenavif-serialize
+[zenravif]: https://github.com/imazen/cavif-rs
+[zenavif-parse]: https://github.com/imazen/zenavif
+[zenavif-serialize]: https://github.com/imazen/zenavif
 [zenflate]: https://github.com/imazen/zenflate
 [zenzop]: https://github.com/imazen/zenzop
 [zenzstd]: https://github.com/imazen/zenzstd
 [zenresize]: https://github.com/imazen/zenresize
 [zenquant]: https://github.com/imazen/zenquant
 [zenblend]: https://github.com/imazen/zenblend
-[zenfilters]: https://github.com/imazen/zenfilters
+[zenfilters]: https://github.com/imazen/zenpipe
 [zensally]: https://github.com/imazen/zensally
 [zentone]: https://github.com/imazen/zentone
 [zenpixels]: https://github.com/imazen/zenpixels
 [zenpixels-convert]: https://github.com/imazen/zenpixels
 [garb]: https://github.com/imazen/garb
+[zenyuv]: https://github.com/imazen/zenjpeg
 [zenpipe]: https://github.com/imazen/zenpipe
 [zencodec]: https://github.com/imazen/zencodec
-[zencodecs]: https://github.com/imazen/zencodecs
-[zenlayout]: https://github.com/imazen/zenlayout
+[zencodecs]: https://github.com/imazen/zenpipe
+[zenlayout]: https://github.com/imazen/zenpipe
 [zennode]: https://github.com/imazen/zennode
 [zenwasm]: https://github.com/imazen/zenwasm
 [zentract]: https://github.com/imazen/zentract
@@ -447,12 +452,16 @@ Developed with Claude (Anthropic). All code has been reviewed and benchmarked, b
 [zenanalyze]: https://github.com/imazen/zenanalyze
 [zenpredict]: https://github.com/imazen/zenanalyze
 [zenpicker]: https://github.com/imazen/zenanalyze
+[zenanalyze-api]: https://github.com/imazen/zenanalyze
+[codec-corpus]: https://github.com/imazen/codec-corpus
+[imazen-26]: https://github.com/imazen/imazen-26
 [zenbench]: https://github.com/imazen/zenbench
 [archmage]: https://github.com/imazen/archmage
 [magetypes]: https://github.com/imazen/archmage
 [enough]: https://github.com/imazen/enough
 [whereat]: https://github.com/lilith/whereat
 [cargo-copter]: https://github.com/imazen/cargo-copter
+[zenutils]: https://github.com/imazen/zenutils
 [Imageflow]: https://github.com/imazen/imageflow
 [Imageflow Server]: https://github.com/imazen/imageflow-dotnet-server
 [ImageResizer]: https://github.com/imazen/resizer
