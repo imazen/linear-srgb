@@ -65,6 +65,24 @@ fn linear_to_srgb_rgba_save_vec(values: &mut [f32]) {
     }
 }
 
+// ============================================================================
+// Approach 6: Copy src -> dst, convert everything, restore alpha FROM SRC
+//
+// This is the shape real consumers use when they already hold the untouched
+// source row, so no allocation is needed for the alpha save. zenpixels-convert
+// does exactly this in `convert_kernels.rs` (transform slice, then
+// `restore_alpha_f32_f32`), which is why it is worth measuring separately from
+// `save_vec` — that one allocates and so overstates the cost of the approach.
+// ============================================================================
+
+fn srgb_to_linear_rgba_restore_from_src(src: &[f32], dst: &mut [f32]) {
+    dst.copy_from_slice(src);
+    default::srgb_to_linear_slice(dst);
+    for (i, px) in dst.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+        px[3] = src[i * 4 + 3];
+    }
+}
+
 fn srgb_to_linear_rgba_chunked_slice(values: &mut [f32]) {
     for pixel in values.as_chunks_mut::<4>().0.iter_mut() {
         let a = pixel[3];
@@ -155,6 +173,18 @@ fn bench_rgba_srgb_to_linear(c: &mut Criterion) {
                 b.iter(|| {
                     buf.copy_from_slice(data);
                     srgb_to_linear_rgba_save_vec(black_box(&mut buf));
+                })
+            },
+        );
+
+        // Approach 6: Restore alpha from the untouched source row (no alloc)
+        group.bench_with_input(
+            BenchmarkId::new("restore_from_src", num_pixels),
+            &data,
+            |b, data| {
+                let mut buf = data.clone();
+                b.iter(|| {
+                    srgb_to_linear_rgba_restore_from_src(black_box(data), black_box(&mut buf));
                 })
             },
         );

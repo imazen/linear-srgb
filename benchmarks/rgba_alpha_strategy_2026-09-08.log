@@ -1,0 +1,214 @@
+   Compiling linear-srgb v0.6.12 (/Users/lilith/work/zen/linear-srgb)
+    Finished `bench` profile [optimized] target(s) in 0.71s
+     Running benches/rgba_approach.rs (target/release/deps/rgba_approach-71cd331471138aff)
+
+  rgba_s2l  0 rounds ⚠ only 0 rounds
+                                  mean ±mad ns  95% CI vs base 
+  ├─ baseline/64                   77.8 ±0.5ns  [77.6–77.9]ns  
+  ├─ save_vec/64                  122.0 ±2.0ns                 
+  ├─ restore_from_src/64           90.0 ±0.1ns                 
+  ├─ integrated_simd/64            79.7 ±0.3ns                 
+  ├─ per_pixel_slice/64           188.2 ±3.0ns                 
+  ├─ inverse_fixup/64             117.2 ±1.6ns                 
+  ├─ rgb_only_scalar/64           179.5 ±2.5ns                 
+  ├─ baseline/256                 337.7 ±0.3ns                 
+  ├─ save_vec/256                 499.3 ±1.7ns                 
+  ├─ restore_from_src/256         379.9 ±0.1ns                 
+  ├─ integrated_simd/256          347.0 ±0.1ns                 
+  ├─ per_pixel_slice/256          787.7 ±0.2ns                 
+  ├─ inverse_fixup/256            522.7 ±0.9ns                  [1]
+  ├─ rgb_only_scalar/256          755.0 ±0.3ns                 
+  ├─ baseline/1024               1350.8 ±4.3ns                 
+  ├─ save_vec/1024              1804.2 ±41.4ns                 
+  ├─ restore_from_src/1024      1508.8 ±16.9ns                 
+  ├─ integrated_simd/1024       1373.2 ±29.5ns                 
+  ├─ per_pixel_slice/1024       3141.1 ±27.7ns                 
+  ├─ inverse_fixup/1024          1858.2 ±2.1ns                 
+  ├─ rgb_only_scalar/1024        2994.6 ±1.4ns                 
+  ├─ baseline/4096              5426.9 ±24.5ns                 
+  ├─ save_vec/4096             7843.2 ±145.2ns                 
+  ├─ restore_from_src/4096     6369.9 ±113.6ns                 
+  ├─ integrated_simd/4096       5502.0 ±26.6ns                 
+  ├─ per_pixel_slice/4096      12735.7 ±53.8ns                 
+  ├─ inverse_fixup/4096        7518.6 ±108.4ns                 
+  ├─ rgb_only_scalar/4096      12029.4 ±67.1ns                 
+  ├─ baseline/16384           23253.9 ±321.5ns                 
+  ├─ save_vec/16384           31880.4 ±346.2ns                 
+  ├─ restore_from_src/16384   27961.7 ±313.3ns                 
+  ├─ integrated_simd/16384    23452.8 ±151.6ns                 
+  ├─ per_pixel_slice/16384    53138.9 ±303.8ns                 
+  ├─ inverse_fixup/16384      31716.3 ±414.9ns                 
+  ╰─ rgb_only_scalar/16384    49290.5 ±112.7ns                 
+
+  baseline/64             █ 77.8ns
+  integrated_simd/64      █ 79.7ns
+  restore_from_src/64     █ 90.0ns
+  inverse_fixup/64        █ 117.2ns
+  save_vec/64             █ 122.0ns
+  rgb_only_scalar/64      █ 179.5ns
+  per_pixel_slice/64      █ 188.2ns
+  baseline/256            █ 337.7ns
+  integrated_simd/256     █ 347.0ns
+  restore_from_src/256    █ 379.9ns
+  save_vec/256            █ 499.3ns
+  inverse_fixup/256       █ 522.7ns
+  rgb_only_scalar/256     █ 755.0ns
+  per_pixel_slice/256     █ 787.7ns
+  baseline/1024           █ 1.35µs
+  integrated_simd/1024    █ 1.37µs
+  restore_from_src/1024   █ 1.51µs
+  save_vec/1024           ██ 1.80µs
+  inverse_fixup/1024      ██ 1.86µs
+  rgb_only_scalar/1024    ███ 2.99µs
+  per_pixel_slice/1024    ███ 3.14µs
+  baseline/4096           █████ 5.43µs
+  integrated_simd/4096    █████ 5.50µs
+  restore_from_src/4096   █████ 6.37µs
+  inverse_fixup/4096      ██████ 7.52µs
+  save_vec/4096           ███████ 7.84µs
+  rgb_only_scalar/4096    ██████████ 12.03µs
+  per_pixel_slice/4096    ███████████ 12.74µs
+  baseline/16384          ████████████████████ 23.25µs
+  integrated_simd/16384   ████████████████████ 23.45µs
+  restore_from_src/16384  ████████████████████████ 27.96µs
+  inverse_fixup/16384     ███████████████████████████ 31.72µs
+  save_vec/16384          ███████████████████████████ 31.88µs
+  rgb_only_scalar/16384   ██████████████████████████████████████████ 49.29µs
+  per_pixel_slice/16384   █████████████████████████████████████████████ 53.14µs
+  [1] CV=42%
+
+  rgba_l2s  0 rounds ⚠ only 0 rounds
+                             mean ±mad ns  95% CI vs base
+  ├─ baseline/64                 130 ±0ns  [130–131]ns  
+  ├─ save_vec/64                 172 ±2ns               
+  ├─ integrated_simd/64          126 ±0ns               
+  ├─ per_pixel_slice/64          315 ±4ns               
+  ├─ inverse_fixup/64            163 ±3ns               
+  ├─ rgb_only_scalar/64          309 ±4ns               
+  ├─ baseline/256                568 ±0ns               
+  ├─ save_vec/256                688 ±3ns               
+  ├─ integrated_simd/256         537 ±0ns               
+  ├─ per_pixel_slice/256       1315 ±19ns               
+  ├─ inverse_fixup/256           668 ±6ns               
+  ├─ rgb_only_scalar/256        1249 ±6ns               
+  ├─ baseline/1024              2273 ±3ns               
+  ├─ save_vec/1024             2635 ±18ns               
+  ├─ integrated_simd/1024      2147 ±18ns               
+  ├─ per_pixel_slice/1024     5203 ±100ns               
+  ├─ inverse_fixup/1024        2560 ±91ns               
+  ├─ rgb_only_scalar/1024      4974 ±74ns               
+  ├─ baseline/4096             9210 ±80ns               
+  ├─ save_vec/4096           10940 ±162ns               
+  ├─ integrated_simd/4096      8664 ±95ns               
+  ├─ per_pixel_slice/4096    20788 ±209ns               
+  ├─ inverse_fixup/4096      10484 ±270ns               
+  ├─ rgb_only_scalar/4096     19917 ±56ns               
+  ├─ baseline/16384          37897 ±137ns               
+  ├─ save_vec/16384          44661 ±413ns               
+  ├─ integrated_simd/16384   35738 ±206ns               
+  ├─ per_pixel_slice/16384   85118 ±511ns               
+  ├─ inverse_fixup/16384     43447 ±329ns               
+  ╰─ rgb_only_scalar/16384   81526 ±211ns               
+
+  integrated_simd/64     █ 125.5ns
+  baseline/64            █ 130.4ns
+  inverse_fixup/64       █ 163.3ns
+  save_vec/64            █ 171.6ns
+  rgb_only_scalar/64     █ 308.8ns
+  per_pixel_slice/64     █ 315.4ns
+  integrated_simd/256    █ 536.6ns
+  baseline/256           █ 568.3ns
+  inverse_fixup/256      █ 667.8ns
+  save_vec/256           █ 687.7ns
+  rgb_only_scalar/256    █ 1.25µs
+  per_pixel_slice/256    █ 1.32µs
+  integrated_simd/1024   █ 2.15µs
+  baseline/1024          █ 2.27µs
+  inverse_fixup/1024     █ 2.56µs
+  save_vec/1024          █ 2.64µs
+  rgb_only_scalar/1024   ███ 4.97µs
+  per_pixel_slice/1024   ███ 5.20µs
+  integrated_simd/4096   █████ 8.66µs
+  baseline/4096          █████ 9.21µs
+  inverse_fixup/4096     ██████ 10.48µs
+  save_vec/4096          ██████ 10.94µs
+  rgb_only_scalar/4096   ███████████ 19.92µs
+  per_pixel_slice/4096   ███████████ 20.79µs
+  integrated_simd/16384  ███████████████████ 35.74µs
+  baseline/16384         ████████████████████ 37.90µs
+  inverse_fixup/16384    ███████████████████████ 43.45µs
+  save_vec/16384         ████████████████████████ 44.66µs
+  rgb_only_scalar/16384  ████████████████████████████████████████████ 81.53µs
+  per_pixel_slice/16384  ██████████████████████████████████████████████ 85.12µs
+
+  premultiply_s2l  0 rounds ⚠ only 0 rounds
+                      mean ±mad ns  95% CI vs base
+  ├─ separate/64          110 ±2ns  [109–111]ns  
+  ├─ fused/64              98 ±2ns               
+  ├─ separate/256         429 ±4ns               
+  ├─ fused/256            413 ±5ns               
+  ├─ separate/1024      1670 ±44ns               
+  ├─ fused/1024         1651 ±27ns               
+  ├─ separate/4096       6628 ±7ns               
+  ├─ fused/4096         6659 ±22ns               
+  ├─ separate/16384   30918 ±235ns               
+  ╰─ fused/16384      30731 ±129ns               
+
+  fused/64        █ 98.2ns
+  separate/64     █ 110.1ns
+  fused/256       █ 413.2ns
+  separate/256    █ 429.5ns
+  fused/1024      ███ 1.65µs
+  separate/1024   ███ 1.67µs
+  separate/4096   ███████████ 6.63µs
+  fused/4096      ███████████ 6.66µs
+  fused/16384     █████████████████████████████████████████████████████ 30.73µs
+  separate/16384  █████████████████████████████████████████████████████ 30.92µs
+
+  unpremultiply_l2s  0 rounds ⚠ only 0 rounds
+                       mean ±mad ns  95% CI vs base
+  ├─ separate/64           184 ±0ns  [173–198]ns   [1]
+  ├─ fused/64              182 ±0ns               
+  ├─ separate/256          743 ±7ns                [2]
+  ├─ fused/256             804 ±0ns                [3]
+  ├─ separate/1024        3042 ±1ns                [4]
+  ├─ fused/1024           2995 ±0ns               
+  ├─ separate/4096      12647 ±25ns                [5]
+  ├─ fused/4096        13530 ±967ns                [6]
+  ├─ separate/16384    45154 ±154ns               
+  ╰─ fused/16384      49890 ±1337ns               
+
+  fused/64        █ 181.5ns
+  separate/64     █ 184.5ns
+  separate/256    █ 742.9ns
+  fused/256       █ 803.6ns
+  fused/1024      ███ 2.99µs
+  separate/1024   ███ 3.04µs
+  separate/4096   █████████████ 12.65µs
+  fused/4096      ██████████████ 13.53µs
+  separate/16384  ████████████████████████████████████████████████ 45.15µs
+  fused/16384     █████████████████████████████████████████████████████ 49.89µs
+  [1] CV=35%
+  [2] CV=23%
+  [3] CV=27%
+  [4] CV=31%
+  [5] CV=61%
+  [6] CV=25%
+inverse_fixup s2l alpha max error: 4.77e-7 (4.0 ULP at alpha=0.5)
+inverse_fixup l2s alpha max error: 7.45e-7 (6.2 ULP at alpha=0.5)
+
+  rgba_inverse_accuracy  0 rounds ⚠ only 0 rounds
+            mean ±mad ns  95% CI vs base 
+  ╰─ noop   0.48 ±0.01ns  [0.47–0.48]ns  
+[zenbench] calibration: int=0.32ns/iter mem_bw=101.9GiB/s mem_lat=9.7ns
+[zenbench] timer resolution: 41ns, loop overhead: 0.25ns/iter, TSC: 1.000 ticks/ns (invariant)
+[zenbench] results → /var/folders/sc/m9jbk0qj0jz4w09h7gg8v3p80000gn/T/zenbench/zenbench-1788906801-1437e.txt
+
+═══════════════════════════════════════════════════════════════
+  zenbench  1788906801-1437e
+  git: 630a30467c464c9148d145edee0d8896a3d6f2c0
+═══════════════════════════════════════════════════════════════
+
+  total: 0.0s
+═══════════════════════════════════════════════════════════════
+  filter: cargo bench -- --group=NAME  format: --format=llm|csv|md|json
