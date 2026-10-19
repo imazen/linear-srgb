@@ -26,3 +26,12 @@
   plain mul+add on ISAs without hardware FMA (wasm32 SIMD128 has none),
   then regen + re-bless. The aarch64 leg is unaffected (native FMLA).
   Repro: `scripts/dump-asm.sh wasm32-unknown-unknown && git diff --stat`.
+
+## Known Bugs: assembly snapshot drift (2026-10-19)
+
+The unchanged-source CI commit 595dfcbc passes regular CI but fails both ARM64
+and WASM opcode-essence snapshot checks. The dumps complete; their generated
+assembly differs from the committed fingerprints. The cause has not been
+attributed. Expectations remain unchanged pending review; see
+[issue 28](https://github.com/imazen/linear-srgb/issues/28) and
+[run 39293065161](https://github.com/imazen/linear-srgb/actions/runs/39293065161).
