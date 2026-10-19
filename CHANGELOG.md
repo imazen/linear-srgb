@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Admit archmage/magetypes 0.9.31-beta.1 with token-explicit constructor aliases and private generic 16-lane dispatch helpers (`88fa6a42`). Strict default library lint and 109 default / 165 all-feature library tests pass. Assembly snapshot drift remains tracked in issue 28; its expectations are unchanged.
+
 ### Fixed
 
 - `clippy::chunks_exact_to_as_chunks` at 27 sites in `src/simd.rs` — every one is
