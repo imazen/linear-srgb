@@ -14,3 +14,12 @@ api-doc:
 # Verify the committed snapshots are current
 api-doc-check:
     ZEN_API_DOC=check cargo test --manifest-path apidoc/Cargo.toml
+
+# Validate the owner-requested archmage beta constraint update.
+beta-check:
+    cargo fmt --check
+    cargo clippy --locked --lib -- -D warnings
+    cargo test --locked --lib
+
+beta-library-check:
+    cargo test --locked --all-features --lib
