@@ -113,17 +113,17 @@ pub(crate) fn eval_rational_poly_x4<T: F32x4Convert>(
     p: [f32; 5],
     q: [f32; 5],
 ) -> f32x4<T> {
-    let mut yp = f32x4::splat(t, p[4]);
-    yp = yp.mul_add(x, f32x4::splat(t, p[3]));
-    yp = yp.mul_add(x, f32x4::splat(t, p[2]));
-    yp = yp.mul_add(x, f32x4::splat(t, p[1]));
-    yp = yp.mul_add(x, f32x4::splat(t, p[0]));
+    let mut yp = f32x4::splat_t(t, p[4]);
+    yp = yp.mul_add(x, f32x4::splat_t(t, p[3]));
+    yp = yp.mul_add(x, f32x4::splat_t(t, p[2]));
+    yp = yp.mul_add(x, f32x4::splat_t(t, p[1]));
+    yp = yp.mul_add(x, f32x4::splat_t(t, p[0]));
 
-    let mut yq = f32x4::splat(t, q[4]);
-    yq = yq.mul_add(x, f32x4::splat(t, q[3]));
-    yq = yq.mul_add(x, f32x4::splat(t, q[2]));
-    yq = yq.mul_add(x, f32x4::splat(t, q[1]));
-    yq = yq.mul_add(x, f32x4::splat(t, q[0]));
+    let mut yq = f32x4::splat_t(t, q[4]);
+    yq = yq.mul_add(x, f32x4::splat_t(t, q[3]));
+    yq = yq.mul_add(x, f32x4::splat_t(t, q[2]));
+    yq = yq.mul_add(x, f32x4::splat_t(t, q[1]));
+    yq = yq.mul_add(x, f32x4::splat_t(t, q[0]));
 
     yp / yq
 }
@@ -133,25 +133,25 @@ pub(crate) fn eval_rational_poly_x4<T: F32x4Convert>(
 #[inline(always)]
 pub(crate) fn fast_log2f_x4<T: F32x4Convert>(t: T, x: f32x4<T>) -> f32x4<T> {
     let x_bits = x.bitcast_to_i32();
-    let magic = i32x4::splat(t, 0x3f2aaaab_u32 as i32);
+    let magic = i32x4::splat_t(t, 0x3f2aaaab_u32 as i32);
     let exp_bits = x_bits - magic;
     let exp_shifted = exp_bits.shr_arithmetic_const::<23>();
 
     let shifted_back = exp_shifted.shl_const::<23>();
     let mantissa_bits = x_bits - shifted_back;
-    let mantissa = f32x4::from_i32_bitcast(t, mantissa_bits);
+    let mantissa = f32x4::from_i32_bitcast_t(t, mantissa_bits);
 
-    let exp_f = f32x4::from_i32(t, exp_shifted);
-    let one = f32x4::splat(t, 1.0);
+    let exp_f = f32x4::from_i32_t(t, exp_shifted);
+    let one = f32x4::splat_t(t, 1.0);
     let m = mantissa - one;
 
-    let mut yp = f32x4::splat(t, LOG2_P[2]);
-    yp = yp.mul_add(m, f32x4::splat(t, LOG2_P[1]));
-    yp = yp.mul_add(m, f32x4::splat(t, LOG2_P[0]));
+    let mut yp = f32x4::splat_t(t, LOG2_P[2]);
+    yp = yp.mul_add(m, f32x4::splat_t(t, LOG2_P[1]));
+    yp = yp.mul_add(m, f32x4::splat_t(t, LOG2_P[0]));
 
-    let mut yq = f32x4::splat(t, LOG2_Q[2]);
-    yq = yq.mul_add(m, f32x4::splat(t, LOG2_Q[1]));
-    yq = yq.mul_add(m, f32x4::splat(t, LOG2_Q[0]));
+    let mut yq = f32x4::splat_t(t, LOG2_Q[2]);
+    yq = yq.mul_add(m, f32x4::splat_t(t, LOG2_Q[1]));
+    yq = yq.mul_add(m, f32x4::splat_t(t, LOG2_Q[0]));
 
     let poly = yp / yq;
     poly + exp_f
@@ -165,18 +165,18 @@ pub(crate) fn fast_pow2f_x4<T: F32x4Convert>(t: T, x: f32x4<T>) -> f32x4<T> {
     let frac = x - x_floor;
 
     let x_floor_i = x_floor.to_i32();
-    let bias = i32x4::splat(t, 127);
+    let bias = i32x4::splat_t(t, 127);
     let exp_bits = (x_floor_i + bias).shl_const::<23>();
-    let exp = f32x4::from_i32_bitcast(t, exp_bits);
+    let exp = f32x4::from_i32_bitcast_t(t, exp_bits);
 
-    let mut num = frac + f32x4::splat(t, POW2_NUM[0]);
-    num = num.mul_add(frac, f32x4::splat(t, POW2_NUM[1]));
-    num = num.mul_add(frac, f32x4::splat(t, POW2_NUM[2]));
+    let mut num = frac + f32x4::splat_t(t, POW2_NUM[0]);
+    num = num.mul_add(frac, f32x4::splat_t(t, POW2_NUM[1]));
+    num = num.mul_add(frac, f32x4::splat_t(t, POW2_NUM[2]));
     num = num * exp;
 
-    let mut den = f32x4::splat(t, POW2_DEN[0]).mul_add(frac, f32x4::splat(t, POW2_DEN[1]));
-    den = den.mul_add(frac, f32x4::splat(t, POW2_DEN[2]));
-    den = den.mul_add(frac, f32x4::splat(t, POW2_DEN[3]));
+    let mut den = f32x4::splat_t(t, POW2_DEN[0]).mul_add(frac, f32x4::splat_t(t, POW2_DEN[1]));
+    den = den.mul_add(frac, f32x4::splat_t(t, POW2_DEN[2]));
+    den = den.mul_add(frac, f32x4::splat_t(t, POW2_DEN[3]));
 
     num / den
 }
@@ -186,7 +186,7 @@ pub(crate) fn fast_pow2f_x4<T: F32x4Convert>(t: T, x: f32x4<T>) -> f32x4<T> {
 #[inline(always)]
 pub(crate) fn fast_powf_x4<T: F32x4Convert>(t: T, base: f32x4<T>, exponent: f32) -> f32x4<T> {
     let log2 = fast_log2f_x4(t, base);
-    let scaled = log2 * f32x4::splat(t, exponent);
+    let scaled = log2 * f32x4::splat_t(t, exponent);
     fast_pow2f_x4(t, scaled)
 }
 
@@ -203,17 +203,17 @@ pub(crate) fn eval_rational_poly_x8<T: F32x8Convert>(
     p: [f32; 5],
     q: [f32; 5],
 ) -> f32x8<T> {
-    let mut yp = f32x8::splat(t, p[4]);
-    yp = yp.mul_add(x, f32x8::splat(t, p[3]));
-    yp = yp.mul_add(x, f32x8::splat(t, p[2]));
-    yp = yp.mul_add(x, f32x8::splat(t, p[1]));
-    yp = yp.mul_add(x, f32x8::splat(t, p[0]));
+    let mut yp = f32x8::splat_t(t, p[4]);
+    yp = yp.mul_add(x, f32x8::splat_t(t, p[3]));
+    yp = yp.mul_add(x, f32x8::splat_t(t, p[2]));
+    yp = yp.mul_add(x, f32x8::splat_t(t, p[1]));
+    yp = yp.mul_add(x, f32x8::splat_t(t, p[0]));
 
-    let mut yq = f32x8::splat(t, q[4]);
-    yq = yq.mul_add(x, f32x8::splat(t, q[3]));
-    yq = yq.mul_add(x, f32x8::splat(t, q[2]));
-    yq = yq.mul_add(x, f32x8::splat(t, q[1]));
-    yq = yq.mul_add(x, f32x8::splat(t, q[0]));
+    let mut yq = f32x8::splat_t(t, q[4]);
+    yq = yq.mul_add(x, f32x8::splat_t(t, q[3]));
+    yq = yq.mul_add(x, f32x8::splat_t(t, q[2]));
+    yq = yq.mul_add(x, f32x8::splat_t(t, q[1]));
+    yq = yq.mul_add(x, f32x8::splat_t(t, q[0]));
 
     yp / yq
 }
@@ -222,25 +222,25 @@ pub(crate) fn eval_rational_poly_x8<T: F32x8Convert>(
 #[inline(always)]
 pub(crate) fn fast_log2f_x8<T: F32x8Convert>(t: T, x: f32x8<T>) -> f32x8<T> {
     let x_bits = x.bitcast_to_i32();
-    let magic = i32x8::splat(t, 0x3f2aaaab_u32 as i32);
+    let magic = i32x8::splat_t(t, 0x3f2aaaab_u32 as i32);
     let exp_bits = x_bits - magic;
     let exp_shifted = exp_bits.shr_arithmetic_const::<23>();
 
     let shifted_back = exp_shifted.shl_const::<23>();
     let mantissa_bits = x_bits - shifted_back;
-    let mantissa = f32x8::from_i32_bitcast(t, mantissa_bits);
+    let mantissa = f32x8::from_i32_bitcast_t(t, mantissa_bits);
 
-    let exp_f = f32x8::from_i32(t, exp_shifted);
-    let one = f32x8::splat(t, 1.0);
+    let exp_f = f32x8::from_i32_t(t, exp_shifted);
+    let one = f32x8::splat_t(t, 1.0);
     let m = mantissa - one;
 
-    let mut yp = f32x8::splat(t, LOG2_P[2]);
-    yp = yp.mul_add(m, f32x8::splat(t, LOG2_P[1]));
-    yp = yp.mul_add(m, f32x8::splat(t, LOG2_P[0]));
+    let mut yp = f32x8::splat_t(t, LOG2_P[2]);
+    yp = yp.mul_add(m, f32x8::splat_t(t, LOG2_P[1]));
+    yp = yp.mul_add(m, f32x8::splat_t(t, LOG2_P[0]));
 
-    let mut yq = f32x8::splat(t, LOG2_Q[2]);
-    yq = yq.mul_add(m, f32x8::splat(t, LOG2_Q[1]));
-    yq = yq.mul_add(m, f32x8::splat(t, LOG2_Q[0]));
+    let mut yq = f32x8::splat_t(t, LOG2_Q[2]);
+    yq = yq.mul_add(m, f32x8::splat_t(t, LOG2_Q[1]));
+    yq = yq.mul_add(m, f32x8::splat_t(t, LOG2_Q[0]));
 
     let poly = yp / yq;
     poly + exp_f
@@ -253,18 +253,18 @@ pub(crate) fn fast_pow2f_x8<T: F32x8Convert>(t: T, x: f32x8<T>) -> f32x8<T> {
     let frac = x - x_floor;
 
     let x_floor_i = x_floor.to_i32();
-    let bias = i32x8::splat(t, 127);
+    let bias = i32x8::splat_t(t, 127);
     let exp_bits = (x_floor_i + bias).shl_const::<23>();
-    let exp = f32x8::from_i32_bitcast(t, exp_bits);
+    let exp = f32x8::from_i32_bitcast_t(t, exp_bits);
 
-    let mut num = frac + f32x8::splat(t, POW2_NUM[0]);
-    num = num.mul_add(frac, f32x8::splat(t, POW2_NUM[1]));
-    num = num.mul_add(frac, f32x8::splat(t, POW2_NUM[2]));
+    let mut num = frac + f32x8::splat_t(t, POW2_NUM[0]);
+    num = num.mul_add(frac, f32x8::splat_t(t, POW2_NUM[1]));
+    num = num.mul_add(frac, f32x8::splat_t(t, POW2_NUM[2]));
     num = num * exp;
 
-    let mut den = f32x8::splat(t, POW2_DEN[0]).mul_add(frac, f32x8::splat(t, POW2_DEN[1]));
-    den = den.mul_add(frac, f32x8::splat(t, POW2_DEN[2]));
-    den = den.mul_add(frac, f32x8::splat(t, POW2_DEN[3]));
+    let mut den = f32x8::splat_t(t, POW2_DEN[0]).mul_add(frac, f32x8::splat_t(t, POW2_DEN[1]));
+    den = den.mul_add(frac, f32x8::splat_t(t, POW2_DEN[2]));
+    den = den.mul_add(frac, f32x8::splat_t(t, POW2_DEN[3]));
 
     num / den
 }
@@ -273,7 +273,7 @@ pub(crate) fn fast_pow2f_x8<T: F32x8Convert>(t: T, x: f32x8<T>) -> f32x8<T> {
 #[inline(always)]
 pub(crate) fn fast_powf_x8<T: F32x8Convert>(t: T, base: f32x8<T>, exponent: f32) -> f32x8<T> {
     let log2 = fast_log2f_x8(t, base);
-    let scaled = log2 * f32x8::splat(t, exponent);
+    let scaled = log2 * f32x8::splat_t(t, exponent);
     fast_pow2f_x8(t, scaled)
 }
 
@@ -290,17 +290,17 @@ pub(crate) fn eval_rational_poly_x16<T: F32x16Convert>(
     p: [f32; 5],
     q: [f32; 5],
 ) -> f32x16<T> {
-    let mut yp = f32x16::splat(t, p[4]);
-    yp = yp.mul_add(x, f32x16::splat(t, p[3]));
-    yp = yp.mul_add(x, f32x16::splat(t, p[2]));
-    yp = yp.mul_add(x, f32x16::splat(t, p[1]));
-    yp = yp.mul_add(x, f32x16::splat(t, p[0]));
+    let mut yp = f32x16::splat_t(t, p[4]);
+    yp = yp.mul_add(x, f32x16::splat_t(t, p[3]));
+    yp = yp.mul_add(x, f32x16::splat_t(t, p[2]));
+    yp = yp.mul_add(x, f32x16::splat_t(t, p[1]));
+    yp = yp.mul_add(x, f32x16::splat_t(t, p[0]));
 
-    let mut yq = f32x16::splat(t, q[4]);
-    yq = yq.mul_add(x, f32x16::splat(t, q[3]));
-    yq = yq.mul_add(x, f32x16::splat(t, q[2]));
-    yq = yq.mul_add(x, f32x16::splat(t, q[1]));
-    yq = yq.mul_add(x, f32x16::splat(t, q[0]));
+    let mut yq = f32x16::splat_t(t, q[4]);
+    yq = yq.mul_add(x, f32x16::splat_t(t, q[3]));
+    yq = yq.mul_add(x, f32x16::splat_t(t, q[2]));
+    yq = yq.mul_add(x, f32x16::splat_t(t, q[1]));
+    yq = yq.mul_add(x, f32x16::splat_t(t, q[0]));
 
     yp / yq
 }
@@ -309,25 +309,25 @@ pub(crate) fn eval_rational_poly_x16<T: F32x16Convert>(
 #[inline(always)]
 pub(crate) fn fast_log2f_x16<T: F32x16Convert>(t: T, x: f32x16<T>) -> f32x16<T> {
     let x_bits = x.bitcast_to_i32();
-    let magic = i32x16::splat(t, 0x3f2aaaab_u32 as i32);
+    let magic = i32x16::splat_t(t, 0x3f2aaaab_u32 as i32);
     let exp_bits = x_bits - magic;
     let exp_shifted = exp_bits.shr_arithmetic_const::<23>();
 
     let shifted_back = exp_shifted.shl_const::<23>();
     let mantissa_bits = x_bits - shifted_back;
-    let mantissa = f32x16::from_i32_bitcast(t, mantissa_bits);
+    let mantissa = f32x16::from_i32_bitcast_t(t, mantissa_bits);
 
-    let exp_f = f32x16::from_i32(t, exp_shifted);
-    let one = f32x16::splat(t, 1.0);
+    let exp_f = f32x16::from_i32_t(t, exp_shifted);
+    let one = f32x16::splat_t(t, 1.0);
     let m = mantissa - one;
 
-    let mut yp = f32x16::splat(t, LOG2_P[2]);
-    yp = yp.mul_add(m, f32x16::splat(t, LOG2_P[1]));
-    yp = yp.mul_add(m, f32x16::splat(t, LOG2_P[0]));
+    let mut yp = f32x16::splat_t(t, LOG2_P[2]);
+    yp = yp.mul_add(m, f32x16::splat_t(t, LOG2_P[1]));
+    yp = yp.mul_add(m, f32x16::splat_t(t, LOG2_P[0]));
 
-    let mut yq = f32x16::splat(t, LOG2_Q[2]);
-    yq = yq.mul_add(m, f32x16::splat(t, LOG2_Q[1]));
-    yq = yq.mul_add(m, f32x16::splat(t, LOG2_Q[0]));
+    let mut yq = f32x16::splat_t(t, LOG2_Q[2]);
+    yq = yq.mul_add(m, f32x16::splat_t(t, LOG2_Q[1]));
+    yq = yq.mul_add(m, f32x16::splat_t(t, LOG2_Q[0]));
 
     let poly = yp / yq;
     poly + exp_f
@@ -340,18 +340,18 @@ pub(crate) fn fast_pow2f_x16<T: F32x16Convert>(t: T, x: f32x16<T>) -> f32x16<T> 
     let frac = x - x_floor;
 
     let x_floor_i = x_floor.to_i32();
-    let bias = i32x16::splat(t, 127);
+    let bias = i32x16::splat_t(t, 127);
     let exp_bits = (x_floor_i + bias).shl_const::<23>();
-    let exp = f32x16::from_i32_bitcast(t, exp_bits);
+    let exp = f32x16::from_i32_bitcast_t(t, exp_bits);
 
-    let mut num = frac + f32x16::splat(t, POW2_NUM[0]);
-    num = num.mul_add(frac, f32x16::splat(t, POW2_NUM[1]));
-    num = num.mul_add(frac, f32x16::splat(t, POW2_NUM[2]));
+    let mut num = frac + f32x16::splat_t(t, POW2_NUM[0]);
+    num = num.mul_add(frac, f32x16::splat_t(t, POW2_NUM[1]));
+    num = num.mul_add(frac, f32x16::splat_t(t, POW2_NUM[2]));
     num = num * exp;
 
-    let mut den = f32x16::splat(t, POW2_DEN[0]).mul_add(frac, f32x16::splat(t, POW2_DEN[1]));
-    den = den.mul_add(frac, f32x16::splat(t, POW2_DEN[2]));
-    den = den.mul_add(frac, f32x16::splat(t, POW2_DEN[3]));
+    let mut den = f32x16::splat_t(t, POW2_DEN[0]).mul_add(frac, f32x16::splat_t(t, POW2_DEN[1]));
+    den = den.mul_add(frac, f32x16::splat_t(t, POW2_DEN[2]));
+    den = den.mul_add(frac, f32x16::splat_t(t, POW2_DEN[3]));
 
     num / den
 }
@@ -360,6 +360,6 @@ pub(crate) fn fast_pow2f_x16<T: F32x16Convert>(t: T, x: f32x16<T>) -> f32x16<T> 
 #[inline(always)]
 pub(crate) fn fast_powf_x16<T: F32x16Convert>(t: T, base: f32x16<T>, exponent: f32) -> f32x16<T> {
     let log2 = fast_log2f_x16(t, base);
-    let scaled = log2 * f32x16::splat(t, exponent);
+    let scaled = log2 * f32x16::splat_t(t, exponent);
     fast_pow2f_x16(t, scaled)
 }

@@ -35,10 +35,10 @@ use magetypes::simd::generic::f32x4;
 #[allow(dead_code)]
 #[inline(always)]
 pub(crate) fn bt709_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
-    let threshold = f32x4::splat(t, 4.5 * BT709_BETA);
-    let inv_4_5 = f32x4::splat(t, 1.0 / 4.5);
-    let alpha = f32x4::splat(t, BT709_ALPHA);
-    let one_plus_alpha = f32x4::splat(t, 1.0 + BT709_ALPHA);
+    let threshold = f32x4::splat_t(t, 4.5 * BT709_BETA);
+    let inv_4_5 = f32x4::splat_t(t, 1.0 / 4.5);
+    let alpha = f32x4::splat_t(t, BT709_ALPHA);
+    let one_plus_alpha = f32x4::splat_t(t, 1.0 + BT709_ALPHA);
 
     let linear = v * inv_4_5;
 
@@ -56,10 +56,10 @@ pub(crate) fn bt709_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T>
 #[allow(dead_code)]
 #[inline(always)]
 pub(crate) fn linear_to_bt709_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
-    let threshold = f32x4::splat(t, BT709_BETA);
-    let scale_4_5 = f32x4::splat(t, 4.5);
-    let one_plus_alpha = f32x4::splat(t, 1.0 + BT709_ALPHA);
-    let alpha = f32x4::splat(t, BT709_ALPHA);
+    let threshold = f32x4::splat_t(t, BT709_BETA);
+    let scale_4_5 = f32x4::splat_t(t, 4.5);
+    let one_plus_alpha = f32x4::splat_t(t, 1.0 + BT709_ALPHA);
+    let alpha = f32x4::splat_t(t, BT709_ALPHA);
 
     let linear = v * scale_4_5;
 
@@ -81,10 +81,10 @@ use magetypes::simd::generic::f32x8;
 
 #[inline(always)]
 pub(crate) fn bt709_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
-    let threshold = f32x8::splat(t, 4.5 * BT709_BETA);
-    let inv_4_5 = f32x8::splat(t, 1.0 / 4.5);
-    let alpha = f32x8::splat(t, BT709_ALPHA);
-    let one_plus_alpha = f32x8::splat(t, 1.0 + BT709_ALPHA);
+    let threshold = f32x8::splat_t(t, 4.5 * BT709_BETA);
+    let inv_4_5 = f32x8::splat_t(t, 1.0 / 4.5);
+    let alpha = f32x8::splat_t(t, BT709_ALPHA);
+    let one_plus_alpha = f32x8::splat_t(t, 1.0 + BT709_ALPHA);
 
     let linear = v * inv_4_5;
 
@@ -98,10 +98,10 @@ pub(crate) fn bt709_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T>
 
 #[inline(always)]
 pub(crate) fn linear_to_bt709_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
-    let threshold = f32x8::splat(t, BT709_BETA);
-    let scale_4_5 = f32x8::splat(t, 4.5);
-    let one_plus_alpha = f32x8::splat(t, 1.0 + BT709_ALPHA);
-    let alpha = f32x8::splat(t, BT709_ALPHA);
+    let threshold = f32x8::splat_t(t, BT709_BETA);
+    let scale_4_5 = f32x8::splat_t(t, 4.5);
+    let one_plus_alpha = f32x8::splat_t(t, 1.0 + BT709_ALPHA);
+    let alpha = f32x8::splat_t(t, BT709_ALPHA);
 
     let linear = v * scale_4_5;
 
@@ -122,10 +122,10 @@ use magetypes::simd::generic::f32x16;
 
 #[inline(always)]
 pub(crate) fn bt709_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
-    let threshold = f32x16::splat(t, 4.5 * BT709_BETA);
-    let inv_4_5 = f32x16::splat(t, 1.0 / 4.5);
-    let alpha = f32x16::splat(t, BT709_ALPHA);
-    let one_plus_alpha = f32x16::splat(t, 1.0 + BT709_ALPHA);
+    let threshold = f32x16::splat_t(t, 4.5 * BT709_BETA);
+    let inv_4_5 = f32x16::splat_t(t, 1.0 / 4.5);
+    let alpha = f32x16::splat_t(t, BT709_ALPHA);
+    let one_plus_alpha = f32x16::splat_t(t, 1.0 + BT709_ALPHA);
 
     let linear = v * inv_4_5;
 
@@ -139,10 +139,10 @@ pub(crate) fn bt709_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x1
 
 #[inline(always)]
 pub(crate) fn linear_to_bt709_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
-    let threshold = f32x16::splat(t, BT709_BETA);
-    let scale_4_5 = f32x16::splat(t, 4.5);
-    let one_plus_alpha = f32x16::splat(t, 1.0 + BT709_ALPHA);
-    let alpha = f32x16::splat(t, BT709_ALPHA);
+    let threshold = f32x16::splat_t(t, BT709_BETA);
+    let scale_4_5 = f32x16::splat_t(t, 4.5);
+    let one_plus_alpha = f32x16::splat_t(t, 1.0 + BT709_ALPHA);
+    let alpha = f32x16::splat_t(t, BT709_ALPHA);
 
     let linear = v * scale_4_5;
 

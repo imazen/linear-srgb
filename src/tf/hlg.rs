@@ -48,13 +48,13 @@ use magetypes::simd::generic::f32x4;
 #[allow(dead_code)]
 #[inline(always)]
 pub(crate) fn hlg_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
-    let zero = f32x4::zero(t);
-    let half = f32x4::splat(t, 0.5);
-    let third = f32x4::splat(t, 1.0 / 3.0);
-    let inv_12 = f32x4::splat(t, 1.0 / 12.0);
-    let hlg_b = f32x4::splat(t, HLG_B);
-    let hlg_c = f32x4::splat(t, HLG_C);
-    let hlg_inv_a_log2e = f32x4::splat(t, HLG_INV_A_LOG2E);
+    let zero = f32x4::zero_t(t);
+    let half = f32x4::splat_t(t, 0.5);
+    let third = f32x4::splat_t(t, 1.0 / 3.0);
+    let inv_12 = f32x4::splat_t(t, 1.0 / 12.0);
+    let hlg_b = f32x4::splat_t(t, HLG_B);
+    let hlg_c = f32x4::splat_t(t, HLG_C);
+    let hlg_inv_a_log2e = f32x4::splat_t(t, HLG_INV_A_LOG2E);
 
     // v <= 0 is absorbed by a = max(v, 0) = 0 ⇒ low = 0; the a<=0.5 mask then
     // already selects `low` for those lanes, so no separate positive mask is
@@ -73,13 +73,13 @@ pub(crate) fn hlg_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
 #[allow(dead_code)]
 #[inline(always)]
 pub(crate) fn linear_to_hlg_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
-    let zero = f32x4::zero(t);
-    let threshold = f32x4::splat(t, 1.0 / 12.0);
-    let three = f32x4::splat(t, 3.0);
-    let twelve = f32x4::splat(t, 12.0);
-    let hlg_a_ln2 = f32x4::splat(t, HLG_A_INV_LOG2E);
-    let hlg_b = f32x4::splat(t, HLG_B);
-    let hlg_c = f32x4::splat(t, HLG_C);
+    let zero = f32x4::zero_t(t);
+    let threshold = f32x4::splat_t(t, 1.0 / 12.0);
+    let three = f32x4::splat_t(t, 3.0);
+    let twelve = f32x4::splat_t(t, 12.0);
+    let hlg_a_ln2 = f32x4::splat_t(t, HLG_A_INV_LOG2E);
+    let hlg_b = f32x4::splat_t(t, HLG_B);
+    let hlg_c = f32x4::splat_t(t, HLG_C);
 
     // v <= 0 is absorbed by a = max(v, 0) = 0 ⇒ low = sqrt(0) = 0; the
     // a<=1/12 mask then selects `low` (=0) for those lanes. The `high` path
@@ -105,13 +105,13 @@ use magetypes::simd::generic::f32x8;
 
 #[inline(always)]
 pub(crate) fn hlg_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
-    let zero = f32x8::zero(t);
-    let half = f32x8::splat(t, 0.5);
-    let third = f32x8::splat(t, 1.0 / 3.0);
-    let inv_12 = f32x8::splat(t, 1.0 / 12.0);
-    let hlg_b = f32x8::splat(t, HLG_B);
-    let hlg_c = f32x8::splat(t, HLG_C);
-    let hlg_inv_a_log2e = f32x8::splat(t, HLG_INV_A_LOG2E);
+    let zero = f32x8::zero_t(t);
+    let half = f32x8::splat_t(t, 0.5);
+    let third = f32x8::splat_t(t, 1.0 / 3.0);
+    let inv_12 = f32x8::splat_t(t, 1.0 / 12.0);
+    let hlg_b = f32x8::splat_t(t, HLG_B);
+    let hlg_c = f32x8::splat_t(t, HLG_C);
+    let hlg_inv_a_log2e = f32x8::splat_t(t, HLG_INV_A_LOG2E);
 
     // See comments on hlg_to_linear_x4.
     let a = v.max(zero);
@@ -127,13 +127,13 @@ pub(crate) fn hlg_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
 
 #[inline(always)]
 pub(crate) fn linear_to_hlg_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
-    let zero = f32x8::zero(t);
-    let threshold = f32x8::splat(t, 1.0 / 12.0);
-    let three = f32x8::splat(t, 3.0);
-    let twelve = f32x8::splat(t, 12.0);
-    let hlg_a_ln2 = f32x8::splat(t, HLG_A_INV_LOG2E);
-    let hlg_b = f32x8::splat(t, HLG_B);
-    let hlg_c = f32x8::splat(t, HLG_C);
+    let zero = f32x8::zero_t(t);
+    let threshold = f32x8::splat_t(t, 1.0 / 12.0);
+    let three = f32x8::splat_t(t, 3.0);
+    let twelve = f32x8::splat_t(t, 12.0);
+    let hlg_a_ln2 = f32x8::splat_t(t, HLG_A_INV_LOG2E);
+    let hlg_b = f32x8::splat_t(t, HLG_B);
+    let hlg_c = f32x8::splat_t(t, HLG_C);
 
     // See comments on linear_to_hlg_x4.
     let a = v.max(zero);
@@ -156,13 +156,13 @@ use magetypes::simd::generic::f32x16;
 
 #[inline(always)]
 pub(crate) fn hlg_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
-    let zero = f32x16::zero(t);
-    let half = f32x16::splat(t, 0.5);
-    let third = f32x16::splat(t, 1.0 / 3.0);
-    let inv_12 = f32x16::splat(t, 1.0 / 12.0);
-    let hlg_b = f32x16::splat(t, HLG_B);
-    let hlg_c = f32x16::splat(t, HLG_C);
-    let hlg_inv_a_log2e = f32x16::splat(t, HLG_INV_A_LOG2E);
+    let zero = f32x16::zero_t(t);
+    let half = f32x16::splat_t(t, 0.5);
+    let third = f32x16::splat_t(t, 1.0 / 3.0);
+    let inv_12 = f32x16::splat_t(t, 1.0 / 12.0);
+    let hlg_b = f32x16::splat_t(t, HLG_B);
+    let hlg_c = f32x16::splat_t(t, HLG_C);
+    let hlg_inv_a_log2e = f32x16::splat_t(t, HLG_INV_A_LOG2E);
 
     // See comments on hlg_to_linear_x4.
     let a = v.max(zero);
@@ -178,13 +178,13 @@ pub(crate) fn hlg_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<
 
 #[inline(always)]
 pub(crate) fn linear_to_hlg_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
-    let zero = f32x16::zero(t);
-    let threshold = f32x16::splat(t, 1.0 / 12.0);
-    let three = f32x16::splat(t, 3.0);
-    let twelve = f32x16::splat(t, 12.0);
-    let hlg_a_ln2 = f32x16::splat(t, HLG_A_INV_LOG2E);
-    let hlg_b = f32x16::splat(t, HLG_B);
-    let hlg_c = f32x16::splat(t, HLG_C);
+    let zero = f32x16::zero_t(t);
+    let threshold = f32x16::splat_t(t, 1.0 / 12.0);
+    let three = f32x16::splat_t(t, 3.0);
+    let twelve = f32x16::splat_t(t, 12.0);
+    let hlg_a_ln2 = f32x16::splat_t(t, HLG_A_INV_LOG2E);
+    let hlg_b = f32x16::splat_t(t, HLG_B);
+    let hlg_c = f32x16::splat_t(t, HLG_C);
     // See comments on linear_to_hlg_x4.
     let a = v.max(zero);
     let low = (three * a).sqrt();

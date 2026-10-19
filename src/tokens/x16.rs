@@ -30,27 +30,27 @@ const TWELVE_92: f32 = 12.92;
 pub fn srgb_to_linear_v4(token: X64V4Token, srgb: [f32; 16]) -> [f32; 16] {
     use crate::rational_poly::{S2L_P, S2L_Q};
 
-    let zero = mt_f32x16::zero(token);
-    let one = mt_f32x16::splat(token, 1.0);
-    let srgb = mt_f32x16::from_array(token, srgb).max(zero).min(one);
+    let zero = mt_f32x16::zero_t(token);
+    let one = mt_f32x16::splat_t(token, 1.0);
+    let srgb = mt_f32x16::from_array_t(token, srgb).max(zero).min(one);
 
-    let linear_result = srgb * mt_f32x16::splat(token, LINEAR_SCALE);
+    let linear_result = srgb * mt_f32x16::splat_t(token, LINEAR_SCALE);
 
     // Rational polynomial P(x)/Q(x) via Horner's method
     let x = srgb;
-    let yp = mt_f32x16::splat(token, S2L_P[4]).mul_add(x, mt_f32x16::splat(token, S2L_P[3]));
-    let yp = yp.mul_add(x, mt_f32x16::splat(token, S2L_P[2]));
-    let yp = yp.mul_add(x, mt_f32x16::splat(token, S2L_P[1]));
-    let yp = yp.mul_add(x, mt_f32x16::splat(token, S2L_P[0]));
+    let yp = mt_f32x16::splat_t(token, S2L_P[4]).mul_add(x, mt_f32x16::splat_t(token, S2L_P[3]));
+    let yp = yp.mul_add(x, mt_f32x16::splat_t(token, S2L_P[2]));
+    let yp = yp.mul_add(x, mt_f32x16::splat_t(token, S2L_P[1]));
+    let yp = yp.mul_add(x, mt_f32x16::splat_t(token, S2L_P[0]));
 
-    let yq = mt_f32x16::splat(token, S2L_Q[4]).mul_add(x, mt_f32x16::splat(token, S2L_Q[3]));
-    let yq = yq.mul_add(x, mt_f32x16::splat(token, S2L_Q[2]));
-    let yq = yq.mul_add(x, mt_f32x16::splat(token, S2L_Q[1]));
-    let yq = yq.mul_add(x, mt_f32x16::splat(token, S2L_Q[0]));
+    let yq = mt_f32x16::splat_t(token, S2L_Q[4]).mul_add(x, mt_f32x16::splat_t(token, S2L_Q[3]));
+    let yq = yq.mul_add(x, mt_f32x16::splat_t(token, S2L_Q[2]));
+    let yq = yq.mul_add(x, mt_f32x16::splat_t(token, S2L_Q[1]));
+    let yq = yq.mul_add(x, mt_f32x16::splat_t(token, S2L_Q[0]));
 
     let power_result = (yp / yq).min(one);
 
-    let mask = srgb.simd_lt(mt_f32x16::splat(token, SRGB_LINEAR_THRESHOLD));
+    let mask = srgb.simd_lt(mt_f32x16::splat_t(token, SRGB_LINEAR_THRESHOLD));
     mt_f32x16::blend(mask, linear_result, power_result).to_array()
 }
 
@@ -62,27 +62,27 @@ pub fn srgb_to_linear_v4(token: X64V4Token, srgb: [f32; 16]) -> [f32; 16] {
 pub fn linear_to_srgb_v4(token: X64V4Token, linear: [f32; 16]) -> [f32; 16] {
     use crate::rational_poly::{L2S_P, L2S_Q};
 
-    let zero = mt_f32x16::zero(token);
-    let one = mt_f32x16::splat(token, 1.0);
-    let linear = mt_f32x16::from_array(token, linear).max(zero).min(one);
+    let zero = mt_f32x16::zero_t(token);
+    let one = mt_f32x16::splat_t(token, 1.0);
+    let linear = mt_f32x16::from_array_t(token, linear).max(zero).min(one);
 
-    let linear_result = linear * mt_f32x16::splat(token, TWELVE_92);
+    let linear_result = linear * mt_f32x16::splat_t(token, TWELVE_92);
 
     // sqrt transform + rational polynomial P(√x)/Q(√x) via Horner's method
     let x = linear.sqrt();
-    let yp = mt_f32x16::splat(token, L2S_P[4]).mul_add(x, mt_f32x16::splat(token, L2S_P[3]));
-    let yp = yp.mul_add(x, mt_f32x16::splat(token, L2S_P[2]));
-    let yp = yp.mul_add(x, mt_f32x16::splat(token, L2S_P[1]));
-    let yp = yp.mul_add(x, mt_f32x16::splat(token, L2S_P[0]));
+    let yp = mt_f32x16::splat_t(token, L2S_P[4]).mul_add(x, mt_f32x16::splat_t(token, L2S_P[3]));
+    let yp = yp.mul_add(x, mt_f32x16::splat_t(token, L2S_P[2]));
+    let yp = yp.mul_add(x, mt_f32x16::splat_t(token, L2S_P[1]));
+    let yp = yp.mul_add(x, mt_f32x16::splat_t(token, L2S_P[0]));
 
-    let yq = mt_f32x16::splat(token, L2S_Q[4]).mul_add(x, mt_f32x16::splat(token, L2S_Q[3]));
-    let yq = yq.mul_add(x, mt_f32x16::splat(token, L2S_Q[2]));
-    let yq = yq.mul_add(x, mt_f32x16::splat(token, L2S_Q[1]));
-    let yq = yq.mul_add(x, mt_f32x16::splat(token, L2S_Q[0]));
+    let yq = mt_f32x16::splat_t(token, L2S_Q[4]).mul_add(x, mt_f32x16::splat_t(token, L2S_Q[3]));
+    let yq = yq.mul_add(x, mt_f32x16::splat_t(token, L2S_Q[2]));
+    let yq = yq.mul_add(x, mt_f32x16::splat_t(token, L2S_Q[1]));
+    let yq = yq.mul_add(x, mt_f32x16::splat_t(token, L2S_Q[0]));
 
     let power_result = (yp / yq).min(one);
 
-    let mask = linear.simd_lt(mt_f32x16::splat(token, LINEAR_THRESHOLD));
+    let mask = linear.simd_lt(mt_f32x16::splat_t(token, LINEAR_THRESHOLD));
     mt_f32x16::blend(mask, linear_result, power_result).to_array()
 }
 
@@ -184,10 +184,10 @@ pub fn srgb_u8_to_linear_slice_v4(_token: X64V4Token, input: &[u8], output: &mut
 /// Call from inside an `#[arcane]` function for zero-overhead inlining.
 #[rite]
 pub fn linear_to_srgb_u8_v4(token: X64V4Token, linear: [f32; 16]) -> [u8; 16] {
-    let zero = mt_f32x16::zero(token);
-    let one = mt_f32x16::splat(token, 1.0);
-    let linear = mt_f32x16::from_array(token, linear).max(zero).min(one);
-    let scaled = linear * mt_f32x16::splat(token, 4095.0) + mt_f32x16::splat(token, 0.5);
+    let zero = mt_f32x16::zero_t(token);
+    let one = mt_f32x16::splat_t(token, 1.0);
+    let linear = mt_f32x16::from_array_t(token, linear).max(zero).min(one);
+    let scaled = linear * mt_f32x16::splat_t(token, 4095.0) + mt_f32x16::splat_t(token, 0.5);
     let arr = scaled.to_array();
     let lut = crate::const_luts::linear_to_srgb_u8();
     [
@@ -306,10 +306,10 @@ pub fn linear_to_srgb_u8_slice_v4(token: X64V4Token, input: &[f32], output: &mut
 pub fn tf_srgb_to_linear_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
     use crate::rational_poly::{LINEAR_SCALE, S2L_P, S2L_Q, SRGB_THRESHOLD};
 
-    let v = mt_f32x16::from_array(token, v);
-    let one = mt_f32x16::splat(token, 1.0);
-    let threshold = mt_f32x16::splat(token, SRGB_THRESHOLD);
-    let inv_12_92 = mt_f32x16::splat(token, LINEAR_SCALE);
+    let v = mt_f32x16::from_array_t(token, v);
+    let one = mt_f32x16::splat_t(token, 1.0);
+    let threshold = mt_f32x16::splat_t(token, SRGB_THRESHOLD);
+    let inv_12_92 = mt_f32x16::splat_t(token, LINEAR_SCALE);
 
     let linear = v * inv_12_92;
     let poly = eval_rational_poly_x16(token, v, S2L_P, S2L_Q).min(one);
@@ -324,10 +324,10 @@ pub fn tf_srgb_to_linear_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
 pub fn tf_linear_to_srgb_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
     use crate::rational_poly::{L2S_P, L2S_Q, LINEAR_THRESHOLD, TWELVE_92};
 
-    let v = mt_f32x16::from_array(token, v);
-    let one = mt_f32x16::splat(token, 1.0);
-    let threshold = mt_f32x16::splat(token, LINEAR_THRESHOLD);
-    let scale = mt_f32x16::splat(token, TWELVE_92);
+    let v = mt_f32x16::from_array_t(token, v);
+    let one = mt_f32x16::splat_t(token, 1.0);
+    let threshold = mt_f32x16::splat_t(token, LINEAR_THRESHOLD);
+    let scale = mt_f32x16::splat_t(token, TWELVE_92);
 
     let linear = v * scale;
     let s = v.sqrt();
@@ -343,12 +343,12 @@ pub fn tf_linear_to_srgb_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
 pub fn pq_to_linear_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
     use crate::tf::pq::{PQ_EOTF_P_LARGE, PQ_EOTF_P_SMALL, PQ_EOTF_Q_LARGE, PQ_EOTF_Q_SMALL};
 
-    let v = mt_f32x16::from_array(token, v);
-    let zero = mt_f32x16::zero(token);
+    let v = mt_f32x16::from_array_t(token, v);
+    let zero = mt_f32x16::zero_t(token);
     let a = v.max(zero);
     let x = a.mul_add(a, a); // x = a + a*a
 
-    let threshold = mt_f32x16::splat(token, 0.25);
+    let threshold = mt_f32x16::splat_t(token, 0.25);
     let large = eval_rational_poly_x16(token, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE);
     let small = eval_rational_poly_x16(token, x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL);
 
@@ -365,12 +365,12 @@ pub fn pq_to_linear_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
 pub fn linear_to_pq_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
     use crate::tf::pq::{PQ_INV_P_LARGE, PQ_INV_P_SMALL, PQ_INV_Q_LARGE, PQ_INV_Q_SMALL};
 
-    let v = mt_f32x16::from_array(token, v);
-    let zero = mt_f32x16::zero(token);
+    let v = mt_f32x16::from_array_t(token, v);
+    let zero = mt_f32x16::zero_t(token);
     let a = v.max(zero);
     let a4 = a.sqrt().sqrt();
 
-    let threshold = mt_f32x16::splat(token, 0.1);
+    let threshold = mt_f32x16::splat_t(token, 0.1);
     let large = eval_rational_poly_x16(token, a4, PQ_INV_P_LARGE, PQ_INV_Q_LARGE);
     let small = eval_rational_poly_x16(token, a4, PQ_INV_P_SMALL, PQ_INV_Q_SMALL);
 
@@ -519,17 +519,17 @@ fn eval_rational_poly_x16(
     p: [f32; 5],
     q: [f32; 5],
 ) -> magetypes::simd::v4::f32x16 {
-    let mut yp = mt_f32x16::splat(t, p[4]);
-    yp = yp.mul_add(x, mt_f32x16::splat(t, p[3]));
-    yp = yp.mul_add(x, mt_f32x16::splat(t, p[2]));
-    yp = yp.mul_add(x, mt_f32x16::splat(t, p[1]));
-    yp = yp.mul_add(x, mt_f32x16::splat(t, p[0]));
+    let mut yp = mt_f32x16::splat_t(t, p[4]);
+    yp = yp.mul_add(x, mt_f32x16::splat_t(t, p[3]));
+    yp = yp.mul_add(x, mt_f32x16::splat_t(t, p[2]));
+    yp = yp.mul_add(x, mt_f32x16::splat_t(t, p[1]));
+    yp = yp.mul_add(x, mt_f32x16::splat_t(t, p[0]));
 
-    let mut yq = mt_f32x16::splat(t, q[4]);
-    yq = yq.mul_add(x, mt_f32x16::splat(t, q[3]));
-    yq = yq.mul_add(x, mt_f32x16::splat(t, q[2]));
-    yq = yq.mul_add(x, mt_f32x16::splat(t, q[1]));
-    yq = yq.mul_add(x, mt_f32x16::splat(t, q[0]));
+    let mut yq = mt_f32x16::splat_t(t, q[4]);
+    yq = yq.mul_add(x, mt_f32x16::splat_t(t, q[3]));
+    yq = yq.mul_add(x, mt_f32x16::splat_t(t, q[2]));
+    yq = yq.mul_add(x, mt_f32x16::splat_t(t, q[1]));
+    yq = yq.mul_add(x, mt_f32x16::splat_t(t, q[0]));
 
     yp / yq
 }

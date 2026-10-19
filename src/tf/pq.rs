@@ -138,11 +138,11 @@ use magetypes::simd::generic::f32x4;
 #[allow(dead_code)]
 #[inline(always)]
 pub(crate) fn pq_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
-    let zero = f32x4::zero(t);
+    let zero = f32x4::zero_t(t);
     let a = v.max(zero);
     let x = a.mul_add(a, a);
 
-    let threshold = f32x4::splat(t, 0.25);
+    let threshold = f32x4::splat_t(t, 0.25);
     let large = fast_math::eval_rational_poly_x4(t, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE);
     let small = fast_math::eval_rational_poly_x4(t, x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL);
 
@@ -156,11 +156,11 @@ pub(crate) fn pq_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
 #[allow(dead_code)]
 #[inline(always)]
 pub(crate) fn linear_to_pq_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
-    let zero = f32x4::zero(t);
+    let zero = f32x4::zero_t(t);
     let a = v.max(zero);
     let a4 = a.sqrt().sqrt();
 
-    let threshold = f32x4::splat(t, 0.1);
+    let threshold = f32x4::splat_t(t, 0.1);
     let large = fast_math::eval_rational_poly_x4(t, a4, PQ_INV_P_LARGE, PQ_INV_Q_LARGE);
     let small = fast_math::eval_rational_poly_x4(t, a4, PQ_INV_P_SMALL, PQ_INV_Q_SMALL);
 
@@ -180,11 +180,11 @@ use magetypes::simd::generic::f32x8;
 
 #[inline(always)]
 pub(crate) fn pq_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
-    let zero = f32x8::zero(t);
+    let zero = f32x8::zero_t(t);
     let a = v.max(zero);
     let x = a.mul_add(a, a);
 
-    let threshold = f32x8::splat(t, 0.25);
+    let threshold = f32x8::splat_t(t, 0.25);
     let large = fast_math::eval_rational_poly_x8(t, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE);
     let small = fast_math::eval_rational_poly_x8(t, x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL);
 
@@ -197,11 +197,11 @@ pub(crate) fn pq_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
 
 #[inline(always)]
 pub(crate) fn linear_to_pq_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
-    let zero = f32x8::zero(t);
+    let zero = f32x8::zero_t(t);
     let a = v.max(zero);
     let a4 = a.sqrt().sqrt();
 
-    let threshold = f32x8::splat(t, 0.1);
+    let threshold = f32x8::splat_t(t, 0.1);
     let large = fast_math::eval_rational_poly_x8(t, a4, PQ_INV_P_LARGE, PQ_INV_Q_LARGE);
     let small = fast_math::eval_rational_poly_x8(t, a4, PQ_INV_P_SMALL, PQ_INV_Q_SMALL);
 
@@ -221,11 +221,11 @@ use magetypes::simd::generic::f32x16;
 
 #[inline(always)]
 pub(crate) fn pq_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
-    let zero = f32x16::zero(t);
+    let zero = f32x16::zero_t(t);
     let a = v.max(zero);
     let x = a.mul_add(a, a);
 
-    let threshold = f32x16::splat(t, 0.25);
+    let threshold = f32x16::splat_t(t, 0.25);
     let large = fast_math::eval_rational_poly_x16(t, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE);
     let small = fast_math::eval_rational_poly_x16(t, x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL);
 
@@ -238,11 +238,11 @@ pub(crate) fn pq_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T
 
 #[inline(always)]
 pub(crate) fn linear_to_pq_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
-    let zero = f32x16::zero(t);
+    let zero = f32x16::zero_t(t);
     let a = v.max(zero);
     let a4 = a.sqrt().sqrt();
 
-    let threshold = f32x16::splat(t, 0.1);
+    let threshold = f32x16::splat_t(t, 0.1);
     let large = fast_math::eval_rational_poly_x16(t, a4, PQ_INV_P_LARGE, PQ_INV_Q_LARGE);
     let small = fast_math::eval_rational_poly_x16(t, a4, PQ_INV_P_SMALL, PQ_INV_Q_SMALL);
 
