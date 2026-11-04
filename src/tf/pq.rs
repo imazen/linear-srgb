@@ -18,7 +18,7 @@ pub fn pq_to_linear(v: f32) -> f32 {
     if v <= 0.0 {
         return 0.0;
     }
-    if v < 0.02 {
+    if v < EOTF_POLY_FLOOR {
         return pq_to_linear_exact(v);
     }
     let x = v + v * v;
@@ -31,14 +31,14 @@ pub fn pq_to_linear(v: f32) -> f32 {
 
 /// PQ inverse EOTF: linear → signal. Rational polynomial on x^(1/4), max error ~3e-6.
 ///
-/// Two-range approximation. Very small values (v < 1e-4) use exact powf.
+/// Two-range approximation. Very small values (v < 1e-7) use exact powf.
 /// Coefficients from libjxl.
 #[inline(always)]
 pub fn linear_to_pq(v: f32) -> f32 {
     if v <= 0.0 {
         return 0.0;
     }
-    if v < 1e-4 {
+    if v < OETF_POLY_FLOOR {
         return pq_from_linear_exact(v);
     }
     let a = v.sqrt().sqrt();
@@ -47,6 +47,30 @@ pub fn linear_to_pq(v: f32) -> f32 {
     } else {
         fast_math::eval_rational_poly(a, PQ_INV_P_LARGE, PQ_INV_Q_LARGE)
     }
+}
+
+/// Below this signal the EOTF polynomial fails: it has a pole near 0.007, so the exact formula
+/// runs.
+const EOTF_POLY_FLOOR: f32 = 0.02;
+/// Below this linear value (0.001 cd/m²) the inverse-EOTF polynomial loses relative accuracy:
+/// worst 7.4e-6 relative in 1e-7..1e-6, but 9.2e-5 in 1e-8..1e-7.
+const OETF_POLY_FLOOR: f32 = 1e-7;
+
+/// Replaces the lanes in `(0, floor)` with the exact formula. Rare, and shared by every tier so that those lanes match the scalar functions at each one.
+#[cold]
+#[inline(never)]
+fn exact_low_lanes<const N: usize>(
+    input: [f32; N],
+    mut output: [f32; N],
+    floor: f32,
+    exact: fn(f32) -> f32,
+) -> [f32; N] {
+    for (x, y) in input.iter().zip(&mut output) {
+        if *x > 0.0 && *x < floor {
+            *y = exact(*x);
+        }
+    }
+    output
 }
 
 #[inline(always)]
@@ -150,7 +174,22 @@ pub(crate) fn pq_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let result = f32x4::blend(mask, small, large);
 
     let pos_mask = v.simd_gt(zero);
-    result & pos_mask
+    let result = result & pos_mask;
+    if (v.simd_lt(f32x4::splat_t(t, EOTF_POLY_FLOOR)) & pos_mask)
+        .bitcast_to_i32()
+        .any_true()
+    {
+        return f32x4::from_array_t(
+            t,
+            exact_low_lanes(
+                v.to_array(),
+                result.to_array(),
+                EOTF_POLY_FLOOR,
+                pq_to_linear_exact,
+            ),
+        );
+    }
+    result
 }
 
 #[allow(dead_code)]
@@ -168,7 +207,22 @@ pub(crate) fn linear_to_pq_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let result = f32x4::blend(mask, small, large);
 
     let pos_mask = v.simd_gt(zero);
-    result & pos_mask
+    let result = result & pos_mask;
+    if (v.simd_lt(f32x4::splat_t(t, OETF_POLY_FLOOR)) & pos_mask)
+        .bitcast_to_i32()
+        .any_true()
+    {
+        return f32x4::from_array_t(
+            t,
+            exact_low_lanes(
+                v.to_array(),
+                result.to_array(),
+                OETF_POLY_FLOOR,
+                pq_from_linear_exact,
+            ),
+        );
+    }
+    result
 }
 
 // =============================================================================
@@ -192,7 +246,22 @@ pub(crate) fn pq_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let result = f32x8::blend(mask, small, large);
 
     let pos_mask = v.simd_gt(zero);
-    result & pos_mask
+    let result = result & pos_mask;
+    if (v.simd_lt(f32x8::splat_t(t, EOTF_POLY_FLOOR)) & pos_mask)
+        .bitcast_to_i32()
+        .any_true()
+    {
+        return f32x8::from_array_t(
+            t,
+            exact_low_lanes(
+                v.to_array(),
+                result.to_array(),
+                EOTF_POLY_FLOOR,
+                pq_to_linear_exact,
+            ),
+        );
+    }
+    result
 }
 
 #[inline(always)]
@@ -209,7 +278,22 @@ pub(crate) fn linear_to_pq_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let result = f32x8::blend(mask, small, large);
 
     let pos_mask = v.simd_gt(zero);
-    result & pos_mask
+    let result = result & pos_mask;
+    if (v.simd_lt(f32x8::splat_t(t, OETF_POLY_FLOOR)) & pos_mask)
+        .bitcast_to_i32()
+        .any_true()
+    {
+        return f32x8::from_array_t(
+            t,
+            exact_low_lanes(
+                v.to_array(),
+                result.to_array(),
+                OETF_POLY_FLOOR,
+                pq_from_linear_exact,
+            ),
+        );
+    }
+    result
 }
 
 // =============================================================================
@@ -233,7 +317,22 @@ pub(crate) fn pq_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T
     let result = f32x16::blend(mask, small, large);
 
     let pos_mask = v.simd_gt(zero);
-    result & pos_mask
+    let result = result & pos_mask;
+    if (v.simd_lt(f32x16::splat_t(t, EOTF_POLY_FLOOR)) & pos_mask)
+        .bitcast_to_i32()
+        .any_true()
+    {
+        return f32x16::from_array_t(
+            t,
+            exact_low_lanes(
+                v.to_array(),
+                result.to_array(),
+                EOTF_POLY_FLOOR,
+                pq_to_linear_exact,
+            ),
+        );
+    }
+    result
 }
 
 #[inline(always)]
@@ -250,5 +349,20 @@ pub(crate) fn linear_to_pq_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T
     let result = f32x16::blend(mask, small, large);
 
     let pos_mask = v.simd_gt(zero);
-    result & pos_mask
+    let result = result & pos_mask;
+    if (v.simd_lt(f32x16::splat_t(t, OETF_POLY_FLOOR)) & pos_mask)
+        .bitcast_to_i32()
+        .any_true()
+    {
+        return f32x16::from_array_t(
+            t,
+            exact_low_lanes(
+                v.to_array(),
+                result.to_array(),
+                OETF_POLY_FLOOR,
+                pq_from_linear_exact,
+            ),
+        );
+    }
+    result
 }
