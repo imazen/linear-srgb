@@ -104,3 +104,24 @@ fn slices_do_not_step_down_at_branch_seams() {
         assert!(biggest_drop <= 2, "{name}: {biggest_drop} ULP");
     }
 }
+
+/// The 16-bit encoder too, including rows too short for a vector block.
+#[test]
+fn u16_encode_gives_the_same_codes_at_every_tier_and_length() {
+    let input = samples();
+    let mut first: Vec<u16> = Vec::new();
+    let _ = for_each_token_permutation(CompileTimePolicy::Warn, |perm| {
+        let mut whole = vec![0u16; input.len()];
+        d::linear_to_srgb_u16_slice(&input, &mut whole);
+        for (x, want) in input.iter().zip(&whole).step_by(97) {
+            let mut one = [0u16];
+            d::linear_to_srgb_u16_slice(&[*x], &mut one);
+            assert_eq!(one[0], *want, "{x} alone at {}", perm.label);
+        }
+        if first.is_empty() {
+            first = whole;
+        } else {
+            assert!(first == whole, "differs at {}", perm.label);
+        }
+    });
+}

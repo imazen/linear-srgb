@@ -846,7 +846,7 @@ pub fn srgb_u16_to_linear_slice(input: &[u16], output: &mut [f32]) {
 // on NEON / WASM (inlined, no runtime overhead). Cross-tier output may
 // differ by ≤1 u16 LSB — see `linear_to_srgb_u16_all_tiers_within_one_lsb`.
 
-#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[attune(_*_t, -_scalar_t, +v4x(cfg(avx512)), define(f32x16))]
 fn linear_to_srgb_u16_slice_tier(token: Token, input: &[f32], output: &mut [u16]) {
     use crate::rational_poly::{L2S_P, L2S_Q, LINEAR_THRESHOLD};
 
@@ -880,7 +880,13 @@ fn linear_to_srgb_u16_slice_tier(token: Token, input: &[f32], output: &mut [u16]
         }
     }
     for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
-        *out = crate::scalar::linear_to_srgb_u16(*inp);
+        *out = crate::lanes::linear_to_srgb_u16(*inp);
+    }
+}
+
+fn linear_to_srgb_u16_slice_tier_scalar_t(_token: ScalarToken, input: &[f32], output: &mut [u16]) {
+    for (inp, out) in input.iter().zip(output.iter_mut()) {
+        *out = crate::lanes::linear_to_srgb_u16(*inp);
     }
 }
 
@@ -896,9 +902,9 @@ fn linear_to_srgb_u16_slice_tier(token: Token, input: &[f32], output: &mut [u16]
 #[inline]
 pub fn linear_to_srgb_u16_slice(input: &[f32], output: &mut [u16]) {
     assert_eq!(input.len(), output.len());
-    incant!(
+    attuned!(
         linear_to_srgb_u16_slice_tier(input, output),
-        [v4, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 

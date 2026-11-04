@@ -132,6 +132,10 @@ pub(crate) fn linear_to_srgb(v: f32) -> f32 {
     if power < 1.0 { power } else { 1.0 }
 }
 
+pub(crate) fn linear_to_srgb_u16(v: f32) -> u16 {
+    linear_to_srgb(v).mul_add(65535.0, 0.5) as i32 as u16
+}
+
 pub(crate) fn srgb_to_linear_extended(v: f32) -> f32 {
     let magnitude = v.abs();
     let result = if magnitude < SRGB_THRESHOLD {
