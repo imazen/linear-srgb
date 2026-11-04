@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Admit archmage/magetypes 0.9.31-beta.2 for crates that use `#[attune]`; 276 tests pass with `--all-features` on that version. Replace the cap with the stable floor before publishing.
 - Admit archmage/magetypes 0.9.31-beta.1 with token-explicit constructor aliases and private generic 16-lane dispatch helpers (`88fa6a42`). Strict default library lint and 109 default / 165 all-feature library tests pass. Assembly snapshot drift remains tracked in issue 28; its expectations are unchanged.
 
 - `clippy::chunks_exact_to_as_chunks` at 27 sites in `src/simd.rs` — every one is
