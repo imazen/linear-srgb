@@ -2,7 +2,7 @@
 use archmage::testing::{CompileTimePolicy, for_each_token_permutation};
 use linear_srgb::default as d;
 
-const GAMMA: f32 = 2.19921875;
+const GAMMA: f32 = 563.0 / 256.0;
 
 fn samples() -> Vec<f32> {
     let mut v: Vec<f32> = (0..=300_000).map(|i| i as f32 / 3e5).collect();
@@ -81,7 +81,8 @@ fn every_slice_gives_the_same_bits_at_every_tier() {
 /// The formula branches meet without a step down.
 #[test]
 fn slices_do_not_step_down_at_branch_seams() {
-    let seams: [(&str, fn(&mut [f32]), f32); 3] = [
+    type Seam = (&'static str, fn(&mut [f32]), f32);
+    let seams: [Seam; 3] = [
         ("linear_to_hlg", |v| d::linear_to_hlg_slice(v), 1.0 / 12.0),
         ("bt709_to_linear", |v| d::bt709_to_linear_slice(v), 0.081242),
         ("hlg_to_linear", |v| d::hlg_to_linear_slice(v), 0.5),

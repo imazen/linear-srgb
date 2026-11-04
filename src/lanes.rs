@@ -208,7 +208,7 @@ pub(crate) fn pq_to_linear(v: f32) -> f32 {
         C1, C2, C3, EOTF_POLY_FLOOR, M1, M2, PQ_EOTF_P_LARGE, PQ_EOTF_P_SMALL, PQ_EOTF_Q_LARGE,
         PQ_EOTF_Q_SMALL,
     };
-    if !(v > 0.0) {
+    if v.is_nan() || v <= 0.0 {
         return 0.0;
     }
     if v < EOTF_POLY_FLOOR {
@@ -230,7 +230,7 @@ pub(crate) fn linear_to_pq(v: f32) -> f32 {
         C1, C2, C3, M1, M2, OETF_POLY_FLOOR, PQ_INV_P_LARGE, PQ_INV_P_SMALL, PQ_INV_Q_LARGE,
         PQ_INV_Q_SMALL,
     };
-    if !(v > 0.0) {
+    if v.is_nan() || v <= 0.0 {
         return 0.0;
     }
     if v < OETF_POLY_FLOOR {
