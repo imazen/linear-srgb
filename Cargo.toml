@@ -66,6 +66,9 @@ default = ["std", "avx512"]
 std = ["num-traits/std", "archmage/std", "magetypes/std"]
 # AVX-512 support (V4/V4x tiers for incant! dispatch and rites)
 avx512 = ["archmage/avx512", "magetypes/avx512"]
+# Same bits as native tiers on WASM builds without relaxed-simd or on engines that round relaxed
+# madd twice, using software FMA: up to about 18x slower there. No effect on native targets.
+precise-portable = []
 # Include alternative/experimental implementations for benchmarking
 alt = []
 # No-op since 0.6.2 — all paths are now safe Rust. Kept for backward compatibility.

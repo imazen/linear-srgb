@@ -19,6 +19,7 @@
 //! portable code that mirrors the NEON/WASM API shape. Use `x8` for maximum
 //! throughput on contiguous f32 slices.
 
+use crate::tf::fast_math::Mla;
 use archmage::rite;
 
 #[cfg(target_arch = "x86_64")]
@@ -60,16 +61,16 @@ fn srgb_to_linear_core<T: F32x4Backend>(token: T, srgb: [f32; 4]) -> [f32; 4] {
     let linear_result = clamped * gen_f32x4::<T>::splat_t(token, LINEAR_SCALE);
     // Rational polynomial P(x)/Q(x) via Horner's method
     let x = clamped;
-    let yp = gen_f32x4::<T>::splat_t(token, S2L_P[4])
-        .mul_add_relaxed(x, gen_f32x4::<T>::splat_t(token, S2L_P[3]));
-    let yp = yp.mul_add_relaxed(x, gen_f32x4::<T>::splat_t(token, S2L_P[2]));
-    let yp = yp.mul_add_relaxed(x, gen_f32x4::<T>::splat_t(token, S2L_P[1]));
-    let yp = yp.mul_add_relaxed(x, gen_f32x4::<T>::splat_t(token, S2L_P[0]));
-    let yq = gen_f32x4::<T>::splat_t(token, S2L_Q[4])
-        .mul_add_relaxed(x, gen_f32x4::<T>::splat_t(token, S2L_Q[3]));
-    let yq = yq.mul_add_relaxed(x, gen_f32x4::<T>::splat_t(token, S2L_Q[2]));
-    let yq = yq.mul_add_relaxed(x, gen_f32x4::<T>::splat_t(token, S2L_Q[1]));
-    let yq = yq.mul_add_relaxed(x, gen_f32x4::<T>::splat_t(token, S2L_Q[0]));
+    let yp =
+        gen_f32x4::<T>::splat_t(token, S2L_P[4]).mla(x, gen_f32x4::<T>::splat_t(token, S2L_P[3]));
+    let yp = yp.mla(x, gen_f32x4::<T>::splat_t(token, S2L_P[2]));
+    let yp = yp.mla(x, gen_f32x4::<T>::splat_t(token, S2L_P[1]));
+    let yp = yp.mla(x, gen_f32x4::<T>::splat_t(token, S2L_P[0]));
+    let yq =
+        gen_f32x4::<T>::splat_t(token, S2L_Q[4]).mla(x, gen_f32x4::<T>::splat_t(token, S2L_Q[3]));
+    let yq = yq.mla(x, gen_f32x4::<T>::splat_t(token, S2L_Q[2]));
+    let yq = yq.mla(x, gen_f32x4::<T>::splat_t(token, S2L_Q[1]));
+    let yq = yq.mla(x, gen_f32x4::<T>::splat_t(token, S2L_Q[0]));
     let power_result = (yp / yq).min(one);
     let mask = clamped.simd_lt(gen_f32x4::<T>::splat_t(token, SRGB_LINEAR_THRESHOLD));
     let result = gen_f32x4::<T>::blend(mask, linear_result, power_result);
@@ -89,16 +90,16 @@ fn linear_to_srgb_core<T: F32x4Backend>(token: T, linear: [f32; 4]) -> [f32; 4] 
     let linear_result = clamped * gen_f32x4::<T>::splat_t(token, TWELVE_92);
     // sqrt transform + rational polynomial P(√x)/Q(√x) via Horner's method
     let x = clamped.sqrt();
-    let yp = gen_f32x4::<T>::splat_t(token, L2S_P[4])
-        .mul_add_relaxed(x, gen_f32x4::<T>::splat_t(token, L2S_P[3]));
-    let yp = yp.mul_add_relaxed(x, gen_f32x4::<T>::splat_t(token, L2S_P[2]));
-    let yp = yp.mul_add_relaxed(x, gen_f32x4::<T>::splat_t(token, L2S_P[1]));
-    let yp = yp.mul_add_relaxed(x, gen_f32x4::<T>::splat_t(token, L2S_P[0]));
-    let yq = gen_f32x4::<T>::splat_t(token, L2S_Q[4])
-        .mul_add_relaxed(x, gen_f32x4::<T>::splat_t(token, L2S_Q[3]));
-    let yq = yq.mul_add_relaxed(x, gen_f32x4::<T>::splat_t(token, L2S_Q[2]));
-    let yq = yq.mul_add_relaxed(x, gen_f32x4::<T>::splat_t(token, L2S_Q[1]));
-    let yq = yq.mul_add_relaxed(x, gen_f32x4::<T>::splat_t(token, L2S_Q[0]));
+    let yp =
+        gen_f32x4::<T>::splat_t(token, L2S_P[4]).mla(x, gen_f32x4::<T>::splat_t(token, L2S_P[3]));
+    let yp = yp.mla(x, gen_f32x4::<T>::splat_t(token, L2S_P[2]));
+    let yp = yp.mla(x, gen_f32x4::<T>::splat_t(token, L2S_P[1]));
+    let yp = yp.mla(x, gen_f32x4::<T>::splat_t(token, L2S_P[0]));
+    let yq =
+        gen_f32x4::<T>::splat_t(token, L2S_Q[4]).mla(x, gen_f32x4::<T>::splat_t(token, L2S_Q[3]));
+    let yq = yq.mla(x, gen_f32x4::<T>::splat_t(token, L2S_Q[2]));
+    let yq = yq.mla(x, gen_f32x4::<T>::splat_t(token, L2S_Q[1]));
+    let yq = yq.mla(x, gen_f32x4::<T>::splat_t(token, L2S_Q[0]));
     let power_result = (yp / yq).min(one);
     let mask = clamped.simd_lt(gen_f32x4::<T>::splat_t(token, LINEAR_THRESHOLD));
     let result = gen_f32x4::<T>::blend(mask, linear_result, power_result);
@@ -114,7 +115,7 @@ fn gamma_to_linear_core<T: F32x4Convert>(token: T, encoded: [f32; 4], gamma: f32
     let v = gen_f32x4::<T>::from_array_t(token, encoded)
         .max(zero)
         .min(one);
-    v.pow_midp(gamma).to_array()
+    crate::tf::fast_math::pow_x4(token, v, gamma).to_array()
 }
 
 /// Linear → custom-gamma encoded (4 lanes). Clamps input to \[0, 1\].
@@ -125,7 +126,7 @@ fn linear_to_gamma_core<T: F32x4Convert>(token: T, linear: [f32; 4], gamma: f32)
     let v = gen_f32x4::<T>::from_array_t(token, linear)
         .max(zero)
         .min(one);
-    v.pow_midp(1.0 / gamma).to_array()
+    crate::tf::fast_math::pow_x4(token, v, 1.0 / gamma).to_array()
 }
 
 // ============================================================================
@@ -167,18 +168,18 @@ pub fn srgb_to_linear_extended(token: Token, srgb: [f32; 4]) -> [f32; 4] {
     let abs_v = v.abs();
     let linear_result = abs_v * f32x4::splat_t(token, LINEAR_SCALE);
     let x = abs_v;
-    let yp = f32x4::splat_t(token, P[6]).mul_add_relaxed(x, f32x4::splat_t(token, P[5]));
-    let yp = yp.mul_add_relaxed(x, f32x4::splat_t(token, P[4]));
-    let yp = yp.mul_add_relaxed(x, f32x4::splat_t(token, P[3]));
-    let yp = yp.mul_add_relaxed(x, f32x4::splat_t(token, P[2]));
-    let yp = yp.mul_add_relaxed(x, f32x4::splat_t(token, P[1]));
-    let yp = yp.mul_add_relaxed(x, f32x4::splat_t(token, P[0]));
-    let yq = f32x4::splat_t(token, Q[6]).mul_add_relaxed(x, f32x4::splat_t(token, Q[5]));
-    let yq = yq.mul_add_relaxed(x, f32x4::splat_t(token, Q[4]));
-    let yq = yq.mul_add_relaxed(x, f32x4::splat_t(token, Q[3]));
-    let yq = yq.mul_add_relaxed(x, f32x4::splat_t(token, Q[2]));
-    let yq = yq.mul_add_relaxed(x, f32x4::splat_t(token, Q[1]));
-    let yq = yq.mul_add_relaxed(x, f32x4::splat_t(token, Q[0]));
+    let yp = f32x4::splat_t(token, P[6]).mla(x, f32x4::splat_t(token, P[5]));
+    let yp = yp.mla(x, f32x4::splat_t(token, P[4]));
+    let yp = yp.mla(x, f32x4::splat_t(token, P[3]));
+    let yp = yp.mla(x, f32x4::splat_t(token, P[2]));
+    let yp = yp.mla(x, f32x4::splat_t(token, P[1]));
+    let yp = yp.mla(x, f32x4::splat_t(token, P[0]));
+    let yq = f32x4::splat_t(token, Q[6]).mla(x, f32x4::splat_t(token, Q[5]));
+    let yq = yq.mla(x, f32x4::splat_t(token, Q[4]));
+    let yq = yq.mla(x, f32x4::splat_t(token, Q[3]));
+    let yq = yq.mla(x, f32x4::splat_t(token, Q[2]));
+    let yq = yq.mla(x, f32x4::splat_t(token, Q[1]));
+    let yq = yq.mla(x, f32x4::splat_t(token, Q[0]));
     let power_result = yp / yq;
     let thresh_mask = abs_v.simd_lt(f32x4::splat_t(token, SRGB_LINEAR_THRESHOLD));
     let result = f32x4::blend(thresh_mask, linear_result, power_result);
@@ -200,18 +201,18 @@ pub fn linear_to_srgb_extended(token: Token, linear: [f32; 4]) -> [f32; 4] {
     let abs_v = v.abs();
     let linear_result = abs_v * f32x4::splat_t(token, TWELVE_92);
     let x = abs_v.sqrt();
-    let yp = f32x4::splat_t(token, P[6]).mul_add_relaxed(x, f32x4::splat_t(token, P[5]));
-    let yp = yp.mul_add_relaxed(x, f32x4::splat_t(token, P[4]));
-    let yp = yp.mul_add_relaxed(x, f32x4::splat_t(token, P[3]));
-    let yp = yp.mul_add_relaxed(x, f32x4::splat_t(token, P[2]));
-    let yp = yp.mul_add_relaxed(x, f32x4::splat_t(token, P[1]));
-    let yp = yp.mul_add_relaxed(x, f32x4::splat_t(token, P[0]));
-    let yq = f32x4::splat_t(token, Q[6]).mul_add_relaxed(x, f32x4::splat_t(token, Q[5]));
-    let yq = yq.mul_add_relaxed(x, f32x4::splat_t(token, Q[4]));
-    let yq = yq.mul_add_relaxed(x, f32x4::splat_t(token, Q[3]));
-    let yq = yq.mul_add_relaxed(x, f32x4::splat_t(token, Q[2]));
-    let yq = yq.mul_add_relaxed(x, f32x4::splat_t(token, Q[1]));
-    let yq = yq.mul_add_relaxed(x, f32x4::splat_t(token, Q[0]));
+    let yp = f32x4::splat_t(token, P[6]).mla(x, f32x4::splat_t(token, P[5]));
+    let yp = yp.mla(x, f32x4::splat_t(token, P[4]));
+    let yp = yp.mla(x, f32x4::splat_t(token, P[3]));
+    let yp = yp.mla(x, f32x4::splat_t(token, P[2]));
+    let yp = yp.mla(x, f32x4::splat_t(token, P[1]));
+    let yp = yp.mla(x, f32x4::splat_t(token, P[0]));
+    let yq = f32x4::splat_t(token, Q[6]).mla(x, f32x4::splat_t(token, Q[5]));
+    let yq = yq.mla(x, f32x4::splat_t(token, Q[4]));
+    let yq = yq.mla(x, f32x4::splat_t(token, Q[3]));
+    let yq = yq.mla(x, f32x4::splat_t(token, Q[2]));
+    let yq = yq.mla(x, f32x4::splat_t(token, Q[1]));
+    let yq = yq.mla(x, f32x4::splat_t(token, Q[0]));
     let power_result = yp / yq;
     let thresh_mask = abs_v.simd_lt(f32x4::splat_t(token, LINEAR_THRESHOLD));
     let result = f32x4::blend(thresh_mask, linear_result, power_result);

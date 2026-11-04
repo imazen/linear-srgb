@@ -4,6 +4,7 @@
 //! SIMD versions use the same polynomial coefficients inline.
 
 use crate::rational_poly;
+use crate::tf::fast_math::Mla;
 
 use magetypes::simd::backends::F32x4Convert;
 use magetypes::simd::generic::f32x4;
@@ -93,19 +94,19 @@ pub(crate) fn srgb_to_linear_extended_x16<T: F32x16Backend>(t: T, v: f32x16<T>) 
     let linear_result = abs_v * f32x16::splat_t(t, rational_poly::LINEAR_SCALE);
 
     let x = abs_v;
-    let yp = f32x16::splat_t(t, P[6]).mul_add_relaxed(x, f32x16::splat_t(t, P[5]));
-    let yp = yp.mul_add_relaxed(x, f32x16::splat_t(t, P[4]));
-    let yp = yp.mul_add_relaxed(x, f32x16::splat_t(t, P[3]));
-    let yp = yp.mul_add_relaxed(x, f32x16::splat_t(t, P[2]));
-    let yp = yp.mul_add_relaxed(x, f32x16::splat_t(t, P[1]));
-    let yp = yp.mul_add_relaxed(x, f32x16::splat_t(t, P[0]));
+    let yp = f32x16::splat_t(t, P[6]).mla(x, f32x16::splat_t(t, P[5]));
+    let yp = yp.mla(x, f32x16::splat_t(t, P[4]));
+    let yp = yp.mla(x, f32x16::splat_t(t, P[3]));
+    let yp = yp.mla(x, f32x16::splat_t(t, P[2]));
+    let yp = yp.mla(x, f32x16::splat_t(t, P[1]));
+    let yp = yp.mla(x, f32x16::splat_t(t, P[0]));
 
-    let yq = f32x16::splat_t(t, Q[6]).mul_add_relaxed(x, f32x16::splat_t(t, Q[5]));
-    let yq = yq.mul_add_relaxed(x, f32x16::splat_t(t, Q[4]));
-    let yq = yq.mul_add_relaxed(x, f32x16::splat_t(t, Q[3]));
-    let yq = yq.mul_add_relaxed(x, f32x16::splat_t(t, Q[2]));
-    let yq = yq.mul_add_relaxed(x, f32x16::splat_t(t, Q[1]));
-    let yq = yq.mul_add_relaxed(x, f32x16::splat_t(t, Q[0]));
+    let yq = f32x16::splat_t(t, Q[6]).mla(x, f32x16::splat_t(t, Q[5]));
+    let yq = yq.mla(x, f32x16::splat_t(t, Q[4]));
+    let yq = yq.mla(x, f32x16::splat_t(t, Q[3]));
+    let yq = yq.mla(x, f32x16::splat_t(t, Q[2]));
+    let yq = yq.mla(x, f32x16::splat_t(t, Q[1]));
+    let yq = yq.mla(x, f32x16::splat_t(t, Q[0]));
 
     let power_result = yp / yq;
 
@@ -125,19 +126,19 @@ pub(crate) fn linear_to_srgb_extended_x16<T: F32x16Backend>(t: T, v: f32x16<T>) 
     let linear_result = abs_v * f32x16::splat_t(t, rational_poly::TWELVE_92);
 
     let x = abs_v.sqrt();
-    let yp = f32x16::splat_t(t, P[6]).mul_add_relaxed(x, f32x16::splat_t(t, P[5]));
-    let yp = yp.mul_add_relaxed(x, f32x16::splat_t(t, P[4]));
-    let yp = yp.mul_add_relaxed(x, f32x16::splat_t(t, P[3]));
-    let yp = yp.mul_add_relaxed(x, f32x16::splat_t(t, P[2]));
-    let yp = yp.mul_add_relaxed(x, f32x16::splat_t(t, P[1]));
-    let yp = yp.mul_add_relaxed(x, f32x16::splat_t(t, P[0]));
+    let yp = f32x16::splat_t(t, P[6]).mla(x, f32x16::splat_t(t, P[5]));
+    let yp = yp.mla(x, f32x16::splat_t(t, P[4]));
+    let yp = yp.mla(x, f32x16::splat_t(t, P[3]));
+    let yp = yp.mla(x, f32x16::splat_t(t, P[2]));
+    let yp = yp.mla(x, f32x16::splat_t(t, P[1]));
+    let yp = yp.mla(x, f32x16::splat_t(t, P[0]));
 
-    let yq = f32x16::splat_t(t, Q[6]).mul_add_relaxed(x, f32x16::splat_t(t, Q[5]));
-    let yq = yq.mul_add_relaxed(x, f32x16::splat_t(t, Q[4]));
-    let yq = yq.mul_add_relaxed(x, f32x16::splat_t(t, Q[3]));
-    let yq = yq.mul_add_relaxed(x, f32x16::splat_t(t, Q[2]));
-    let yq = yq.mul_add_relaxed(x, f32x16::splat_t(t, Q[1]));
-    let yq = yq.mul_add_relaxed(x, f32x16::splat_t(t, Q[0]));
+    let yq = f32x16::splat_t(t, Q[6]).mla(x, f32x16::splat_t(t, Q[5]));
+    let yq = yq.mla(x, f32x16::splat_t(t, Q[4]));
+    let yq = yq.mla(x, f32x16::splat_t(t, Q[3]));
+    let yq = yq.mla(x, f32x16::splat_t(t, Q[2]));
+    let yq = yq.mla(x, f32x16::splat_t(t, Q[1]));
+    let yq = yq.mla(x, f32x16::splat_t(t, Q[0]));
 
     let power_result = yp / yq;
 

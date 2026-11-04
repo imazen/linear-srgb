@@ -1,9 +1,10 @@
 //! BT.709 transfer function (scalar + generic SIMD).
 
 use super::fast_math;
+use crate::tf::fast_math::Mla;
 
-const BT709_ALPHA: f32 = 0.09929682680944;
-const BT709_BETA: f32 = 0.018053968510807;
+pub(crate) const BT709_ALPHA: f32 = 0.09929682680944;
+pub(crate) const BT709_BETA: f32 = 0.018053968510807;
 
 /// BT.709 EOTF: encoded → linear. Uses fast_powf, max error ~3e-6.
 #[inline(always)]
@@ -11,7 +12,7 @@ pub fn bt709_to_linear(v: f32) -> f32 {
     if v < 4.5 * BT709_BETA {
         v / 4.5
     } else {
-        fast_math::fast_powf((v + BT709_ALPHA) / (1.0 + BT709_ALPHA), 1.0 / 0.45)
+        fast_math::fast_powf((v + BT709_ALPHA) / (1.0 + BT709_ALPHA), 1.0 / 0.45).max(BT709_BETA)
     }
 }
 
@@ -49,6 +50,8 @@ pub(crate) fn bt709_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T>
     let normalized = (v + alpha) / one_plus_alpha;
     let power = fast_math::fast_powf_x4(t, normalized, 1.0 / 0.45);
 
+    // The curves meet only to within rounding: keep the power branch above the linear one.
+    let power = power.max(f32x4::splat_t(t, (4.5 * BT709_BETA) * (1.0 / 4.5)));
     let mask = v.simd_lt(threshold);
     f32x4::blend(mask, linear, power)
 }
@@ -66,7 +69,7 @@ pub(crate) fn linear_to_bt709_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T>
     // See bt709_to_linear_x4: no MIN_POSITIVE clamp needed; `power` is
     // blended away for v < threshold and fast_powf is branch-free.
     let power = fast_math::fast_powf_x4(t, v, 0.45);
-    let power = one_plus_alpha.mul_add_relaxed(power, -alpha);
+    let power = one_plus_alpha.mla(power, -alpha);
 
     let mask = v.simd_lt(threshold);
     f32x4::blend(mask, linear, power)
@@ -92,6 +95,8 @@ pub(crate) fn bt709_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T>
     let normalized = (v + alpha) / one_plus_alpha;
     let power = fast_math::fast_powf_x8(t, normalized, 1.0 / 0.45);
 
+    // The curves meet only to within rounding: keep the power branch above the linear one.
+    let power = power.max(f32x8::splat_t(t, (4.5 * BT709_BETA) * (1.0 / 4.5)));
     let mask = v.simd_lt(threshold);
     f32x8::blend(mask, linear, power)
 }
@@ -107,7 +112,7 @@ pub(crate) fn linear_to_bt709_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T>
 
     // See linear_to_bt709_x4: no MIN_POSITIVE clamp needed.
     let power = fast_math::fast_powf_x8(t, v, 0.45);
-    let power = one_plus_alpha.mul_add_relaxed(power, -alpha);
+    let power = one_plus_alpha.mla(power, -alpha);
 
     let mask = v.simd_lt(threshold);
     f32x8::blend(mask, linear, power)
@@ -133,6 +138,8 @@ pub(crate) fn bt709_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x1
     let normalized = (v + alpha) / one_plus_alpha;
     let power = fast_math::fast_powf_x16(t, normalized, 1.0 / 0.45);
 
+    // The curves meet only to within rounding: keep the power branch above the linear one.
+    let power = power.max(f32x16::splat_t(t, (4.5 * BT709_BETA) * (1.0 / 4.5)));
     let mask = v.simd_lt(threshold);
     f32x16::blend(mask, linear, power)
 }
@@ -148,7 +155,7 @@ pub(crate) fn linear_to_bt709_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x1
 
     // See linear_to_bt709_x4: no MIN_POSITIVE clamp needed.
     let power = fast_math::fast_powf_x16(t, v, 0.45);
-    let power = one_plus_alpha.mul_add_relaxed(power, -alpha);
+    let power = one_plus_alpha.mla(power, -alpha);
 
     let mask = v.simd_lt(threshold);
     f32x16::blend(mask, linear, power)

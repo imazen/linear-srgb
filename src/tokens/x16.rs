@@ -6,6 +6,7 @@
 //! Call these from inside your own `#[arcane]` function with a matching token.
 //! They inline fully — no dispatch, no function-pointer indirection.
 
+use crate::tf::fast_math::Mla;
 use archmage::rite;
 
 pub use archmage::X64V4Token;
@@ -38,17 +39,15 @@ pub fn srgb_to_linear_v4(token: X64V4Token, srgb: [f32; 16]) -> [f32; 16] {
 
     // Rational polynomial P(x)/Q(x) via Horner's method
     let x = srgb;
-    let yp =
-        mt_f32x16::splat_t(token, S2L_P[4]).mul_add_relaxed(x, mt_f32x16::splat_t(token, S2L_P[3]));
-    let yp = yp.mul_add_relaxed(x, mt_f32x16::splat_t(token, S2L_P[2]));
-    let yp = yp.mul_add_relaxed(x, mt_f32x16::splat_t(token, S2L_P[1]));
-    let yp = yp.mul_add_relaxed(x, mt_f32x16::splat_t(token, S2L_P[0]));
+    let yp = mt_f32x16::splat_t(token, S2L_P[4]).mla(x, mt_f32x16::splat_t(token, S2L_P[3]));
+    let yp = yp.mla(x, mt_f32x16::splat_t(token, S2L_P[2]));
+    let yp = yp.mla(x, mt_f32x16::splat_t(token, S2L_P[1]));
+    let yp = yp.mla(x, mt_f32x16::splat_t(token, S2L_P[0]));
 
-    let yq =
-        mt_f32x16::splat_t(token, S2L_Q[4]).mul_add_relaxed(x, mt_f32x16::splat_t(token, S2L_Q[3]));
-    let yq = yq.mul_add_relaxed(x, mt_f32x16::splat_t(token, S2L_Q[2]));
-    let yq = yq.mul_add_relaxed(x, mt_f32x16::splat_t(token, S2L_Q[1]));
-    let yq = yq.mul_add_relaxed(x, mt_f32x16::splat_t(token, S2L_Q[0]));
+    let yq = mt_f32x16::splat_t(token, S2L_Q[4]).mla(x, mt_f32x16::splat_t(token, S2L_Q[3]));
+    let yq = yq.mla(x, mt_f32x16::splat_t(token, S2L_Q[2]));
+    let yq = yq.mla(x, mt_f32x16::splat_t(token, S2L_Q[1]));
+    let yq = yq.mla(x, mt_f32x16::splat_t(token, S2L_Q[0]));
 
     let power_result = (yp / yq).min(one);
 
@@ -72,17 +71,15 @@ pub fn linear_to_srgb_v4(token: X64V4Token, linear: [f32; 16]) -> [f32; 16] {
 
     // sqrt transform + rational polynomial P(√x)/Q(√x) via Horner's method
     let x = linear.sqrt();
-    let yp =
-        mt_f32x16::splat_t(token, L2S_P[4]).mul_add_relaxed(x, mt_f32x16::splat_t(token, L2S_P[3]));
-    let yp = yp.mul_add_relaxed(x, mt_f32x16::splat_t(token, L2S_P[2]));
-    let yp = yp.mul_add_relaxed(x, mt_f32x16::splat_t(token, L2S_P[1]));
-    let yp = yp.mul_add_relaxed(x, mt_f32x16::splat_t(token, L2S_P[0]));
+    let yp = mt_f32x16::splat_t(token, L2S_P[4]).mla(x, mt_f32x16::splat_t(token, L2S_P[3]));
+    let yp = yp.mla(x, mt_f32x16::splat_t(token, L2S_P[2]));
+    let yp = yp.mla(x, mt_f32x16::splat_t(token, L2S_P[1]));
+    let yp = yp.mla(x, mt_f32x16::splat_t(token, L2S_P[0]));
 
-    let yq =
-        mt_f32x16::splat_t(token, L2S_Q[4]).mul_add_relaxed(x, mt_f32x16::splat_t(token, L2S_Q[3]));
-    let yq = yq.mul_add_relaxed(x, mt_f32x16::splat_t(token, L2S_Q[2]));
-    let yq = yq.mul_add_relaxed(x, mt_f32x16::splat_t(token, L2S_Q[1]));
-    let yq = yq.mul_add_relaxed(x, mt_f32x16::splat_t(token, L2S_Q[0]));
+    let yq = mt_f32x16::splat_t(token, L2S_Q[4]).mla(x, mt_f32x16::splat_t(token, L2S_Q[3]));
+    let yq = yq.mla(x, mt_f32x16::splat_t(token, L2S_Q[2]));
+    let yq = yq.mla(x, mt_f32x16::splat_t(token, L2S_Q[1]));
+    let yq = yq.mla(x, mt_f32x16::splat_t(token, L2S_Q[0]));
 
     let power_result = (yp / yq).min(one);
 
@@ -350,7 +347,7 @@ pub fn pq_to_linear_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
     let v = mt_f32x16::from_array_t(token, v);
     let zero = mt_f32x16::zero_t(token);
     let a = v.max(zero);
-    let x = a.mul_add_relaxed(a, a); // x = a + a*a
+    let x = a.mla(a, a); // x = a + a*a
 
     let threshold = mt_f32x16::splat_t(token, 0.25);
     let large = eval_rational_poly_x16(token, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE);
@@ -524,16 +521,16 @@ fn eval_rational_poly_x16(
     q: [f32; 5],
 ) -> magetypes::simd::v4::f32x16 {
     let mut yp = mt_f32x16::splat_t(t, p[4]);
-    yp = yp.mul_add_relaxed(x, mt_f32x16::splat_t(t, p[3]));
-    yp = yp.mul_add_relaxed(x, mt_f32x16::splat_t(t, p[2]));
-    yp = yp.mul_add_relaxed(x, mt_f32x16::splat_t(t, p[1]));
-    yp = yp.mul_add_relaxed(x, mt_f32x16::splat_t(t, p[0]));
+    yp = yp.mla(x, mt_f32x16::splat_t(t, p[3]));
+    yp = yp.mla(x, mt_f32x16::splat_t(t, p[2]));
+    yp = yp.mla(x, mt_f32x16::splat_t(t, p[1]));
+    yp = yp.mla(x, mt_f32x16::splat_t(t, p[0]));
 
     let mut yq = mt_f32x16::splat_t(t, q[4]);
-    yq = yq.mul_add_relaxed(x, mt_f32x16::splat_t(t, q[3]));
-    yq = yq.mul_add_relaxed(x, mt_f32x16::splat_t(t, q[2]));
-    yq = yq.mul_add_relaxed(x, mt_f32x16::splat_t(t, q[1]));
-    yq = yq.mul_add_relaxed(x, mt_f32x16::splat_t(t, q[0]));
+    yq = yq.mla(x, mt_f32x16::splat_t(t, q[3]));
+    yq = yq.mla(x, mt_f32x16::splat_t(t, q[2]));
+    yq = yq.mla(x, mt_f32x16::splat_t(t, q[1]));
+    yq = yq.mla(x, mt_f32x16::splat_t(t, q[0]));
 
     yp / yq
 }

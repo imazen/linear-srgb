@@ -1,6 +1,7 @@
 //! HLG (ARIB STD-B67) transfer function (scalar + generic SIMD).
 
 use super::fast_math;
+use crate::tf::fast_math::Mla;
 #[allow(unused_imports)]
 use num_traits::Float; // provides sqrt via libm in no_std
 
@@ -9,10 +10,10 @@ use num_traits::Float; // provides sqrt via libm in no_std
 // =============================================================================
 
 const HLG_A: f32 = 0.17883277;
-const HLG_B: f32 = 0.28466892; // 1 - 4 * A
-const HLG_C: f32 = 0.55991073; // 0.5 - A * ln(4 * A)
-const HLG_A_INV_LOG2E: f32 = HLG_A * core::f32::consts::LN_2; // A * ln(2) for log2 conversion
-const HLG_INV_A_LOG2E: f32 = core::f32::consts::LOG2_E / HLG_A; // log2(e) / A for exp2 conversion
+pub(crate) const HLG_B: f32 = 0.28466892; // 1 - 4 * A
+pub(crate) const HLG_C: f32 = 0.55991073; // 0.5 - A * ln(4 * A)
+pub(crate) const HLG_A_INV_LOG2E: f32 = HLG_A * core::f32::consts::LN_2; // A * ln(2) for log2 conversion
+pub(crate) const HLG_INV_A_LOG2E: f32 = core::f32::consts::LOG2_E / HLG_A; // log2(e) / A for exp2 conversion
 
 /// HLG inverse OETF: signal → scene linear. Uses fast_pow2f for exp().
 #[inline(always)]
@@ -34,7 +35,7 @@ pub fn linear_to_hlg(v: f32) -> f32 {
     } else if v <= 1.0 / 12.0 {
         (3.0 * v).sqrt()
     } else {
-        HLG_A_INV_LOG2E * fast_math::fast_log2f(12.0 * v - HLG_B) + HLG_C
+        (HLG_A_INV_LOG2E * fast_math::fast_log2f(12.0 * v - HLG_B) + HLG_C).max(0.5)
     }
 }
 
@@ -90,7 +91,7 @@ pub(crate) fn linear_to_hlg_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
 
     let arg = twelve * a - hlg_b;
     let log2_val = fast_math::fast_log2f_x4(t, arg);
-    let high = hlg_a_ln2.mul_add_relaxed(log2_val, hlg_c);
+    let high = hlg_a_ln2.mla(log2_val, hlg_c).max(f32x4::splat_t(t, 0.5));
 
     let mask = a.simd_le(threshold);
     f32x4::blend(mask, low, high)
@@ -141,7 +142,7 @@ pub(crate) fn linear_to_hlg_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
 
     let arg = twelve * a - hlg_b;
     let log2_val = fast_math::fast_log2f_x8(t, arg);
-    let high = hlg_a_ln2.mul_add_relaxed(log2_val, hlg_c);
+    let high = hlg_a_ln2.mla(log2_val, hlg_c).max(f32x8::splat_t(t, 0.5));
 
     let mask = a.simd_le(threshold);
     f32x8::blend(mask, low, high)
@@ -191,7 +192,7 @@ pub(crate) fn linear_to_hlg_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<
 
     let arg = twelve * a - hlg_b;
     let log2_val = fast_math::fast_log2f_x16(t, arg);
-    let high = hlg_a_ln2.mul_add_relaxed(log2_val, hlg_c);
+    let high = hlg_a_ln2.mla(log2_val, hlg_c).max(f32x16::splat_t(t, 0.5));
 
     let mask = a.simd_le(threshold);
     f32x16::blend(mask, low, high)

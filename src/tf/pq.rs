@@ -1,6 +1,7 @@
 //! PQ (SMPTE ST 2084) transfer function (scalar + generic SIMD).
 
 use super::fast_math;
+use crate::tf::fast_math::Mla;
 #[allow(unused_imports)]
 use num_traits::Float; // provides powf/sqrt via libm in no_std
 
@@ -49,18 +50,18 @@ pub fn linear_to_pq(v: f32) -> f32 {
     }
 }
 
-const M1: f32 = 0.1593017578125;
-const M2: f32 = 78.84375;
-const C1: f32 = 0.8359375;
-const C2: f32 = 18.8515625;
-const C3: f32 = 18.6875;
+pub(crate) const M1: f32 = 0.1593017578125;
+pub(crate) const M2: f32 = 78.84375;
+pub(crate) const C1: f32 = 0.8359375;
+pub(crate) const C2: f32 = 18.8515625;
+pub(crate) const C3: f32 = 18.6875;
 
 /// Below this signal the EOTF polynomial fails: it has a pole near 0.007, so the exact formula
 /// runs.
-const EOTF_POLY_FLOOR: f32 = 0.02;
+pub(crate) const EOTF_POLY_FLOOR: f32 = 0.02;
 /// Below this linear value (0.001 cd/m²) the inverse-EOTF polynomial loses relative accuracy:
 /// worst 7.4e-6 relative in 1e-7..1e-6, but 9.2e-5 in 1e-8..1e-7.
-const OETF_POLY_FLOOR: f32 = 1e-7;
+pub(crate) const OETF_POLY_FLOOR: f32 = 1e-7;
 
 #[inline(always)]
 fn pq_to_linear_exact(v: f32) -> f32 {
@@ -143,7 +144,7 @@ use magetypes::simd::generic::f32x4;
 pub(crate) fn pq_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let zero = f32x4::zero_t(t);
     let a = v.max(zero);
-    let x = a.mul_add_relaxed(a, a);
+    let x = a.mla(a, a);
 
     let threshold = f32x4::splat_t(t, 0.25);
     let large = fast_math::eval_rational_poly_x4(t, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE);
@@ -156,10 +157,10 @@ pub(crate) fn pq_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let result = result & pos_mask;
     let low = v.simd_lt(f32x4::splat_t(t, EOTF_POLY_FLOOR)) & pos_mask;
     if low.bitcast_to_i32().any_true() {
-        let vp = a.pow_midp_precise(1.0 / M2);
+        let vp = fast_math::pow_x4(t, a, 1.0 / M2);
         let num = (vp - f32x4::splat_t(t, C1)).max(zero);
         let den = f32x4::splat_t(t, C2) - f32x4::splat_t(t, C3) * vp;
-        return f32x4::blend(low, (num / den).pow_midp_precise(1.0 / M1), result);
+        return f32x4::blend(low, fast_math::pow_x4(t, num / den, 1.0 / M1), result);
     }
     result
 }
@@ -182,10 +183,10 @@ pub(crate) fn linear_to_pq_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let result = result & pos_mask;
     let low = v.simd_lt(f32x4::splat_t(t, OETF_POLY_FLOOR)) & pos_mask;
     if low.bitcast_to_i32().any_true() {
-        let vp = a.pow_midp_precise(M1);
+        let vp = fast_math::pow_x4(t, a, M1);
         let num = f32x4::splat_t(t, C1) + f32x4::splat_t(t, C2) * vp;
         let den = f32x4::splat_t(t, 1.0) + f32x4::splat_t(t, C3) * vp;
-        return f32x4::blend(low, (num / den).pow_midp_precise(M2), result);
+        return f32x4::blend(low, fast_math::pow_x4(t, num / den, M2), result);
     }
     result
 }
@@ -201,7 +202,7 @@ use magetypes::simd::generic::f32x8;
 pub(crate) fn pq_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let zero = f32x8::zero_t(t);
     let a = v.max(zero);
-    let x = a.mul_add_relaxed(a, a);
+    let x = a.mla(a, a);
 
     let threshold = f32x8::splat_t(t, 0.25);
     let large = fast_math::eval_rational_poly_x8(t, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE);
@@ -214,10 +215,10 @@ pub(crate) fn pq_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let result = result & pos_mask;
     let low = v.simd_lt(f32x8::splat_t(t, EOTF_POLY_FLOOR)) & pos_mask;
     if low.bitcast_to_i32().any_true() {
-        let vp = a.pow_midp_precise(1.0 / M2);
+        let vp = fast_math::pow_x8(t, a, 1.0 / M2);
         let num = (vp - f32x8::splat_t(t, C1)).max(zero);
         let den = f32x8::splat_t(t, C2) - f32x8::splat_t(t, C3) * vp;
-        return f32x8::blend(low, (num / den).pow_midp_precise(1.0 / M1), result);
+        return f32x8::blend(low, fast_math::pow_x8(t, num / den, 1.0 / M1), result);
     }
     result
 }
@@ -239,10 +240,10 @@ pub(crate) fn linear_to_pq_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let result = result & pos_mask;
     let low = v.simd_lt(f32x8::splat_t(t, OETF_POLY_FLOOR)) & pos_mask;
     if low.bitcast_to_i32().any_true() {
-        let vp = a.pow_midp_precise(M1);
+        let vp = fast_math::pow_x8(t, a, M1);
         let num = f32x8::splat_t(t, C1) + f32x8::splat_t(t, C2) * vp;
         let den = f32x8::splat_t(t, 1.0) + f32x8::splat_t(t, C3) * vp;
-        return f32x8::blend(low, (num / den).pow_midp_precise(M2), result);
+        return f32x8::blend(low, fast_math::pow_x8(t, num / den, M2), result);
     }
     result
 }
@@ -258,7 +259,7 @@ use magetypes::simd::generic::f32x16;
 pub(crate) fn pq_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
     let zero = f32x16::zero_t(t);
     let a = v.max(zero);
-    let x = a.mul_add_relaxed(a, a);
+    let x = a.mla(a, a);
 
     let threshold = f32x16::splat_t(t, 0.25);
     let large = fast_math::eval_rational_poly_x16(t, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE);
@@ -271,10 +272,10 @@ pub(crate) fn pq_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T
     let result = result & pos_mask;
     let low = v.simd_lt(f32x16::splat_t(t, EOTF_POLY_FLOOR)) & pos_mask;
     if low.bitcast_to_i32().any_true() {
-        let vp = a.pow_midp_precise(1.0 / M2);
+        let vp = fast_math::pow_x16(t, a, 1.0 / M2);
         let num = (vp - f32x16::splat_t(t, C1)).max(zero);
         let den = f32x16::splat_t(t, C2) - f32x16::splat_t(t, C3) * vp;
-        return f32x16::blend(low, (num / den).pow_midp_precise(1.0 / M1), result);
+        return f32x16::blend(low, fast_math::pow_x16(t, num / den, 1.0 / M1), result);
     }
     result
 }
@@ -296,10 +297,10 @@ pub(crate) fn linear_to_pq_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T
     let result = result & pos_mask;
     let low = v.simd_lt(f32x16::splat_t(t, OETF_POLY_FLOOR)) & pos_mask;
     if low.bitcast_to_i32().any_true() {
-        let vp = a.pow_midp_precise(M1);
+        let vp = fast_math::pow_x16(t, a, M1);
         let num = f32x16::splat_t(t, C1) + f32x16::splat_t(t, C2) * vp;
         let den = f32x16::splat_t(t, 1.0) + f32x16::splat_t(t, C3) * vp;
-        return f32x16::blend(low, (num / den).pow_midp_precise(M2), result);
+        return f32x16::blend(low, fast_math::pow_x16(t, num / den, M2), result);
     }
     result
 }
