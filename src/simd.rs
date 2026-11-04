@@ -402,8 +402,8 @@ pub fn linear_to_srgb_extended_slice(values: &mut [f32]) {
 //
 // Same x16 rites as the plain extended slices above; alpha lanes (3, 7, 11,
 // 15 of every 16-float chunk) are stashed before the SIMD step and restored
-// bit-identical afterwards. The remainder is handled per pixel with the
-// scalar `_extended` functions so tail pixels see the same curve as the
+// bit-identical afterwards. The remainder runs through the same kernel, so
+// tail pixels see the same curve as the
 // body (the x16 rites are the SIMD form of the same sign-preserving
 // polynomial; see `tests::extended_rgba_matches_plain_slice_on_rgb`).
 
@@ -1509,7 +1509,7 @@ pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
 // Same SIMD body as the plain gamma slices above (clamp to [0, 1], then
 // `pow_midp`); alpha lanes (3, 7, 11, 15 of every 16-float chunk) are
 // stashed before the SIMD step and restored bit-identical afterwards. The
-// remainder is handled per pixel with the scalar functions, matching the
+// remainder runs through the same kernel, matching the
 // plain slice's tail — so R/G/B come out bit-identical to
 // `gamma_to_linear_slice` on the same data (see
 // `tests::gamma_rgba_matches_plain_slice_on_rgb`). The `gamma: f32`
