@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- The plain slices use `#[attune]` and require archmage/magetypes 0.9.31-beta.2 or later, with a `v4x` tier in place of `v4` behind the `avx512` feature. Their scalar tiers run the scalar functions per sample, so non-AVX2 x86-64 can be slower. Lanes below the PQ floors run a vectorized exact formula, which costs about 25% over 0.9.30-era PQ kernels on near-black rows.
 - PQ vector kernels run the exact formula in the lanes below the polynomial floor, as the scalar functions do. The slices stay within one `u16` code of ST 2084 across the range; below signal 0.02 they had been up to 79 codes off. The inverse-EOTF floor moved from 1e-4 to 1e-7, so `linear_to_pq` output in that range changes slightly: the polynomial is within 7.4e-6 relative down to 1e-7.
 - Slice functions run their tail through the vector kernel instead of the scalar functions, so a value converts to the same bits wherever it sits in a slice (1ce79069). Tail values change: the scalar math differs from the vector kernels by 1 ULP, and by more on the `gamma` slices. The `u8` and `u16` output slices are unchanged.
 - Admit archmage/magetypes 0.9.31-beta.2 for crates that use `#[attune]`; 276 tests pass with `--all-features` on that version. Replace the cap with the stable floor before publishing.

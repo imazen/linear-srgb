@@ -90,7 +90,7 @@ pub(crate) fn linear_to_hlg_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
 
     let arg = twelve * a - hlg_b;
     let log2_val = fast_math::fast_log2f_x4(t, arg);
-    let high = hlg_a_ln2.mul_add(log2_val, hlg_c);
+    let high = hlg_a_ln2.mul_add_relaxed(log2_val, hlg_c);
 
     let mask = a.simd_le(threshold);
     f32x4::blend(mask, low, high)
@@ -141,7 +141,7 @@ pub(crate) fn linear_to_hlg_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
 
     let arg = twelve * a - hlg_b;
     let log2_val = fast_math::fast_log2f_x8(t, arg);
-    let high = hlg_a_ln2.mul_add(log2_val, hlg_c);
+    let high = hlg_a_ln2.mul_add_relaxed(log2_val, hlg_c);
 
     let mask = a.simd_le(threshold);
     f32x8::blend(mask, low, high)
@@ -191,7 +191,7 @@ pub(crate) fn linear_to_hlg_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<
 
     let arg = twelve * a - hlg_b;
     let log2_val = fast_math::fast_log2f_x16(t, arg);
-    let high = hlg_a_ln2.mul_add(log2_val, hlg_c);
+    let high = hlg_a_ln2.mul_add_relaxed(log2_val, hlg_c);
 
     let mask = a.simd_le(threshold);
     f32x16::blend(mask, low, high)

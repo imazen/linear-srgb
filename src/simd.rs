@@ -24,6 +24,7 @@
 use archmage::{
     NeonToken, ScalarToken, Wasm128Token, X64V3Token, X64V4Token, arcane, incant, rite,
 };
+use archmage::{attune, attuned};
 
 // Alias magetypes SIMD types to avoid name clash with the generic f32x8. These
 // are used by the pre-magetypes #[rite] helpers below that take concrete V3/V4
@@ -59,15 +60,15 @@ fn mt_srgb_to_linear<T: F32x16Backend>(token: T, srgb: [f32; 16]) -> [f32; 16] {
     let linear_result = clamped * f32x16::splat_t(token, 1.0 / 12.92);
 
     let x = clamped;
-    let yp = f32x16::splat_t(token, S2L_P[4]).mul_add(x, f32x16::splat_t(token, S2L_P[3]));
-    let yp = yp.mul_add(x, f32x16::splat_t(token, S2L_P[2]));
-    let yp = yp.mul_add(x, f32x16::splat_t(token, S2L_P[1]));
-    let yp = yp.mul_add(x, f32x16::splat_t(token, S2L_P[0]));
+    let yp = f32x16::splat_t(token, S2L_P[4]).mul_add_relaxed(x, f32x16::splat_t(token, S2L_P[3]));
+    let yp = yp.mul_add_relaxed(x, f32x16::splat_t(token, S2L_P[2]));
+    let yp = yp.mul_add_relaxed(x, f32x16::splat_t(token, S2L_P[1]));
+    let yp = yp.mul_add_relaxed(x, f32x16::splat_t(token, S2L_P[0]));
 
-    let yq = f32x16::splat_t(token, S2L_Q[4]).mul_add(x, f32x16::splat_t(token, S2L_Q[3]));
-    let yq = yq.mul_add(x, f32x16::splat_t(token, S2L_Q[2]));
-    let yq = yq.mul_add(x, f32x16::splat_t(token, S2L_Q[1]));
-    let yq = yq.mul_add(x, f32x16::splat_t(token, S2L_Q[0]));
+    let yq = f32x16::splat_t(token, S2L_Q[4]).mul_add_relaxed(x, f32x16::splat_t(token, S2L_Q[3]));
+    let yq = yq.mul_add_relaxed(x, f32x16::splat_t(token, S2L_Q[2]));
+    let yq = yq.mul_add_relaxed(x, f32x16::splat_t(token, S2L_Q[1]));
+    let yq = yq.mul_add_relaxed(x, f32x16::splat_t(token, S2L_Q[0]));
 
     let power_result = (yp / yq).min(one);
 
@@ -90,15 +91,15 @@ fn mt_linear_to_srgb<T: F32x16Backend>(token: T, linear: [f32; 16]) -> [f32; 16]
     let linear_result = clamped * f32x16::splat_t(token, 12.92);
 
     let x = clamped.sqrt();
-    let yp = f32x16::splat_t(token, L2S_P[4]).mul_add(x, f32x16::splat_t(token, L2S_P[3]));
-    let yp = yp.mul_add(x, f32x16::splat_t(token, L2S_P[2]));
-    let yp = yp.mul_add(x, f32x16::splat_t(token, L2S_P[1]));
-    let yp = yp.mul_add(x, f32x16::splat_t(token, L2S_P[0]));
+    let yp = f32x16::splat_t(token, L2S_P[4]).mul_add_relaxed(x, f32x16::splat_t(token, L2S_P[3]));
+    let yp = yp.mul_add_relaxed(x, f32x16::splat_t(token, L2S_P[2]));
+    let yp = yp.mul_add_relaxed(x, f32x16::splat_t(token, L2S_P[1]));
+    let yp = yp.mul_add_relaxed(x, f32x16::splat_t(token, L2S_P[0]));
 
-    let yq = f32x16::splat_t(token, L2S_Q[4]).mul_add(x, f32x16::splat_t(token, L2S_Q[3]));
-    let yq = yq.mul_add(x, f32x16::splat_t(token, L2S_Q[2]));
-    let yq = yq.mul_add(x, f32x16::splat_t(token, L2S_Q[1]));
-    let yq = yq.mul_add(x, f32x16::splat_t(token, L2S_Q[0]));
+    let yq = f32x16::splat_t(token, L2S_Q[4]).mul_add_relaxed(x, f32x16::splat_t(token, L2S_Q[3]));
+    let yq = yq.mul_add_relaxed(x, f32x16::splat_t(token, L2S_Q[2]));
+    let yq = yq.mul_add_relaxed(x, f32x16::splat_t(token, L2S_Q[1]));
+    let yq = yq.mul_add_relaxed(x, f32x16::splat_t(token, L2S_Q[0]));
 
     let power_result = (yp / yq).min(one);
 
@@ -152,7 +153,7 @@ fn store_tail<const N: usize>(tail: &mut [f32], block: Option<&[f32; N]>) {
 // sRGB ↔ Linear Slice Functions (plain + RGBA, magetypes-unified)
 // ============================================================================
 
-#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[attune(_*_t, -_scalar_t, +v4x(cfg(avx512)), define(f32x16))]
 fn srgb_to_linear_slice_tier(_token: Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     let mut tail = tail_block::<16>(remainder);
@@ -160,6 +161,12 @@ fn srgb_to_linear_slice_tier(_token: Token, values: &mut [f32]) {
         *chunk = mt_srgb_to_linear(_token, *chunk);
     }
     store_tail(remainder, tail.as_ref());
+}
+
+fn srgb_to_linear_slice_tier_scalar_t(_token: ScalarToken, values: &mut [f32]) {
+    for v in values {
+        *v = crate::scalar::srgb_to_linear_fast(*v);
+    }
 }
 
 #[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
@@ -188,9 +195,9 @@ fn srgb_to_linear_rgba_slice_tier(_token: Token, values: &mut [f32]) {
 /// ```
 #[inline]
 pub fn srgb_to_linear_slice(values: &mut [f32]) {
-    incant!(
+    attuned!(
         srgb_to_linear_slice_tier(values),
-        [v4, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
@@ -216,7 +223,7 @@ pub fn srgb_to_linear_rgba_slice(values: &mut [f32]) {
     )
 }
 
-#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[attune(_*_t, -_scalar_t, +v4x(cfg(avx512)), define(f32x16))]
 fn linear_to_srgb_slice_tier(_token: Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     let mut tail = tail_block::<16>(remainder);
@@ -224,6 +231,12 @@ fn linear_to_srgb_slice_tier(_token: Token, values: &mut [f32]) {
         *chunk = mt_linear_to_srgb(_token, *chunk);
     }
     store_tail(remainder, tail.as_ref());
+}
+
+fn linear_to_srgb_slice_tier_scalar_t(_token: ScalarToken, values: &mut [f32]) {
+    for v in values {
+        *v = crate::scalar::linear_to_srgb_fast(*v);
+    }
 }
 
 #[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
@@ -252,9 +265,9 @@ fn linear_to_srgb_rgba_slice_tier(_token: Token, values: &mut [f32]) {
 /// ```
 #[inline]
 pub fn linear_to_srgb_slice(values: &mut [f32]) {
-    incant!(
+    attuned!(
         linear_to_srgb_slice_tier(values),
-        [v4, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
@@ -284,7 +297,7 @@ pub fn linear_to_srgb_rgba_slice(values: &mut [f32]) {
 // Extended-range sRGB ↔ Linear Slice Functions (no clamping)
 // ============================================================================
 
-#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[attune(_*_t, -_scalar_t, +v4x(cfg(avx512)), define(f32x16))]
 fn srgb_to_linear_extended_slice_tier(token: Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     let mut tail = tail_block::<16>(remainder);
@@ -293,6 +306,12 @@ fn srgb_to_linear_extended_slice_tier(token: Token, values: &mut [f32]) {
         *chunk = crate::tf::srgb::srgb_to_linear_extended_x16(token, v).to_array();
     }
     store_tail(remainder, tail.as_ref());
+}
+
+fn srgb_to_linear_extended_slice_tier_scalar_t(_token: ScalarToken, values: &mut [f32]) {
+    for v in values {
+        *v = crate::scalar::srgb_to_linear_extended(*v);
+    }
 }
 
 /// Convert sRGB f32 values to linear in-place without clamping (extended range).
@@ -335,13 +354,13 @@ fn srgb_to_linear_extended_slice_tier(token: Token, values: &mut [f32]) {
 /// ```
 #[inline]
 pub fn srgb_to_linear_extended_slice(values: &mut [f32]) {
-    incant!(
+    attuned!(
         srgb_to_linear_extended_slice_tier(values),
-        [v4, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
-#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[attune(_*_t, -_scalar_t, +v4x(cfg(avx512)), define(f32x16))]
 fn linear_to_srgb_extended_slice_tier(token: Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     let mut tail = tail_block::<16>(remainder);
@@ -350,6 +369,12 @@ fn linear_to_srgb_extended_slice_tier(token: Token, values: &mut [f32]) {
         *chunk = crate::tf::srgb::linear_to_srgb_extended_x16(token, v).to_array();
     }
     store_tail(remainder, tail.as_ref());
+}
+
+fn linear_to_srgb_extended_slice_tier_scalar_t(_token: ScalarToken, values: &mut [f32]) {
+    for v in values {
+        *v = crate::scalar::linear_to_srgb_extended(*v);
+    }
 }
 
 /// Convert linear f32 values to sRGB in-place without clamping (extended range).
@@ -390,9 +415,9 @@ fn linear_to_srgb_extended_slice_tier(token: Token, values: &mut [f32]) {
 /// ```
 #[inline]
 pub fn linear_to_srgb_extended_slice(values: &mut [f32]) {
-    incant!(
+    attuned!(
         linear_to_srgb_extended_slice_tier(values),
-        [v4, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
@@ -695,7 +720,8 @@ fn linear_to_srgb_u8_slice_tier(token: Token, input: &[f32], output: &mut [u8]) 
         let clamped = v
             .max(f32x16::zero_t(token))
             .min(f32x16::splat_t(token, 1.0));
-        let idx_f = clamped.mul_add(f32x16::splat_t(token, 4095.0), f32x16::splat_t(token, 0.5));
+        let idx_f =
+            clamped.mul_add_relaxed(f32x16::splat_t(token, 4095.0), f32x16::splat_t(token, 0.5));
         let idx_i = idx_f.to_i32().to_array();
         for i in 0..16 {
             out[i] = lut[(idx_i[i] as usize) & 0xFFF];
@@ -764,15 +790,17 @@ fn srgb_u16_to_linear_slice_tier(token: Token, input: &[u16], output: &mut [f32]
 
         let linear_result = v * f32x16::splat_t(token, LINEAR_SCALE);
 
-        let yp = f32x16::splat_t(token, S2L_P[4]).mul_add(v, f32x16::splat_t(token, S2L_P[3]));
-        let yp = yp.mul_add(v, f32x16::splat_t(token, S2L_P[2]));
-        let yp = yp.mul_add(v, f32x16::splat_t(token, S2L_P[1]));
-        let yp = yp.mul_add(v, f32x16::splat_t(token, S2L_P[0]));
+        let yp =
+            f32x16::splat_t(token, S2L_P[4]).mul_add_relaxed(v, f32x16::splat_t(token, S2L_P[3]));
+        let yp = yp.mul_add_relaxed(v, f32x16::splat_t(token, S2L_P[2]));
+        let yp = yp.mul_add_relaxed(v, f32x16::splat_t(token, S2L_P[1]));
+        let yp = yp.mul_add_relaxed(v, f32x16::splat_t(token, S2L_P[0]));
 
-        let yq = f32x16::splat_t(token, S2L_Q[4]).mul_add(v, f32x16::splat_t(token, S2L_Q[3]));
-        let yq = yq.mul_add(v, f32x16::splat_t(token, S2L_Q[2]));
-        let yq = yq.mul_add(v, f32x16::splat_t(token, S2L_Q[1]));
-        let yq = yq.mul_add(v, f32x16::splat_t(token, S2L_Q[0]));
+        let yq =
+            f32x16::splat_t(token, S2L_Q[4]).mul_add_relaxed(v, f32x16::splat_t(token, S2L_Q[3]));
+        let yq = yq.mul_add_relaxed(v, f32x16::splat_t(token, S2L_Q[2]));
+        let yq = yq.mul_add_relaxed(v, f32x16::splat_t(token, S2L_Q[1]));
+        let yq = yq.mul_add_relaxed(v, f32x16::splat_t(token, S2L_Q[0]));
 
         let power_result = (yp / yq).min(one);
 
@@ -833,21 +861,24 @@ fn linear_to_srgb_u16_slice_tier(token: Token, input: &[f32], output: &mut [u16]
         let clamped = linear.max(zero).min(one);
         let linear_result = clamped * f32x16::splat_t(token, 12.92);
         let x = clamped.sqrt();
-        let yp = f32x16::splat_t(token, L2S_P[4]).mul_add(x, f32x16::splat_t(token, L2S_P[3]));
-        let yp = yp.mul_add(x, f32x16::splat_t(token, L2S_P[2]));
-        let yp = yp.mul_add(x, f32x16::splat_t(token, L2S_P[1]));
-        let yp = yp.mul_add(x, f32x16::splat_t(token, L2S_P[0]));
-        let yq = f32x16::splat_t(token, L2S_Q[4]).mul_add(x, f32x16::splat_t(token, L2S_Q[3]));
-        let yq = yq.mul_add(x, f32x16::splat_t(token, L2S_Q[2]));
-        let yq = yq.mul_add(x, f32x16::splat_t(token, L2S_Q[1]));
-        let yq = yq.mul_add(x, f32x16::splat_t(token, L2S_Q[0]));
+        let yp =
+            f32x16::splat_t(token, L2S_P[4]).mul_add_relaxed(x, f32x16::splat_t(token, L2S_P[3]));
+        let yp = yp.mul_add_relaxed(x, f32x16::splat_t(token, L2S_P[2]));
+        let yp = yp.mul_add_relaxed(x, f32x16::splat_t(token, L2S_P[1]));
+        let yp = yp.mul_add_relaxed(x, f32x16::splat_t(token, L2S_P[0]));
+        let yq =
+            f32x16::splat_t(token, L2S_Q[4]).mul_add_relaxed(x, f32x16::splat_t(token, L2S_Q[3]));
+        let yq = yq.mul_add_relaxed(x, f32x16::splat_t(token, L2S_Q[2]));
+        let yq = yq.mul_add_relaxed(x, f32x16::splat_t(token, L2S_Q[1]));
+        let yq = yq.mul_add_relaxed(x, f32x16::splat_t(token, L2S_Q[0]));
         let power_result = (yp / yq).min(one);
         let thresh_mask = clamped.simd_lt(f32x16::splat_t(token, LINEAR_THRESHOLD));
         let srgb = f32x16::blend(thresh_mask, linear_result, power_result);
         let ge_one = linear.simd_ge(one);
         let srgb = f32x16::blend(ge_one, one, srgb);
 
-        let scaled = srgb.mul_add(f32x16::splat_t(token, 65535.0), f32x16::splat_t(token, 0.5));
+        let scaled =
+            srgb.mul_add_relaxed(f32x16::splat_t(token, 65535.0), f32x16::splat_t(token, 0.5));
         let idx_i = scaled.to_i32().to_array();
         for i in 0..16 {
             out[i] = idx_i[i] as u16;
@@ -902,7 +933,7 @@ fn linear_to_srgb_u16_slice_fast_tier(token: Token, input: &[f32], output: &mut 
             .min(f32x16::splat_t(token, 1.0));
         let idx_f = clamped
             .sqrt()
-            .mul_add(f32x16::splat_t(token, scale), f32x16::splat_t(token, 0.5));
+            .mul_add_relaxed(f32x16::splat_t(token, scale), f32x16::splat_t(token, 0.5));
         let idx_i = idx_f.to_i32().to_array();
         for i in 0..16 {
             out[i] = lut[(idx_i[i] as usize).min(max_idx)];
@@ -1025,7 +1056,8 @@ fn linear_to_srgb_u8_rgba_slice_tier(token: Token, input: &[f32], output: &mut [
         let clamped = v
             .max(f32x16::zero_t(token))
             .min(f32x16::splat_t(token, 1.0));
-        let idx_f = clamped.mul_add(f32x16::splat_t(token, 4095.0), f32x16::splat_t(token, 0.5));
+        let idx_f =
+            clamped.mul_add_relaxed(f32x16::splat_t(token, 4095.0), f32x16::splat_t(token, 0.5));
         let idx_i = idx_f.to_i32().to_array();
         for px in 0..4 {
             let base = px * 4;
@@ -1173,7 +1205,8 @@ fn unpremultiply_linear_to_srgb_u8_rgba_slice_tier(token: Token, input: &[f32], 
         let clamped = unpremul
             .max(f32x16::zero_t(token))
             .min(f32x16::splat_t(token, 1.0));
-        let idx_f = clamped.mul_add(f32x16::splat_t(token, 4095.0), f32x16::splat_t(token, 0.5));
+        let idx_f =
+            clamped.mul_add_relaxed(f32x16::splat_t(token, 4095.0), f32x16::splat_t(token, 0.5));
         let idx_i = idx_f.to_i32().to_array();
         for px in 0..4 {
             let base = px * 4;
@@ -1292,21 +1325,24 @@ fn linear_to_srgb_u16_rgba_slice_tier(token: Token, input: &[f32], output: &mut 
         let clamped = linear.max(zero).min(one);
         let linear_result = clamped * f32x16::splat_t(token, 12.92);
         let x = clamped.sqrt();
-        let yp = f32x16::splat_t(token, L2S_P[4]).mul_add(x, f32x16::splat_t(token, L2S_P[3]));
-        let yp = yp.mul_add(x, f32x16::splat_t(token, L2S_P[2]));
-        let yp = yp.mul_add(x, f32x16::splat_t(token, L2S_P[1]));
-        let yp = yp.mul_add(x, f32x16::splat_t(token, L2S_P[0]));
-        let yq = f32x16::splat_t(token, L2S_Q[4]).mul_add(x, f32x16::splat_t(token, L2S_Q[3]));
-        let yq = yq.mul_add(x, f32x16::splat_t(token, L2S_Q[2]));
-        let yq = yq.mul_add(x, f32x16::splat_t(token, L2S_Q[1]));
-        let yq = yq.mul_add(x, f32x16::splat_t(token, L2S_Q[0]));
+        let yp =
+            f32x16::splat_t(token, L2S_P[4]).mul_add_relaxed(x, f32x16::splat_t(token, L2S_P[3]));
+        let yp = yp.mul_add_relaxed(x, f32x16::splat_t(token, L2S_P[2]));
+        let yp = yp.mul_add_relaxed(x, f32x16::splat_t(token, L2S_P[1]));
+        let yp = yp.mul_add_relaxed(x, f32x16::splat_t(token, L2S_P[0]));
+        let yq =
+            f32x16::splat_t(token, L2S_Q[4]).mul_add_relaxed(x, f32x16::splat_t(token, L2S_Q[3]));
+        let yq = yq.mul_add_relaxed(x, f32x16::splat_t(token, L2S_Q[2]));
+        let yq = yq.mul_add_relaxed(x, f32x16::splat_t(token, L2S_Q[1]));
+        let yq = yq.mul_add_relaxed(x, f32x16::splat_t(token, L2S_Q[0]));
         let power_result = (yp / yq).min(one);
         let thresh_mask = clamped.simd_lt(f32x16::splat_t(token, LINEAR_THRESHOLD));
         let srgb = f32x16::blend(thresh_mask, linear_result, power_result);
         let ge_one = linear.simd_ge(one);
         let srgb = f32x16::blend(ge_one, one, srgb);
 
-        let scaled = srgb.mul_add(f32x16::splat_t(token, 65535.0), f32x16::splat_t(token, 0.5));
+        let scaled =
+            srgb.mul_add_relaxed(f32x16::splat_t(token, 65535.0), f32x16::splat_t(token, 0.5));
         let idx_i = scaled.to_i32().to_array();
         for px in 0..4 {
             let base = px * 4;
@@ -1372,7 +1408,7 @@ fn linear_to_srgb_u16_rgba_slice_fast_tier(token: Token, input: &[f32], output: 
             .min(f32x16::splat_t(token, 1.0));
         let idx_f = clamped
             .sqrt()
-            .mul_add(f32x16::splat_t(token, scale), f32x16::splat_t(token, 0.5));
+            .mul_add_relaxed(f32x16::splat_t(token, scale), f32x16::splat_t(token, 0.5));
         let idx_i = idx_f.to_i32().to_array();
         for px in 0..4 {
             let base = px * 4;
@@ -1428,7 +1464,7 @@ pub fn linear_to_srgb_u16_rgba_slice_fast(input: &[f32], output: &mut [u16]) {
 // Custom Gamma Slice Functions
 // ============================================================================
 
-#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[attune(_*_t, -_scalar_t, +v4x(cfg(avx512)), define(f32x16))]
 fn gamma_to_linear_slice_tier(token: Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     let mut tail = tail_block::<16>(remainder);
@@ -1440,6 +1476,12 @@ fn gamma_to_linear_slice_tier(token: Token, values: &mut [f32], gamma: f32) {
         *chunk = clamped.pow_midp(gamma).to_array();
     }
     store_tail(remainder, tail.as_ref());
+}
+
+fn gamma_to_linear_slice_tier_scalar_t(_token: ScalarToken, values: &mut [f32], gamma: f32) {
+    for v in values {
+        *v = crate::scalar::gamma_to_linear(*v, gamma);
+    }
 }
 
 /// Convert gamma-encoded f32 values to linear in-place using a custom gamma.
@@ -1459,13 +1501,13 @@ fn gamma_to_linear_slice_tier(token: Token, values: &mut [f32], gamma: f32) {
 /// ```
 #[inline]
 pub fn gamma_to_linear_slice(values: &mut [f32], gamma: f32) {
-    incant!(
+    attuned!(
         gamma_to_linear_slice_tier(values, gamma),
-        [v4, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
-#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[attune(_*_t, -_scalar_t, +v4x(cfg(avx512)), define(f32x16))]
 fn linear_to_gamma_slice_tier(token: Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     let mut tail = tail_block::<16>(remainder);
@@ -1477,6 +1519,12 @@ fn linear_to_gamma_slice_tier(token: Token, values: &mut [f32], gamma: f32) {
         *chunk = clamped.pow_midp(1.0 / gamma).to_array();
     }
     store_tail(remainder, tail.as_ref());
+}
+
+fn linear_to_gamma_slice_tier_scalar_t(_token: ScalarToken, values: &mut [f32], gamma: f32) {
+    for v in values {
+        *v = crate::scalar::linear_to_gamma(*v, gamma);
+    }
 }
 
 /// Convert linear f32 values to gamma-encoded in-place using a custom gamma.
@@ -1496,9 +1544,9 @@ fn linear_to_gamma_slice_tier(token: Token, values: &mut [f32], gamma: f32) {
 /// ```
 #[inline]
 pub fn linear_to_gamma_slice(values: &mut [f32], gamma: f32) {
-    incant!(
+    attuned!(
         linear_to_gamma_slice_tier(values, gamma),
-        [v4, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
@@ -1770,7 +1818,7 @@ pub fn unpremultiply_linear_to_gamma_rgba_slice(values: &mut [f32], gamma: f32) 
 // falls through to the per-element TF function.
 
 #[cfg(feature = "transfer")]
-#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[attune(_*_t, -_scalar_t, +v4x(cfg(avx512)), define(f32x16))]
 fn bt709_to_linear_slice_tier(token: Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     let mut tail = tail_block::<16>(remainder);
@@ -1779,6 +1827,13 @@ fn bt709_to_linear_slice_tier(token: Token, values: &mut [f32]) {
         *chunk = crate::tf::bt709::bt709_to_linear_x16(token, v).to_array();
     }
     store_tail(remainder, tail.as_ref());
+}
+
+#[cfg(feature = "transfer")]
+fn bt709_to_linear_slice_tier_scalar_t(_token: ScalarToken, values: &mut [f32]) {
+    for v in values {
+        *v = crate::tf::bt709_to_linear(*v);
+    }
 }
 
 /// Convert BT.709 signal f32 values to linear in-place.
@@ -1792,14 +1847,14 @@ fn bt709_to_linear_slice_tier(token: Token, values: &mut [f32]) {
 #[cfg(feature = "transfer")]
 #[inline]
 pub fn bt709_to_linear_slice(values: &mut [f32]) {
-    incant!(
+    attuned!(
         bt709_to_linear_slice_tier(values),
-        [v4, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
 #[cfg(feature = "transfer")]
-#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[attune(_*_t, -_scalar_t, +v4x(cfg(avx512)), define(f32x16))]
 fn linear_to_bt709_slice_tier(token: Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     let mut tail = tail_block::<16>(remainder);
@@ -1808,6 +1863,13 @@ fn linear_to_bt709_slice_tier(token: Token, values: &mut [f32]) {
         *chunk = crate::tf::bt709::linear_to_bt709_x16(token, v).to_array();
     }
     store_tail(remainder, tail.as_ref());
+}
+
+#[cfg(feature = "transfer")]
+fn linear_to_bt709_slice_tier_scalar_t(_token: ScalarToken, values: &mut [f32]) {
+    for v in values {
+        *v = crate::tf::linear_to_bt709(*v);
+    }
 }
 
 /// Convert linear f32 values to BT.709 signal in-place.
@@ -1821,14 +1883,14 @@ fn linear_to_bt709_slice_tier(token: Token, values: &mut [f32]) {
 #[cfg(feature = "transfer")]
 #[inline]
 pub fn linear_to_bt709_slice(values: &mut [f32]) {
-    incant!(
+    attuned!(
         linear_to_bt709_slice_tier(values),
-        [v4, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
 #[cfg(feature = "transfer")]
-#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[attune(_*_t, -_scalar_t, +v4x(cfg(avx512)), define(f32x16))]
 fn pq_to_linear_slice_tier(token: Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     let mut tail = tail_block::<16>(remainder);
@@ -1837,6 +1899,13 @@ fn pq_to_linear_slice_tier(token: Token, values: &mut [f32]) {
         *chunk = crate::tf::pq::pq_to_linear_x16(token, v).to_array();
     }
     store_tail(remainder, tail.as_ref());
+}
+
+#[cfg(feature = "transfer")]
+fn pq_to_linear_slice_tier_scalar_t(_token: ScalarToken, values: &mut [f32]) {
+    for v in values {
+        *v = crate::tf::pq_to_linear(*v);
+    }
 }
 
 /// Convert PQ (ST 2084) signal f32 values to linear in-place.
@@ -1850,14 +1919,14 @@ fn pq_to_linear_slice_tier(token: Token, values: &mut [f32]) {
 #[cfg(feature = "transfer")]
 #[inline]
 pub fn pq_to_linear_slice(values: &mut [f32]) {
-    incant!(
+    attuned!(
         pq_to_linear_slice_tier(values),
-        [v4, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
 #[cfg(feature = "transfer")]
-#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[attune(_*_t, -_scalar_t, +v4x(cfg(avx512)), define(f32x16))]
 fn linear_to_pq_slice_tier(token: Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     let mut tail = tail_block::<16>(remainder);
@@ -1866,6 +1935,13 @@ fn linear_to_pq_slice_tier(token: Token, values: &mut [f32]) {
         *chunk = crate::tf::pq::linear_to_pq_x16(token, v).to_array();
     }
     store_tail(remainder, tail.as_ref());
+}
+
+#[cfg(feature = "transfer")]
+fn linear_to_pq_slice_tier_scalar_t(_token: ScalarToken, values: &mut [f32]) {
+    for v in values {
+        *v = crate::tf::linear_to_pq(*v);
+    }
 }
 
 /// Convert linear f32 values to PQ (ST 2084) signal in-place.
@@ -1879,14 +1955,14 @@ fn linear_to_pq_slice_tier(token: Token, values: &mut [f32]) {
 #[cfg(feature = "transfer")]
 #[inline]
 pub fn linear_to_pq_slice(values: &mut [f32]) {
-    incant!(
+    attuned!(
         linear_to_pq_slice_tier(values),
-        [v4, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
 #[cfg(feature = "transfer")]
-#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[attune(_*_t, -_scalar_t, +v4x(cfg(avx512)), define(f32x16))]
 fn hlg_to_linear_slice_tier(token: Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     let mut tail = tail_block::<16>(remainder);
@@ -1895,6 +1971,13 @@ fn hlg_to_linear_slice_tier(token: Token, values: &mut [f32]) {
         *chunk = crate::tf::hlg::hlg_to_linear_x16(token, v).to_array();
     }
     store_tail(remainder, tail.as_ref());
+}
+
+#[cfg(feature = "transfer")]
+fn hlg_to_linear_slice_tier_scalar_t(_token: ScalarToken, values: &mut [f32]) {
+    for v in values {
+        *v = crate::tf::hlg_to_linear(*v);
+    }
 }
 
 /// Convert HLG (ARIB STD-B67) signal f32 values to linear in-place.
@@ -1908,14 +1991,14 @@ fn hlg_to_linear_slice_tier(token: Token, values: &mut [f32]) {
 #[cfg(feature = "transfer")]
 #[inline]
 pub fn hlg_to_linear_slice(values: &mut [f32]) {
-    incant!(
+    attuned!(
         hlg_to_linear_slice_tier(values),
-        [v4, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
 #[cfg(feature = "transfer")]
-#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+#[attune(_*_t, -_scalar_t, +v4x(cfg(avx512)), define(f32x16))]
 fn linear_to_hlg_slice_tier(token: Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     let mut tail = tail_block::<16>(remainder);
@@ -1924,6 +2007,13 @@ fn linear_to_hlg_slice_tier(token: Token, values: &mut [f32]) {
         *chunk = crate::tf::hlg::linear_to_hlg_x16(token, v).to_array();
     }
     store_tail(remainder, tail.as_ref());
+}
+
+#[cfg(feature = "transfer")]
+fn linear_to_hlg_slice_tier_scalar_t(_token: ScalarToken, values: &mut [f32]) {
+    for v in values {
+        *v = crate::tf::linear_to_hlg(*v);
+    }
 }
 
 /// Convert linear f32 values to HLG (ARIB STD-B67) signal in-place.
@@ -1937,9 +2027,9 @@ fn linear_to_hlg_slice_tier(token: Token, values: &mut [f32]) {
 #[cfg(feature = "transfer")]
 #[inline]
 pub fn linear_to_hlg_slice(values: &mut [f32]) {
-    incant!(
+    attuned!(
         linear_to_hlg_slice_tier(values),
-        [v4, v3, neon, wasm128, scalar]
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     )
 }
 
