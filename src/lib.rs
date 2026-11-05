@@ -7,7 +7,7 @@
 //! # Module Organization
 //!
 //! - [`default`] — **Start here.** Rational polynomial for f32, LUT for integers, SIMD for slices.
-//! - [`precise`] — Exact `powf()` with C0-continuous constants. f32/f64, extended range. Slower.
+//! - [`precise`] — Platform `powf()` with C0-continuous constants. f32/f64, extended range. Slower.
 //! - [`tokens`] — Inlineable `#[rite]` functions for embedding in your own `#[arcane]` SIMD code.
 //! - [`lut`] — Lookup tables for custom bit depths (10-bit, 12-bit, 16-bit).
 //! - **`tf`** — Transfer functions beyond sRGB: BT.709, PQ, HLG. Requires `transfer` feature.
@@ -81,7 +81,7 @@
 //! | u16 → f32 slice | [`default::srgb_u16_to_linear_slice`] |
 //! | f32 → u16 (exact RT) | [`default::linear_to_srgb_u16`] |
 //! | f32 → u16 (fast, ±1 RT) | [`default::linear_to_srgb_u16_fast`] |
-//! | Exact f32/f64 (powf) | [`precise::srgb_to_linear`] |
+//! | Platform powf f32/f64 | [`precise::srgb_to_linear`] |
 //! | Extended range (HDR) | [`precise::srgb_to_linear_extended`] |
 //! | Extended range f32 slice (SIMD) | [`default::srgb_to_linear_extended_slice`] |
 //! | Extended range RGBA f32 slice (alpha-preserving) | [`default::srgb_to_linear_extended_rgba_slice`] |
@@ -98,8 +98,9 @@
 //!
 //! ## Clamped (default) — use for same-gamut pipelines
 //!
-//! All functions except the `_extended` variants clamp inputs to \[0, 1\]:
-//! negatives become 0, values above 1 become 1.
+//! The ordinary sRGB and custom-gamma APIs clamp inputs to \[0, 1\]:
+//! negatives become 0, values above 1 become 1. BT.709/PQ/HLG helpers have
+//! curve-specific domains and do not share this general upper clamp.
 //!
 //! This is correct whenever the source and destination share the same color
 //! space (gamut + transfer function). The typical pipeline:
@@ -152,7 +153,7 @@
 //!
 //! | Function | Range | Pipeline |
 //! |----------|-------|----------|
-//! | All non-`_extended` `default::*_slice`, `tokens::*`, `lut::*` | \[0, 1\] | Same-gamut batch processing |
+//! | Ordinary sRGB/custom-gamma slices and integer LUT helpers | \[0, 1\] | Same-gamut batch processing |
 //! | [`default::srgb_to_linear`] | \[0, 1\] | Same-gamut single values |
 //! | [`default::linear_to_srgb`] | \[0, 1\] | Same-gamut single values |
 //! | [`precise::srgb_to_linear_extended`] | Unbounded | Cross-gamut, scRGB, HDR |
@@ -207,7 +208,7 @@ extern crate std;
 /// for slices.
 pub mod default;
 
-/// Exact `powf()`-based conversions with C0-continuous constants.
+/// Platform `powf()`-based conversions with C0-continuous constants.
 ///
 /// Uses C0-continuous constants (from the moxcms reference implementation) that
 /// eliminate the IEC 61966-2-1 piecewise discontinuity. ~6 ULP max error

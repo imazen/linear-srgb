@@ -7,7 +7,6 @@ fmt:
     cargo fmt --all
     ZEN_API_DOC_TOOLCHAIN=nightly-2026-07-13 cargo test --manifest-path apidoc/Cargo.toml
 
-# Pin the rustdoc JSON producer: tracking nightly misreports generic auto traits.
 # Regenerate the public-API surface snapshots only
 api-doc:
     ZEN_API_DOC_TOOLCHAIN=nightly-2026-07-13 cargo test --manifest-path apidoc/Cargo.toml
@@ -54,6 +53,11 @@ precision-inventory workspace output_json:
 precision-native-summary before after output_tsv:
     python3 tools/precision-review/summarize.py {{before}} {{after}} {{output_tsv}}
 
+precision-policy output_dir:
+    python3 tools/precision-review/generate.py {{output_dir}} ../garb
+    POLICIES=1 cargo run --release --manifest-path {{output_dir}}/Cargo.toml --bin oracle
+
+# Tracking nightly currently misreports generic auto traits in snapshot output.
 portable-math-check:
     PORTABLE_MATH_REQUIRE_NATIVE=1 cargo test --test portable_math
     cargo check --no-default-features

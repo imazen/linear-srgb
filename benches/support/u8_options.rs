@@ -121,7 +121,7 @@ fn floor_corrected_tier(
         }
         if rgba {
             for i in [3, 7, 11, 15] {
-                d[i] = (s[i].clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+                d[i] = alpha(s[i]);
             }
         }
     }
@@ -140,7 +140,7 @@ fn floor_corrected_tier(
             for i in 0..3 {
                 d[i] = options.floor_corrected(s[i] * inv);
             }
-            d[3] = (s[3].clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+            d[3] = alpha(s[3]);
         }
     } else {
         for (&s, d) in rem.iter().zip(dst_rem) {
@@ -161,4 +161,10 @@ pub fn floor_corrected_rgba_slice(input: &[f32], output: &mut [u8], options: &Op
         floor_corrected_tier(input, output, options, true),
         [v4, v3, neon, wasm128, scalar]
     );
+}
+
+/// The production RGBA quantizer's widened scale/bias policy.
+#[inline(always)]
+pub fn alpha(x: f32) -> u8 {
+    (f64::from(x).clamp(0.0, 1.0) * 255.0 + 0.5) as u8
 }

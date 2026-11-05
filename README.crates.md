@@ -173,7 +173,7 @@ wider domains than the clamped path's 4/4. The S2L polynomial covers
 |encoded| ≤ 8 (u8-safe) / ≤ ~4.2 (u16-safe). The L2S polynomial covers
 |linear| ≤ 64 at u16 precision.
 
-For exact `powf`-based extended range (scalar, any range):
+For `powf`-based extended range (scalar, any range):
 
 ```rust
 use linear_srgb::precise::*;
@@ -189,7 +189,7 @@ For maximum accuracy:
 ```rust
 use linear_srgb::precise::*;
 
-// f32 — exact powf, C0-continuous (6 ULP max)
+// f32 — platform powf, C0-continuous (not correctly rounded)
 let linear = srgb_to_linear(0.5f32);
 let srgb = linear_to_srgb(0.214f32);
 
@@ -275,7 +275,7 @@ they share a SIMD-generated `OnceLock` LUT.
 | Single f32 | `srgb_to_linear` / `linear_to_srgb` |
 | Single u8 | `srgb_u8_to_linear` / `linear_to_srgb_u8` |
 | Single u16 | `srgb_u16_to_linear` / `linear_to_srgb_u16` |
-| Exact powf f32/f64 | `precise::srgb_to_linear` / `precise::linear_to_srgb` |
+| Platform powf f32/f64 | `precise::srgb_to_linear` / `precise::linear_to_srgb` |
 | Extended range (scalar) | `precise::srgb_to_linear_extended` / `precise::linear_to_srgb_extended` |
 
 All functions live in `linear_srgb::default` unless noted.
@@ -301,37 +301,29 @@ For interop with software that uses the original IEC textbook constants, enable
 the `iec` feature for `linear_srgb::iec::srgb_to_linear` /
 `linear_srgb::iec::linear_to_srgb`.
 
-### Accuracy summary (exhaustive f32 sweep)
+### Measured accuracy
 
-Exhaustive f32 sweep (all ~1B values in [0, 1]) against f64 reference.
-"SIMD" rows measured via the actual dispatched SIMD path (f32 FMA evaluation).
-"Scalar" rows use f64 intermediate precision.
+Against the crate's C0 f64 formula rounded to f32, a 5,242,880-point grid
+(4,194,304 uniform plus 1,048,576 dark logarithmic inputs) gives:
 
-| Path | Max ULP | Avg ULP | Monotonic | Fitted domain |
-|------|---------|---------|-----------|---------------|
-| `default` s→l (4/4 scalar) | 8 | 0.18 | yes | [0, 1] |
-| `default` l→s (4/4 scalar) | 10 | 0.32 | yes | [0, 1] |
-| `default` s→l (4/4 SIMD) | 4 | 0.09 | yes | [0, 1] |
-| `default` l→s (4/4 SIMD) | 5 | 0.10 | yes | [0, 1] |
-| `extended_slice` s→l (6/6 SIMD) | 8* | 0.12 | yes | [0, 8] |
-| `extended_slice` l→s (6/6 SIMD) | 8* | 0.17 | yes | [0, 64] |
-| `precise` s→l (powf) | 6 | 0.1 | yes | unbounded |
-| `precise` l→s (powf) | 3 | 0.1 | yes | unbounded |
+| Path | Sampled max ULP |
+|---|---:|
+| `default` s→l scalar, f64 polynomial intermediates | 8 |
+| `default` l→s scalar, f64 polynomial intermediates | 10 |
+| `default` s→l dispatched slice, f32 fused evaluation | 11 |
+| `default` l→s dispatched slice, f32 fused evaluation | 12 |
+| `precise` s→l, platform powf | 6 |
+| `precise` l→s, platform powf | 3 |
 
-\*The 6/6 extended polynomials use larger coefficients to cover a wider domain,
-which costs ~2 ULP vs the clamped 4/4 in a narrow band near the piecewise
-threshold (0.04–0.05). Affects < 0.1% of values; avg ULP is comparable.
+These are measured grid maxima, not all-input bounds. The earlier SIMD
+4/5-ULP summary does not describe the current implementation. Scalar and
+slice APIs use different evaluation precision; the existing monotonicity
+and round-trip regression tests remain in place. One ULP at 0.5 is 2^-24;
+even a small float error can change a quantized code at a rounding boundary.
 
-**What does 10 ULP mean in practice?** 1 ULP (unit in the last place) is the
-spacing between adjacent f32 values at a given magnitude. At 0.5 that's ~6e-8,
-so 10 ULP ≈ 6e-7 — about 6 decimal digits of precision. At 0.01 it's ~1e-8.
-For any 8-bit or 16-bit output, this error is invisible — it's thousands of
-times smaller than one output level.
-
-Reference: C0-continuous f64 powf. The scalar rational polynomial evaluates in
-f64 intermediate precision, guaranteeing perfect monotonicity (zero reversals
-across all ~1B f32 values in [0, 1]). SIMD paths use f32 evaluation for
-throughput and are also monotonic within each segment.
+See [precision contracts](docs/precision.md) and
+[measured alternatives](benchmarks/u8_encode_2026-11-05.md) for LUT errors,
+curve policy, row/tier portability and exact-rounding prototype costs.
 
 ## Feature Flags
 
@@ -349,7 +341,7 @@ linear-srgb = { version = "0.6.13", default-features = false }
 ## Module Organization
 
 - **`default`** — Recommended API. Rational polynomial for f32, LUT for integers, SIMD for slices.
-- **`precise`** — Exact `powf()` conversions with C0-continuous constants (not IEC textbook). f32/f64, extended range.
+- **`precise`** — `powf()`-based conversions with C0-continuous constants (not IEC textbook). f32/f64, extended range.
 - **`lut`** — Lookup tables for custom bit depths (10-bit, 12-bit, 16-bit).
 - **`tf`** — Transfer functions: BT.709, PQ, HLG. Requires `transfer` feature.
 - **`iec`** — IEC 61966-2-1 textbook constants for legacy interop. Requires `iec` feature.

@@ -65,12 +65,12 @@ for repo in repos.values():
         path = repo / rel
         if path.stat().st_size>600_000: continue
         text = path.read_text(errors="replace").split("#[cfg(test)]",1)[0]
-        named_table = any(k in path.stem.lower() for k in ["lut", "table", "gamma"]) and any(k in text for k in ["sRGB", "srgb", "EOTF", "OETF", "PQ", "HLG"])
+        named_table = path.stem in {"fdlibm", "fdlibm64", "glibc", "lut8"} or (any(k in path.stem.lower() for k in ["lut", "table", "gamma"]) and any(k in text for k in ["sRGB", "srgb", "EOTF", "OETF", "PQ", "HLG"]))
         if not any_pattern.search(text) and not named_table: continue
         hits = [(i, line.strip(), [k for k,p in compiled.items() if p.search(line)]) for i,line in enumerate(text.splitlines(),1)]
         hits = [h for h in hits if h[2]]
         if not hits and named_table:
-            hits = [(1, "Named transfer table; inspect its provenance and values", ["sRGB/LUT"])]
+            hits = [(1, "Named transfer table or reference math port; inspect provenance and values", ["table/reference math"])]
         if not hits:
             continue
         kinds = sorted({k for _,_,ks in hits for k in ks})

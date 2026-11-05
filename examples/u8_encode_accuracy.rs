@@ -3,6 +3,7 @@ mod options;
 use linear_srgb::default as d;
 fn main() {
     let o = options::Options::new();
+    check_fused_alpha(&o);
     let args: Vec<String> = std::env::args().collect();
     if let Some(i) = args.iter().position(|a| a == "--emit-size") {
         let directory = std::path::Path::new(&args[i + 1]);
@@ -143,5 +144,25 @@ fn main() {
         }
         println!("floor_corrected_slice\t{n}\t{bad}\t0\t5120");
         assert_eq!(bad, 0);
+    }
+}
+
+fn check_fused_alpha(options: &options::Options) {
+    let mut input = vec![f32::NAN, 0.0, 0.0, 1.0];
+    for code in 0..255 {
+        let midpoint = ((code as f64 + 0.5) / 255.0) as f32;
+        for bits in midpoint.to_bits() - 1..=midpoint.to_bits() + 1 {
+            input.extend([0.0, 0.0, 0.0, f32::from_bits(bits)]);
+        }
+    }
+    for width in [1, 7, 8, 64] {
+        let mut out = vec![0; input.len()];
+        for (src, dst) in input.chunks(width * 4).zip(out.chunks_mut(width * 4)) {
+            options::floor_corrected_rgba_slice(src, dst, options);
+        }
+        for (src, dst) in input.as_chunks::<4>().0.iter().zip(out.as_chunks::<4>().0) {
+            let expected = (f64::from(src[3]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+            assert_eq!(dst[3], expected, "fused alpha={} width={width}", src[3]);
+        }
     }
 }

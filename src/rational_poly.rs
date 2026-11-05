@@ -3,8 +3,7 @@
 //! Single source of truth for all polynomial constants used across scalar,
 //! SIMD, magetypes rites (x4/x8/x16), and mage implementations.
 //!
-//! Evaluates P(x)/Q(x) via Horner's method: 4 `mul_add` + 1 `div` per
-//! direction. Much faster and more accurate than Chebyshev polynomials.
+//! Evaluates P(x)/Q(x) with Horner multiply-adds and one division per direction.
 //!
 //! Uses C0-continuous thresholds (moxcms) that eliminate the ~2.3e-9
 //! discontinuity present in the IEC 61966-2-1 textbook constants. The
@@ -82,7 +81,7 @@ pub(crate) const L2S_Q: [f32; 5] = [
 // =============================================================================
 
 /// Extended sRGB EOTF numerator (degree 6, fitted to [threshold, 8]).
-/// 5 ULP max in [0,1], u16-safe to |encoded| ≤ ~4.2 (SIMD FMA), u8-safe to 8.0.
+/// Sampled max 8 ULP in [0,1], u16-safe to |encoded| ≤ ~4.2 (SIMD FMA), u8-safe to 8.0.
 pub(crate) const EXT_S2L_P: [f32; 7] = [
     1.802_136_5e1,
     9.110_411_4e2,
@@ -106,7 +105,7 @@ pub(crate) const EXT_S2L_Q: [f32; 7] = [
 ];
 
 /// Extended sRGB inverse EOTF numerator (degree 6, fitted on sqrt to [threshold, 64]).
-/// 5 ULP max in [0,1], u16-safe across full [0, 64] domain.
+/// Sampled max 7 ULP in [0,1], u16-safe across full [0, 64] domain.
 /// Coefficients from polyfit (SK init + LM + f32 ULP grid search).
 pub(crate) const EXT_L2S_P: [f32; 7] = [
     -1.025_467_4,
@@ -181,7 +180,7 @@ fn eval_rational_poly_5(x: f32, p: [f32; 5], q: [f32; 5]) -> f32 {
 /// Max error: ~8 ULP in the power segment, 1 ULP at the piecewise threshold.
 /// Uses C0-continuous (moxcms) thresholds for exact continuity.
 ///
-/// **Clamps** inputs to \[0, 1\]. For exact `powf()`, see [`crate::precise::srgb_to_linear`].
+/// **Clamps** inputs to \[0, 1\]. For platform `powf()`, see [`crate::precise::srgb_to_linear`].
 #[inline]
 pub fn srgb_to_linear_fast(gamma: f32) -> f32 {
     if gamma < 0.0 {
@@ -199,10 +198,10 @@ pub fn srgb_to_linear_fast(gamma: f32) -> f32 {
 /// Convert linear light value to sRGB gamma-encoded using a rational polynomial (f32).
 ///
 /// Uses sqrt + 5/5 rational polynomial (Horner's method).
-/// Max error: ~8 ULP in the power segment, 0 ULP at the piecewise threshold.
+/// Sampled max error: 10 ULP on the uniform/dark grid in benchmarks/precision_f32_2026-11-05.md.
 /// Uses C0-continuous (moxcms) thresholds for exact continuity.
 ///
-/// **Clamps** inputs to \[0, 1\]. For exact `powf()`, see [`crate::precise::linear_to_srgb`].
+/// **Clamps** inputs to \[0, 1\]. For platform `powf()`, see [`crate::precise::linear_to_srgb`].
 #[inline]
 pub fn linear_to_srgb_fast(linear: f32) -> f32 {
     if linear < 0.0 {
