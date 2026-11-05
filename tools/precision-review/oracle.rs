@@ -39,6 +39,7 @@ fn c0_report() {
 }
 fn main() {
     c0_report();
+    if std::env::var_os("POLICIES").is_some() { policy_report(); hdr_policy_report(); return; }
     if std::env::var_os("C0_ONLY").is_some() { return; }
     // u8 -> linear
     let (mut bad, mut w) = (0, 0);
@@ -137,7 +138,8 @@ fn main() {
     let mut o = vec![0u8; 256 * 4];
     garb::bytes::convert_u8_to_f32(&all8, &mut o).unwrap();
     let w = o.chunks(4).enumerate().map(|(i, b)| ulp(f32::from_ne_bytes(b.try_into().unwrap()), (i as f64 / 255.0) as f32)).max().unwrap();
-    report("garb convert_u8_to_f32", 256, usize::from(w > 0), w, "ulp", String::new());
+    let bad = o.chunks(4).enumerate().filter(|(i,b)| ulp(f32::from_ne_bytes((*b).try_into().unwrap()), (*i as f64 / 255.0) as f32) != 0).count();
+    report("garb convert_u8_to_f32", 256, bad, w, "ulp", String::new());
     for (label, width) in [("row 65536", 65536usize), ("row 1", 1)] {
         let mut o = vec![0u8; 65536 * 4];
         for (a, b) in all16.chunks(width * 2).zip(o.chunks_mut(width * 4)) { garb::bytes::convert_u16_to_f32(a, b).unwrap(); }
@@ -158,4 +160,140 @@ fn main() {
     let (mut bad, mut w) = (0, 0i64);
     for (&v, b) in vals.iter().zip(o.chunks(2)) { let e = (v as f64 * 65535.0).round() as i64; let g = u16::from_ne_bytes([b[0], b[1]]) as i64; if g != e { bad += 1; w = w.max((g - e).abs()); } }
     report("garb convert_f32_to_u16", vals.len(), bad, w, "codes", String::new());
+}
+
+fn policy_report() {
+    let input = grid();
+    for (name, fun, reference) in [
+        ("default s2l scalar", ls::srgb_to_linear as fn(f32)->f32, s2l_c0 as fn(f64)->f64),
+        ("default l2s scalar", ls::linear_to_srgb, l2s_c0),
+        ("precise s2l scalar", linear_srgb::precise::srgb_to_linear, s2l_c0),
+        ("precise l2s scalar", linear_srgb::precise::linear_to_srgb, l2s_c0),
+    ] {
+        let (mut bad, mut maximum)=(0,0);
+        for &x in &input { let error=ulp(fun(x),reference(x as f64) as f32);bad+=usize::from(error!=0);maximum=maximum.max(error); }
+        report(name,input.len(),bad,maximum,"ULP",String::new());
+    }
+    for (name,fun,reference) in [
+        ("default s2l slice",ls::srgb_to_linear_slice as fn(&mut[f32]),s2l_c0 as fn(f64)->f64),
+        ("default l2s slice",ls::linear_to_srgb_slice,l2s_c0),
+        ("extended s2l slice unit range",ls::srgb_to_linear_extended_slice,s2l_c0),
+        ("extended l2s slice unit range",ls::linear_to_srgb_extended_slice,l2s_c0),
+    ] {
+        let mut output=input.clone();fun(&mut output);
+        let (mut bad, mut maximum)=(0,0);
+        for (&x,&y) in input.iter().zip(&output) {let error=ulp(y,reference(x as f64) as f32);bad+=usize::from(error!=0);maximum=maximum.max(error);}
+        report(name,input.len(),bad,maximum,"ULP",String::new());
+    }
+    let converter=linear_srgb::lut::SrgbConverter::new();
+    let (mut bad,mut maximum)=(0,0);
+    let mut max_absolute=0.0f64;
+    for &x in &input {let expected=l2s_c0(x as f64);let y=converter.linear_to_srgb(x);let error=ulp(y,expected as f32);bad+=usize::from(error!=0);maximum=maximum.max(error);max_absolute=max_absolute.max((y as f64-expected).abs());}
+    report("converter interpolated l2s",input.len(),bad,maximum,"ULP",format!("max_absolute={max_absolute:e}"));
+    let (mut bad,mut maximum)=(0,0);
+    for &x in &input {let y=ls::linear_to_srgb_u16_fast(x) as i64;let e=(l2s_c0(x as f64)*65535.0).round() as i64;bad+=usize::from(y!=e);maximum=maximum.max((y-e).abs());}
+    report("default u16 fast sqrt table",input.len(),bad,maximum,"codes",String::new());
+}
+
+fn pq_to_linear_f64(v: f64) -> f64 {
+    if v <= 0.0 {
+        return 0.0;
+    }
+    let m1: f64 = 0.1593017578125;
+    let m2: f64 = 78.84375;
+    let c1: f64 = 0.8359375;
+    let c2: f64 = 18.8515625;
+    let c3: f64 = 18.6875;
+    let vp = v.powf(1.0 / m2);
+    let num = (vp - c1).max(0.0);
+    let den = c2 - c3 * vp;
+    if den <= 0.0 {
+        return 1.0;
+    }
+    (num / den).powf(1.0 / m1)
+}
+
+fn pq_from_linear_f64(v: f64) -> f64 {
+    if v <= 0.0 {
+        return 0.0;
+    }
+    let m1: f64 = 0.1593017578125;
+    let m2: f64 = 78.84375;
+    let c1: f64 = 0.8359375;
+    let c2: f64 = 18.8515625;
+    let c3: f64 = 18.6875;
+    let vp = v.powf(m1);
+    let num = c1 + c2 * vp;
+    let den = 1.0 + c3 * vp;
+    (num / den).powf(m2)
+}
+
+fn bt709_to_linear_f64(v: f64) -> f64 {
+    let beta: f64 = 0.018053968510807;
+    if v < 4.5 * beta {
+        v / 4.5
+    } else {
+        let alpha: f64 = 0.09929682680944;
+        ((v + alpha) / (1.0 + alpha)).powf(1.0 / 0.45)
+    }
+}
+
+fn bt709_from_linear_f64(v: f64) -> f64 {
+    let beta: f64 = 0.018053968510807;
+    let alpha: f64 = 0.09929682680944;
+    if v < beta {
+        4.5 * v
+    } else {
+        (1.0 + alpha) * v.powf(0.45) - alpha
+    }
+}
+
+fn hlg_to_linear_f64(v: f64) -> f64 {
+    let a: f64 = 0.17883277;
+    let b: f64 = 0.28466892;
+    let c: f64 = 0.55991073;
+    if v <= 0.0 {
+        0.0
+    } else if v <= 0.5 {
+        (v * v) / 3.0
+    } else {
+        (((v - c) / a).exp() + b) / 12.0
+    }
+}
+
+fn hlg_from_linear_f64(v: f64) -> f64 {
+    let a: f64 = 0.17883277;
+    let b: f64 = 0.28466892;
+    let c: f64 = 0.55991073;
+    if v <= 0.0 {
+        0.0
+    } else if v <= 1.0 / 12.0 {
+        (3.0 * v).sqrt()
+    } else {
+        a * (12.0 * v - b).ln() + c
+    }
+}
+
+fn hdr_policy_report() {
+    let input=grid();
+    for (name,scalar,slice,reference) in [
+        ("BT709 decode",ls::bt709_to_linear as fn(f32)->f32,ls::bt709_to_linear_slice as fn(&mut[f32]),bt709_to_linear_f64 as fn(f64)->f64),
+        ("BT709 encode",ls::linear_to_bt709,ls::linear_to_bt709_slice,bt709_from_linear_f64),
+        ("HLG decode",ls::hlg_to_linear,ls::hlg_to_linear_slice,hlg_to_linear_f64),
+        ("HLG encode",ls::linear_to_hlg,ls::linear_to_hlg_slice,hlg_from_linear_f64),
+        ("PQ decode",ls::pq_to_linear,ls::pq_to_linear_slice,pq_to_linear_f64),
+        ("PQ encode",ls::linear_to_pq,ls::linear_to_pq_slice,pq_from_linear_f64),
+    ] {
+        let mut output=input.clone();slice(&mut output);
+        for (kind, values) in [("scalar",input.iter().map(|&x| scalar(x)).collect::<Vec<_>>()),("slice",output)] {
+            let (mut bad,mut maximum)=(0,0);
+            let (mut rel,mut code_error)=(0.0f64,0.0f64);
+            for (&x,&y) in input.iter().zip(&values) {
+                let expected=reference(x as f64);let error=ulp(y,expected as f32);bad+=usize::from(error!=0);maximum=maximum.max(error);
+                if expected!=0.0 {rel=rel.max(((y as f64-expected)/expected).abs());}
+                code_error=code_error.max((y as f64-expected).abs()*65535.0);
+            }
+            report(&format!("{name} {kind}"),input.len(),bad,maximum,"ULP",format!("max_relative={rel:e} max_u16_code_error={code_error:e}"));
+        }
+    }
 }

@@ -52,3 +52,7 @@ precision-inventory workspace output_json:
 
 precision-native-summary before after output_tsv:
     python3 tools/precision-review/summarize.py {{before}} {{after}} {{output_tsv}}
+
+precision-policy output_dir:
+    python3 tools/precision-review/generate.py {{output_dir}} ../garb
+    POLICIES=1 cargo run --release --manifest-path {{output_dir}}/Cargo.toml --bin oracle
