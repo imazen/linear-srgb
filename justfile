@@ -42,7 +42,7 @@ precision-u8-size output_dir:
 precision-release-check:
     cargo test --all-targets --all-features
     cargo test --doc --all-features
-    cargo semver-checks --baseline-version 0.6.12
+    cargo +1.98.1 semver-checks --baseline-version 0.6.12
 
 precision-audit output_dir:
     bash tools/precision-review/run.sh {{output_dir}} ../garb

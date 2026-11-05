@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+Prepared package version: **0.6.13**. Publication awaits README approval and release gates.
+
 ### QUEUED BREAKING CHANGES
 
 - None queued by this review.
@@ -10,7 +12,7 @@
 
 - Float LUT interpolation uses a single fused lower-endpoint expression, preserving near-black inputs without cancellation and using the same operations on every target.
 
-- RGBA alpha quantization widens before scaling, avoiding double rounding at u8/u16 half-code boundaries; `iec` uses the published 0.0031308 encode cutoff and inclusive junction comparisons.
+- RGBA alpha quantization widens before scaling, avoiding double rounding at u8/u16 half-code boundaries (`6bfdbf02`); `iec` uses the published 0.0031308 encode cutoff and inclusive junction comparisons.
 
 - Direct token slice hooks run partial vectors through the same kernel as full vectors; AVX-512 PQ hooks share the near-black correction with the generic PQ kernel (`40c00ab4`).
 

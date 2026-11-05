@@ -10,10 +10,10 @@ preservation, fused premultiply/unpremultiply, custom gamma, and extended range.
 
 ```toml
 [dependencies]
-linear-srgb = "0.6"
+linear-srgb = "0.6.13"
 
 # Optional: BT.709, PQ (HDR10), and HLG transfer functions
-linear-srgb = { version = "0.6", features = ["transfer"] }
+linear-srgb = { version = "0.6.13", features = ["transfer"] }
 ```
 
 ```rust
@@ -219,7 +219,7 @@ gamma_to_linear_slice(&mut values, 2.2);
 BT.709, PQ (ST 2084 / HDR10), and HLG (ARIB STD-B67) — scalar and SIMD.
 
 ```toml
-linear-srgb = { version = "0.6", features = ["transfer"] }
+linear-srgb = { version = "0.6.13", features = ["transfer"] }
 ```
 
 ```rust,ignore
@@ -341,7 +341,7 @@ throughput and are also monotonic within each segment.
 
 ```toml
 # no_std (requires alloc for LUT generation)
-linear-srgb = { version = "0.6", default-features = false }
+linear-srgb = { version = "0.6.13", default-features = false }
 ```
 
 ## Module Organization
