@@ -6,6 +6,7 @@ include private projects. Classifications are conservative recommendations, not
 proof of numerical interchangeability. Each row retains a source excerpt.
 """
 import json
+import hashlib
 import re
 import subprocess
 import sys
@@ -35,6 +36,7 @@ patterns = {
 compiled = {k: re.compile(v, re.I) for k, v in patterns.items()}
 any_pattern=re.compile("|".join(patterns.values()),re.I)
 rows = []
+seen_files = set()
 for repo in repos.values():
     proc = subprocess.run(["rg", "--files", "-g", "*.rs", "-g", "*.wgsl", "-g", "!target/**", "-g", "!**/target/**"], cwd=repo, text=True, capture_output=True)
     origin=subprocess.run(["git","remote","get-url","origin"],cwd=repo,text=True,capture_output=True).stdout.strip()
@@ -42,8 +44,13 @@ for repo in repos.values():
         continue
     sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True).stdout.strip()
     for rel in proc.stdout.splitlines():
+        candidate = repo / rel
+        canonical = candidate.resolve()
+        if canonical in seen_files:
+            continue
+        seen_files.add(canonical)
         parts = Path(rel).parts
-        if any(p in {"target", "retired", "upstream", "reference", "references", "vendor", "vendored", "third_party", "node_modules", ".jj"} or "--" in p for p in parts):
+        if any(p in {"target", "retired", "upstream", "reference", "references", "vendor", "vendored", "third_party", "node_modules", ".jj", "archmage-still-parity", "zenjpeg-checked", "zenpng-checked", "zenforks-cubecl-test", "iqa-compete-task4"} or "--" in p for p in parts):
             continue
         if any(p in {"tests", "benches", "examples", "testdata"} for p in parts) or "test" in Path(rel).stem:
             continue
@@ -72,7 +79,7 @@ for repo in repos.values():
         else:
             cls,rec="private copy candidate", "Potential shared caller after constants, clamping, rounding and extended-range contract match; no automatic replacement."
         # Snippets are evidence for the classification; no source is modified.
-        rows.append(dict(file=str(path), revision=sha, what=", ".join(kinds), classification=cls, recommendation=rec, evidence=[dict(line=i,text=t) for i,t,_ in hits[:8]]))
+        rows.append(dict(file=str(path), revision=sha, source_sha256=hashlib.sha256(path.read_bytes()).hexdigest(), what=", ".join(kinds), classification=cls, recommendation=rec, evidence=[dict(line=i,text=t) for i,t,_ in hits[:8]]))
 output.parent.mkdir(parents=True,exist_ok=True)
 output.write_text(json.dumps(rows,indent=2)+"\n")
 table=output.with_suffix(".md")

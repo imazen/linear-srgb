@@ -46,3 +46,9 @@ precision-release-check:
 
 precision-audit output_dir:
     bash tools/precision-review/run.sh {{output_dir}} ../garb
+
+precision-inventory workspace output_json:
+    python3 tools/precision-review/inventory.py {{workspace}} {{output_json}}
+
+precision-native-summary before after output_tsv:
+    python3 tools/precision-review/summarize.py {{before}} {{after}} {{output_tsv}}

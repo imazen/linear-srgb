@@ -99,7 +99,12 @@ fn bytes_input(n:usize, format:&str)->Vec<u8> {
     else {(0..n).map(|i| ((i/2) >> (8*(i%2))) as u8).collect()}
 }
 fn main() {
- let x=samples(); let u8s:Vec<u8>=(0..=255).collect(); let u16s:Vec<u16>=(0..=65535).collect();
+ let x=samples();
+ if let Some(capture)=std::env::var_os("AUDIT_CAPTURE") {
+    let path=PathBuf::from(capture);std::fs::create_dir_all(&path).unwrap();
+    std::fs::write(path.join("__inputs.bin"),bytemuck::cast_slice(&x)).unwrap();
+ }
+ let u8s:Vec<u8>=(0..=255).collect(); let u16s:Vec<u16>=(0..=65535).collect();
 '''
 lines = []
 missing = []
