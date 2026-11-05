@@ -7,6 +7,7 @@ fmt:
     cargo fmt --all
     ZEN_API_DOC_TOOLCHAIN=nightly-2026-07-13 cargo test --manifest-path apidoc/Cargo.toml
 
+# Pin the rustdoc JSON producer: tracking nightly misreports generic auto traits.
 # Regenerate the public-API surface snapshots only
 api-doc:
     ZEN_API_DOC_TOOLCHAIN=nightly-2026-07-13 cargo test --manifest-path apidoc/Cargo.toml

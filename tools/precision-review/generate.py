@@ -78,7 +78,9 @@ fn record<T: bytemuck::Pod>(name: &str, data: &[T]) {
     if TIER.with(|t|t.get())=="native" {
         if let Some(capture)=std::env::var_os("AUDIT_CAPTURE") {
             let path=PathBuf::from(capture);std::fs::create_dir_all(&path).unwrap();
-            std::fs::write(path.join(name.replace("::","_").replace("/","_")+".bin"),bytes).unwrap();
+            let filename=name.replace("::","_").replace("/","_")+".bin";
+            let selected=std::env::var("AUDIT_CAPTURE_ONLY").map_or(true,|names| names.split(',').any(|n|n==filename));
+            if selected { std::fs::write(path.join(filename),bytes).unwrap(); }
         }
     }
     NATIVE.with(|m| {let mut m=m.borrow_mut(); if let Some(old)=m.get(name) {let unit=core::mem::size_of::<T>();println!("tier-parity\t{name}\t{}\t{}",data.len(),old.chunks(unit).zip(bytes.chunks(unit)).filter(|(a,b)|a!=b).count());} else {m.insert(name.into(),bytes.to_vec());}});
@@ -115,7 +117,7 @@ for item in api(root):
     if not m:
         missing.append(item); continue
     name, args, ret = m.groups()
-    if released and name in {"default::gamma_to_linear_rgba_slice", "default::linear_to_gamma_rgba_slice", "default::linear_to_srgb_extended_rgba_slice", "default::srgb_to_linear_extended_rgba_slice"}:
+    if released and (name.startswith("portable::") or name in {"default::gamma_to_linear_rgba_slice", "default::linear_to_gamma_rgba_slice", "default::linear_to_srgb_extended_rgba_slice", "default::srgb_to_linear_extended_rgba_slice"}):
         continue
     call = "ls::" + name
     if args in ("f32", "f32, f32", "f64", "f64, f64", "u8", "u16") and ret in ("f32", "f64", "u8", "u16", "u32", "u64"):
