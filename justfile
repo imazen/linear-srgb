@@ -23,3 +23,21 @@ beta-check:
 
 beta-library-check:
     cargo test --locked --all-features --lib
+
+# Verify CPU-feature entry points, compatibility, docs and feature combinations.
+verify-target-features:
+    cargo fmt --check
+    cargo clippy --all-targets --all-features -- -D warnings
+    cargo test --all-features
+    cargo test --doc --all-features
+    cargo test --no-default-features --features std,transfer --test target_features
+    cargo check --no-default-features
+
+# Type-check ARM and execute the portable SIMD entry points under WASI.
+verify-target-features-portable:
+    cargo check --all-features --test target_features --target aarch64-unknown-linux-gnu
+    CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime run" CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-C target-feature=+simd128" cargo test --all-features --test target_features --target wasm32-wasip1
+
+# Run after regenerating snapshots; includes aliases collapsed by the renderer.
+check-target-features-surface:
+    python3 scripts/check_target_features_api.py

@@ -94,6 +94,7 @@ macro_rules! gamma {
         }
     };
 }
+#[cfg(target_arch = "x86_64")]
 macro_rules! integers {
     ($token:ident, $n:literal; $decode:ident, $encode:ident, $decode_slice:ident, $encode_slice:ident) => {
         for offset in 0..256 {
@@ -124,6 +125,7 @@ macro_rules! integers {
         }
     };
 }
+#[cfg(target_arch = "x86_64")]
 macro_rules! u16_arrays {
     ($token:ident; $decode:ident, $encode:ident) => {
         for offset in (0..=u16::MAX).step_by(8) {

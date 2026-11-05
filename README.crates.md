@@ -352,24 +352,49 @@ linear-srgb = { version = "0.6", default-features = false }
 - **`lut`** — Lookup tables for custom bit depths (10-bit, 12-bit, 16-bit).
 - **`tf`** — Transfer functions: BT.709, PQ, HLG. Requires `transfer` feature.
 - **`iec`** — IEC 61966-2-1 textbook constants for legacy interop. Requires `iec` feature.
-- **`tokens`** — Inlineable `#[rite]` functions for embedding in SIMD pipelines (see below).
+- **`target_features`** — Array/slice conversions inside matching CPU-feature functions (see below).
+- **`tokens`** — Deprecated token-taking compatibility API.
 
-## Embedding in SIMD Pipelines (`tokens` module)
+## Composing inside CPU-feature functions (`target_features`)
 
-If you're writing your own SIMD code with [archmage](https://crates.io/crates/archmage),
-the `tokens` module provides `#[rite]` functions that inline directly into your
-`#[arcane]` functions — zero dispatch overhead.
+For ordinary calls, use `linear_srgb::default`: it selects CPU features at runtime.
+Use `target_features` when your loop already runs inside a matching
+`#[target_feature]` function. The signatures use arrays and slices, so callers
+can use a different version of archmage or magetypes.
 
-```rust,ignore
-use linear_srgb::tokens::x8;
-use archmage::arcane;
+```rust
+# #[cfg(target_arch = "x86_64")]
+# {
+use archmage::{arcane, SimdToken, X64V3Token};
+use linear_srgb::target_features::x8;
 
 #[arcane]
-fn my_pipeline(token: X64V3Token, data: &mut [f32]) {
-    // x8::srgb_to_linear_v3 is #[rite] — inlines into your function
-    // Available widths: x4 (SSE/NEON/WASM), x8 (AVX2), x16 (AVX-512)
+fn my_pipeline(_token: X64V3Token, rows: &mut [[f32; 8]]) {
+    for row in rows {
+        *row = x8::srgb_to_linear_v3(*row); // no token crosses this call
+    }
 }
+
+if let Some(token) = X64V3Token::summon() {
+    my_pipeline(token, &mut [[0.5; 8]]);
+}
+# }
 ```
+
+The width modules are `x4`, `x8`, and `x16`; suffixes specify the required
+feature context: `_v3`, `_v4`, `_neon`, `_wasm128`, or `_scalar`.
+**On native targets, these are safe calls inside matching feature functions.**
+An ordinary caller gets E0133: a runtime feature check alone does not provide
+the compiler context. Put the call in a feature function as above; ordinary
+callers should use `default` instead of adding an `unsafe` block. WASM validates
+SIMD support when loading the module. See the
+[`target_features` documentation](https://docs.rs/linear-srgb/latest/linear_srgb/target_features/)
+for the complete feature requirements and contracts.
+
+The old `tokens` paths remain available with deprecation warnings. Migrate by
+changing `tokens` to `target_features` and removing the token argument inside
+the matching feature function. Conversion behavior and length contracts stay
+the same.
 
 
 ## License
