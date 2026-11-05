@@ -821,7 +821,7 @@ mod tests_x86 {
     use archmage::SimdToken;
 
     #[cfg(not(feature = "std"))]
-    use alloc::{vec, vec::Vec};
+    use alloc::vec::Vec;
 
     fn get_token() -> Option<X64V3Token> {
         X64V3Token::try_new()
@@ -850,7 +850,7 @@ mod tests_x86 {
     #[test]
     fn test_x4_srgb_roundtrip() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: X64V3 not available");
+            std::eprintln!("Skipping test: X64V3 not available");
             return;
         };
 
@@ -872,7 +872,7 @@ mod tests_x86 {
     #[test]
     fn test_x4_matches_scalar() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: X64V3 not available");
+            std::eprintln!("Skipping test: X64V3 not available");
             return;
         };
 
@@ -894,7 +894,7 @@ mod tests_x86 {
     #[test]
     fn test_x4_matches_x8() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: X64V3 not available");
+            std::eprintln!("Skipping test: X64V3 not available");
             return;
         };
 
@@ -918,7 +918,7 @@ mod tests_x86 {
     #[test]
     fn test_slice_roundtrip() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: X64V3 not available");
+            std::eprintln!("Skipping test: X64V3 not available");
             return;
         };
 
@@ -947,7 +947,7 @@ mod tests_aarch64 {
     use archmage::SimdToken;
 
     #[cfg(not(feature = "std"))]
-    use alloc::{vec, vec::Vec};
+    use alloc::vec::Vec;
 
     fn get_token() -> Option<NeonToken> {
         NeonToken::try_new()
@@ -976,7 +976,7 @@ mod tests_aarch64 {
     #[test]
     fn test_x4_srgb_roundtrip() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: NEON not available");
+            std::eprintln!("Skipping test: NEON not available");
             return;
         };
 
@@ -998,7 +998,7 @@ mod tests_aarch64 {
     #[test]
     fn test_x4_matches_scalar() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: NEON not available");
+            std::eprintln!("Skipping test: NEON not available");
             return;
         };
 
@@ -1020,7 +1020,7 @@ mod tests_aarch64 {
     #[test]
     fn test_slice_roundtrip() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: NEON not available");
+            std::eprintln!("Skipping test: NEON not available");
             return;
         };
 
