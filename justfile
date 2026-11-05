@@ -23,3 +23,26 @@ beta-check:
 
 beta-library-check:
     cargo test --locked --all-features --lib
+
+# Precision experiments; these do not change the library's encode policy.
+precision-u8:
+    cargo run --release --example u8_encode_accuracy -- --exhaustive
+
+precision-u8-bench:
+    cargo bench --bench u8_encode_options
+
+precision-parity-check:
+    cargo test --features transfer --test remaining_parity --test u8_position
+
+# Emit standalone candidates and measure their linked executable/section sizes.
+precision-u8-size output_dir:
+    cargo run --release --example u8_encode_accuracy -- --emit-size {{output_dir}}
+    bash scripts/measure-encode-size.sh {{output_dir}}
+
+precision-release-check:
+    cargo test --all-targets --all-features
+    cargo test --doc --all-features
+    cargo semver-checks --baseline-version 0.6.12
+
+precision-audit output_dir:
+    bash tools/precision-review/run.sh {{output_dir}} ../garb

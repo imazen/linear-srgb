@@ -28,6 +28,7 @@ exclude = [
     "api-snapshots/",
     # Dev scripts and Python curve-fitting utilities
     "scripts/",
+    "tools/",
     # Committed benchmark result docs — historical, not needed by consumers
     "benchmarks/",
     # Root scratch/historical performance notes
@@ -54,7 +55,7 @@ archmage = { version = ">=0.9.31-beta.2, <0.10.0", default-features = false, fea
 magetypes = { version = ">=0.9.31-beta.2, <0.10.0", default-features = false, features = ["w512"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-zenbench = { version = "0.1.2", features = ["criterion-compat"] }
+zenbench = { version = "0.1.11", features = ["criterion-compat"] }
 # `testable_dispatch` lets the tier-isolation benches disable a compile-time
 # guaranteed baseline token (NEON on aarch64) so the scalar tier is actually
 # measurable there, instead of silently reporting NEON numbers as "scalar".
@@ -100,6 +101,10 @@ required-features = ["transfer"]
 
 [[bench]]
 name = "benchmarks"
+harness = false
+
+[[bench]]
+name = "u8_encode_options"
 harness = false
 
 [[bench]]
