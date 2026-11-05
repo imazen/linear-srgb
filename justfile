@@ -5,15 +5,15 @@
 # `cargo test` never compiles its dependency tree or runs rustdoc.
 fmt:
     cargo fmt --all
-    cargo test --manifest-path apidoc/Cargo.toml
+    ZEN_API_DOC_TOOLCHAIN=nightly-2026-07-13 cargo test --manifest-path apidoc/Cargo.toml
 
 # Regenerate the public-API surface snapshots only
 api-doc:
-    cargo test --manifest-path apidoc/Cargo.toml
+    ZEN_API_DOC_TOOLCHAIN=nightly-2026-07-13 cargo test --manifest-path apidoc/Cargo.toml
 
 # Verify the committed snapshots are current
 api-doc-check:
-    ZEN_API_DOC=check cargo test --manifest-path apidoc/Cargo.toml
+    ZEN_API_DOC=check ZEN_API_DOC_TOOLCHAIN=nightly-2026-07-13 cargo test --manifest-path apidoc/Cargo.toml
 
 # Validate the owner-requested archmage beta constraint update.
 beta-check:
@@ -52,3 +52,11 @@ precision-inventory workspace output_json:
 
 precision-native-summary before after output_tsv:
     python3 tools/precision-review/summarize.py {{before}} {{after}} {{output_tsv}}
+
+portable-math-check:
+    PORTABLE_MATH_REQUIRE_NATIVE=1 cargo test --test portable_math
+    cargo check --no-default-features
+    cargo run --release --example portable_math_accuracy
+
+portable-math-bench:
+    cargo bench --bench portable_math

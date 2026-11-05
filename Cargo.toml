@@ -120,3 +120,7 @@ harness = false
 name = "kernel_tiers"
 harness = false
 required-features = ["transfer"]
+
+[[bench]]
+name = "portable_math"
+harness = false
