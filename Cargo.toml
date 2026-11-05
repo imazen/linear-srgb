@@ -121,10 +121,6 @@ name = "kernel_tiers"
 harness = false
 required-features = ["transfer"]
 
-[[bench]]
-name = "portable_math"
-harness = false
-
 [[example]]
 name = "encode_perf"
 required-features = ["std"]
@@ -132,3 +128,7 @@ required-features = ["std"]
 [[example]]
 name = "lut_init_time"
 required-features = ["std"]
+
+[[bench]]
+name = "portable_math"
+harness = false

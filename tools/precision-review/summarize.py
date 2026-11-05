@@ -22,21 +22,24 @@ def kind(name):
     if "linear_to_srgb_u16" in name or "interp_linear_u16" in name or "generate_encode_lut" in name: return "H", "u16 code"
     return "I", "f32 ULP"
 
+inputs=array.array("f")
+if (after/"__inputs.bin").exists(): inputs.frombytes((after/"__inputs.bin").read_bytes())
 rows=[]
 for path in sorted(after.glob("*.bin")):
     if path.name.startswith("__"): continue
     code,unit=kind(path.stem)
     original=before/path.name
     if not original.exists():
-        rows.append([path.stem,unit,path.stat().st_size//array.array(code).itemsize,"new", "", "", ""])
+        rows.append([path.stem,unit,path.stat().st_size//array.array(code).itemsize,"new", "", "", "", "", "", ""])
         continue
     old=original.read_bytes();new=path.read_bytes()
     assert len(old)==len(new),path.name
     a=array.array(code);a.frombytes(old)
+    unit_domain = len(a)==len(inputs) and not path.stem.startswith("garb_")
     if old==new:
-        rows.append([path.stem,unit,len(a),0,0,0,""]);continue
+        rows.append([path.stem,unit,len(a),0,0,0,"", *( [0,0,0] if unit_domain else ["","",""] )]);continue
     b=array.array(code);b.frombytes(new)
-    bad=nonfinite=maximum=0;first=None
+    bad=nonfinite=maximum=unit_bad=unit_max=0;unit_abs=0.0;first=None
     bits=a.itemsize*8;sign=1<<(bits-1);mask=(1<<bits)-1
     for i,(x,y) in enumerate(zip(a,b)):
         if x==y:continue
@@ -50,11 +53,15 @@ for path in sorted(after.glob("*.bin")):
                 nonfinite+=1;continue
             x=(~x)&mask if x&sign else x|sign
             y=(~y)&mask if y&sign else y|sign
-        maximum=max(maximum,abs(x-y))
-    rows.append([path.stem,unit,len(a),bad,maximum,nonfinite,first])
+        delta=abs(x-y)
+        maximum=max(maximum,delta)
+        if unit_domain and math.isfinite(inputs[i]) and 0.0<=inputs[i]<=1.0:
+            unit_bad+=1;unit_max=max(unit_max,delta)
+            unit_abs=max(unit_abs,abs(xx-yy) if "ULP" in unit else delta)
+    rows.append([path.stem,unit,len(a),bad,maximum,nonfinite,first, *( [unit_bad,unit_max,unit_abs] if unit_domain else ["","",""] )])
 output.parent.mkdir(parents=True,exist_ok=True)
 with output.open("w") as f:
-    writer=csv.writer(f,delimiter="\t");writer.writerow(["function","unit","samples","changed","max_finite_delta","nonfinite_changed","first_index"]);writer.writerows(rows)
+    writer=csv.writer(f,delimiter="\t");writer.writerow(["function","unit","samples","changed","max_finite_delta","nonfinite_changed","first_index","unit_range_changed","unit_range_max_finite_delta","unit_range_max_absolute"]);writer.writerows(rows)
 md=output.with_suffix(".md")
-md.write_text("| Function | Unit | Samples | Changed | Max finite change | Nonfinite changed | First index |\n|---|---|---:|---:|---:|---:|---:|\n"+"\n".join("| "+" | ".join(str(x) for x in row)+" |" for row in rows)+"\n")
+md.write_text("| Function | Unit | Samples | Changed | Max finite change | Nonfinite changed | First index | Unit-range changed | Unit-range max finite delta | Unit-range max absolute |\n|---|---|---:|---:|---:|---:|---:|---:|---:|---:|\n"+"\n".join("| "+" | ".join(str(x) for x in row)+" |" for row in rows)+"\n")
 print(f"{len(rows)} functions; {sum(isinstance(r[3],int) and r[3]>0 for r in rows)} differ; {output}")
