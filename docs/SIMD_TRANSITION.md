@@ -13,7 +13,7 @@ new: target_features::x8::srgb_to_linear_v3(values)
 
 The caller still needs matching target features. A runtime check alone does not establish a native compiler context; use a feature function or an archmage entry point. Native E0133 is a context diagnostic, not an instruction to insert an unsafe block. WASM validates SIMD when loading the module and permits ordinary safe calls. See [the API's calling-context example and complete feature sets](../src/target_features/mod.rs).
 
-Token/vector types stay internal to the new boundary. Keep the deprecated `tokens` signatures for compatibility; no removal version has been approved. Do not restore the public magetypes-vector signatures proposed by old branches. Arrays do not guarantee register-only passing: inspect assembly and measure before claiming overhead savings.
+Token/vector types stay internal to the new boundary. Keep deprecated `tokens` signatures in the current additive change. Their removal and removal of token reexports are approved for the next version. Do not restore the public magetypes-vector signatures proposed by old branches. Arrays do not guarantee register-only passing: inspect assembly and measure before claiming overhead savings.
 
 Validation recipes: `just verify-target-features`, `just verify-target-features-native-v4`, `just verify-target-features-portable`, `just api-doc-check`, and `just check-target-features-surface`. Required-tier runs fail when their specified tier is unavailable. Snapshots alone are insufficient: inspect bare token reexports and architecture-gated declarations too.
 
@@ -48,3 +48,23 @@ Additional local refs: `abandoned/pulp-rewrite` (`414e59ab`, five unique commits
 - `Cargo.toml` still says `TODO: remove in 0.7` for the no-op `unsafe_simd` feature. This is a queued proposal, not approval to remove a public feature or make a breaking release. No other TODO/FIXME/HACK/XXX markers were found in the inspected source, tests, examples, docs and scripts.
 - After API review, migrate consumers such as zenresize/zenjpeg only in separately authorized changes. Confirm each resolved dependency includes PR #30 before replacing calls; preserve per-tier numerical behavior and row/stride contracts. An old published version does not have `target_features`.
 - Release still needs README/API review, normal release validation and explicit publication approval. This work did not publish, delete branches or weaken tests.
+
+## Wider dispatch and shared scalar math
+
+The f32 array and slice families in `target_features::{x4,x8,x16}` provide
+scalar, V3, V4, NEON and WASM128 variants (V4 requires `avx512`). Existing
+native kernels remain; missing wider tiers compose x4 kernels. This completes
+calling families without a measured performance claim. Integer conversion
+hooks retain their existing target-specific coverage.
+
+Use `incant!(x16::srgb_to_linear(values) without token)` inside a caller-owned
+`#[magetypes(...)]` entry point, then ordinary `incant!` to dispatch that entry
+point. Bare feature functions still require matching feature contexts on
+native targets. See `tests/target_features_dispatch.rs` for a complete example.
+
+Scalar generic vectors and `mul_add_fused` already exist in beta.2. Its midp
+transcendentals still use relaxed evaluation. The shared approximation now lives
+in magetypes' fused variants; linear-srgb retains color-specific coefficients
+and its existing native/WASM rounding policy. This change temporarily pins the
+pinned dependency source revision; switch to a published version containing
+those methods before release. No crate has been published by this work.

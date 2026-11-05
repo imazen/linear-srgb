@@ -6,14 +6,14 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: linear-srgb.txt 175 lines (supported surface) | linear-srgb.features.txt 103 added (features: alt,avx512,iec,precise-portable,std,transfer,unsafe_simd) | linear-srgb.internal.txt 40 lines (57 hidden + 0 excluded-feature)
+# files: linear-srgb.txt 219 lines (supported surface) | linear-srgb.features.txt 159 added (features: alt,avx512,iec,precise-portable,std,transfer,unsafe_simd) | linear-srgb.internal.txt 40 lines (57 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                13
 #   pub types (struct/enum/trait/alias)        11
 #   pub consts/statics                          3
-#   free functions                            137
+#   free functions                            213
 #   inherent methods                           16
 #   re-exports                                  5
 #   trait roster entries (type × trait)         3
@@ -24,11 +24,11 @@
 #   default                          38
 #   lut                              28
 #   precise                           8
-#   target_features                  47
+#   target_features                 123
 #   tf                                2
 #   tokens                           52
 
-## items (171 lines)
+## items (215 lines)
 
 pub mod linear_srgb
 pub mod default
@@ -106,44 +106,88 @@ pub fn precise::srgb_to_linear_extended(f32) -> f32
 pub fn precise::srgb_to_linear_f64(f64) -> f64
 pub mod target_features
 pub mod target_features::x16
-pub fn target_features::x16::gamma_to_linear_slice_v4(&mut [f32], f32)
+pub fn target_features::x16::gamma_to_linear_scalar([f32; 16], f32) -> [f32; 16]
+pub fn target_features::x16::gamma_to_linear_v3([f32; 16], f32) -> [f32; 16]
 pub fn target_features::x16::gamma_to_linear_v4([f32; 16], f32) -> [f32; 16]
-pub fn target_features::x16::linear_to_gamma_slice_v4(&mut [f32], f32)
+pub fn target_features::x16::linear_to_gamma_scalar([f32; 16], f32) -> [f32; 16]
+pub fn target_features::x16::linear_to_gamma_v3([f32; 16], f32) -> [f32; 16]
 pub fn target_features::x16::linear_to_gamma_v4([f32; 16], f32) -> [f32; 16]
-pub fn target_features::x16::linear_to_srgb_slice_v4(&mut [f32])
+pub fn target_features::x16::linear_to_srgb_extended_scalar([f32; 16]) -> [f32; 16]
+pub fn target_features::x16::linear_to_srgb_extended_v3([f32; 16]) -> [f32; 16]
+pub fn target_features::x16::linear_to_srgb_extended_v4([f32; 16]) -> [f32; 16]
+pub fn target_features::x16::linear_to_srgb_scalar([f32; 16]) -> [f32; 16]
 pub fn target_features::x16::linear_to_srgb_u8_slice_v4(&[f32], &mut [u8])
 pub fn target_features::x16::linear_to_srgb_u8_v4([f32; 16]) -> [u8; 16]
+pub fn target_features::x16::linear_to_srgb_v3([f32; 16]) -> [f32; 16]
 pub fn target_features::x16::linear_to_srgb_v4([f32; 16]) -> [f32; 16]
-pub fn target_features::x16::srgb_to_linear_slice_v4(&mut [f32])
+pub fn target_features::x16::srgb_to_linear_extended_scalar([f32; 16]) -> [f32; 16]
+pub fn target_features::x16::srgb_to_linear_extended_v3([f32; 16]) -> [f32; 16]
+pub fn target_features::x16::srgb_to_linear_extended_v4([f32; 16]) -> [f32; 16]
+pub fn target_features::x16::srgb_to_linear_scalar([f32; 16]) -> [f32; 16]
+pub fn target_features::x16::srgb_to_linear_v3([f32; 16]) -> [f32; 16]
 pub fn target_features::x16::srgb_to_linear_v4([f32; 16]) -> [f32; 16]
 pub fn target_features::x16::srgb_u8_to_linear_slice_v4(&[u8], &mut [f32])
 pub fn target_features::x16::srgb_u8_to_linear_v4([u8; 16]) -> [f32; 16]
 pub mod target_features::x4
-pub fn target_features::x4::gamma_to_linear_slice_v3(&mut [f32], f32) [also: target_features::x8]
+pub fn target_features::x4::gamma_to_linear_scalar([f32; 4], f32) -> [f32; 4]
+pub fn target_features::x4::gamma_to_linear_slice_scalar(&mut [f32], f32) [also: target_features::x16, target_features::x8]
+pub fn target_features::x4::gamma_to_linear_slice_v3(&mut [f32], f32) [also: target_features::x16, target_features::x8]
+pub fn target_features::x4::gamma_to_linear_slice_v4(&mut [f32], f32) [also: target_features::x16, target_features::x8]
 pub fn target_features::x4::gamma_to_linear_v3([f32; 4], f32) -> [f32; 4]
-pub fn target_features::x4::linear_to_gamma_slice_v3(&mut [f32], f32) [also: target_features::x8]
+pub fn target_features::x4::gamma_to_linear_v4([f32; 4], f32) -> [f32; 4]
+pub fn target_features::x4::linear_to_gamma_scalar([f32; 4], f32) -> [f32; 4]
+pub fn target_features::x4::linear_to_gamma_slice_scalar(&mut [f32], f32) [also: target_features::x16, target_features::x8]
+pub fn target_features::x4::linear_to_gamma_slice_v3(&mut [f32], f32) [also: target_features::x16, target_features::x8]
+pub fn target_features::x4::linear_to_gamma_slice_v4(&mut [f32], f32) [also: target_features::x16, target_features::x8]
 pub fn target_features::x4::linear_to_gamma_v3([f32; 4], f32) -> [f32; 4]
+pub fn target_features::x4::linear_to_gamma_v4([f32; 4], f32) -> [f32; 4]
 pub fn target_features::x4::linear_to_srgb_extended_scalar([f32; 4]) -> [f32; 4]
+pub fn target_features::x4::linear_to_srgb_extended_slice_scalar(&mut [f32]) [also: target_features::x16, target_features::x8]
+pub fn target_features::x4::linear_to_srgb_extended_slice_v3(&mut [f32]) [also: target_features::x16, target_features::x8]
+pub fn target_features::x4::linear_to_srgb_extended_slice_v4(&mut [f32]) [also: target_features::x16, target_features::x8]
 pub fn target_features::x4::linear_to_srgb_extended_v3([f32; 4]) -> [f32; 4]
-pub fn target_features::x4::linear_to_srgb_slice_v3(&mut [f32]) [also: target_features::x8]
+pub fn target_features::x4::linear_to_srgb_extended_v4([f32; 4]) -> [f32; 4]
+pub fn target_features::x4::linear_to_srgb_scalar([f32; 4]) -> [f32; 4]
+pub fn target_features::x4::linear_to_srgb_slice_scalar(&mut [f32]) [also: target_features::x16, target_features::x8]
+pub fn target_features::x4::linear_to_srgb_slice_v3(&mut [f32]) [also: target_features::x16, target_features::x8]
+pub fn target_features::x4::linear_to_srgb_slice_v4(&mut [f32]) [also: target_features::x16, target_features::x8]
 pub fn target_features::x4::linear_to_srgb_v3([f32; 4]) -> [f32; 4]
+pub fn target_features::x4::linear_to_srgb_v4([f32; 4]) -> [f32; 4]
 pub fn target_features::x4::srgb_to_linear_extended_scalar([f32; 4]) -> [f32; 4]
+pub fn target_features::x4::srgb_to_linear_extended_slice_scalar(&mut [f32]) [also: target_features::x16, target_features::x8]
+pub fn target_features::x4::srgb_to_linear_extended_slice_v3(&mut [f32]) [also: target_features::x16, target_features::x8]
+pub fn target_features::x4::srgb_to_linear_extended_slice_v4(&mut [f32]) [also: target_features::x16, target_features::x8]
 pub fn target_features::x4::srgb_to_linear_extended_v3([f32; 4]) -> [f32; 4]
-pub fn target_features::x4::srgb_to_linear_slice_v3(&mut [f32]) [also: target_features::x8]
+pub fn target_features::x4::srgb_to_linear_extended_v4([f32; 4]) -> [f32; 4]
+pub fn target_features::x4::srgb_to_linear_scalar([f32; 4]) -> [f32; 4]
+pub fn target_features::x4::srgb_to_linear_slice_scalar(&mut [f32]) [also: target_features::x16, target_features::x8]
+pub fn target_features::x4::srgb_to_linear_slice_v3(&mut [f32]) [also: target_features::x16, target_features::x8]
+pub fn target_features::x4::srgb_to_linear_slice_v4(&mut [f32]) [also: target_features::x16, target_features::x8]
 pub fn target_features::x4::srgb_to_linear_v3([f32; 4]) -> [f32; 4]
+pub fn target_features::x4::srgb_to_linear_v4([f32; 4]) -> [f32; 4]
 pub mod target_features::x8
+pub fn target_features::x8::gamma_to_linear_scalar([f32; 8], f32) -> [f32; 8]
 pub fn target_features::x8::gamma_to_linear_v3([f32; 8], f32) -> [f32; 8]
+pub fn target_features::x8::gamma_to_linear_v4([f32; 8], f32) -> [f32; 8]
+pub fn target_features::x8::linear_to_gamma_scalar([f32; 8], f32) -> [f32; 8]
 pub fn target_features::x8::linear_to_gamma_v3([f32; 8], f32) -> [f32; 8]
-pub fn target_features::x8::linear_to_srgb_extended_slice_v3(&mut [f32])
+pub fn target_features::x8::linear_to_gamma_v4([f32; 8], f32) -> [f32; 8]
+pub fn target_features::x8::linear_to_srgb_extended_scalar([f32; 8]) -> [f32; 8]
 pub fn target_features::x8::linear_to_srgb_extended_v3([f32; 8]) -> [f32; 8]
+pub fn target_features::x8::linear_to_srgb_extended_v4([f32; 8]) -> [f32; 8]
+pub fn target_features::x8::linear_to_srgb_scalar([f32; 8]) -> [f32; 8]
 pub fn target_features::x8::linear_to_srgb_u16_scalar([f32; 8]) -> [u16; 8]
 pub fn target_features::x8::linear_to_srgb_u16_v3([f32; 8]) -> [u16; 8]
 pub fn target_features::x8::linear_to_srgb_u8_slice_v3(&[f32], &mut [u8])
 pub fn target_features::x8::linear_to_srgb_u8_v3([f32; 8]) -> [u8; 8]
 pub fn target_features::x8::linear_to_srgb_v3([f32; 8]) -> [f32; 8]
-pub fn target_features::x8::srgb_to_linear_extended_slice_v3(&mut [f32])
+pub fn target_features::x8::linear_to_srgb_v4([f32; 8]) -> [f32; 8]
+pub fn target_features::x8::srgb_to_linear_extended_scalar([f32; 8]) -> [f32; 8]
 pub fn target_features::x8::srgb_to_linear_extended_v3([f32; 8]) -> [f32; 8]
+pub fn target_features::x8::srgb_to_linear_extended_v4([f32; 8]) -> [f32; 8]
+pub fn target_features::x8::srgb_to_linear_scalar([f32; 8]) -> [f32; 8]
 pub fn target_features::x8::srgb_to_linear_v3([f32; 8]) -> [f32; 8]
+pub fn target_features::x8::srgb_to_linear_v4([f32; 8]) -> [f32; 8]
 pub fn target_features::x8::srgb_u16_to_linear_scalar([u16; 8]) -> [f32; 8]
 pub fn target_features::x8::srgb_u16_to_linear_v3([u16; 8]) -> [f32; 8]
 pub fn target_features::x8::srgb_u8_to_linear_slice_v3(&[u8], &mut [f32])

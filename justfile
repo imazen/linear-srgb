@@ -35,8 +35,8 @@ verify-target-features:
 
 # Type-check ARM and execute the portable SIMD entry points under WASI.
 verify-target-features-portable:
-    cargo check --all-features --test target_features --target aarch64-unknown-linux-gnu
-    CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime run --env LINEAR_SRGB_REQUIRE_TIERS=Wasm128Token" CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-C target-feature=+simd128" cargo test --all-features --test target_features --target wasm32-wasip1
+    cargo check --all-features --tests --target aarch64-unknown-linux-gnu
+    CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime run --env LINEAR_SRGB_REQUIRE_TIERS=Wasm128Token" CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-C target-feature=+simd128" cargo test --all-features --test target_features --test target_features_dispatch --target wasm32-wasip1
 
 # Run after regenerating snapshots; includes aliases collapsed by the renderer.
 check-target-features-surface:
@@ -45,3 +45,11 @@ check-target-features-surface:
 # Require both x86 SIMD tiers to execute, rather than accept unavailable hardware.
 verify-target-features-native-v4:
     LINEAR_SRGB_REQUIRE_TIERS=X64V3Token,X64V4Token cargo test --all-features --test target_features
+
+# Regenerate the missing width/tier entry points from their shared operation list.
+generate-portable-target-features:
+    python3 scripts/generate_portable_target_features.py
+
+# Caller-owned runtime dispatch with token-free x8/x16 library boundaries.
+verify-wide-dispatch:
+    cargo test --all-features --release --test target_features_dispatch

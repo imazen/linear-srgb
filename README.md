@@ -395,7 +395,9 @@ for the complete feature requirements and contracts.
 The old `tokens` paths remain available with deprecation warnings. Migrate by
 changing `tokens` to `target_features` and removing the token argument inside
 the matching feature function. Conversion behavior and length contracts stay
-the same.
+the same. Token reexports and token-taking operation APIs are queued for removal
+in the next version. The f32 families support caller-owned `incant!` dispatch
+at x8 and x16 as well as x4; see the module documentation for an example.
 
 <!-- crates.io:skip-start -->
 ## Benchmarks
