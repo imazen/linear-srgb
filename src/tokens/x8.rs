@@ -54,7 +54,9 @@ pub fn srgb_to_linear_v3(token: X64V3Token, srgb: [f32; 8]) -> [f32; 8] {
     let power_result = (yp / yq).min(one);
 
     let mask = srgb.simd_lt(mt_f32x8::splat_t(token, SRGB_LINEAR_THRESHOLD));
-    mt_f32x8::blend(mask, linear_result, power_result).to_array()
+    let result = mt_f32x8::blend(mask, linear_result, power_result);
+    // Match x4 and the scalar/slice kernels at the clamped white endpoint.
+    mt_f32x8::blend(srgb.simd_ge(one), one, result).to_array()
 }
 
 /// Convert 8 linear values to sRGB. Input clamped to \[0, 1\].
@@ -86,7 +88,9 @@ pub fn linear_to_srgb_v3(token: X64V3Token, linear: [f32; 8]) -> [f32; 8] {
     let power_result = (yp / yq).min(one);
 
     let mask = linear.simd_lt(mt_f32x8::splat_t(token, LINEAR_THRESHOLD));
-    mt_f32x8::blend(mask, linear_result, power_result).to_array()
+    let result = mt_f32x8::blend(mask, linear_result, power_result);
+    // Match x4 and the scalar/slice kernels at the clamped white endpoint.
+    mt_f32x8::blend(linear.simd_ge(one), one, result).to_array()
 }
 
 /// Convert 8 sRGB values to linear without clamping (extended range).

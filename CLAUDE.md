@@ -2,9 +2,11 @@
 
 ## Current transition
 
-See [docs/SIMD_TRANSITION.md](docs/SIMD_TRANSITION.md) for the branch, issue and TODO inventory checked 2026-11-05. PR #30 adds `target_features` and deprecates the retained `tokens` module; it is open, not a published release. Ordinary code uses `default`; SIMD contexts use arrays/slices without exchanging dependency tokens. Preserve old signatures until an explicitly approved removal.
+See [docs/SIMD_TRANSITION.md](docs/SIMD_TRANSITION.md) for the branch, issue and TODO inventory checked 2026-11-05. PR #30 adds `target_features` and deprecates the retained `tokens` module; it is open, not a published release. Ordinary code uses `default`; SIMD contexts use arrays/slices without exchanging dependency tokens. The owner approved removal of consumer token reexports and token-taking operation surfaces in the next version. Keep the current additive change compatible.
 
 ## Known Bugs
+
+- Resolved in the wider-dispatch change: x8/x16 token hooks missed the exact-white endpoint rescue already present at x4. Cross-width dispatch now checks bit equality, including values at and above 1.0; the wider hooks blend those lanes to exactly 1.0.
 
 - [Issue 29](https://github.com/imazen/linear-srgb/issues/29): reported LLVM failure on soft-float `x86_64-unknown-none`. Normal-target no-std checks do not resolve this; no new reproduction was run during the documentation inventory.
 
