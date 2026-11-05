@@ -1,37 +1,15 @@
 # linear-srgb — Project Notes
 
+## Current transition
+
+See [docs/SIMD_TRANSITION.md](docs/SIMD_TRANSITION.md) for the branch, issue and TODO inventory checked 2026-11-05. PR #30 adds `target_features` and deprecates the retained `tokens` module; it is open, not a published release. Ordinary code uses `default`; SIMD contexts use arrays/slices without exchanging dependency tokens. Preserve old signatures until an explicitly approved removal.
+
 ## Known Bugs
 
-- **"ASM snapshots" workflow red on every push since 2026-05-31** (8+ consecutive
-  failures through 2026-06-11). Job `ASM snapshot diff (informational)
-  (wasm32-unknown-unknown)`, step `Assert essence unchanged (hard gate)`: the
-  committed wasm32 ASM snapshots no longer match output under the runner's
-  rustc (1.96.0 as of run 27375675758) — diff hunks around `I32.AND` /
-  `LOCAL.TEE` show both shrinking and growing regions, i.e. upstream codegen
-  drift, not a single added bounds check. The aarch64 matrix leg passes.
-  Unrelated to the 2026-06-11 api-doc migration (1bcf6e52 touched ci.yml +
-  api-surface.yml only; failures predate it by 11 days). Fix requires
-  re-blessing the wasm snapshots after a human reviews the new codegen for
-  regressions — do NOT regen blindly; the gate exists to catch exactly that.
+- [Issue 29](https://github.com/imazen/linear-srgb/issues/29): reported LLVM failure on soft-float `x86_64-unknown-none`. Normal-target no-std checks do not resolve this; no new reproduction was run during the documentation inventory.
 
-  **2026-06-12 characterization (local repro, rustc 1.96.0):** the essence
-  delta is NOT benign reshuffling. Per slice stub the f32 polynomial branch
-  tree shrinks (−42 F32.CONST, −22 F32.LT, −16 BR_IF, −13 BLOCK) and is
-  replaced by +48 CALL — including 7× `call fma` per slice stub — plus
-  +72 F64.CONST and +8 each of F64.PROMOTE_F32 / F64.DIV / F64.ADD /
-  F32.DEMOTE_F64. I.e. f32 `mul_add` paths (`src/mlaf.rs` `MulAdd`) now
-  lower to software libm fma with f64 arithmetic on wasm32 — a real
-  per-element perf regression, worst in hot conversion loops. Re-blessing
-  the snapshots as-is would enshrine it. Likely fix: target-gate mlaf to
-  plain mul+add on ISAs without hardware FMA (wasm32 SIMD128 has none),
-  then regen + re-bless. The aarch64 leg is unaffected (native FMLA).
-  Repro: `scripts/dump-asm.sh wasm32-unknown-unknown && git diff --stat`.
+## Historical assembly drift
 
-## Known Bugs: assembly snapshot drift (2026-10-19)
+The May/June WASM drift and October ARM/WASM drift remain historical reports, not current “every push is red” claims. Both target checks pass on main `1340e864` ([run 41986870385](https://github.com/imazen/linear-srgb/actions/runs/41986870385)) and API PR #30 ([run 41985914165](https://github.com/imazen/linear-srgb/actions/runs/41985914165)). [Issue 28](https://github.com/imazen/linear-srgb/issues/28) retains the old evidence. Do not infer its cause from current green checks, regenerate expected snapshots blindly, or weaken the existing gates.
 
-The unchanged-source CI commit 595dfcbc passes regular CI but fails both ARM64
-and WASM opcode-essence snapshot checks. The dumps complete; their generated
-assembly differs from the committed fingerprints. The cause has not been
-attributed. Expectations remain unchanged pending review; see
-[issue 28](https://github.com/imazen/linear-srgb/issues/28) and
-[run 39293065161](https://github.com/imazen/linear-srgb/actions/runs/39293065161).
+The original toolchain/codegen observations are retained in [docs/ASM_HISTORY.md](docs/ASM_HISTORY.md).

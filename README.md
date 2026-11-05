@@ -355,6 +355,9 @@ linear-srgb = { version = "0.6", default-features = false }
 
 ## Composing inside CPU-feature functions (`target_features`)
 
+Source transition: [PR #30](https://github.com/imazen/linear-srgb/pull/30); this API is not in crates.io 0.6.12.
+See the [migration and outstanding-work inventory](https://github.com/imazen/linear-srgb/blob/api/target-features/docs/SIMD_TRANSITION.md).
+
 For ordinary calls, use `linear_srgb::default`: it selects CPU features at runtime.
 Use `target_features` when your loop already runs inside a matching
 `#[target_feature]` function. The signatures use arrays and slices, so callers

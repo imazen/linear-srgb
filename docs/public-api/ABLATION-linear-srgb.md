@@ -1,5 +1,7 @@
 # ABLATION-linear-srgb.md
 
+**Historical audit (2026-06-11).** Its “no leaks” verdict does not cover the dependency-version coupling identified in November. Token signatures remain for compatibility but are deprecated in [PR #30](https://github.com/imazen/linear-srgb/pull/30). New callers use the array/slice feature-context API; see [current migration guidance](../SIMD_TRANSITION.md). The dated consumer list below is not a current dependency inventory.
+
 **Date:** 2026-06-11  
 **Snapshot commit:** 00ec86be (main@origin)  
 **Surface size:** 173 items (default features) / 250 items (all features)  
