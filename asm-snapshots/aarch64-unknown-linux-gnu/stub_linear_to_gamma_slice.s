@@ -4,17 +4,17 @@
 .type	stub_linear_to_gamma_slice,@function
 stub_linear_to_gamma_slice:
 	.cfi_startproc
-	sub sp, sp, #464
-	.cfi_def_cfa_offset 464
-	stp d15, d14, [sp, #336]
-	stp d13, d12, [sp, #352]
-	stp d11, d10, [sp, #368]
-	stp d9, d8, [sp, #384]
-	stp x29, x30, [sp, #400]
-	stp x28, x23, [sp, #416]
-	stp x22, x21, [sp, #432]
-	stp x20, x19, [sp, #448]
-	add x29, sp, #400
+	sub sp, sp, #480
+	.cfi_def_cfa_offset 480
+	stp d15, d14, [sp, #352]
+	stp d13, d12, [sp, #368]
+	stp d11, d10, [sp, #384]
+	stp d9, d8, [sp, #400]
+	stp x29, x30, [sp, #416]
+	stp x28, x23, [sp, #432]
+	stp x22, x21, [sp, #448]
+	stp x20, x19, [sp, #464]
+	add x29, sp, #416
 	.cfi_def_cfa w29, 64
 	.cfi_offset w19, -8
 	.cfi_offset w20, -16
@@ -86,24 +86,25 @@ stub_linear_to_gamma_slice:
 	mov w8, #27455
 	stur w9, [x29, #-196]
 	movk w8, #16094, lsl #16
-	stp q3, q4, [sp, #160]
+	stp q3, q4, [sp, #176]
 	dup v4.4s, w8
 	mov w8, #46233
 	movk w8, #16147, lsl #16
 	dup v3.4s, w8
 	mov w8, #43579
 	movk w8, #16440, lsl #16
-	stp q3, q4, [sp, #112]
+	stp q3, q4, [sp, #128]
 	dup v4.4s, w10
 	dup v3.4s, w8
 	mov w8, #-1023672320
 	mov w10, #38156
+	ldr q25, [sp, #144]
 	dup v22.4s, w8
 	mov w8, #1123942400
 	movk w10, #15389, lsl #16
-	stp q3, q4, [sp, #80]
+	stp q3, q4, [sp, #96]
 	fneg v3.4s, v1.4s
-	str q0, [sp, #144]
+	str q0, [sp, #160]
 	mvni v0.4s, #127, msl #16
 	fneg v20.4s, v0.4s
 	dup v0.4s, w8
@@ -112,14 +113,14 @@ stub_linear_to_gamma_slice:
 	dup v1.4s, w8
 	mov w8, #50297
 	movk w8, #15022, lsl #16
-	stp q0, q3, [sp, #48]
+	stp q0, q3, [sp, #64]
 	dup v0.4s, w8
 	mov w8, #22716
 	movk w8, #15715, lsl #16
-	dup v28.4s, w8
+	stp q0, q1, [sp, #32]
+	dup v1.4s, w10
+	dup v0.4s, w8
 	mov w8, #65005
-	stp q0, q1, [sp, #16]
-	dup v0.4s, w10
 	mov w10, #29208
 	movk w8, #15989, lsl #16
 	movk w10, #16177, lsl #16
@@ -128,246 +129,245 @@ stub_linear_to_gamma_slice:
 	sub x10, x29, #196
 	add x8, x0, x22, lsl #6
 	add x1, x10, #4
-	str q0, [sp]
+	stp q0, q1, [sp]
 	csel x9, xzr, x1, eq
 	b .LBB7_8
 .LBB7_6:
 	add x10, x0, #64
 .LBB7_7:
 	movi v0.2d, #0000000000000000
-	ldp q1, q6, [x0]
-	ldp q7, q3, [sp, #160]
+	ldp q1, q4, [x0]
+	ldp q7, q3, [sp, #176]
 	movi v5.4s, #127, msl #16
-	ldp q9, q10, [x0, #32]
+	ldp q6, q10, [x0, #32]
 	fmov v17.4s, #-1.00000000
-	mvni v21.4s, #126
+	mvni v23.4s, #126
+	mvni v26.4s, #126
 	fmax v1.4s, v1.4s, v0.4s
-	fmax v9.4s, v9.4s, v0.4s
+	fmax v6.4s, v6.4s, v0.4s
 	fmax v10.4s, v10.4s, v0.4s
 	fmin v31.4s, v1.4s, v2.4s
-	fmax v1.4s, v6.4s, v0.4s
-	fmin v9.4s, v9.4s, v2.4s
+	fmax v1.4s, v4.4s, v0.4s
+	fmin v9.4s, v6.4s, v2.4s
 	fmin v10.4s, v10.4s, v2.4s
-	add v4.4s, v31.4s, v3.4s
+	add v12.4s, v31.4s, v3.4s
 	fmin v8.4s, v1.4s, v2.4s
-	add v13.4s, v9.4s, v3.4s
-	and v6.16b, v4.16b, v5.16b
-	add v16.4s, v8.4s, v3.4s
-	and v14.16b, v13.16b, v5.16b
-	add v1.4s, v6.4s, v7.4s
-	and v11.16b, v16.16b, v5.16b
-	ssra v21.4s, v16.4s, #23
-	fadd v6.4s, v1.4s, v17.4s
+	add v14.4s, v9.4s, v3.4s
+	add v15.4s, v10.4s, v3.4s
+	and v4.16b, v12.16b, v5.16b
+	add v13.4s, v8.4s, v3.4s
+	and v16.16b, v15.16b, v5.16b
+	ssra v26.4s, v14.4s, #23
+	add v1.4s, v4.4s, v7.4s
+	and v11.16b, v13.16b, v5.16b
+	add v16.4s, v16.4s, v7.4s
+	ssra v23.4s, v13.4s, #23
+	ldr q13, [sp, #96]
+	fadd v4.4s, v1.4s, v17.4s
 	fadd v1.4s, v1.4s, v2.4s
-	scvtf v21.4s, v21.4s
-	fdiv v6.4s, v6.4s, v1.4s
-	add v1.4s, v11.4s, v7.4s
-	fadd v11.4s, v1.4s, v17.4s
-	fadd v1.4s, v1.4s, v2.4s
-	fdiv v12.4s, v11.4s, v1.4s
-	add v1.4s, v14.4s, v7.4s
-	add v14.4s, v10.4s, v3.4s
-	fadd v11.4s, v1.4s, v17.4s
-	fadd v1.4s, v1.4s, v2.4s
-	and v15.16b, v14.16b, v5.16b
-	fmul v27.4s, v6.4s, v6.4s
-	fdiv v11.4s, v11.4s, v1.4s
-	add v1.4s, v15.4s, v7.4s
+	mov v28.16b, v13.16b
+	fdiv v1.4s, v4.4s, v1.4s
+	add v4.4s, v11.4s, v7.4s
+	and v11.16b, v14.16b, v5.16b
+	fadd v6.4s, v4.4s, v17.4s
+	fadd v4.4s, v4.4s, v2.4s
+	fdiv v4.4s, v6.4s, v4.4s
+	add v6.4s, v11.4s, v7.4s
 	mvni v7.4s, #126
-	fadd v15.4s, v1.4s, v17.4s
-	fadd v1.4s, v1.4s, v2.4s
-	fmul v3.4s, v12.4s, v12.4s
-	ldp q17, q24, [sp, #112]
-	ssra v7.4s, v4.4s, #23
-	mvni v4.4s, #126
-	mov v23.16b, v17.16b
-	mov v5.16b, v17.16b
-	mov v25.16b, v17.16b
+	fadd v11.4s, v6.4s, v17.4s
+	fadd v6.4s, v6.4s, v2.4s
+	ssra v7.4s, v12.4s, #23
 	scvtf v7.4s, v7.4s
-	ssra v4.4s, v13.4s, #23
-	fdiv v1.4s, v15.4s, v1.4s
-	ldp q15, q18, [sp, #80]
-	fmla v23.4s, v24.4s, v27.4s
-	fmla v5.4s, v24.4s, v3.4s
-	scvtf v4.4s, v4.4s
-	mov v26.16b, v18.16b
-	mov v16.16b, v15.16b
-	fmul v0.4s, v11.4s, v11.4s
-	fmla v26.4s, v27.4s, v23.4s
-	mov v23.16b, v18.16b
-	fmla v25.4s, v24.4s, v0.4s
-	fmla v23.4s, v3.4s, v5.4s
+	fdiv v6.4s, v11.4s, v6.4s
+	fadd v11.4s, v16.4s, v17.4s
+	fadd v16.4s, v16.4s, v2.4s
+	ldp q21, q17, [sp, #112]
+	fmul v3.4s, v4.4s, v4.4s
+	mov v24.16b, v17.16b
 	mov v5.16b, v17.16b
-	mov v17.16b, v18.16b
-	fmla v16.4s, v27.4s, v26.4s
-	mov v26.16b, v15.16b
-	fmul v19.4s, v1.4s, v1.4s
-	fmla v26.4s, v3.4s, v23.4s
-	mvni v3.4s, #126
-	fmla v7.4s, v6.4s, v16.4s
-	fcmeq v6.4s, v31.4s, #0.0
-	mvni v23.4s, #127, msl #16
-	fcmlt v16.4s, v10.4s, #0.0
-	ssra v3.4s, v14.4s, #23
-	fmla v5.4s, v24.4s, v19.4s
-	mov v24.16b, v18.16b
-	fcmlt v18.4s, v31.4s, #0.0
-	fmla v21.4s, v12.4s, v26.4s
-	bsl v6.16b, v23.16b, v7.16b
-	fcmeq v7.4s, v9.4s, #0.0
-	scvtf v3.4s, v3.4s
-	fmla v24.4s, v0.4s, v25.4s
-	fmla v17.4s, v19.4s, v5.4s
-	mov v5.16b, v15.16b
-	fmla v5.4s, v0.4s, v24.4s
-	fcmeq v0.4s, v8.4s, #0.0
-	movi v24.4s, #67, lsl #24
-	fmla v15.4s, v19.4s, v17.4s
-	fcmlt v17.4s, v8.4s, #0.0
-	fcmeq v19.4s, v31.4s, v20.4s
-	fmla v4.4s, v11.4s, v5.4s
-	bsl v0.16b, v23.16b, v21.16b
-	ldr q21, [sp, #64]
-	fmla v3.4s, v1.4s, v15.4s
-	mov v1.16b, v18.16b
-	fcmeq v5.4s, v10.4s, #0.0
-	bsl v1.16b, v21.16b, v6.16b
-	bit v4.16b, v23.16b, v7.16b
-	fcmeq v7.4s, v8.4s, v20.4s
-	bit v0.16b, v21.16b, v17.16b
-	fcmlt v6.4s, v9.4s, #0.0
-	bit v3.16b, v23.16b, v5.16b
-	fcmeq v5.4s, v9.4s, v20.4s
-	bit v1.16b, v20.16b, v19.16b
-	ldp q19, q17, [sp]
-	bit v0.16b, v20.16b, v7.16b
-	ldr q7, [sp, #144]
-	bit v4.16b, v21.16b, v6.16b
-	fcmeq v6.4s, v10.4s, v20.4s
-	bit v3.16b, v21.16b, v16.16b
-	ldp q18, q16, [sp, #32]
-	fmul v10.4s, v1.4s, v7.s[0]
-	mov v1.16b, v5.16b
-	fmul v9.4s, v0.4s, v7.s[0]
-	mov v0.16b, v6.16b
-	bsl v1.16b, v20.16b, v4.16b
-	fcmge v23.4s, v10.4s, v24.4s
-	bsl v0.16b, v20.16b, v3.16b
-	fmax v3.4s, v10.4s, v22.4s
-	fmul v8.4s, v1.4s, v7.s[0]
-	fmax v1.4s, v9.4s, v22.4s
-	fmul v31.4s, v0.4s, v7.s[0]
-	fmin v0.4s, v3.4s, v24.4s
-	fmax v3.4s, v8.4s, v22.4s
-	fmin v4.4s, v1.4s, v24.4s
-	frintn v5.4s, v0.4s
+	mov v27.16b, v21.16b
+	mov v18.16b, v17.16b
+	fmla v5.4s, v25.4s, v3.4s
+	fdiv v11.4s, v11.4s, v16.4s
+	fmul v16.4s, v1.4s, v1.4s
+	fmul v0.4s, v6.4s, v6.4s
+	fmla v24.4s, v25.4s, v16.4s
+	fmla v18.4s, v25.4s, v0.4s
+	fmla v27.4s, v16.4s, v24.4s
+	mov v24.16b, v21.16b
+	fmla v24.4s, v3.4s, v5.4s
+	mov v5.16b, v21.16b
+	fmla v28.4s, v16.4s, v27.4s
+	mvni v16.4s, #126
+	fmul v19.4s, v11.4s, v11.4s
+	fmla v5.4s, v0.4s, v18.4s
+	mov v18.16b, v13.16b
+	ssra v16.4s, v15.4s, #23
+	fmla v7.4s, v1.4s, v28.4s
+	fcmlt v1.4s, v9.4s, #0.0
+	fmla v17.4s, v25.4s, v19.4s
+	fmla v18.4s, v3.4s, v24.4s
+	mov v3.16b, v21.16b
+	scvtf v21.4s, v23.4s
+	mov v23.16b, v13.16b
+	fmla v3.4s, v19.4s, v17.4s
+	scvtf v17.4s, v26.4s
+	fmla v23.4s, v0.4s, v5.4s
+	fcmeq v0.4s, v31.4s, #0.0
+	fmla v21.4s, v4.4s, v18.4s
+	mvni v18.4s, #127, msl #16
+	fcmeq v5.4s, v8.4s, #0.0
+	scvtf v4.4s, v16.4s
+	fcmeq v16.4s, v10.4s, #0.0
+	fmla v13.4s, v19.4s, v3.4s
+	fcmeq v3.4s, v9.4s, #0.0
+	fmla v17.4s, v6.4s, v23.4s
+	fcmlt v6.4s, v31.4s, #0.0
+	bsl v0.16b, v18.16b, v7.16b
+	ldr q19, [sp, #80]
+	fcmlt v7.4s, v8.4s, #0.0
+	bsl v5.16b, v18.16b, v21.16b
+	movi v23.4s, #67, lsl #24
+	bsl v3.16b, v18.16b, v17.16b
+	fmla v4.4s, v11.4s, v13.4s
+	fcmeq v17.4s, v31.4s, v20.4s
+	bit v0.16b, v19.16b, v6.16b
+	fcmeq v6.4s, v8.4s, v20.4s
+	bit v5.16b, v19.16b, v7.16b
+	fcmlt v7.4s, v10.4s, #0.0
+	bsl v1.16b, v19.16b, v3.16b
+	bit v4.16b, v18.16b, v16.16b
+	fcmeq v16.4s, v9.4s, v20.4s
+	mov v3.16b, v6.16b
+	bit v0.16b, v20.16b, v17.16b
+	ldr q6, [sp, #160]
+	bsl v3.16b, v20.16b, v5.16b
+	fcmeq v5.4s, v10.4s, v20.4s
+	bit v4.16b, v19.16b, v7.16b
+	fmul v8.4s, v0.4s, v6.s[0]
+	bit v1.16b, v20.16b, v16.16b
+	ldp q17, q19, [sp, #48]
+	mov v0.16b, v5.16b
+	fmul v9.4s, v3.4s, v6.s[0]
+	fmul v10.4s, v1.4s, v6.s[0]
+	fmax v1.4s, v8.4s, v22.4s
+	fcmgt v24.4s, v22.4s, v8.4s
+	bsl v0.16b, v20.16b, v4.16b
+	fmax v3.4s, v9.4s, v22.4s
+	fmin v4.4s, v1.4s, v23.4s
+	fmul v31.4s, v0.4s, v6.s[0]
+	fmax v0.4s, v10.4s, v22.4s
+	fmin v3.4s, v3.4s, v23.4s
+	frintn v5.4s, v4.4s
 	fmax v1.4s, v31.4s, v22.4s
-	fmin v3.4s, v3.4s, v24.4s
-	frintn v6.4s, v4.4s
-	fmin v15.4s, v5.4s, v16.4s
-	fmin v7.4s, v1.4s, v24.4s
-	frintn v1.4s, v3.4s
-	fmin v14.4s, v6.4s, v16.4s
-	fsub v6.4s, v0.4s, v15.4s
+	fmin v0.4s, v0.4s, v23.4s
+	frintn v6.4s, v3.4s
+	fmin v7.4s, v1.4s, v23.4s
+	frintn v16.4s, v0.4s
+	fmin v1.4s, v5.4s, v19.4s
+	fmin v15.4s, v6.4s, v19.4s
 	frintn v5.4s, v7.4s
-	mov v0.16b, v17.16b
-	fmin v1.4s, v1.4s, v16.4s
-	fsub v4.4s, v4.4s, v14.4s
-	fmla v0.4s, v18.4s, v6.4s
-	fmin v13.4s, v5.4s, v16.4s
-	mov v5.16b, v17.16b
-	mov v16.16b, v17.16b
-	fsub v12.4s, v3.4s, v1.4s
-	mov v3.16b, v19.16b
+	fmin v14.4s, v16.4s, v19.4s
+	fsub v6.4s, v4.4s, v1.4s
+	fsub v4.4s, v3.4s, v15.4s
 	fcvtns v1.4s, v1.4s
-	fmla v5.4s, v18.4s, v4.4s
+	fmin v13.4s, v5.4s, v19.4s
+	ldp q19, q18, [sp, #16]
+	fsub v12.4s, v0.4s, v14.4s
+	shl v1.4s, v1.4s, #23
+	mov v3.16b, v18.16b
+	mov v0.16b, v18.16b
+	mov v5.16b, v18.16b
 	fsub v11.4s, v7.4s, v13.4s
 	mov v7.16b, v19.16b
+	mov v16.16b, v19.16b
 	fcvtns v21.4s, v13.4s
-	fmla v3.4s, v6.4s, v0.4s
-	mov v0.16b, v17.16b
-	mov v17.16b, v28.16b
-	shl v1.4s, v1.4s, #23
-	fmla v7.4s, v4.4s, v5.4s
-	mov v5.16b, v28.16b
-	fmla v0.4s, v18.4s, v12.4s
-	fmla v16.4s, v18.4s, v11.4s
-	mov v18.16b, v29.16b
-	fmla v17.4s, v6.4s, v3.4s
-	mov v3.16b, v19.16b
-	shl v21.4s, v21.4s, #23
 	add v1.4s, v1.4s, v2.4s
-	fmla v5.4s, v4.4s, v7.4s
-	mov v7.16b, v28.16b
-	fmla v3.4s, v12.4s, v0.4s
+	fmla v3.4s, v17.4s, v6.4s
+	fmla v0.4s, v17.4s, v4.4s
+	fmla v5.4s, v17.4s, v12.4s
+	shl v21.4s, v21.4s, #23
+	fmla v7.4s, v6.4s, v3.4s
+	mov v3.16b, v18.16b
+	ldr q18, [sp]
+	fmla v16.4s, v4.4s, v0.4s
 	mov v0.16b, v19.16b
-	mov v19.16b, v30.16b
-	fmla v18.4s, v6.4s, v17.4s
-	mov v17.16b, v29.16b
 	add v21.4s, v21.4s, v2.4s
-	fmla v0.4s, v11.4s, v16.4s
-	fmov v16.4s, #1.00000000
-	fmla v7.4s, v12.4s, v3.4s
-	mov v3.16b, v28.16b
-	fmla v17.4s, v4.4s, v5.4s
-	fmla v19.4s, v6.4s, v18.4s
-	mov v5.16b, v30.16b
-	fcvtns v18.4s, v15.4s
-	fmla v3.4s, v11.4s, v0.4s
-	mov v0.16b, v29.16b
-	fmla v5.4s, v4.4s, v17.4s
-	fmov v17.4s, #1.00000000
-	fmla v16.4s, v6.4s, v19.4s
-	mov v6.16b, v30.16b
-	fcvtns v19.4s, v14.4s
-	fmla v0.4s, v12.4s, v7.4s
-	mov v7.16b, v29.16b
-	shl v18.4s, v18.4s, #23
-	fmla v17.4s, v4.4s, v5.4s
-	fmov v4.4s, #1.00000000
-	fcmgt v5.4s, v22.4s, v10.4s
+	fmla v3.4s, v17.4s, v11.4s
+	mov v17.16b, v18.16b
+	fmla v0.4s, v12.4s, v5.4s
+	mov v5.16b, v18.16b
+	fmla v17.4s, v6.4s, v7.4s
+	mov v7.16b, v19.16b
+	fcmge v19.4s, v8.4s, v23.4s
+	fmla v5.4s, v4.4s, v16.4s
+	mov v16.16b, v18.16b
+	fcmgt v8.4s, v22.4s, v9.4s
 	fmla v7.4s, v11.4s, v3.4s
-	mov v3.16b, v30.16b
-	shl v19.4s, v19.4s, #23
-	fcmge v10.4s, v31.4s, v24.4s
-	add v18.4s, v18.4s, v2.4s
-	fcmgt v31.4s, v22.4s, v31.4s
-	fmla v3.4s, v12.4s, v0.4s
+	mov v3.16b, v29.16b
+	fmla v16.4s, v12.4s, v0.4s
+	mov v0.16b, v29.16b
+	fmla v3.4s, v6.4s, v17.4s
+	mov v17.16b, v18.16b
+	fmov v18.4s, #1.00000000
+	fmla v0.4s, v4.4s, v5.4s
+	mov v5.16b, v29.16b
+	fmla v17.4s, v11.4s, v7.4s
+	mov v7.16b, v30.16b
+	fmla v5.4s, v12.4s, v16.4s
+	mov v16.16b, v30.16b
+	fmla v7.4s, v6.4s, v3.4s
+	mov v3.16b, v29.16b
+	fmla v16.4s, v4.4s, v0.4s
 	fmov v0.4s, #1.00000000
-	add v19.4s, v19.4s, v2.4s
-	fmla v6.4s, v11.4s, v7.4s
-	fcmgt v7.4s, v22.4s, v9.4s
-	fcmge v9.4s, v9.4s, v24.4s
-	fmul v16.4s, v16.4s, v18.4s
-	fmla v0.4s, v12.4s, v3.4s
-	fcmgt v3.4s, v22.4s, v8.4s
-	fcmge v8.4s, v8.4s, v24.4s
+	fmla v3.4s, v11.4s, v17.4s
+	mov v17.16b, v30.16b
+	fmla v18.4s, v6.4s, v7.4s
+	mov v6.16b, v30.16b
+	fcvtns v7.4s, v15.4s
+	fmla v0.4s, v4.4s, v16.4s
+	fcvtns v16.4s, v14.4s
+	fmov v4.4s, #1.00000000
+	fmla v17.4s, v12.4s, v5.4s
+	fmov v5.4s, #1.00000000
+	fmla v6.4s, v11.4s, v3.4s
+	fcmge v3.4s, v9.4s, v23.4s
+	fcmgt v9.4s, v22.4s, v10.4s
+	shl v7.4s, v7.4s, #23
+	fmul v1.4s, v18.4s, v1.4s
+	shl v16.4s, v16.4s, #23
+	fmla v5.4s, v12.4s, v17.4s
+	fcmge v17.4s, v10.4s, v23.4s
+	fcmge v23.4s, v31.4s, v23.4s
 	fmla v4.4s, v11.4s, v6.4s
-	mvn v6.16b, v23.16b
-	mvn v11.16b, v9.16b
-	mvn v18.16b, v8.16b
-	bic v5.16b, v6.16b, v5.16b
-	fmul v6.4s, v17.4s, v19.4s
-	mvn v17.16b, v10.16b
-	fmul v0.4s, v0.4s, v1.4s
-	bic v7.16b, v11.16b, v7.16b
-	bic v1.16b, v18.16b, v3.16b
-	fmul v3.4s, v4.4s, v21.4s
-	and v5.16b, v5.16b, v16.16b
-	bic v4.16b, v17.16b, v31.16b
-	and v16.16b, v23.16b, v20.16b
-	and v6.16b, v7.16b, v6.16b
-	and v7.16b, v9.16b, v20.16b
-	and v0.16b, v1.16b, v0.16b
-	and v1.16b, v8.16b, v20.16b
-	and v3.16b, v4.16b, v3.16b
-	orr v4.16b, v5.16b, v16.16b
-	and v5.16b, v10.16b, v20.16b
-	orr v6.16b, v6.16b, v7.16b
-	orr v0.16b, v0.16b, v1.16b
-	orr v1.16b, v3.16b, v5.16b
-	stp q4, q6, [x0]
-	stp q0, q1, [x0, #32]
+	mvn v6.16b, v19.16b
+	add v7.4s, v7.4s, v2.4s
+	fcmgt v31.4s, v22.4s, v31.4s
+	add v16.4s, v16.4s, v2.4s
+	mvn v10.16b, v3.16b
+	and v3.16b, v3.16b, v20.16b
+	mvn v18.16b, v17.16b
+	bic v6.16b, v6.16b, v24.16b
+	fmul v0.4s, v0.4s, v7.4s
+	mvn v7.16b, v23.16b
+	fmul v5.4s, v5.4s, v16.4s
+	fmul v4.4s, v4.4s, v21.4s
+	bic v24.16b, v10.16b, v8.16b
+	bic v16.16b, v18.16b, v9.16b
+	and v1.16b, v6.16b, v1.16b
+	and v6.16b, v19.16b, v20.16b
+	bic v7.16b, v7.16b, v31.16b
+	and v0.16b, v24.16b, v0.16b
+	and v5.16b, v16.16b, v5.16b
+	and v16.16b, v17.16b, v20.16b
+	orr v1.16b, v1.16b, v6.16b
+	and v4.16b, v7.16b, v4.16b
+	and v6.16b, v23.16b, v20.16b
+	orr v0.16b, v0.16b, v3.16b
+	orr v3.16b, v5.16b, v16.16b
+	orr v4.16b, v4.16b, v6.16b
+	stp q1, q0, [x0]
+	stp q3, q4, [x0, #32]
 	mov x0, x10
 .LBB7_8:
 	cmp x0, x8
@@ -385,16 +385,16 @@ stub_linear_to_gamma_slice:
 	mov x2, x20
 	bl memcpy
 .LBB7_13:
-	.cfi_def_cfa wsp, 464
-	ldp x20, x19, [sp, #448]
-	ldp x22, x21, [sp, #432]
-	ldp x28, x23, [sp, #416]
-	ldp x29, x30, [sp, #400]
-	ldp d9, d8, [sp, #384]
-	ldp d11, d10, [sp, #368]
-	ldp d13, d12, [sp, #352]
-	ldp d15, d14, [sp, #336]
-	add sp, sp, #464
+	.cfi_def_cfa wsp, 480
+	ldp x20, x19, [sp, #464]
+	ldp x22, x21, [sp, #448]
+	ldp x28, x23, [sp, #432]
+	ldp x29, x30, [sp, #416]
+	ldp d9, d8, [sp, #400]
+	ldp d11, d10, [sp, #384]
+	ldp d13, d12, [sp, #368]
+	ldp d15, d14, [sp, #352]
+	add sp, sp, #480
 	.cfi_def_cfa_offset 0
 	.cfi_restore w19
 	.cfi_restore w20
@@ -425,16 +425,16 @@ stub_linear_to_gamma_slice:
 	mov x0, x19
 	cbnz w8, .LBB7_2
 .LBB7_15:
-	.cfi_def_cfa wsp, 464
-	ldp x20, x19, [sp, #448]
-	ldp x22, x21, [sp, #432]
-	ldp x28, x23, [sp, #416]
-	ldp x29, x30, [sp, #400]
-	ldp d9, d8, [sp, #384]
-	ldp d11, d10, [sp, #368]
-	ldp d13, d12, [sp, #352]
-	ldp d15, d14, [sp, #336]
-	add sp, sp, #464
+	.cfi_def_cfa wsp, 480
+	ldp x20, x19, [sp, #464]
+	ldp x22, x21, [sp, #448]
+	ldp x28, x23, [sp, #432]
+	ldp x29, x30, [sp, #416]
+	ldp d9, d8, [sp, #400]
+	ldp d11, d10, [sp, #384]
+	ldp d13, d12, [sp, #368]
+	ldp d15, d14, [sp, #352]
+	add sp, sp, #480
 	.cfi_def_cfa_offset 0
 	.cfi_restore w19
 	.cfi_restore w20

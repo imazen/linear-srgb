@@ -74,3 +74,13 @@ The proposed linear-srgb `portable::{log2_midp,exp2_midp,pow_midp}` surface in
 [magetypes' shared implementation](https://github.com/imazen/archmage/pull/140).
 Its branch preserves the accuracy grids and benchmark evidence. No such module
 is added to linear-srgb; scalar tails call `magetypes::simd::scalar::pow_midp_fused`.
+
+
+The shared-math refactor changes four ARM gamma opcode snapshots. Reviewed CI
+artifacts from source `3a2fd485` (ASM run 42011608065) show instruction counts
+410→409, 377→376, 383→383 and 438→438 for gamma premultiply, gamma decode,
+gamma encode and gamma unpremultiply respectively. Floating-point opcode/width
+counts and calls are unchanged; two stack frames change from 464 to 480 bytes.
+The full native ARM CI test job passes. Paired `.s`/`.essence` snapshots are
+refreshed under the existing documented refactor workflow; the comparison gate
+remains intact. Timing impact was not measured.
