@@ -24,7 +24,7 @@ The initial capture contained 14 live remote branches, accounted for below. A la
 | Branch / tip | Evidence and disposition |
 | --- | --- |
 | `main` / `1340e864` | Initial inventory baseline; current precision work through `24a87677` is merged into PR #30. |
-| `api/target-features` | PR #30 includes the shared math integration, wider f32 dispatch and main's precision fixes through `24a87677`. Review/merge and a separately approved release remain. |
+| `api/target-features` | PR #30 keeps math crate-private and includes wider f32 dispatch and main's precision fixes through `24a87677`. Review/merge and a separately approved release remain. |
 | `feat/adobe-rgb-romm-trcs` / `a396300c` | One unique commit adding Adobe/ProPhoto functions. [Issue #7](https://github.com/imazen/linear-srgb/issues/7) was deliberately closed as outside the motivating Ultra HDR work. Preserve as scoped-out work, not an approved implementation backlog. |
 | `feat/extended-range-simd` / `95cbcd1e` | [PR #6](https://github.com/imazen/linear-srgb/pull/6) merged; tip has two later documentation/accuracy-test commits not in main. `extended_simd_doc_accuracy_claims` is absent from current tests. Review those residual assertions against today's coefficients before porting; do not import old expected numbers blindly. |
 | `feat/pub-tf-x16` / `f6dffe2d` | One unique commit exposes generic magetypes TF kernels and adds gamma kernels. Current array API already covers gamma at x4/x8/x16; retain any needed algorithm internally rather than merging the old public type coupling. No numerical equivalence claim was measured here. |
@@ -49,7 +49,7 @@ Additional local refs: `abandoned/pulp-rewrite` (`414e59ab`, five unique commits
 - After API review, migrate consumers such as zenresize/zenjpeg only in separately authorized changes. Confirm each resolved dependency includes PR #30 before replacing calls; preserve per-tier numerical behavior and row/stride contracts. An old published version does not have `target_features`.
 - Release still needs README/API review, normal release validation and explicit publication approval. This work did not publish, delete branches or weaken tests.
 
-## Wider dispatch and shared scalar math
+## Wider dispatch and private math
 
 The f32 array and slice families in `target_features::{x4,x8,x16}` provide
 scalar, V3, V4, NEON and WASM128 variants (V4 requires `avx512`). Existing
@@ -62,25 +62,19 @@ Use `incant!(x16::srgb_to_linear(values) without token)` inside a caller-owned
 point. Bare feature functions still require matching feature contexts on
 native targets. See `tests/target_features_dispatch.rs` for a complete example.
 
-Scalar generic vectors and `mul_add_fused` already exist in beta.2. Its midp
-transcendentals still use relaxed evaluation. The shared approximation now lives
-in magetypes' fused variants and plain `simd::scalar` companions; linear-srgb retains color-specific coefficients
-and its existing native/WASM rounding policy. This change temporarily pins the
-pinned dependency source revision; switch to a published version containing
-those methods before release. No crate has been published by this work.
+Scalar generic vectors and `mul_add_fused` already exist in published beta.2,
+whose midp transcendentals use relaxed evaluation. Keep the log/exp/pow copies
+private to this crate: `src/lanes.rs` owns scalar copies and
+`src/tf/fast_math.rs` owns vector copies. Their helpers/constants are private or
+`pub(crate)`, with no new public math surface. Preserve native fused rounding,
+default-WASM relaxed evaluation and the `precise-portable` contract. Exact
+parity tests keep the copies aligned.
 
-The proposed linear-srgb `portable::{log2_midp,exp2_midp,pow_midp}` surface in
-[PR #31](https://github.com/imazen/linear-srgb/pull/31) is superseded by
-[magetypes' shared implementation](https://github.com/imazen/archmage/pull/140).
-Its branch preserves the accuracy grids and benchmark evidence. No such module
-is added to linear-srgb; scalar tails call `magetypes::simd::scalar::pow_midp_fused`.
-
-
-The shared-math refactor changes four ARM gamma opcode snapshots. Reviewed CI
-artifacts from source `3a2fd485` (ASM run 42011608065) show instruction counts
-410→409, 377→376, 383→383 and 438→438 for gamma premultiply, gamma decode,
-gamma encode and gamma unpremultiply respectively. Floating-point opcode/width
-counts and calls are unchanged; two stack frames change from 464 to 480 bytes.
-The full native ARM CI test job passes. Paired `.s`/`.essence` snapshots are
-refreshed under the existing documented refactor workflow; the comparison gate
-remains intact. Timing impact was not measured.
+Use published archmage/magetypes beta.2 under the existing version constraints;
+there is no git pin and no dependency on new magetypes methods or a release.
+The proposed public linear-srgb companions in
+[PR #31](https://github.com/imazen/linear-srgb/pull/31) remain closed. The
+shared-math proposal in [archmage PR #140](https://github.com/imazen/archmage/pull/140)
+is also superseded by the owner's decision to retain crate-private copies.
+Both branches preserve their implementation/measurement evidence. The original
+ARM gamma snapshot pairs are retained with the restored kernels.
