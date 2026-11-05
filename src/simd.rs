@@ -806,7 +806,7 @@ fn srgb_u16_to_linear_slice_tier(token: Token, input: &[u16], output: &mut [f32]
         let result = f32x16::blend(mask, linear_result, power_result);
 
         // Match the scalar `srgb_to_linear_fast` early-exit: v >= 1.0 → 1.0.
-        // At u16=65535 the normalized v rounds to 1 + 2^-16 in f32, and the
+        // At u16=65535 the normalized v rounds to 1.0 in f32, and the
         // polynomial alone drifts a few ULP short of 1.0 — snap it back so
         // srgb_u16_to_linear(65535) == 1.0 bit-exact (as the LUT does).
         let ge_one = v.simd_ge(one);
@@ -825,7 +825,8 @@ fn srgb_u16_to_linear_slice_tier(token: Token, input: &[u16], output: &mut [f32]
 /// the polynomial evaluates 4/8/16 wide. No LUT and no cache footprint —
 /// replaces the 256KB decode LUT on the slice path. Boundary values
 /// (0, 65535) map exactly to (0.0, 1.0). Output may differ from the
-/// scalar LUT by ≤1 f32 ULP at interior values.
+/// scalar LUT at 31,766 of 65,536 codes, by at most 4 f32 ULP
+/// (exhaustive native-tier measurement, November 2026).
 ///
 /// # Panics
 /// Panics if `input.len() != output.len()`.

@@ -28,7 +28,7 @@ patterns = {
     "PQ": r"\b(?:fn|function)\s+\w*pq\w*|2610\.0\s*/\s*16384",
     "HLG": r"\b(?:fn|function)\s+\w*hlg\w*|0\.17883277",
     "gamma": r"\b(?:fn|function)\s+\w*gamma\w*",
-    "cbrt/pow/exp/log": r"\b(?:fn|function)\s+\w*(?:cbrt|powf?|exp2?|log2?|ln)\w*\s*\(",
+    "cbrt/pow/exp/log": r"\bfn\s+(?:[a-z0-9]+_)*(?:cbrtf?|powf?|pow64|exp|exp2f?|expf|log|log2f?|log10f?|logf|lnf?)(?:_[a-z0-9]+)*\s*(?:<[^>]*>)?\s*\(",
     "matrices/luma": r"0\.2126|0\.2627|0\.412221|0\.412456|\b(?:fn|function)\s+\w*(?:oklab|xyz_to|to_xyz)\w*",
     "depth": r"\b(?:fn|function)\s+\w*(?:u16_to_u8|f32_to_u(?:8|16)|u(?:8|16)_to_f32|scale_bit_depth|expand_\d+)\w*|65535\.0",
 }

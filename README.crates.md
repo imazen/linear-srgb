@@ -107,13 +107,12 @@ let fast = linear_to_srgb_u16_fast(linear);
 Slice variants: `linear_to_srgb_u16_slice` / `linear_to_srgb_u16_slice_fast`,
 `linear_to_srgb_u16_rgba_slice` / `linear_to_srgb_u16_rgba_slice_fast`.
 
-**u8 encode** (`linear_to_srgb_u8` / `linear_to_srgb_u8_slice`) rounds to the
-nearest level (LUT index `linear * 4095 + 0.5`) and is accurate to within ±1 u8
-level vs exact computation. The `u8 → linear → u8` round-trip is exact to within
-**±1 level** (not bit-exact 0 like the `linear_to_srgb_u16` polynomial path) —
-the LUT-quantized encode can land one level off near segment boundaries. For most
-8-bit image work this is invisible; if you need a guaranteed-exact round-trip,
-stay in u16.
+**u8 encode** (`linear_to_srgb_u8` / `linear_to_srgb_u8_slice`) quantizes the
+linear input to a 4096-entry table. It can differ by one code from correctly
+rounded encoding: 64,806 of 4,194,304 uniform inputs and 84,213 of 1,048,576
+dark log-spaced inputs in the [precision review](https://github.com/imazen/linear-srgb/blob/main/docs/precision.md).
+All 256 u8 decode→encode round trips are exact with the current constants;
+filtered values between those codes still encounter table quantization error.
 
 ### Premultiplied alpha (fused, single-pass)
 
@@ -286,13 +285,15 @@ All functions live in `linear_srgb::default` unless noted.
 ### Transfer function constants
 
 All code paths use C0-continuous constants derived from the
-[moxcms](https://github.com/niclasberg/moxcms) reference implementation. These
+[moxcms](https://github.com/awxkee/moxcms/blob/master/src/gamma.rs) reference implementation. These
 adjust the IEC 61966-2-1 offset from 0.055 to 0.055011 and the threshold from
 0.04045 to 0.03929, making the piecewise transfer function mathematically
 continuous (~2.3e-9 gap eliminated).
 
-At u8 precision the two constant sets produce identical values. At u16, the max
-difference is ~1 LSB near the threshold. See
+The decoded f32 values differ at 244 of the 256 u8 codes: code 12 differs
+by 2.28e-4 relative. The change affects the power branch throughout its range,
+not just the junction. Re-encoding each set of decoded u8 values to u8 preserves
+all 256 codes; that round trip does not establish f32 equivalence. See
 [docs/iec.md](https://github.com/imazen/linear-srgb/blob/main/docs/iec.md) for a
 detailed comparison.
 
@@ -378,7 +379,8 @@ MIT OR Apache-2.0
 
 ## AI-Generated Code Notice
 
-Developed with Claude (Anthropic). All code has been reviewed and benchmarked, but verify critical paths for your use case.
+Developed with AI assistance. Not all code has been manually reviewed. Verify
+critical paths for your use case.
 
 ## Image tech I maintain
 
