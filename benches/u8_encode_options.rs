@@ -102,7 +102,7 @@ fn bench(suite: &mut Suite) {
                                         _ => opts.polynomial(x),
                                     };
                                 }
-                                dst[3] = (s[3].clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+                                dst[3] = options::alpha(s[3]);
                             }
                         }
                         black_box(&out);
