@@ -4,7 +4,9 @@
 
 ### Fixed
 
-- Direct token slice hooks run partial vectors through the same kernel as full vectors; AVX-512 PQ hooks share the near-black correction with the generic PQ kernel.
+- RGBA alpha quantization widens before scaling, avoiding double rounding at u8/u16 half-code boundaries; `iec` uses the published 0.0031308 encode cutoff and inclusive junction comparisons.
+
+- Direct token slice hooks run partial vectors through the same kernel as full vectors; AVX-512 PQ hooks share the near-black correction with the generic PQ kernel (`40c00ab4`).
 
 - u16 decode tails and RGBA u16 encode use the same RGB arithmetic at every row length; HDR RGBA slices share the plain slice kernels, including the near-black PQ correction (`01b92fa0`).
 

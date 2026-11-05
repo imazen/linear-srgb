@@ -8,8 +8,10 @@
 //! interoperability with software that implements the original specification
 //! verbatim (e.g., ICC profile processors, conformance test suites).
 //!
-//! At u8 precision the two constant sets produce identical results. Differences
-//! only appear near the piecewise threshold at ≥16-bit or f32/f64 precision.
+//! The decoded f32 values differ at 244 of the 256 u8 codes (up to 2.28e-4
+//! relative at code 12). The adjusted offset changes the entire power branch,
+//! not only the piecewise junction. An exact u8 decode→encode round trip does
+//! not imply that the intermediate floating-point values are identical.
 //!
 //! Requires the `iec` feature.
 
@@ -20,7 +22,7 @@ use num_traits::Float;
 // IEC 61966-2-1:1999 textbook constants
 const SRGB_LINEAR_THRESHOLD: f64 = 0.04045;
 const SRGB_LINEAR_THRESHOLD_F32: f32 = SRGB_LINEAR_THRESHOLD as f32;
-const LINEAR_THRESHOLD: f64 = 0.003_130_804_953_560_372;
+const LINEAR_THRESHOLD: f64 = 0.003_130_8;
 const LINEAR_THRESHOLD_F32: f32 = LINEAR_THRESHOLD as f32;
 const LINEAR_SCALE: f64 = 1.0 / 12.92;
 const LINEAR_SCALE_F32: f32 = LINEAR_SCALE as f32;
@@ -40,7 +42,7 @@ const INV_GAMMA_F32: f32 = INV_GAMMA as f32;
 pub fn srgb_to_linear_f64(gamma: f64) -> f64 {
     if gamma < 0.0 {
         0.0
-    } else if gamma < SRGB_LINEAR_THRESHOLD {
+    } else if gamma <= SRGB_LINEAR_THRESHOLD {
         gamma * LINEAR_SCALE
     } else if gamma < 1.0 {
         ((gamma + SRGB_A) / SRGB_A_PLUS_1).powf(GAMMA)
@@ -57,7 +59,7 @@ pub fn srgb_to_linear_f64(gamma: f64) -> f64 {
 pub fn srgb_to_linear(gamma: f32) -> f32 {
     if gamma < 0.0 {
         0.0
-    } else if gamma < SRGB_LINEAR_THRESHOLD_F32 {
+    } else if gamma <= SRGB_LINEAR_THRESHOLD_F32 {
         gamma * LINEAR_SCALE_F32
     } else if gamma < 1.0 {
         ((gamma + SRGB_A_F32) / SRGB_A_PLUS_1_F32).powf(GAMMA as f32)
@@ -74,7 +76,7 @@ pub fn srgb_to_linear(gamma: f32) -> f32 {
 pub fn linear_to_srgb_f64(linear: f64) -> f64 {
     if linear < 0.0 {
         0.0
-    } else if linear < LINEAR_THRESHOLD {
+    } else if linear <= LINEAR_THRESHOLD {
         linear * 12.92
     } else if linear < 1.0 {
         fmla(SRGB_A_PLUS_1, linear.powf(INV_GAMMA), -SRGB_A)
@@ -91,7 +93,7 @@ pub fn linear_to_srgb_f64(linear: f64) -> f64 {
 pub fn linear_to_srgb(linear: f32) -> f32 {
     if linear < 0.0 {
         0.0
-    } else if linear < LINEAR_THRESHOLD_F32 {
+    } else if linear <= LINEAR_THRESHOLD_F32 {
         linear * 12.92
     } else if linear < 1.0 {
         fmla(SRGB_A_PLUS_1_F32, linear.powf(INV_GAMMA_F32), -SRGB_A_F32)

@@ -1064,7 +1064,7 @@ fn linear_to_srgb_u8_rgba_slice_tier(token: Token, input: &[f32], output: &mut [
             out[base] = lut[(idx_i[base] as usize) & 0xFFF];
             out[base + 1] = lut[(idx_i[base + 1] as usize) & 0xFFF];
             out[base + 2] = lut[(idx_i[base + 2] as usize) & 0xFFF];
-            out[base + 3] = (inp[base + 3].clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+            out[base + 3] = (f64::from(inp[base + 3]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
         }
     }
     for (inp, out) in in_rem
@@ -1078,7 +1078,7 @@ fn linear_to_srgb_u8_rgba_slice_tier(token: Token, input: &[f32], output: &mut [
             let idx = (clamped * 4095.0 + 0.5) as usize & 0xFFF;
             out[i] = lut[idx];
         }
-        out[3] = (inp[3].clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+        out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
     }
 }
 
@@ -1212,7 +1212,7 @@ fn unpremultiply_linear_to_srgb_u8_rgba_slice_tier(token: Token, input: &[f32], 
             out[base] = lut[(idx_i[base] as usize) & 0xFFF];
             out[base + 1] = lut[(idx_i[base + 1] as usize) & 0xFFF];
             out[base + 2] = lut[(idx_i[base + 2] as usize) & 0xFFF];
-            out[base + 3] = (a[px].clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+            out[base + 3] = (f64::from(a[px]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
         }
     }
     for (inp, out) in in_rem
@@ -1228,7 +1228,7 @@ fn unpremultiply_linear_to_srgb_u8_rgba_slice_tier(token: Token, input: &[f32], 
             let idx = (clamped * 4095.0 + 0.5) as usize & 0xFFF;
             out[i] = lut[idx];
         }
-        out[3] = (a.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+        out[3] = (f64::from(a).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
     }
 }
 
@@ -1361,7 +1361,7 @@ fn linear_to_srgb_u16_rgba_slice_fast_tier(token: Token, input: &[f32], output: 
             out[base] = lut[(idx_i[base] as usize).min(max_idx)];
             out[base + 1] = lut[(idx_i[base + 1] as usize).min(max_idx)];
             out[base + 2] = lut[(idx_i[base + 2] as usize).min(max_idx)];
-            out[base + 3] = (inp[base + 3].clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+            out[base + 3] = (f64::from(inp[base + 3]).clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
         }
     }
     for (inp, out) in in_rem
@@ -1373,7 +1373,7 @@ fn linear_to_srgb_u16_rgba_slice_fast_tier(token: Token, input: &[f32], output: 
         out[0] = crate::scalar::linear_to_srgb_u16_fast(inp[0]);
         out[1] = crate::scalar::linear_to_srgb_u16_fast(inp[1]);
         out[2] = crate::scalar::linear_to_srgb_u16_fast(inp[2]);
-        out[3] = (inp[3].clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+        out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
     }
 }
 
@@ -1401,7 +1401,7 @@ pub fn linear_to_srgb_u16_rgba_slice_fast(input: &[f32], output: &mut [u16]) {
             out[0] = crate::scalar::linear_to_srgb_u16_fast(inp[0]);
             out[1] = crate::scalar::linear_to_srgb_u16_fast(inp[1]);
             out[2] = crate::scalar::linear_to_srgb_u16_fast(inp[2]);
-            out[3] = (inp[3].clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+            out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
         }
     }
 }
