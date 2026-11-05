@@ -8,6 +8,10 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 
 - None queued by this review.
 
+### Added
+
+- Proposed `portable::{pow_midp, log2_midp, exp2_midp}` scalar companions reuse the fused native-lane math without exposing tokens or vector types. Normal-domain approximate math; no general libm or subnormal accuracy guarantee.
+
 ### Fixed
 
 - Float LUT interpolation uses a single fused lower-endpoint expression, preserving near-black inputs without cancellation and using the same operations on every target.

@@ -51,7 +51,7 @@ pub(crate) fn pow(x: f32, n: f32) -> f32 {
 }
 
 #[inline(always)]
-fn log2(x: f32) -> f32 {
+pub(crate) fn log2(x: f32) -> f32 {
     use fast_math::POW_LOG2 as C;
     let adjusted =
         (x.to_bits() as i32).wrapping_add((0x3f80_0000u32 - fast_math::POW_SQRT1_2) as i32);
@@ -91,7 +91,7 @@ fn round_even(x: f32) -> f32 {
 }
 
 #[inline(always)]
-fn exp2(x: f32) -> f32 {
+pub(crate) fn exp2(x: f32) -> f32 {
     use fast_math::POW_EXP2 as C;
     if x >= 128.0 {
         return f32::INFINITY;

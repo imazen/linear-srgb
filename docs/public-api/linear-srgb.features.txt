@@ -1,5 +1,5 @@
 # linear-srgb public API — additions from non-default features
-# features: alt,avx512,iec,std,transfer,unsafe_simd
+# features: alt,avx512,iec,precise-portable,std,transfer,unsafe_simd
 # (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
 # Encodings: crate-name prefix stripped; auto traits collapse to a
 # count + exceptions; trait impls collapse to one roster line per

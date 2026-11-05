@@ -217,6 +217,12 @@ pub mod default;
 /// For faster alternatives, use [`default`].
 pub mod precise;
 
+/// Portable scalar companions to native fused mid-precision vector math.
+///
+/// These approximations preserve the vector kernels' operation order for
+/// scalar remainders. See the domain and precision limits in [`portable`].
+pub mod portable;
+
 /// Lookup table types for sRGB conversion.
 ///
 /// Provides both build-time const tables ([`SrgbConverter`](lut::SrgbConverter))
