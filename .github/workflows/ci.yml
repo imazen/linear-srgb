@@ -138,6 +138,20 @@ jobs:
       - name: Check (all features)
         run: cargo check --target ${{ matrix.target }} --all-features
 
+  linux-i686:
+    name: Test (Linux i686 via cross)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cross
+        run: cargo install cross --locked
+      - name: Test all library features
+        run: cross test --target i686-unknown-linux-gnu --all-features --release --lib
+      - name: Check no default features
+        run: cross check --target i686-unknown-linux-gnu --no-default-features
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
