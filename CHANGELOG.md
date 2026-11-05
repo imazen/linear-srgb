@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- u16 decode tails and RGBA u16 encode use the same RGB arithmetic at every row length; HDR RGBA slices share the plain slice kernels, including the near-black PQ correction.
+
 - `linear_to_srgb_u16_slice` gives the same codes at every tier and row length: its tail and scalar tier ran the higher-precision scalar function, while its vector body runs in f32.
 - Every native tier gives the same bits for the plain slices: V3, V4x, NEON and the scalar tier, on x86-64 and aarch64, and WASM under `+relaxed-simd` on a fusing engine. The scalar tiers run the kernels' own operations per sample with fused math (`src/lanes.rs`), and `pow` for gamma and near-black PQ is now ours. Scalar tier output changes by small amounts. `tests/tier_parity.rs`.
 - `linear_to_hlg` no longer steps down at `1/12`, nor `bt709_to_linear` at its threshold.

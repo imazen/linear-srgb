@@ -815,7 +815,7 @@ fn srgb_u16_to_linear_slice_tier(token: Token, input: &[u16], output: &mut [f32]
     }
 
     for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
-        *out = crate::scalar::srgb_u16_to_linear(*inp);
+        *out = crate::lanes::srgb_to_linear(*inp as f32 * (1.0 / 65535.0));
     }
 }
 
@@ -1304,76 +1304,26 @@ pub fn srgb_u16_to_linear_rgba_slice(input: &[u16], output: &mut [f32]) {
     }
 }
 
-// ---------- SIMD polynomial + quantize for linear_to_srgb_u16_rgba_slice ----------
-//
-// Applies the polynomial to all lanes (including alpha positions — their
-// polynomial result is discarded and replaced with a scalar
-// `(alpha * 65535 + 0.5) as u16` direct cast). Same 25% lane-waste pattern
-// as other memory-based RGBA paths.
-
-#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
-fn linear_to_srgb_u16_rgba_slice_tier(token: Token, input: &[f32], output: &mut [u16]) {
-    use crate::rational_poly::{L2S_P, L2S_Q, LINEAR_THRESHOLD};
-
-    let (in_chunks, in_rem) = input.as_chunks::<16>();
-    let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
-    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
-        let linear = f32x16::from_array_t(token, *inp);
-        let zero = f32x16::zero_t(token);
-        let one = f32x16::splat_t(token, 1.0);
-        let clamped = linear.max(zero).min(one);
-        let linear_result = clamped * f32x16::splat_t(token, 12.92);
-        let x = clamped.sqrt();
-        let yp = f32x16::splat_t(token, L2S_P[4]).mla(x, f32x16::splat_t(token, L2S_P[3]));
-        let yp = yp.mla(x, f32x16::splat_t(token, L2S_P[2]));
-        let yp = yp.mla(x, f32x16::splat_t(token, L2S_P[1]));
-        let yp = yp.mla(x, f32x16::splat_t(token, L2S_P[0]));
-        let yq = f32x16::splat_t(token, L2S_Q[4]).mla(x, f32x16::splat_t(token, L2S_Q[3]));
-        let yq = yq.mla(x, f32x16::splat_t(token, L2S_Q[2]));
-        let yq = yq.mla(x, f32x16::splat_t(token, L2S_Q[1]));
-        let yq = yq.mla(x, f32x16::splat_t(token, L2S_Q[0]));
-        let power_result = (yp / yq).min(one);
-        let thresh_mask = clamped.simd_lt(f32x16::splat_t(token, LINEAR_THRESHOLD));
-        let srgb = f32x16::blend(thresh_mask, linear_result, power_result);
-        let ge_one = linear.simd_ge(one);
-        let srgb = f32x16::blend(ge_one, one, srgb);
-
-        let scaled = srgb.mla(f32x16::splat_t(token, 65535.0), f32x16::splat_t(token, 0.5));
-        let idx_i = scaled.to_i32().to_array();
-        for px in 0..4 {
-            let base = px * 4;
-            out[base] = idx_i[base] as u16;
-            out[base + 1] = idx_i[base + 1] as u16;
-            out[base + 2] = idx_i[base + 2] as u16;
-            out[base + 3] = (inp[base + 3].clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
-        }
-    }
-    for (inp, out) in in_rem
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(out_rem.as_chunks_mut::<4>().0.iter_mut())
-    {
-        out[0] = crate::scalar::linear_to_srgb_u16(inp[0]);
-        out[1] = crate::scalar::linear_to_srgb_u16(inp[1]);
-        out[2] = crate::scalar::linear_to_srgb_u16(inp[2]);
-        out[3] = (inp[3].clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
-    }
-}
-
-/// Convert linear RGBA f32 to sRGB u16, preserving alpha. Polynomial encode
-/// with SIMD dispatch (perfect roundtrip). For ~10× faster, use
-/// [`linear_to_srgb_u16_rgba_slice_fast`].
+/// Convert linear RGBA f32 to sRGB u16, preserving alpha.
+///
+/// Uses the same RGB kernel as [`linear_to_srgb_u16_slice`] at every row
+/// length. Alpha is quantized linearly. Incomplete trailing pixels are ignored.
 ///
 /// # Panics
 /// Panics if `input.len() != output.len()`.
 #[inline]
 pub fn linear_to_srgb_u16_rgba_slice(input: &[f32], output: &mut [u16]) {
     assert_eq!(input.len(), output.len());
-    incant!(
-        linear_to_srgb_u16_rgba_slice_tier(input, output),
-        [v4, v3, neon, wasm128, scalar]
-    )
+    let len = input.len() / 4 * 4;
+    linear_to_srgb_u16_slice(&input[..len], &mut output[..len]);
+    for (src, dst) in input[..len]
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(output[..len].as_chunks_mut::<4>().0)
+    {
+        dst[3] = (f64::from(src[3]).clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+    }
 }
 
 /// Convert linear RGBA f32 to sRGB u16, preserving alpha. Sqrt-indexed LUT
@@ -2033,92 +1983,25 @@ pub fn linear_to_hlg_slice(values: &mut [f32]) {
 // Transfer function RGBA slice dispatchers (BT.709, PQ, HLG — alpha-preserving)
 // ============================================================================
 //
-// Each RGBA dispatcher applies the TF to all four lanes of every RGBA pixel,
-// then restores the alpha channel from a per-chunk stash. The plain slice
-// rites can't be reused because they're slice-shaped; we go through the
-// per-N-lanes rites (`crate::tokens::x8::bt709_to_linear_v3` et al.) so
-// alpha save/restore fits naturally around the SIMD step.
-
+// Preserve alpha around the same plain-slice kernel, in fixed stack chunks.
+// This keeps the HDR near-black corrections and every dispatch tier shared.
 #[cfg(feature = "transfer")]
 macro_rules! tf_rgba_slice_dispatcher {
-    (
-        pub = $pub_name:ident,
-        tier_base = $tier_base:ident,
-        tier_v4 = $tier_v4:ident,
-        tier_v3 = $tier_v3:ident,
-        tier_neon = $tier_neon:ident,
-        tier_wasm128 = $tier_wasm128:ident,
-        tier_scalar = $tier_scalar:ident,
-        scalar = $scalar:path,
-        x16_v4 = $x16_v4:path,
-        x8_v3 = $x8_v3:path,
-        x4_neon = $x4_neon:path,
-        x4_wasm128 = $x4_wasm128:path,
-        doc = $doc:expr,
-    ) => {
-        #[cfg(feature = "avx512")]
-        #[arcane]
-        fn $tier_v4(token: X64V4Token, values: &mut [f32]) {
-            let (chunks, remainder) = values.as_chunks_mut::<16>();
-            let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
-            let mut tail = tail_block::<16>(remainder);
-            for chunk in chunks.iter_mut().chain(tail.as_mut()) {
-                let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
-                *chunk = $x16_v4(token, *chunk);
-                [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
-            }
-            store_tail(remainder, tail.as_ref());
-        }
-
-        #[arcane]
-        fn $tier_v3(token: X64V3Token, values: &mut [f32]) {
-            let (chunks, remainder) = values.as_chunks_mut::<8>();
-            let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
-            let mut tail = tail_block::<8>(remainder);
-            for chunk in chunks.iter_mut().chain(tail.as_mut()) {
-                let a = [chunk[3], chunk[7]];
-                *chunk = $x8_v3(token, *chunk);
-                [chunk[3], chunk[7]] = a;
-            }
-            store_tail(remainder, tail.as_ref());
-        }
-
-        #[arcane]
-        fn $tier_neon(token: NeonToken, values: &mut [f32]) {
-            let (chunks, _remainder) = values.as_chunks_mut::<4>();
-            for chunk in chunks {
-                let a = chunk[3];
-                *chunk = $x4_neon(token, *chunk);
-                chunk[3] = a;
-            }
-        }
-
-        #[arcane]
-        fn $tier_wasm128(token: Wasm128Token, values: &mut [f32]) {
-            let (chunks, _remainder) = values.as_chunks_mut::<4>();
-            for chunk in chunks {
-                let a = chunk[3];
-                *chunk = $x4_wasm128(token, *chunk);
-                chunk[3] = a;
-            }
-        }
-
-        fn $tier_scalar(_token: ScalarToken, values: &mut [f32]) {
-            for pixel in values.as_chunks_mut::<4>().0.iter_mut() {
-                pixel[0] = $scalar(pixel[0]);
-                pixel[1] = $scalar(pixel[1]);
-                pixel[2] = $scalar(pixel[2]);
-            }
-        }
-
+    (pub = $pub_name:ident, plain = $plain:ident, doc = $doc:expr,) => {
         #[doc = $doc]
-        ///
-        /// Expects interleaved RGBA data (`[R, G, B, A, R, G, B, A, ...]`).
-        /// Every 4th element (alpha) is left unchanged. Trailing elements
-        /// that don't form a complete RGBA pixel are ignored.
-        #[inline]
+        /// Alpha is preserved bit-for-bit; incomplete trailing pixels are ignored.
         pub fn $pub_name(values: &mut [f32]) {
-            incant!($tier_base(values), [v4, v3, neon, wasm128, scalar])
+            let len = values.len() / 4 * 4;
+            for chunk in values[..len].chunks_mut(256) {
+                let mut alpha = [0.0f32; 64];
+                for (i, px) in chunk.as_chunks::<4>().0.iter().enumerate() {
+                    alpha[i] = px[3];
+                }
+                $plain(chunk);
+                for (i, px) in chunk.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+                    px[3] = alpha[i];
+                }
+            }
         }
     };
 }
@@ -2126,102 +2009,42 @@ macro_rules! tf_rgba_slice_dispatcher {
 #[cfg(feature = "transfer")]
 tf_rgba_slice_dispatcher! {
     pub = bt709_to_linear_rgba_slice,
-    tier_base = bt709_to_linear_rgba_slice_tier,
-    tier_v4 = bt709_to_linear_rgba_slice_tier_v4,
-    tier_v3 = bt709_to_linear_rgba_slice_tier_v3,
-    tier_neon = bt709_to_linear_rgba_slice_tier_neon,
-    tier_wasm128 = bt709_to_linear_rgba_slice_tier_wasm128,
-    tier_scalar = bt709_to_linear_rgba_slice_tier_scalar,
-    scalar = crate::tf::bt709_to_linear,
-    x16_v4 = crate::tokens::x16::bt709_to_linear_v4,
-    x8_v3 = crate::tokens::x8::bt709_to_linear_v3,
-    x4_neon = crate::tokens::x4::bt709_to_linear_neon,
-    x4_wasm128 = crate::tokens::x4::bt709_to_linear_wasm128,
+    plain = bt709_to_linear_slice,
     doc = "Convert BT.709 signal RGBA f32 values to linear in-place, preserving alpha.",
 }
 
 #[cfg(feature = "transfer")]
 tf_rgba_slice_dispatcher! {
     pub = linear_to_bt709_rgba_slice,
-    tier_base = linear_to_bt709_rgba_slice_tier,
-    tier_v4 = linear_to_bt709_rgba_slice_tier_v4,
-    tier_v3 = linear_to_bt709_rgba_slice_tier_v3,
-    tier_neon = linear_to_bt709_rgba_slice_tier_neon,
-    tier_wasm128 = linear_to_bt709_rgba_slice_tier_wasm128,
-    tier_scalar = linear_to_bt709_rgba_slice_tier_scalar,
-    scalar = crate::tf::linear_to_bt709,
-    x16_v4 = crate::tokens::x16::linear_to_bt709_v4,
-    x8_v3 = crate::tokens::x8::linear_to_bt709_v3,
-    x4_neon = crate::tokens::x4::linear_to_bt709_neon,
-    x4_wasm128 = crate::tokens::x4::linear_to_bt709_wasm128,
+    plain = linear_to_bt709_slice,
     doc = "Convert linear RGBA f32 values to BT.709 signal in-place, preserving alpha.",
 }
 
 #[cfg(feature = "transfer")]
 tf_rgba_slice_dispatcher! {
     pub = pq_to_linear_rgba_slice,
-    tier_base = pq_to_linear_rgba_slice_tier,
-    tier_v4 = pq_to_linear_rgba_slice_tier_v4,
-    tier_v3 = pq_to_linear_rgba_slice_tier_v3,
-    tier_neon = pq_to_linear_rgba_slice_tier_neon,
-    tier_wasm128 = pq_to_linear_rgba_slice_tier_wasm128,
-    tier_scalar = pq_to_linear_rgba_slice_tier_scalar,
-    scalar = crate::tf::pq_to_linear,
-    x16_v4 = crate::tokens::x16::pq_to_linear_v4,
-    x8_v3 = crate::tokens::x8::pq_to_linear_v3,
-    x4_neon = crate::tokens::x4::pq_to_linear_neon,
-    x4_wasm128 = crate::tokens::x4::pq_to_linear_wasm128,
+    plain = pq_to_linear_slice,
     doc = "Convert PQ (ST 2084) signal RGBA f32 values to linear in-place, preserving alpha.",
 }
 
 #[cfg(feature = "transfer")]
 tf_rgba_slice_dispatcher! {
     pub = linear_to_pq_rgba_slice,
-    tier_base = linear_to_pq_rgba_slice_tier,
-    tier_v4 = linear_to_pq_rgba_slice_tier_v4,
-    tier_v3 = linear_to_pq_rgba_slice_tier_v3,
-    tier_neon = linear_to_pq_rgba_slice_tier_neon,
-    tier_wasm128 = linear_to_pq_rgba_slice_tier_wasm128,
-    tier_scalar = linear_to_pq_rgba_slice_tier_scalar,
-    scalar = crate::tf::linear_to_pq,
-    x16_v4 = crate::tokens::x16::linear_to_pq_v4,
-    x8_v3 = crate::tokens::x8::linear_to_pq_v3,
-    x4_neon = crate::tokens::x4::linear_to_pq_neon,
-    x4_wasm128 = crate::tokens::x4::linear_to_pq_wasm128,
+    plain = linear_to_pq_slice,
     doc = "Convert linear RGBA f32 values to PQ (ST 2084) signal in-place, preserving alpha.",
 }
 
 #[cfg(feature = "transfer")]
 tf_rgba_slice_dispatcher! {
     pub = hlg_to_linear_rgba_slice,
-    tier_base = hlg_to_linear_rgba_slice_tier,
-    tier_v4 = hlg_to_linear_rgba_slice_tier_v4,
-    tier_v3 = hlg_to_linear_rgba_slice_tier_v3,
-    tier_neon = hlg_to_linear_rgba_slice_tier_neon,
-    tier_wasm128 = hlg_to_linear_rgba_slice_tier_wasm128,
-    tier_scalar = hlg_to_linear_rgba_slice_tier_scalar,
-    scalar = crate::tf::hlg_to_linear,
-    x16_v4 = crate::tokens::x16::hlg_to_linear_v4,
-    x8_v3 = crate::tokens::x8::hlg_to_linear_v3,
-    x4_neon = crate::tokens::x4::hlg_to_linear_neon,
-    x4_wasm128 = crate::tokens::x4::hlg_to_linear_wasm128,
+    plain = hlg_to_linear_slice,
     doc = "Convert HLG (ARIB STD-B67) signal RGBA f32 values to linear in-place, preserving alpha.",
 }
 
 #[cfg(feature = "transfer")]
 tf_rgba_slice_dispatcher! {
     pub = linear_to_hlg_rgba_slice,
-    tier_base = linear_to_hlg_rgba_slice_tier,
-    tier_v4 = linear_to_hlg_rgba_slice_tier_v4,
-    tier_v3 = linear_to_hlg_rgba_slice_tier_v3,
-    tier_neon = linear_to_hlg_rgba_slice_tier_neon,
-    tier_wasm128 = linear_to_hlg_rgba_slice_tier_wasm128,
-    tier_scalar = linear_to_hlg_rgba_slice_tier_scalar,
-    scalar = crate::tf::linear_to_hlg,
-    x16_v4 = crate::tokens::x16::linear_to_hlg_v4,
-    x8_v3 = crate::tokens::x8::linear_to_hlg_v3,
-    x4_neon = crate::tokens::x4::linear_to_hlg_neon,
-    x4_wasm128 = crate::tokens::x4::linear_to_hlg_wasm128,
+    plain = linear_to_hlg_slice,
     doc = "Convert linear RGBA f32 values to HLG (ARIB STD-B67) signal in-place, preserving alpha.",
 }
 
