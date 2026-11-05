@@ -52,7 +52,7 @@ const TWELVE_92: f32 = 12.92;
 /// sRGB → linear (4 lanes). Clamps input to \[0, 1\]; forces exact 1.0 output
 /// for inputs >= 1.0 to cover polynomial boundary undershoot.
 #[inline(always)]
-fn srgb_to_linear_core<T: F32x4Backend>(token: T, srgb: [f32; 4]) -> [f32; 4] {
+pub(crate) fn srgb_to_linear_core<T: F32x4Backend>(token: T, srgb: [f32; 4]) -> [f32; 4] {
     use crate::rational_poly::{S2L_P, S2L_Q};
     let zero = gen_f32x4::<T>::zero_t(token);
     let one = gen_f32x4::<T>::splat_t(token, 1.0);
@@ -81,7 +81,7 @@ fn srgb_to_linear_core<T: F32x4Backend>(token: T, srgb: [f32; 4]) -> [f32; 4] {
 /// Linear → sRGB (4 lanes). Clamps input to \[0, 1\]; forces exact 1.0 output
 /// for inputs >= 1.0 to cover polynomial boundary undershoot.
 #[inline(always)]
-fn linear_to_srgb_core<T: F32x4Backend>(token: T, linear: [f32; 4]) -> [f32; 4] {
+pub(crate) fn linear_to_srgb_core<T: F32x4Backend>(token: T, linear: [f32; 4]) -> [f32; 4] {
     use crate::rational_poly::{L2S_P, L2S_Q};
     let zero = gen_f32x4::<T>::zero_t(token);
     let one = gen_f32x4::<T>::splat_t(token, 1.0);
@@ -109,7 +109,11 @@ fn linear_to_srgb_core<T: F32x4Backend>(token: T, linear: [f32; 4]) -> [f32; 4] 
 
 /// Custom-gamma encoded → linear (4 lanes). Clamps input to \[0, 1\].
 #[inline(always)]
-fn gamma_to_linear_core<T: F32x4Convert>(token: T, encoded: [f32; 4], gamma: f32) -> [f32; 4] {
+pub(crate) fn gamma_to_linear_core<T: F32x4Convert>(
+    token: T,
+    encoded: [f32; 4],
+    gamma: f32,
+) -> [f32; 4] {
     let zero = gen_f32x4::<T>::zero_t(token);
     let one = gen_f32x4::<T>::splat_t(token, 1.0);
     let v = gen_f32x4::<T>::from_array_t(token, encoded)
@@ -120,7 +124,11 @@ fn gamma_to_linear_core<T: F32x4Convert>(token: T, encoded: [f32; 4], gamma: f32
 
 /// Linear → custom-gamma encoded (4 lanes). Clamps input to \[0, 1\].
 #[inline(always)]
-fn linear_to_gamma_core<T: F32x4Convert>(token: T, linear: [f32; 4], gamma: f32) -> [f32; 4] {
+pub(crate) fn linear_to_gamma_core<T: F32x4Convert>(
+    token: T,
+    linear: [f32; 4],
+    gamma: f32,
+) -> [f32; 4] {
     let zero = gen_f32x4::<T>::zero_t(token);
     let one = gen_f32x4::<T>::splat_t(token, 1.0);
     let v = gen_f32x4::<T>::from_array_t(token, linear)

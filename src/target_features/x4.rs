@@ -206,3 +206,6 @@ forward!(x4, wasm128, archmage::Wasm128Token; #[cfg(target_arch = "wasm32")]
     fn linear_to_hlg_slice_wasm128(values: &mut [f32]));
 forward!(x4, scalar, archmage::ScalarToken; fn srgb_to_linear_extended_scalar(values: [f32; 4]) -> [f32; 4]);
 forward!(x4, scalar, archmage::ScalarToken; fn linear_to_srgb_extended_scalar(values: [f32; 4]) -> [f32; 4]);
+
+// Portable tier completion
+include!("portable_x4.rs");
