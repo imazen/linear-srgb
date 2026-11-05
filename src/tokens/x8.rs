@@ -402,8 +402,11 @@ pub fn srgb_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
         *chunk = srgb_to_linear_v3(token, *chunk);
     }
 
-    for v in remainder {
-        *v = crate::scalar::srgb_to_linear(*v);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 8];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = srgb_to_linear_v3(token, padded);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -418,8 +421,11 @@ pub fn linear_to_srgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
         *chunk = linear_to_srgb_v3(token, *chunk);
     }
 
-    for v in remainder {
-        *v = crate::scalar::linear_to_srgb(*v);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 8];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = linear_to_srgb_v3(token, padded);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -434,8 +440,11 @@ pub fn srgb_to_linear_extended_slice_v3(token: X64V3Token, values: &mut [f32]) {
         *chunk = srgb_to_linear_extended_v3(token, *chunk);
     }
 
-    for v in remainder {
-        *v = crate::scalar::srgb_to_linear_extended(*v);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 8];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = srgb_to_linear_extended_v3(token, padded);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -450,8 +459,11 @@ pub fn linear_to_srgb_extended_slice_v3(token: X64V3Token, values: &mut [f32]) {
         *chunk = linear_to_srgb_extended_v3(token, *chunk);
     }
 
-    for v in remainder {
-        *v = crate::scalar::linear_to_srgb_extended(*v);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 8];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = linear_to_srgb_extended_v3(token, padded);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -466,8 +478,11 @@ pub fn gamma_to_linear_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f3
         *chunk = gamma_to_linear_v3(token, *chunk, gamma);
     }
 
-    for v in remainder {
-        *v = crate::scalar::gamma_to_linear(*v, gamma);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 8];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = gamma_to_linear_v3(token, padded, gamma);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -482,8 +497,11 @@ pub fn linear_to_gamma_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f3
         *chunk = linear_to_gamma_v3(token, *chunk, gamma);
     }
 
-    for v in remainder {
-        *v = crate::scalar::linear_to_gamma(*v, gamma);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 8];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = linear_to_gamma_v3(token, padded, gamma);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -658,14 +676,17 @@ pub fn linear_to_hlg_slice_v3(token: X64V3Token, values: &mut [f32]) {
 fn tf_slice_x8(
     values: &mut [f32],
     tf_x8: impl Fn([f32; 8]) -> [f32; 8],
-    tf_scalar: fn(f32) -> f32,
+    _tf_scalar: fn(f32) -> f32,
 ) {
     let (chunks, remainder) = values.as_chunks_mut::<8>();
     for chunk in chunks {
         *chunk = tf_x8(*chunk);
     }
-    for v in remainder {
-        *v = tf_scalar(*v);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 8];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = tf_x8(padded);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 

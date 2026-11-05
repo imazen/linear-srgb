@@ -247,8 +247,11 @@ pub fn srgb_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
     for chunk in chunks {
         *chunk = srgb_to_linear_core(token, *chunk);
     }
-    for v in remainder {
-        *v = crate::scalar::srgb_to_linear(*v);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 4];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = srgb_to_linear_core(token, padded);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -262,8 +265,11 @@ pub fn linear_to_srgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
     for chunk in chunks {
         *chunk = linear_to_srgb_core(token, *chunk);
     }
-    for v in remainder {
-        *v = crate::scalar::linear_to_srgb(*v);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 4];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = linear_to_srgb_core(token, padded);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -277,8 +283,11 @@ pub fn gamma_to_linear_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f3
     for chunk in chunks {
         *chunk = gamma_to_linear_core(token, *chunk, gamma);
     }
-    for v in remainder {
-        *v = crate::scalar::gamma_to_linear(*v, gamma);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 4];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = gamma_to_linear_core(token, padded, gamma);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -292,8 +301,11 @@ pub fn linear_to_gamma_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f3
     for chunk in chunks {
         *chunk = linear_to_gamma_core(token, *chunk, gamma);
     }
-    for v in remainder {
-        *v = crate::scalar::linear_to_gamma(*v, gamma);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 4];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = linear_to_gamma_core(token, padded, gamma);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -348,8 +360,11 @@ pub fn srgb_to_linear_slice_neon(token: NeonToken, values: &mut [f32]) {
     for chunk in chunks {
         *chunk = srgb_to_linear_core(token, *chunk);
     }
-    for v in remainder {
-        *v = crate::scalar::srgb_to_linear(*v);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 4];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = srgb_to_linear_core(token, padded);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -363,8 +378,11 @@ pub fn linear_to_srgb_slice_neon(token: NeonToken, values: &mut [f32]) {
     for chunk in chunks {
         *chunk = linear_to_srgb_core(token, *chunk);
     }
-    for v in remainder {
-        *v = crate::scalar::linear_to_srgb(*v);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 4];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = linear_to_srgb_core(token, padded);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -378,8 +396,11 @@ pub fn gamma_to_linear_slice_neon(token: NeonToken, values: &mut [f32], gamma: f
     for chunk in chunks {
         *chunk = gamma_to_linear_core(token, *chunk, gamma);
     }
-    for v in remainder {
-        *v = crate::scalar::gamma_to_linear(*v, gamma);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 4];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = gamma_to_linear_core(token, padded, gamma);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -393,8 +414,11 @@ pub fn linear_to_gamma_slice_neon(token: NeonToken, values: &mut [f32], gamma: f
     for chunk in chunks {
         *chunk = linear_to_gamma_core(token, *chunk, gamma);
     }
-    for v in remainder {
-        *v = crate::scalar::linear_to_gamma(*v, gamma);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 4];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = linear_to_gamma_core(token, padded, gamma);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -449,8 +473,11 @@ pub fn srgb_to_linear_slice_wasm128(token: Wasm128Token, values: &mut [f32]) {
     for chunk in chunks {
         *chunk = srgb_to_linear_core(token, *chunk);
     }
-    for v in remainder {
-        *v = crate::scalar::srgb_to_linear(*v);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 4];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = srgb_to_linear_core(token, padded);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -464,8 +491,11 @@ pub fn linear_to_srgb_slice_wasm128(token: Wasm128Token, values: &mut [f32]) {
     for chunk in chunks {
         *chunk = linear_to_srgb_core(token, *chunk);
     }
-    for v in remainder {
-        *v = crate::scalar::linear_to_srgb(*v);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 4];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = linear_to_srgb_core(token, padded);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -479,8 +509,11 @@ pub fn gamma_to_linear_slice_wasm128(token: Wasm128Token, values: &mut [f32], ga
     for chunk in chunks {
         *chunk = gamma_to_linear_core(token, *chunk, gamma);
     }
-    for v in remainder {
-        *v = crate::scalar::gamma_to_linear(*v, gamma);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 4];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = gamma_to_linear_core(token, padded, gamma);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -494,8 +527,11 @@ pub fn linear_to_gamma_slice_wasm128(token: Wasm128Token, values: &mut [f32], ga
     for chunk in chunks {
         *chunk = linear_to_gamma_core(token, *chunk, gamma);
     }
-    for v in remainder {
-        *v = crate::scalar::linear_to_gamma(*v, gamma);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 4];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = linear_to_gamma_core(token, padded, gamma);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -541,8 +577,11 @@ macro_rules! x86_tf_slice_rite {
             for chunk in chunks {
                 *chunk = $rite(token, *chunk);
             }
-            for v in remainder {
-                *v = $scalar(*v);
+            if !remainder.is_empty() {
+                let mut padded = [0.0; 4];
+                padded[..remainder.len()].copy_from_slice(remainder);
+                let converted = $rite(token, padded);
+                remainder.copy_from_slice(&converted[..remainder.len()]);
             }
         }
     };
@@ -623,8 +662,11 @@ macro_rules! neon_tf_slice_rite {
             for chunk in chunks {
                 *chunk = $rite(token, *chunk);
             }
-            for v in remainder {
-                *v = $scalar(*v);
+            if !remainder.is_empty() {
+                let mut padded = [0.0; 4];
+                padded[..remainder.len()].copy_from_slice(remainder);
+                let converted = $rite(token, padded);
+                remainder.copy_from_slice(&converted[..remainder.len()]);
             }
         }
     };
@@ -717,8 +759,11 @@ macro_rules! wasm_tf_slice_rite {
             for chunk in chunks {
                 *chunk = $rite(token, *chunk);
             }
-            for v in remainder {
-                *v = $scalar(*v);
+            if !remainder.is_empty() {
+                let mut padded = [0.0; 4];
+                padded[..remainder.len()].copy_from_slice(remainder);
+                let converted = $rite(token, padded);
+                remainder.copy_from_slice(&converted[..remainder.len()]);
             }
         }
     };

@@ -226,8 +226,11 @@ pub fn srgb_to_linear_slice_v4(token: X64V4Token, values: &mut [f32]) {
         *chunk = srgb_to_linear_v4(token, *chunk);
     }
 
-    for v in remainder {
-        *v = crate::scalar::srgb_to_linear(*v);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 16];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = srgb_to_linear_v4(token, padded);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -242,8 +245,11 @@ pub fn linear_to_srgb_slice_v4(token: X64V4Token, values: &mut [f32]) {
         *chunk = linear_to_srgb_v4(token, *chunk);
     }
 
-    for v in remainder {
-        *v = crate::scalar::linear_to_srgb(*v);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 16];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = linear_to_srgb_v4(token, padded);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -258,8 +264,11 @@ pub fn gamma_to_linear_slice_v4(token: X64V4Token, values: &mut [f32], gamma: f3
         *chunk = gamma_to_linear_v4(token, *chunk, gamma);
     }
 
-    for v in remainder {
-        *v = crate::scalar::gamma_to_linear(*v, gamma);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 16];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = gamma_to_linear_v4(token, padded, gamma);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -274,8 +283,11 @@ pub fn linear_to_gamma_slice_v4(token: X64V4Token, values: &mut [f32], gamma: f3
         *chunk = linear_to_gamma_v4(token, *chunk, gamma);
     }
 
-    for v in remainder {
-        *v = crate::scalar::linear_to_gamma(*v, gamma);
+    if !remainder.is_empty() {
+        let mut padded = [0.0; 16];
+        padded[..remainder.len()].copy_from_slice(remainder);
+        let converted = linear_to_gamma_v4(token, padded, gamma);
+        remainder.copy_from_slice(&converted[..remainder.len()]);
     }
 }
 
@@ -342,44 +354,14 @@ pub fn tf_linear_to_srgb_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
 #[cfg(feature = "transfer")]
 #[rite]
 pub fn pq_to_linear_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
-    use crate::tf::pq::{PQ_EOTF_P_LARGE, PQ_EOTF_P_SMALL, PQ_EOTF_Q_LARGE, PQ_EOTF_Q_SMALL};
-
-    let v = mt_f32x16::from_array_t(token, v);
-    let zero = mt_f32x16::zero_t(token);
-    let a = v.max(zero);
-    let x = a.mla(a, a); // x = a + a*a
-
-    let threshold = mt_f32x16::splat_t(token, 0.25);
-    let large = eval_rational_poly_x16(token, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE);
-    let small = eval_rational_poly_x16(token, x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL);
-
-    let mask = a.simd_lt(threshold);
-    let result = mt_f32x16::blend(mask, small, large);
-
-    let pos_mask = v.simd_gt(zero);
-    (result & pos_mask).to_array()
+    crate::tf::pq::pq_to_linear_x16(token, mt_f32x16::from_array_t(token, v)).to_array()
 }
 
 /// Convert 16 linear values to PQ signal.
 #[cfg(feature = "transfer")]
 #[rite]
 pub fn linear_to_pq_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
-    use crate::tf::pq::{PQ_INV_P_LARGE, PQ_INV_P_SMALL, PQ_INV_Q_LARGE, PQ_INV_Q_SMALL};
-
-    let v = mt_f32x16::from_array_t(token, v);
-    let zero = mt_f32x16::zero_t(token);
-    let a = v.max(zero);
-    let a4 = a.sqrt().sqrt();
-
-    let threshold = mt_f32x16::splat_t(token, 0.1);
-    let large = eval_rational_poly_x16(token, a4, PQ_INV_P_LARGE, PQ_INV_Q_LARGE);
-    let small = eval_rational_poly_x16(token, a4, PQ_INV_P_SMALL, PQ_INV_Q_SMALL);
-
-    let mask = a4.simd_lt(threshold);
-    let result = mt_f32x16::blend(mask, small, large);
-
-    let pos_mask = v.simd_gt(zero);
-    (result & pos_mask).to_array()
+    crate::tf::pq::linear_to_pq_x16(token, mt_f32x16::from_array_t(token, v)).to_array()
 }
 
 /// Convert 16 BT.709 encoded values to linear (2×x8 via tokens::x8).
@@ -456,8 +438,11 @@ macro_rules! tf_slice_v4 {
             for chunk in chunks {
                 *chunk = $rite(token, *chunk);
             }
-            for v in remainder {
-                *v = $scalar(*v);
+            if !remainder.is_empty() {
+                let mut padded = [0.0; 16];
+                padded[..remainder.len()].copy_from_slice(remainder);
+                let converted = $rite(token, padded);
+                remainder.copy_from_slice(&converted[..remainder.len()]);
             }
         }
     };
