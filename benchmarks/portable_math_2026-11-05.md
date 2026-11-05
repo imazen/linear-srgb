@@ -24,8 +24,8 @@ exponentials. Error in pow grows with exponent-amplified logarithm error.
 V3, native x86 and NEON tests execute actual hardware tiers; ordinary baseline
 CI still verifies the portable functions and their edge policies.
 
-The scalar baseline can require software FMA on x86; the explicit hardware
-context lets LLVM inline native FMA and sometimes vectorize the scalar loop.
+The scalar baseline calls a fused-math helper on this x86 build; the explicit
+hardware context lets LLVM inline native FMA and vectorize parts of the loop.
 Native-vector cases include dispatch, packing and partial-vector padding.
 Single-element inputs are the first point of each grid; those timings should
 not be extrapolated to arbitrary tail values.
@@ -74,7 +74,7 @@ Baseline x86 16,384-value costs are 111.2 / 188.1 / 304.2 µs for log2/exp2/pow,
 versus 10.6 / 52.2 / 59.1 µs for relaxed scalar. FMA-context costs are
 3.6 / 24.7 / 39.2 µs. ARM portable costs are 28.3 / 40.5 / 95.4 µs, versus
 31.3 / 111.9 / 134.2 µs relaxed scalar. These are measured whole-loop costs;
-software-FMA cost must not be presented as an unavoidable SIMD-caller cost.
+baseline helper-call cost must not be presented as an unavoidable SIMD-caller cost.
 
 No lookup tables or new dependencies are added. Linked binary-size deltas
 were not measured for this API. Strict WASM and Zen 5 costs were not measured.
@@ -89,3 +89,17 @@ whole-tone-mapper parity.
 Raw logs: `~/tmp/precision-logs/portable-{x86-final,arm}.log` on r7900x;
 reference binaries and source identities are retained outside git under
 `/mnt/v/output/linear-srgb/precision-2026-11-05/`.
+
+## Baseline lowering check
+
+The benchmark executable SHA256 is
+`e0b233e01dd02d0610964d4e4125772e8a6305225364a90dd9086de64dc13c5f`.
+`objdump -Cd` shows baseline scalar Horner stages calling the local `fmaf`
+thunk (GOT relocation0x1f1180→0x1e7c70); the thunk calls compiler-builtins'
+cached runtime-selected function. Rust1.99.1's compiler-builtins source has
+hardware-FMA/FMA4 and software fallback targets. Thus the measured Zen4
+baseline difference must not be labeled pure software-FMA emulation.
+The matching V3 function contains packed/scalar `vfmadd` instructions with
+those helpers inlined. Times combine helper-call overhead, guard logic and
+vectorization; they do not isolate any one factor. The disassembly is retained
+outside git as `portable-x86-disassembly.txt` beside the reference artifacts.

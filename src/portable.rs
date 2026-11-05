@@ -2,7 +2,8 @@
 //!
 //! Each multiply-add is fused, including when software FMA is needed. With
 //! ordinary round-to-nearest floating-point settings, these functions match
-//! native FMA vector lanes on their documented domains. They are approximate
+//! native FMA vector lanes on their documented domains. Parity is tested against
+//! magetypes 0.9.31-beta.2, not arbitrary versions of that crate. They are approximate
 //! math, not correctly rounded libm replacements. The magetypes scalar tier
 //! uses relaxed multiply-add and can give different bits.
 //!
@@ -15,8 +16,8 @@
 //! extrapolation in `[127.5, 128)` has larger error. No uniform pow ULP bound
 //! is promised because logarithm error is amplified by the exponent.
 //!
-//! Software FMA can be costly on baseline x86 and strict WASM. In a hardware
-//! FMA target-feature context these inline into hardware operations. See
+//! Baseline x86 can call a fused-math helper; strict WASM can require software
+//! FMA. A matching FMA target-feature context permits inline hardware operations. See
 //! `benchmarks/portable_math_2026-11-05.md` in the repository for measurements.
 //!
 //! ```

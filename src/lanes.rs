@@ -1,7 +1,7 @@
 //! One sample through the same operations as the vector kernels, with every multiply-add fused.
 //!
-//! The scalar tiers use these, so a value converts to the same bits at every tier. They are
-//! kernels written out per lane, not separate approximations: change one, change the other,
+//! The scalar tiers use these to match finite, in-domain vector results. Special-input
+//! behavior can differ. These are per-lane kernels, not separate approximations: change one, change the other,
 //! and `tests/tier_parity.rs` holds them together.
 
 #[allow(unused_imports)]
