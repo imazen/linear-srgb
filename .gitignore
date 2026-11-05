@@ -64,3 +64,6 @@ Cargo.toml.original.txt
 fuzz-*.log
 .workongoing
 .jj/
+
+# Python tooling bytecode
+__pycache__/
