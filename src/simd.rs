@@ -334,7 +334,7 @@ fn srgb_to_linear_extended_slice_tier_scalar_t(_token: ScalarToken, values: &mut
 ///
 /// Uses a 6/6 rational polynomial fitted to \[0, 8\] — wider domain
 /// than the clamped path's 4/4 polynomial, with comparable in-range
-/// accuracy (5 ULP max in \[0,1\] vs 11 for clamped).
+/// accuracy (sampled max 8 ULP in \[0,1\] vs 11 for clamped).
 ///
 /// | Precision | Max |encoded| for < 0.5 LSB error | Headroom |
 /// |-----------|-------------------------------------|----------|
@@ -395,7 +395,7 @@ fn linear_to_srgb_extended_slice_tier_scalar_t(_token: ScalarToken, values: &mut
 ///
 /// Uses a 6/6 rational polynomial fitted on √x to \[0, 64\]. The sqrt
 /// compression gives excellent extrapolation — u16-safe across the
-/// entire fitted domain (5 ULP max in \[0,1\]).
+/// entire fitted domain (sampled max 7 ULP in \[0,1\]).
 ///
 /// | Precision | Max |linear| for < 0.5 LSB error | Headroom |
 /// |-----------|--------------------------------------|----------|
