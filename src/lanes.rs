@@ -1,8 +1,8 @@
 //! One sample through the same operations as the vector kernels, with every multiply-add fused.
 //!
 //! The scalar tiers use these, so a value converts to the same bits at every tier. They are
-//! kernels written out per lane, not separate approximations: change one, change the other,
-//! and `tests/tier_parity.rs` holds them together.
+//! crate-private kernels written out per lane. Keep their operations paired with
+//! the private vector copies; `tests/tier_parity.rs` holds them together.
 
 #[allow(unused_imports)]
 use num_traits::Float;

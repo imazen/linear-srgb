@@ -1,4 +1,5 @@
 //! Direct token hooks have the same row-length contract as dispatched slices.
+#![allow(deprecated)] // Exercise the retained token-taking compatibility API.
 #[cfg(target_arch = "aarch64")]
 use archmage::NeonToken;
 #[cfg(target_arch = "x86_64")]

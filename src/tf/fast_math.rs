@@ -16,7 +16,11 @@ use num_traits::Float; // provides mul_add/floor via libm in no_std
 ///
 /// Coefficients are stored lowest-degree-first: `p[0] + p[1]*x + p[2]*x^2 + ...`
 #[inline(always)]
-pub fn eval_rational_poly<const P: usize, const Q: usize>(x: f32, p: [f32; P], q: [f32; Q]) -> f32 {
+pub(crate) fn eval_rational_poly<const P: usize, const Q: usize>(
+    x: f32,
+    p: [f32; P],
+    q: [f32; Q],
+) -> f32 {
     let mut yp = p[P - 1];
     for i in (0..P - 1).rev() {
         yp = yp.mul_add(x, p[i]);
@@ -37,7 +41,7 @@ pub fn eval_rational_poly<const P: usize, const Q: usize>(x: f32, p: [f32; P], q
 /// Uses integer bit extraction for exponent + rational polynomial on mantissa.
 /// Coefficients from libjxl (via jxl crate).
 #[inline(always)]
-pub fn fast_log2f(x: f32) -> f32 {
+pub(crate) fn fast_log2f(x: f32) -> f32 {
     let x_bits = x.to_bits() as i32;
     let exp_bits = x_bits.wrapping_sub(0x3f2aaaab);
     let exp_shifted = exp_bits >> 23;
@@ -51,7 +55,7 @@ pub fn fast_log2f(x: f32) -> f32 {
 /// Splits into integer exponent (bit shift) + fractional part (rational polynomial).
 /// Coefficients from libjxl (via jxl crate).
 #[inline(always)]
-pub fn fast_pow2f(x: f32) -> f32 {
+pub(crate) fn fast_pow2f(x: f32) -> f32 {
     // Clamp to valid IEEE 754 exponent range to avoid i32 overflow in debug builds.
     // Values outside [-126, 128] produce 0.0 or infinity anyway.
     let x = x.clamp(-126.0, 128.0);
@@ -75,7 +79,7 @@ pub fn fast_pow2f(x: f32) -> f32 {
 ///
 /// Computed as `pow2(exp * log2(base))`.
 #[inline(always)]
-pub fn fast_powf(base: f32, exp: f32) -> f32 {
+pub(crate) fn fast_powf(base: f32, exp: f32) -> f32 {
     fast_pow2f(fast_log2f(base) * exp)
 }
 
@@ -132,8 +136,10 @@ mla_for!(f32x4, F32x4Backend);
 mla_for!(f32x8, F32x8Backend);
 mla_for!(f32x16, F32x16Backend);
 
-// `pow` for the gamma and near-black PQ paths, ours so that its rounding is under the same rule as
-// the other kernels. The same coefficients and operations as magetypes' `pow_midp`.
+// Crate-private copies for gamma and near-black PQ. Keep the native fused /
+// default-WASM relaxed rounding policy without requiring a magetypes API change.
+// The approximation follows magetypes 0.9.31-beta.2 pow_midp; scalar copies live
+// in crate::lanes. Changes must preserve tests/tier_parity.rs.
 pub(crate) const POW_SQRT1_2: u32 = 0x3f35_04f3;
 pub(crate) const POW_LOG2: [f32; 4] = [2.885_39, 0.961_800_76, 0.576_974_45, 0.434_411_97];
 pub(crate) const POW_EXP2: [f32; 7] = [

@@ -1,0 +1,130 @@
+//! Conversions for callers already compiled with the required CPU features.
+//!
+//! **Start with [`crate::default`] for ordinary calls.** It selects CPU features
+//! at runtime. This module is for composing conversions inside an existing SIMD
+//! loop: arrays and slices cross the API boundary, with no archmage tokens or
+//! magetypes vectors in the signatures.
+//!
+//! # Calling context
+//!
+//! On native targets, call these functions inside a function with matching
+//! `#[target_feature]` attributes. A runtime feature check alone does not give
+//! rustc that context. Calling from an ordinary function produces E0133 even
+//! though the conversion is a safe function. Move the call into your feature
+//! function instead of adding an `unsafe` block. An archmage `#[rite(v3)]` or
+//! `#[arcane]` body supplies the same context; its token stays with the caller.
+//!
+//! WebAssembly validates the required SIMD instructions when loading the
+//! module, so Rust also permits safe calls from ordinary WASM functions.
+//! Functions ending in `_scalar` need no feature context on any target.
+//!
+//! ```
+//! # #[cfg(target_arch = "x86_64")]
+//! # {
+//! use archmage::{arcane, SimdToken, X64V3Token};
+//! use linear_srgb::target_features::x8;
+//!
+//! // The entry point checks the CPU once, outside the loop.
+//! #[arcane]
+//! fn convert_rows(_token: X64V3Token, rows: &mut [[f32; 8]]) {
+//!     for row in rows {
+//!         *row = x8::srgb_to_linear_v3(*row); // no token argument
+//!     }
+//! }
+//!
+//! if let Some(token) = X64V3Token::summon() {
+//!     convert_rows(token, &mut [[0.5; 8]]);
+//! }
+//! # }
+//! ```
+//!
+//! # Names and requirements
+//!
+//! Width modules describe array size, not CPU detection: `x4`, `x8`, `x16`.
+//! Suffixes specify the required feature context. `x4` on x86 still requires
+//! V3, despite operating on four values. `v4` also needs Cargo feature `avx512`.
+//!
+//! | Suffix | Required `target_feature(enable = "…")` |
+//! | --- | --- |
+//! | `_v3` | `sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe` |
+//! | `_v4` | All V3 features plus `pclmulqdq,aes,avx512f,avx512bw,avx512cd,avx512dq,avx512vl` |
+//! | `_neon` | `neon` (AArch64) |
+//! | `_wasm128` | `simd128` (WebAssembly) |
+//! | `_scalar` | None |
+//!
+//! These functions retain the corresponding [`crate::tokens`] conversion,
+//! clamping, rounding and slice-length contracts. Transfer curves other than
+//! the base sRGB/gamma operations require Cargo feature `transfer`. They do not
+//! inspect the CPU or select a fallback. The internal SIMD dependencies may
+//! change independently of the caller's copies; only the feature requirements
+//! and ordinary Rust input/output types cross this boundary.
+
+// These wrappers intentionally call the retained legacy kernels.
+#![allow(deprecated)]
+
+//! # Dispatching wider arrays
+//!
+//! Each f32 family has x4, x8 and x16 variants for scalar, V3, V4, NEON
+//! and WASM128. Missing native widths compose x4 kernels; integer hooks keep
+//! their existing target-specific coverage. V4 requires the `avx512` feature.
+//! A caller can dispatch its own entry point and select our matching feature
+//! function without exchanging token types:
+//!
+//! ```
+//! #![forbid(unsafe_code)]
+//! use archmage::{incant, magetypes};
+//! use linear_srgb::target_features::x16;
+//!
+//! #[magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+//! fn pipeline(_token: Token, values: [f32; 16]) -> [f32; 16] {
+//!     incant!(x16::srgb_to_linear(values) without token)
+//! }
+//!
+//! let values = incant!(pipeline([0.5; 16]), [v4(cfg(avx512)), v3, neon, wasm128, scalar]);
+//! assert!(values.iter().all(|v| *v > 0.0 && *v < 1.0));
+//! ```
+
+macro_rules! forward {
+    ($width:ident, $tier:ident, $token:path; $(#[$meta:meta])* fn $name:ident($($arg:ident: $ty:ty),*) $(-> $out:ty)?) => {
+        #[doc = concat!("Equivalent to [`crate::tokens::", stringify!($width), "::", stringify!($name), "`] without its token argument. See [calling context](crate::target_features#calling-context) for required CPU features.")]
+        ///
+        /// # Safety
+        ///
+        /// On native targets rustc permits a safe call only from a function
+        /// enabling all required CPU features (see the module's feature table).
+        /// Use a matching feature function; ordinary callers should use
+        /// [`crate::default`]. No token argument or `unsafe` block is needed
+        /// inside that matching context. WASM validates SIMD at module load;
+        /// scalar variants have no CPU requirements.
+        $(#[$meta])*
+        #[archmage::rite($tier)]
+        pub fn $name($($arg: $ty),*) $(-> $out)? {
+            legacy::$name(<$token>::from_context(), $($arg),*)
+        }
+    };
+}
+
+/// Four-value arrays, or slices processed four values at a time.
+pub mod x4;
+
+/// Eight-value arrays, or slices processed eight values at a time.
+///
+/// On x86, ordinary calls lack the required compilation context:
+///
+/// ```compile_fail,E0133
+/// let _ = linear_srgb::target_features::x8::srgb_to_linear_v3([0.5; 8]);
+/// ```
+///
+/// A matching feature context makes the same call safe:
+///
+/// ```
+/// #![forbid(unsafe_code)]
+/// #[archmage::rite(v3)]
+/// fn convert(values: [f32; 8]) -> [f32; 8] {
+///     linear_srgb::target_features::x8::srgb_to_linear_v3(values)
+/// }
+/// ```
+pub mod x8;
+
+/// Sixteen-value arrays, or slices processed sixteen values at a time.
+pub mod x16;

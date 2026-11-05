@@ -1,3 +1,6 @@
+//! Deprecated: use [`crate::target_features`] with the same function name and
+//! arguments except for the token. See its calling-context example.
+//!
 //! Inlineable `#[rite]` functions for embedding in your own `#[arcane]` code.
 //!
 //! These functions carry `#[target_feature]` + `#[inline]` directly — no wrapper,
