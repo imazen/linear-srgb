@@ -62,6 +62,28 @@
 // These wrappers intentionally call the retained legacy kernels.
 #![allow(deprecated)]
 
+//! # Dispatching wider arrays
+//!
+//! Each f32 family has x4, x8 and x16 variants for scalar, V3, V4, NEON
+//! and WASM128. Missing native widths compose x4 kernels; integer hooks keep
+//! their existing target-specific coverage. V4 requires the `avx512` feature.
+//! A caller can dispatch its own entry point and select our matching feature
+//! function without exchanging token types:
+//!
+//! ```
+//! #![forbid(unsafe_code)]
+//! use archmage::{incant, magetypes};
+//! use linear_srgb::target_features::x16;
+//!
+//! #[magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+//! fn pipeline(_token: Token, values: [f32; 16]) -> [f32; 16] {
+//!     incant!(x16::srgb_to_linear(values) without token)
+//! }
+//!
+//! let values = incant!(pipeline([0.5; 16]), [v4(cfg(avx512)), v3, neon, wasm128, scalar]);
+//! assert!(values.iter().all(|v| *v > 0.0 && *v < 1.0));
+//! ```
+
 macro_rules! forward {
     ($width:ident, $tier:ident, $token:path; $(#[$meta:meta])* fn $name:ident($($arg:ident: $ty:ty),*) $(-> $out:ty)?) => {
         #[doc = concat!("Equivalent to [`crate::tokens::", stringify!($width), "::", stringify!($name), "`] without its token argument. See [calling context](crate::target_features#calling-context) for required CPU features.")]
@@ -102,9 +124,7 @@ pub mod x4;
 ///     linear_srgb::target_features::x8::srgb_to_linear_v3(values)
 /// }
 /// ```
-#[cfg(target_arch = "x86_64")]
 pub mod x8;
 
 /// Sixteen-value arrays, or slices processed sixteen values at a time.
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 pub mod x16;
