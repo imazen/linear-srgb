@@ -700,7 +700,7 @@ mod tests {
     use archmage::SimdToken;
 
     #[cfg(not(feature = "std"))]
-    use alloc::{vec, vec::Vec};
+    use alloc::vec::Vec;
 
     fn get_token() -> Option<X64V3Token> {
         X64V3Token::try_new()
@@ -735,7 +735,7 @@ mod tests {
     #[test]
     fn test_x8_linear_to_srgb_u8() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: AVX2+FMA not available");
+            std::eprintln!("Skipping test: AVX2+FMA not available");
             return;
         };
 
@@ -758,7 +758,7 @@ mod tests {
     #[test]
     fn test_x8_srgb_roundtrip() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: AVX2+FMA not available");
+            std::eprintln!("Skipping test: AVX2+FMA not available");
             return;
         };
 
@@ -780,7 +780,7 @@ mod tests {
     #[test]
     fn test_x8_matches_scalar() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: AVX2+FMA not available");
+            std::eprintln!("Skipping test: AVX2+FMA not available");
             return;
         };
 
@@ -802,7 +802,7 @@ mod tests {
     #[test]
     fn test_slice_matches_scalar() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: AVX2+FMA not available");
+            std::eprintln!("Skipping test: AVX2+FMA not available");
             return;
         };
 
@@ -828,7 +828,7 @@ mod tests {
     #[test]
     fn test_slice_roundtrip() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: AVX2+FMA not available");
+            std::eprintln!("Skipping test: AVX2+FMA not available");
             return;
         };
 
