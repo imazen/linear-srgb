@@ -1,5 +1,6 @@
 //! Benchmarks for all transfer functions across tiers (scalar, x8, x16).
 
+#![allow(deprecated)] // Exercise the retained token-taking compatibility API.
 use linear_srgb::default as tf;
 use linear_srgb::tokens;
 use std::hint::black_box;
