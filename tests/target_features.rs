@@ -153,7 +153,12 @@ macro_rules! check {
                 use linear_srgb::tokens::$width as old;
                 $($body)*
             }
-            if let Some(token) = archmage::$token::summon() { run(token); }
+            let token = archmage::$token::summon();
+            let required = std::env::var("LINEAR_SRGB_REQUIRE_TIERS").unwrap_or_default();
+            if required.split(',').any(|name| name == stringify!($token)) {
+                assert!(token.is_some(), "required CPU tier {} unavailable", stringify!($token));
+            }
+            if let Some(token) = token { run(token); }
         }
     };
 }

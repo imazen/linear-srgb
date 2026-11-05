@@ -8,11 +8,11 @@ None.
 
 ### Added
 
-- `target_features::{x4,x8,x16}` provides array/slice entry points inside matching CPU-feature functions, without public archmage token or magetypes vector parameters. It preserves the existing kernels and length contracts (`54811875`).
+- `target_features::{x4,x8,x16}` provides array/slice entry points inside matching CPU-feature functions, without public archmage token or magetypes vector parameters. It preserves the existing kernels and length contracts (`9b2df432`).
 
 ### Deprecated
 
-- `tokens`: use the same function in `target_features`, omitting its token argument inside a matching CPU-feature function. Existing signatures remain available (`54811875`).
+- `tokens`: use the same function in `target_features`, omitting its token argument inside a matching CPU-feature function. Existing signatures remain available (`9b2df432`).
 
 ### Fixed
 
