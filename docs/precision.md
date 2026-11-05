@@ -100,3 +100,9 @@ maximum absolute normalized error is 0.33144092779103906 u16-code units.
 See [full float measurements](../benchmarks/precision_f32_2026-11-05.md)
 for domains, counts and separate relative/absolute errors. The near-black
 formula fallback remains approximate f32 arithmetic, not exact rounding.
+
+Replaying the same dense oracle against0.6.12 confirms that the measured
+sRGB polynomial maxima already applied to the release. The released PQ
+vector decode reaches369.12907035951235 normalized u16-code units of
+absolute error; the corrected near-black path measures0.33144092779103906.
+The existing79-code historical note understated the denser sampled error.
