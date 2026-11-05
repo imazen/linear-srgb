@@ -24,6 +24,7 @@ def kind(name):
 
 rows=[]
 for path in sorted(after.glob("*.bin")):
+    if path.name.startswith("__"): continue
     code,unit=kind(path.stem)
     original=before/path.name
     if not original.exists():
