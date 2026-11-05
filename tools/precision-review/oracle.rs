@@ -39,6 +39,7 @@ fn c0_report() {
 }
 fn main() {
     c0_report();
+    if std::env::var_os("POLICIES").is_some() { policy_report(); return; }
     if std::env::var_os("C0_ONLY").is_some() { return; }
     // u8 -> linear
     let (mut bad, mut w) = (0, 0);
@@ -137,7 +138,8 @@ fn main() {
     let mut o = vec![0u8; 256 * 4];
     garb::bytes::convert_u8_to_f32(&all8, &mut o).unwrap();
     let w = o.chunks(4).enumerate().map(|(i, b)| ulp(f32::from_ne_bytes(b.try_into().unwrap()), (i as f64 / 255.0) as f32)).max().unwrap();
-    report("garb convert_u8_to_f32", 256, usize::from(w > 0), w, "ulp", String::new());
+    let bad = o.chunks(4).enumerate().filter(|(i,b)| ulp(f32::from_ne_bytes((*b).try_into().unwrap()), (*i as f64 / 255.0) as f32) != 0).count();
+    report("garb convert_u8_to_f32", 256, bad, w, "ulp", String::new());
     for (label, width) in [("row 65536", 65536usize), ("row 1", 1)] {
         let mut o = vec![0u8; 65536 * 4];
         for (a, b) in all16.chunks(width * 2).zip(o.chunks_mut(width * 4)) { garb::bytes::convert_u16_to_f32(a, b).unwrap(); }
@@ -158,4 +160,35 @@ fn main() {
     let (mut bad, mut w) = (0, 0i64);
     for (&v, b) in vals.iter().zip(o.chunks(2)) { let e = (v as f64 * 65535.0).round() as i64; let g = u16::from_ne_bytes([b[0], b[1]]) as i64; if g != e { bad += 1; w = w.max((g - e).abs()); } }
     report("garb convert_f32_to_u16", vals.len(), bad, w, "codes", String::new());
+}
+
+fn policy_report() {
+    let input = grid();
+    for (name, fun, reference) in [
+        ("default s2l scalar", ls::srgb_to_linear as fn(f32)->f32, s2l_c0 as fn(f64)->f64),
+        ("default l2s scalar", ls::linear_to_srgb, l2s_c0),
+        ("precise s2l scalar", linear_srgb::precise::srgb_to_linear, s2l_c0),
+        ("precise l2s scalar", linear_srgb::precise::linear_to_srgb, l2s_c0),
+    ] {
+        let (mut bad, mut maximum)=(0,0);
+        for &x in &input { let error=ulp(fun(x),reference(x as f64) as f32);bad+=usize::from(error!=0);maximum=maximum.max(error); }
+        report(name,input.len(),bad,maximum,"ULP",String::new());
+    }
+    for (name,fun,reference) in [
+        ("default s2l slice",ls::srgb_to_linear_slice as fn(&mut[f32]),s2l_c0 as fn(f64)->f64),
+        ("default l2s slice",ls::linear_to_srgb_slice,l2s_c0),
+    ] {
+        let mut output=input.clone();fun(&mut output);
+        let (mut bad, mut maximum)=(0,0);
+        for (&x,&y) in input.iter().zip(&output) {let error=ulp(y,reference(x as f64) as f32);bad+=usize::from(error!=0);maximum=maximum.max(error);}
+        report(name,input.len(),bad,maximum,"ULP",String::new());
+    }
+    let converter=linear_srgb::lut::SrgbConverter::new();
+    let (mut bad,mut maximum)=(0,0);
+    let mut max_absolute=0.0f64;
+    for &x in &input {let expected=l2s_c0(x as f64);let y=converter.linear_to_srgb(x);let error=ulp(y,expected as f32);bad+=usize::from(error!=0);maximum=maximum.max(error);max_absolute=max_absolute.max((y as f64-expected).abs());}
+    report("converter interpolated l2s",input.len(),bad,maximum,"ULP",format!("max_absolute={max_absolute:e}"));
+    let (mut bad,mut maximum)=(0,0);
+    for &x in &input {let y=ls::linear_to_srgb_u16_fast(x) as i64;let e=(l2s_c0(x as f64)*65535.0).round() as i64;bad+=usize::from(y!=e);maximum=maximum.max((y-e).abs());}
+    report("default u16 fast sqrt table",input.len(),bad,maximum,"codes",String::new());
 }
