@@ -2,9 +2,11 @@
 #![allow(deprecated)] // Exercise the retained token-taking compatibility API.
 #[cfg(target_arch = "aarch64")]
 use archmage::NeonToken;
-use archmage::{SimdToken, arcane};
 #[cfg(target_arch = "x86_64")]
-use archmage::{X64V3Token, X64V4Token};
+use archmage::X64V3Token;
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+use archmage::X64V4Token;
+use archmage::{SimdToken, arcane};
 
 macro_rules! hooks {
     ($entry:ident, $token:ident, $module:path, [$($fun:ident),+]) => {

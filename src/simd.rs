@@ -334,7 +334,7 @@ fn srgb_to_linear_extended_slice_tier_scalar_t(_token: ScalarToken, values: &mut
 ///
 /// Uses a 6/6 rational polynomial fitted to \[0, 8\] — wider domain
 /// than the clamped path's 4/4 polynomial, with comparable in-range
-/// accuracy (5 ULP max in \[0,1\] vs 11 for clamped).
+/// accuracy (sampled max 8 ULP in \[0,1\] vs 11 for clamped).
 ///
 /// | Precision | Max |encoded| for < 0.5 LSB error | Headroom |
 /// |-----------|-------------------------------------|----------|
@@ -395,7 +395,7 @@ fn linear_to_srgb_extended_slice_tier_scalar_t(_token: ScalarToken, values: &mut
 ///
 /// Uses a 6/6 rational polynomial fitted on √x to \[0, 64\]. The sqrt
 /// compression gives excellent extrapolation — u16-safe across the
-/// entire fitted domain (5 ULP max in \[0,1\]).
+/// entire fitted domain (sampled max 7 ULP in \[0,1\]).
 ///
 /// | Precision | Max |linear| for < 0.5 LSB error | Headroom |
 /// |-----------|--------------------------------------|----------|
@@ -806,7 +806,7 @@ fn srgb_u16_to_linear_slice_tier(token: Token, input: &[u16], output: &mut [f32]
         let result = f32x16::blend(mask, linear_result, power_result);
 
         // Match the scalar `srgb_to_linear_fast` early-exit: v >= 1.0 → 1.0.
-        // At u16=65535 the normalized v rounds to 1 + 2^-16 in f32, and the
+        // At u16=65535 the normalized v rounds to 1.0 in f32, and the
         // polynomial alone drifts a few ULP short of 1.0 — snap it back so
         // srgb_u16_to_linear(65535) == 1.0 bit-exact (as the LUT does).
         let ge_one = v.simd_ge(one);
@@ -825,7 +825,8 @@ fn srgb_u16_to_linear_slice_tier(token: Token, input: &[u16], output: &mut [f32]
 /// the polynomial evaluates 4/8/16 wide. No LUT and no cache footprint —
 /// replaces the 256KB decode LUT on the slice path. Boundary values
 /// (0, 65535) map exactly to (0.0, 1.0). Output may differ from the
-/// scalar LUT by ≤1 f32 ULP at interior values.
+/// scalar LUT at 31,766 of 65,536 codes, by at most 4 f32 ULP
+/// (exhaustive native-tier measurement, November 2026).
 ///
 /// # Panics
 /// Panics if `input.len() != output.len()`.

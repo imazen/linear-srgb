@@ -96,7 +96,7 @@ pub fn linear_to_srgb_v3(token: X64V3Token, linear: [f32; 8]) -> [f32; 8] {
 /// Convert 8 sRGB values to linear without clamping (extended range).
 ///
 /// Uses abs+sign with a 6/6 rational polynomial fitted to \[0, 8\].
-/// 5 ULP max in \[0,1\], u16-safe to |encoded| ≤ 6.18, u8-safe to 8.0.
+/// Sampled max 8 ULP in \[0,1\], u16-safe to |encoded| ≤ 6.18, u8-safe to 8.0.
 /// Pure SIMD — no per-lane branching or scalar fallback.
 #[rite]
 pub fn srgb_to_linear_extended_v3(token: X64V3Token, srgb: [f32; 8]) -> [f32; 8] {
@@ -135,7 +135,7 @@ pub fn srgb_to_linear_extended_v3(token: X64V3Token, srgb: [f32; 8]) -> [f32; 8]
 /// Convert 8 linear values to sRGB without clamping (extended range).
 ///
 /// Uses abs+sign with a 6/6 rational polynomial fitted on √x to \[0, 64\].
-/// 5 ULP max in \[0,1\], u16-safe across the full \[0, 64\] domain.
+/// Sampled max 7 ULP in \[0,1\], u16-safe across the full \[0, 64\] domain.
 /// Pure SIMD — no per-lane branching or scalar fallback.
 #[rite]
 pub fn linear_to_srgb_extended_v3(token: X64V3Token, linear: [f32; 8]) -> [f32; 8] {
@@ -704,7 +704,7 @@ mod tests {
     use archmage::SimdToken;
 
     #[cfg(not(feature = "std"))]
-    use alloc::{vec, vec::Vec};
+    use alloc::vec::Vec;
 
     fn get_token() -> Option<X64V3Token> {
         X64V3Token::try_new()
@@ -739,7 +739,7 @@ mod tests {
     #[test]
     fn test_x8_linear_to_srgb_u8() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: AVX2+FMA not available");
+            std::eprintln!("Skipping test: AVX2+FMA not available");
             return;
         };
 
@@ -762,7 +762,7 @@ mod tests {
     #[test]
     fn test_x8_srgb_roundtrip() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: AVX2+FMA not available");
+            std::eprintln!("Skipping test: AVX2+FMA not available");
             return;
         };
 
@@ -784,7 +784,7 @@ mod tests {
     #[test]
     fn test_x8_matches_scalar() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: AVX2+FMA not available");
+            std::eprintln!("Skipping test: AVX2+FMA not available");
             return;
         };
 
@@ -806,7 +806,7 @@ mod tests {
     #[test]
     fn test_slice_matches_scalar() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: AVX2+FMA not available");
+            std::eprintln!("Skipping test: AVX2+FMA not available");
             return;
         };
 
@@ -832,7 +832,7 @@ mod tests {
     #[test]
     fn test_slice_roundtrip() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: AVX2+FMA not available");
+            std::eprintln!("Skipping test: AVX2+FMA not available");
             return;
         };
 

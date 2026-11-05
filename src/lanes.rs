@@ -47,10 +47,7 @@ fn pow2(x: f32) -> f32 {
 /// Scalar backend of the shared magetypes approximation, with fused rounding.
 #[inline(always)]
 pub(crate) fn pow(x: f32, n: f32) -> f32 {
-    use magetypes::simd::generic::f32x4;
-    f32x4::splat_t(archmage::ScalarToken, x)
-        .pow_midp_fused(n)
-        .to_array()[0]
+    magetypes::simd::scalar::pow_midp_fused(x, n)
 }
 
 pub(crate) fn srgb_to_linear(v: f32) -> f32 {

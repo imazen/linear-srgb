@@ -8,7 +8,7 @@
 //! - **Slices**: SIMD-accelerated with runtime CPU dispatch
 //! - **Custom gamma**: Pure power function (f32, slices)
 //!
-//! For exact `powf()` conversions with C0-continuous constants, see [`crate::precise`].
+//! For platform `powf()` conversions with C0-continuous constants, see [`crate::precise`].
 //!
 //! # Quick Start
 //!

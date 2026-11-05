@@ -163,7 +163,7 @@ pub fn linear_to_srgb_v3(token: X64V3Token, linear: [f32; 4]) -> [f32; 4] {
 
 /// Convert 4 sRGB values to linear without clamping (extended range).
 ///
-/// 6/6 rational polynomial fitted to \[0, 8\]. 5 ULP in \[0,1\], u16-safe to ~4.2.
+/// 6/6 rational polynomial fitted to \[0, 8\]. sampled max 8 ULP in \[0,1\], u16-safe to ~4.2.
 #[archmage::magetypes(v3, neon, wasm128)]
 #[rite]
 pub fn srgb_to_linear_extended(token: Token, srgb: [f32; 4]) -> [f32; 4] {
@@ -196,7 +196,7 @@ pub fn srgb_to_linear_extended(token: Token, srgb: [f32; 4]) -> [f32; 4] {
 
 /// Convert 4 linear values to sRGB without clamping (extended range).
 ///
-/// 6/6 rational polynomial fitted on √x to \[0, 64\]. 5 ULP in \[0,1\], u16-safe to 64.
+/// 6/6 rational polynomial fitted on √x to \[0, 64\]. sampled max 7 ULP in \[0,1\], u16-safe to 64.
 #[archmage::magetypes(v3, neon, wasm128)]
 #[rite]
 pub fn linear_to_srgb_extended(token: Token, linear: [f32; 4]) -> [f32; 4] {
@@ -829,7 +829,7 @@ mod tests_x86 {
     use archmage::SimdToken;
 
     #[cfg(not(feature = "std"))]
-    use alloc::{vec, vec::Vec};
+    use alloc::vec::Vec;
 
     fn get_token() -> Option<X64V3Token> {
         X64V3Token::try_new()
@@ -858,7 +858,7 @@ mod tests_x86 {
     #[test]
     fn test_x4_srgb_roundtrip() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: X64V3 not available");
+            std::eprintln!("Skipping test: X64V3 not available");
             return;
         };
 
@@ -880,7 +880,7 @@ mod tests_x86 {
     #[test]
     fn test_x4_matches_scalar() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: X64V3 not available");
+            std::eprintln!("Skipping test: X64V3 not available");
             return;
         };
 
@@ -902,7 +902,7 @@ mod tests_x86 {
     #[test]
     fn test_x4_matches_x8() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: X64V3 not available");
+            std::eprintln!("Skipping test: X64V3 not available");
             return;
         };
 
@@ -926,7 +926,7 @@ mod tests_x86 {
     #[test]
     fn test_slice_roundtrip() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: X64V3 not available");
+            std::eprintln!("Skipping test: X64V3 not available");
             return;
         };
 
@@ -955,7 +955,7 @@ mod tests_aarch64 {
     use archmage::SimdToken;
 
     #[cfg(not(feature = "std"))]
-    use alloc::{vec, vec::Vec};
+    use alloc::vec::Vec;
 
     fn get_token() -> Option<NeonToken> {
         NeonToken::try_new()
@@ -984,7 +984,7 @@ mod tests_aarch64 {
     #[test]
     fn test_x4_srgb_roundtrip() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: NEON not available");
+            std::eprintln!("Skipping test: NEON not available");
             return;
         };
 
@@ -1006,7 +1006,7 @@ mod tests_aarch64 {
     #[test]
     fn test_x4_matches_scalar() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: NEON not available");
+            std::eprintln!("Skipping test: NEON not available");
             return;
         };
 
@@ -1028,7 +1028,7 @@ mod tests_aarch64 {
     #[test]
     fn test_slice_roundtrip() {
         let Some(token) = get_token() else {
-            eprintln!("Skipping test: NEON not available");
+            std::eprintln!("Skipping test: NEON not available");
             return;
         };
 

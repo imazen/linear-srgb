@@ -13,7 +13,7 @@ use num_traits::Float; // provides powf/sqrt/mul_add via libm in no_std
 
 // sRGB C0-continuous constants (moxcms reference).
 // These eliminate the ~2.3e-9 discontinuity in the IEC 61966-2-1 textbook values.
-// At u8 precision both constant sets are indistinguishable.
+// Quantized u8 round trips agree; the intermediate f32 values generally differ.
 
 /// Linear threshold for linearization: 12.92 * 0.0030412825601275209 ≈ 0.03929
 const SRGB_LINEAR_THRESHOLD: f64 = 12.92 * 0.003_041_282_560_127_521;

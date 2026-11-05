@@ -1,6 +1,6 @@
 [package]
 name = "linear-srgb"
-version = "0.6.12"
+version = "0.6.13"
 authors = ["Lilith River"]
 edition = "2024"
 rust-version = "1.89"
@@ -28,6 +28,7 @@ exclude = [
     "api-snapshots/",
     # Dev scripts and Python curve-fitting utilities
     "scripts/",
+    "tools/",
     # Committed benchmark result docs — historical, not needed by consumers
     "benchmarks/",
     # Root scratch/historical performance notes
@@ -50,15 +51,15 @@ all-features = true
 [dependencies]
 num-traits = { version = "0.2.19", default-features = false, features = ["libm"] }
 bytemuck = "1.25.2"
-archmage = { version = ">=0.9.31-beta.2, <0.10.0", git = "https://github.com/imazen/archmage", rev = "05b4182933280584cf63f93eb5086f75ebeb400e", default-features = false, features = ["macros"] }
-magetypes = { version = ">=0.9.31-beta.2, <0.10.0", git = "https://github.com/imazen/archmage", rev = "05b4182933280584cf63f93eb5086f75ebeb400e", default-features = false, features = ["w512"] }
+archmage = { version = ">=0.9.31-beta.2, <0.10.0", git = "https://github.com/imazen/archmage", rev = "c8c7f5e223fa96187988e09ba4168fb24318105f", default-features = false, features = ["macros"] }
+magetypes = { version = ">=0.9.31-beta.2, <0.10.0", git = "https://github.com/imazen/archmage", rev = "c8c7f5e223fa96187988e09ba4168fb24318105f", default-features = false, features = ["w512"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-zenbench = { version = "0.1.2", features = ["criterion-compat"] }
+zenbench = { version = "0.1.11", features = ["criterion-compat"] }
 # `testable_dispatch` lets the tier-isolation benches disable a compile-time
 # guaranteed baseline token (NEON on aarch64) so the scalar tier is actually
 # measurable there, instead of silently reporting NEON numbers as "scalar".
-archmage = { version = ">=0.9.31-beta.2, <0.10.0", git = "https://github.com/imazen/archmage", rev = "05b4182933280584cf63f93eb5086f75ebeb400e", features = ["testable_dispatch"] }
+archmage = { version = ">=0.9.31-beta.2, <0.10.0", git = "https://github.com/imazen/archmage", rev = "c8c7f5e223fa96187988e09ba4168fb24318105f", features = ["testable_dispatch"] }
 
 [features]
 default = ["std", "avx512"]
@@ -103,6 +104,10 @@ name = "benchmarks"
 harness = false
 
 [[bench]]
+name = "u8_encode_options"
+harness = false
+
+[[bench]]
 name = "tf_bench"
 harness = false
 required-features = ["transfer"]
@@ -115,3 +120,11 @@ harness = false
 name = "kernel_tiers"
 harness = false
 required-features = ["transfer"]
+
+[[example]]
+name = "encode_perf"
+required-features = ["std"]
+
+[[example]]
+name = "lut_init_time"
+required-features = ["std"]

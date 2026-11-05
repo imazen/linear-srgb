@@ -19,12 +19,12 @@ Validation recipes: `just verify-target-features`, `just verify-target-features-
 
 ## Branch inventory
 
-All 14 live remote branches are accounted for below. “Ancestor” is checked against the observed main; divergent history is not proof of missing functionality. Preserve branches until their residual changes have been reviewed.
+The initial capture contained 14 live remote branches, accounted for below. A later capture also found `api/portable-scalar-math` (`0482d5c4`), preserved after PR #31 was superseded. “Ancestor” is checked against the observed main; divergent history is not proof of missing functionality. Preserve branches until their residual changes have been reviewed.
 
 | Branch / tip | Evidence and disposition |
 | --- | --- |
-| `main` / `1340e864` | Current source baseline. |
-| `api/target-features` / `d8ae85be` | Four migration commits, one main commit behind. Review PR #30; approval/merge and a separately approved release remain. |
+| `main` / `1340e864` | Initial inventory baseline; current precision work through `24a87677` is merged into PR #30. |
+| `api/target-features` | PR #30 includes the shared math integration, wider f32 dispatch and main's precision fixes through `24a87677`. Review/merge and a separately approved release remain. |
 | `feat/adobe-rgb-romm-trcs` / `a396300c` | One unique commit adding Adobe/ProPhoto functions. [Issue #7](https://github.com/imazen/linear-srgb/issues/7) was deliberately closed as outside the motivating Ultra HDR work. Preserve as scoped-out work, not an approved implementation backlog. |
 | `feat/extended-range-simd` / `95cbcd1e` | [PR #6](https://github.com/imazen/linear-srgb/pull/6) merged; tip has two later documentation/accuracy-test commits not in main. `extended_simd_doc_accuracy_claims` is absent from current tests. Review those residual assertions against today's coefficients before porting; do not import old expected numbers blindly. |
 | `feat/pub-tf-x16` / `f6dffe2d` | One unique commit exposes generic magetypes TF kernels and adds gamma kernels. Current array API already covers gamma at x4/x8/x16; retain any needed algorithm internally rather than merging the old public type coupling. No numerical equivalence claim was measured here. |
@@ -64,7 +64,13 @@ native targets. See `tests/target_features_dispatch.rs` for a complete example.
 
 Scalar generic vectors and `mul_add_fused` already exist in beta.2. Its midp
 transcendentals still use relaxed evaluation. The shared approximation now lives
-in magetypes' fused variants; linear-srgb retains color-specific coefficients
+in magetypes' fused variants and plain `simd::scalar` companions; linear-srgb retains color-specific coefficients
 and its existing native/WASM rounding policy. This change temporarily pins the
 pinned dependency source revision; switch to a published version containing
 those methods before release. No crate has been published by this work.
+
+The proposed linear-srgb `portable::{log2_midp,exp2_midp,pow_midp}` surface in
+[PR #31](https://github.com/imazen/linear-srgb/pull/31) is superseded by
+[magetypes' shared implementation](https://github.com/imazen/archmage/pull/140).
+Its branch preserves the accuracy grids and benchmark evidence. No such module
+is added to linear-srgb; scalar tails call `magetypes::simd::scalar::pow_midp_fused`.

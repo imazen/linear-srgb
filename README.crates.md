@@ -12,10 +12,10 @@ preservation, fused premultiply/unpremultiply, custom gamma, and extended range.
 
 ```toml
 [dependencies]
-linear-srgb = "0.6"
+linear-srgb = "0.6.13"
 
 # Optional: BT.709, PQ (HDR10), and HLG transfer functions
-linear-srgb = { version = "0.6", features = ["transfer"] }
+linear-srgb = { version = "0.6.13", features = ["transfer"] }
 ```
 
 ```rust
@@ -107,13 +107,12 @@ let fast = linear_to_srgb_u16_fast(linear);
 Slice variants: `linear_to_srgb_u16_slice` / `linear_to_srgb_u16_slice_fast`,
 `linear_to_srgb_u16_rgba_slice` / `linear_to_srgb_u16_rgba_slice_fast`.
 
-**u8 encode** (`linear_to_srgb_u8` / `linear_to_srgb_u8_slice`) rounds to the
-nearest level (LUT index `linear * 4095 + 0.5`) and is accurate to within ±1 u8
-level vs exact computation. The `u8 → linear → u8` round-trip is exact to within
-**±1 level** (not bit-exact 0 like the `linear_to_srgb_u16` polynomial path) —
-the LUT-quantized encode can land one level off near segment boundaries. For most
-8-bit image work this is invisible; if you need a guaranteed-exact round-trip,
-stay in u16.
+**u8 encode** (`linear_to_srgb_u8` / `linear_to_srgb_u8_slice`) quantizes the
+linear input to a 4096-entry table. It can differ by one code from correctly
+rounded encoding: 64,806 of 4,194,304 uniform inputs and 84,213 of 1,048,576
+dark log-spaced inputs in the [precision review](https://github.com/imazen/linear-srgb/blob/main/docs/precision.md).
+All 256 u8 decode→encode round trips are exact with the current constants;
+filtered values between those codes still encounter table quantization error.
 
 ### Premultiplied alpha (fused, single-pass)
 
@@ -174,7 +173,7 @@ wider domains than the clamped path's 4/4. The S2L polynomial covers
 |encoded| ≤ 8 (u8-safe) / ≤ ~4.2 (u16-safe). The L2S polynomial covers
 |linear| ≤ 64 at u16 precision.
 
-For exact `powf`-based extended range (scalar, any range):
+For `powf`-based extended range (scalar, any range):
 
 ```rust
 use linear_srgb::precise::*;
@@ -190,7 +189,7 @@ For maximum accuracy:
 ```rust
 use linear_srgb::precise::*;
 
-// f32 — exact powf, C0-continuous (6 ULP max)
+// f32 — platform powf, C0-continuous (not correctly rounded)
 let linear = srgb_to_linear(0.5f32);
 let srgb = linear_to_srgb(0.214f32);
 
@@ -222,7 +221,7 @@ gamma_to_linear_slice(&mut values, 2.2);
 BT.709, PQ (ST 2084 / HDR10), and HLG (ARIB STD-B67) — scalar and SIMD.
 
 ```toml
-linear-srgb = { version = "0.6", features = ["transfer"] }
+linear-srgb = { version = "0.6.13", features = ["transfer"] }
 ```
 
 ```rust,ignore
@@ -276,7 +275,7 @@ they share a SIMD-generated `OnceLock` LUT.
 | Single f32 | `srgb_to_linear` / `linear_to_srgb` |
 | Single u8 | `srgb_u8_to_linear` / `linear_to_srgb_u8` |
 | Single u16 | `srgb_u16_to_linear` / `linear_to_srgb_u16` |
-| Exact powf f32/f64 | `precise::srgb_to_linear` / `precise::linear_to_srgb` |
+| Platform powf f32/f64 | `precise::srgb_to_linear` / `precise::linear_to_srgb` |
 | Extended range (scalar) | `precise::srgb_to_linear_extended` / `precise::linear_to_srgb_extended` |
 
 All functions live in `linear_srgb::default` unless noted.
@@ -286,13 +285,15 @@ All functions live in `linear_srgb::default` unless noted.
 ### Transfer function constants
 
 All code paths use C0-continuous constants derived from the
-[moxcms](https://github.com/niclasberg/moxcms) reference implementation. These
+[moxcms](https://github.com/awxkee/moxcms/blob/master/src/gamma.rs) reference implementation. These
 adjust the IEC 61966-2-1 offset from 0.055 to 0.055011 and the threshold from
 0.04045 to 0.03929, making the piecewise transfer function mathematically
 continuous (~2.3e-9 gap eliminated).
 
-At u8 precision the two constant sets produce identical values. At u16, the max
-difference is ~1 LSB near the threshold. See
+The decoded f32 values differ at 244 of the 256 u8 codes: code 12 differs
+by 2.28e-4 relative. The change affects the power branch throughout its range,
+not just the junction. Re-encoding each set of decoded u8 values to u8 preserves
+all 256 codes; that round trip does not establish f32 equivalence. See
 [docs/iec.md](https://github.com/imazen/linear-srgb/blob/main/docs/iec.md) for a
 detailed comparison.
 
@@ -300,37 +301,29 @@ For interop with software that uses the original IEC textbook constants, enable
 the `iec` feature for `linear_srgb::iec::srgb_to_linear` /
 `linear_srgb::iec::linear_to_srgb`.
 
-### Accuracy summary (exhaustive f32 sweep)
+### Measured accuracy
 
-Exhaustive f32 sweep (all ~1B values in [0, 1]) against f64 reference.
-"SIMD" rows measured via the actual dispatched SIMD path (f32 FMA evaluation).
-"Scalar" rows use f64 intermediate precision.
+Against the crate's C0 f64 formula rounded to f32, a 5,242,880-point grid
+(4,194,304 uniform plus 1,048,576 dark logarithmic inputs) gives:
 
-| Path | Max ULP | Avg ULP | Monotonic | Fitted domain |
-|------|---------|---------|-----------|---------------|
-| `default` s→l (4/4 scalar) | 8 | 0.18 | yes | [0, 1] |
-| `default` l→s (4/4 scalar) | 10 | 0.32 | yes | [0, 1] |
-| `default` s→l (4/4 SIMD) | 4 | 0.09 | yes | [0, 1] |
-| `default` l→s (4/4 SIMD) | 5 | 0.10 | yes | [0, 1] |
-| `extended_slice` s→l (6/6 SIMD) | 8* | 0.12 | yes | [0, 8] |
-| `extended_slice` l→s (6/6 SIMD) | 8* | 0.17 | yes | [0, 64] |
-| `precise` s→l (powf) | 6 | 0.1 | yes | unbounded |
-| `precise` l→s (powf) | 3 | 0.1 | yes | unbounded |
+| Path | Sampled max ULP |
+|---|---:|
+| `default` s→l scalar, f64 polynomial intermediates | 8 |
+| `default` l→s scalar, f64 polynomial intermediates | 10 |
+| `default` s→l dispatched slice, f32 fused evaluation | 11 |
+| `default` l→s dispatched slice, f32 fused evaluation | 12 |
+| `precise` s→l, platform powf | 6 |
+| `precise` l→s, platform powf | 3 |
 
-\*The 6/6 extended polynomials use larger coefficients to cover a wider domain,
-which costs ~2 ULP vs the clamped 4/4 in a narrow band near the piecewise
-threshold (0.04–0.05). Affects < 0.1% of values; avg ULP is comparable.
+These are measured grid maxima, not all-input bounds. The earlier SIMD
+4/5-ULP summary does not describe the current implementation. Scalar and
+slice APIs use different evaluation precision; the existing monotonicity
+and round-trip regression tests remain in place. One ULP at 0.5 is 2^-24;
+even a small float error can change a quantized code at a rounding boundary.
 
-**What does 10 ULP mean in practice?** 1 ULP (unit in the last place) is the
-spacing between adjacent f32 values at a given magnitude. At 0.5 that's ~6e-8,
-so 10 ULP ≈ 6e-7 — about 6 decimal digits of precision. At 0.01 it's ~1e-8.
-For any 8-bit or 16-bit output, this error is invisible — it's thousands of
-times smaller than one output level.
-
-Reference: C0-continuous f64 powf. The scalar rational polynomial evaluates in
-f64 intermediate precision, guaranteeing perfect monotonicity (zero reversals
-across all ~1B f32 values in [0, 1]). SIMD paths use f32 evaluation for
-throughput and are also monotonic within each segment.
+See [precision contracts](docs/precision.md) and
+[measured alternatives](benchmarks/u8_encode_2026-11-05.md) for LUT errors,
+curve policy, row/tier portability and exact-rounding prototype costs.
 
 ## Feature Flags
 
@@ -342,13 +335,13 @@ throughput and are also monotonic within each segment.
 
 ```toml
 # no_std (requires alloc for LUT generation)
-linear-srgb = { version = "0.6", default-features = false }
+linear-srgb = { version = "0.6.13", default-features = false }
 ```
 
 ## Module Organization
 
 - **`default`** — Recommended API. Rational polynomial for f32, LUT for integers, SIMD for slices.
-- **`precise`** — Exact `powf()` conversions with C0-continuous constants (not IEC textbook). f32/f64, extended range.
+- **`precise`** — `powf()`-based conversions with C0-continuous constants (not IEC textbook). f32/f64, extended range.
 - **`lut`** — Lookup tables for custom bit depths (10-bit, 12-bit, 16-bit).
 - **`tf`** — Transfer functions: BT.709, PQ, HLG. Requires `transfer` feature.
 - **`iec`** — IEC 61966-2-1 textbook constants for legacy interop. Requires `iec` feature.
@@ -408,7 +401,8 @@ MIT OR Apache-2.0
 
 ## AI-Generated Code Notice
 
-Developed with Claude (Anthropic). All code has been reviewed and benchmarked, but verify critical paths for your use case.
+Developed with AI assistance. Not all code has been manually reviewed. Verify
+critical paths for your use case.
 
 ## Image tech I maintain
 

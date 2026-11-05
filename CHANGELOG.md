@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+Prepared package version: **0.6.13**. Publication awaits README approval and release gates.
+
 ### QUEUED BREAKING CHANGES
 
 - Next version: remove public token reexports and the deprecated token-taking operation surfaces. Keep the current additive release compatible; fixed arrays/slices and CPU-feature contexts are the replacement (`ce451a6b`).
@@ -22,7 +24,10 @@
 
 - x8/x16 sRGB array hooks return exactly 1.0 at and above the clamped white endpoint, matching x4 and the scalar/slice kernels (`ce451a6b`).
 
-- RGBA alpha quantization widens before scaling, avoiding double rounding at u8/u16 half-code boundaries; `iec` uses the published 0.0031308 encode cutoff and inclusive junction comparisons.
+
+- Float LUT interpolation uses a single fused lower-endpoint expression, preserving near-black inputs without cancellation and using the same operations on every target.
+
+- RGBA alpha quantization widens before scaling, avoiding double rounding at u8/u16 half-code boundaries (`6bfdbf02`); `iec` uses the published 0.0031308 encode cutoff and inclusive junction comparisons.
 
 - Direct token slice hooks run partial vectors through the same kernel as full vectors; AVX-512 PQ hooks share the near-black correction with the generic PQ kernel (`40c00ab4`).
 
@@ -33,7 +38,7 @@
 - `linear_to_hlg` no longer steps down at `1/12`, nor `bt709_to_linear` at its threshold.
 - New feature `precise-portable`: the same bits on strict WASM and engines that round relaxed madd twice, up to about 18x slower there. No effect on native targets.
 - The plain slices use `#[attune]` and require archmage/magetypes 0.9.31-beta.2 or later, with a `v4x` tier in place of `v4` behind the `avx512` feature. Their scalar tiers run the scalar functions per sample, so non-AVX2 x86-64 can be slower. Lanes below the PQ floors run a vectorized exact formula, which costs about 25% over 0.9.30-era PQ kernels on near-black rows.
-- PQ vector kernels run the exact formula in the lanes below the polynomial floor, as the scalar functions do. The slices stay within one `u16` code of ST 2084 across the range; below signal 0.02 they had been up to 79 codes off. The inverse-EOTF floor moved from 1e-4 to 1e-7, so `linear_to_pq` output in that range changes slightly: the polynomial is within 7.4e-6 relative down to 1e-7.
+- PQ vector kernels run the exact formula in the lanes below the polynomial floor, as the scalar functions do. On the 5,242,880-point uniform/dark grid, the maximum absolute PQ decode error falls from 369.129 to 0.331441 normalized `u16`-code units; the earlier 79-code note understated the sampled release error. The inverse-EOTF floor moved from 1e-4 to 1e-7, so `linear_to_pq` output in that range changes slightly: the polynomial is within 7.4e-6 relative down to 1e-7.
 - Slice functions run their tail through the vector kernel instead of the scalar functions, so a value converts to the same bits wherever it sits in a slice (1ce79069). Tail values change: the scalar math differs from the vector kernels by 1 ULP, and by more on the `gamma` slices. The `u8` and `u16` output slices are unchanged.
 - Admit archmage/magetypes 0.9.31-beta.2 for crates that use `#[attune]`; 276 tests pass with `--all-features` on that version. Replace the cap with the stable floor before publishing.
 - Admit archmage/magetypes 0.9.31-beta.1 with token-explicit constructor aliases and private generic 16-lane dispatch helpers (`88fa6a42`). Strict default library lint and 109 default / 165 all-feature library tests pass. Assembly snapshot drift remains tracked in issue 28; its expectations are unchanged.
