@@ -79,3 +79,24 @@ precision and differed by target FMA availability (63,274 / 160,800 sampled
 The revision fixes cancellation; `precise`/IEC powf paths still inherit platform
 libm rounding and are not a cross-platform bit-exact API. NaN sign/payload
 and out-of-domain transcendental results are not portable contracts.
+
+The 5,242,880-point uniform/dark grid measures default scalar decode/encode
+maxima of 8/10 ULP and dispatched slice maxima of 11/12 ULP against C0
+f64→f32. The `precise` paths measure 6/3 ULP; the converter's interpolated
+encode reaches 4367 ULP (absolute error 1.6270163367089474e-5), and the
+sqrt-indexed u16 fast table differs at 1,177,899 samples, max one code.
+These grid results replace the unsupported README SIMD 4/5-ULP summary.
+
+Clamping is API-specific: ordinary sRGB/gamma functions and integer outputs
+clamp, while BT.709 preserves its linear negative branch and HDR transfer
+functions do not apply a common upper-unit clamp. Their valid transfer domain
+and display-light normalization must be chosen by the caller.
+
+Extended sRGB fits measure 8/7 ULP maxima over the same unit-range grid.
+BT.709 decode/encode measure scalar maxima 69/30 ULP and slice maxima 69/29;
+HLG 4/6 ULP at both; PQ scalar 955/61 ULP and slice 1662/61 ULP. PQ decode's
+slice maximum relative error is 1.0241151287345248e-4 on this grid, while its
+maximum absolute normalized error is 0.33144092779103906 u16-code units.
+See [full float measurements](../benchmarks/precision_f32_2026-11-05.md)
+for domains, counts and separate relative/absolute errors. The near-black
+formula fallback remains approximate f32 arithmetic, not exact rounding.

@@ -1,7 +1,7 @@
-//! Exact conversion functions using `powf()`.
+//! Formula-based conversion functions using platform `powf()`.
 //!
 //! These functions use the mathematical sRGB transfer function with `powf()`,
-//! providing maximum accuracy at the cost of speed (~6 ULP max vs f64 reference).
+//! with platform libm rounding (sampled max 6 ULP vs the f64 reference).
 //! For faster alternatives, use [`crate::default`] which provides rational
 //! polynomial approximations (~14 ULP max, ~0.5 ULP avg, perfectly monotonic).
 //!
