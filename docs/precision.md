@@ -71,3 +71,11 @@ with an explicit continuous compatibility policy. Leave matrices, luma,
 display modeling and reference-exact transcendentals with their numerical
 owners. Unused workspace table types are API-review candidates, not
 authorization to remove public functions.
+
+Float LUT interpolation now evaluates `lower + fraction * (upper - lower)`
+with one fused operation. The earlier two-product form lost near-black
+precision and differed by target FMA availability (63,274 / 160,800 sampled
+`SrgbConverter` results differed across x86/ARM, up to 3,226,306 ULP near zero).
+The revision fixes cancellation; `precise`/IEC powf paths still inherit platform
+libm rounding and are not a cross-platform bit-exact API. NaN sign/payload
+and out-of-domain transcendental results are not portable contracts.

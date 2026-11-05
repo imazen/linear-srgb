@@ -21,7 +21,6 @@
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, vec};
 
-use crate::mlaf::{mlaf, neg_mlaf};
 use crate::scalar::{linear_to_srgb_f64, srgb_to_linear_f64};
 #[allow(unused_imports)]
 use num_traits::Float; // provides ceil/floor via libm in no_std
@@ -128,12 +127,10 @@ pub fn lut_interp_linear_float(x: f32, table: &[f32]) -> f32 {
     let tu = table[upper.min(table.len() - 1)];
     let tl = table[lower];
 
-    let diff = upper as f32 - value;
-
-    // result = tl * diff + tu * (1 - diff)
-    // Using FMA: neg_mlaf(tu, tu, diff) = tu - tu*diff = tu*(1-diff)
-    // Then: mlaf(tu*(1-diff), tl, diff) = tu*(1-diff) + tl*diff
-    mlaf(neg_mlaf(tu, tu, diff), tl, diff)
+    // Interpolate from the lower endpoint: the old weighted-sum form
+    // subtracted nearly equal values when the lower endpoint was zero.
+    // Always fuse, including on targets without compile-time hardware FMA.
+    (tu - tl).mul_add(value - lower as f32, tl)
 }
 
 /// Linear interpolation in a u16 LUT using fixed-point arithmetic.

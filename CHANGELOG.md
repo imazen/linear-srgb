@@ -2,7 +2,13 @@
 
 ## [Unreleased]
 
+### QUEUED BREAKING CHANGES
+
+- None queued by this review.
+
 ### Fixed
+
+- Float LUT interpolation uses a single fused lower-endpoint expression, preserving near-black inputs without cancellation and using the same operations on every target.
 
 - RGBA alpha quantization widens before scaling, avoiding double rounding at u8/u16 half-code boundaries; `iec` uses the published 0.0031308 encode cutoff and inclusive junction comparisons.
 
