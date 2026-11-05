@@ -8,7 +8,8 @@
 //!
 //! - [`default`] — **Start here.** Rational polynomial for f32, LUT for integers, SIMD for slices.
 //! - [`precise`] — Exact `powf()` with C0-continuous constants. f32/f64, extended range. Slower.
-//! - [`tokens`] — Inlineable `#[rite]` functions for embedding in your own `#[arcane]` SIMD code.
+//! - [`target_features`] — Array/slice conversions inside matching CPU-feature functions.
+//! - [`tokens`] — Deprecated token-taking compatibility API.
 //! - [`lut`] — Lookup tables for custom bit depths (10-bit, 12-bit, 16-bit).
 //! - **`tf`** — Transfer functions beyond sRGB: BT.709, PQ, HLG. Requires `transfer` feature.
 //! - **`iec`** — IEC 61966-2-1 textbook constants (legacy interop). Requires `iec` feature.
@@ -188,6 +189,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]
+// Rust's unit-test harness refers to constants inside the deprecated module.
+#![cfg_attr(test, allow(deprecated))]
 #![warn(missing_docs)]
 
 #[cfg(not(feature = "std"))]
@@ -223,18 +226,14 @@ pub mod precise;
 /// and runtime-generated tables for custom bit depths (10-bit, 12-bit, 16-bit).
 pub mod lut;
 
-/// Inlineable `#[rite]` functions for embedding in your own `#[arcane]` code.
-///
-/// These carry `#[target_feature]` + `#[inline]` directly — no wrapper, no
-/// dispatch. When called from a matching `#[arcane]` context, LLVM inlines
-/// them fully. Organized by SIMD width; suffixed by required token tier.
-///
-/// Also re-exports token types for convenience: `X64V3Token`, `X64V4Token`,
-/// `NeonToken`, `Wasm128Token` (each gated to its target architecture).
-///
-/// When the `transfer` feature is enabled, each width module also provides
-/// rites for BT.709, PQ, and HLG (prefixed with `tf_` for sRGB to avoid
-/// name collisions with the rational polynomial sRGB rites).
+pub mod target_features;
+
+/// Deprecated token-taking compatibility API. Use [`crate::target_features`]
+/// inside a matching CPU-feature function and omit the token argument.
+#[deprecated(
+    note = "use target_features::{x4, x8, x16} inside a matching CPU-feature function; omit the token argument"
+)]
+#[allow(deprecated)] // Compatibility kernels and their tests call each other.
 pub mod tokens;
 
 /// Transfer functions: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).

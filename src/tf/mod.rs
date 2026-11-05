@@ -80,6 +80,7 @@ pub use pq::{linear_to_pq, pq_to_linear};
 // =============================================================================
 
 #[cfg(all(test, feature = "transfer"))]
+#[allow(deprecated)] // Verify the retained token-taking kernels.
 mod tests {
     use super::*;
 
