@@ -6,6 +6,7 @@ include private projects. Classifications are conservative recommendations, not
 proof of numerical interchangeability. Each row retains a source excerpt.
 """
 import json
+from datetime import datetime, timezone
 import hashlib
 import re
 import subprocess
@@ -92,6 +93,10 @@ for repo in repos.values():
         # Snippets are evidence for the classification; no source is modified.
         rows.append(dict(file=str(path), revision=sha, source_sha256=hashlib.sha256(path.read_bytes()).hexdigest(), what=", ".join(kinds), classification=cls, recommendation=rec, evidence=[dict(line=i,text=t) for i,t,_ in hits[:8]]))
 output.parent.mkdir(parents=True,exist_ok=True)
+# Preserve prior generated results when refreshing a named report.
+stamp=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+for previous in [output,output.with_suffix(".md")]:
+    if previous.exists(): previous.rename(previous.with_name(previous.name+"."+stamp+".bak"))
 output.write_text(json.dumps(rows,indent=2)+"\n")
 table=output.with_suffix(".md")
 table.write_text("# Transfer, math and depth inventory\n\nRead-only source census; classifications are recommendations, not parity measurements. Revisions are Git HEAD observations; colocated jj working trees may be newer. Test, benchmark, retired, upstream and vendor trees are excluded. Source excerpts are in the adjacent JSON.\n\n| File | What | Class | Recommendation |\n|---|---|---|---|\n"+"\n".join(f"| `{r['file']}` | {r['what']} | {r['classification']} | {r['recommendation']} |" for r in rows)+"\n")

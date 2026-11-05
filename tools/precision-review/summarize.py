@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Compare native captures in sample units; preserve non-finite distinctions."""
 import array
+from datetime import datetime, timezone
 import csv
 import math
 import struct
@@ -60,6 +61,10 @@ for path in sorted(after.glob("*.bin")):
             unit_abs=max(unit_abs,abs(xx-yy) if "ULP" in unit else delta)
     rows.append([path.stem,unit,len(a),bad,maximum,nonfinite,first, *( [unit_bad,unit_max,unit_abs] if unit_domain else ["","",""] )])
 output.parent.mkdir(parents=True,exist_ok=True)
+# Preserve prior generated results when refreshing a named report.
+stamp=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+for previous in [output,output.with_suffix(".md")]:
+    if previous.exists(): previous.rename(previous.with_name(previous.name+"."+stamp+".bak"))
 with output.open("w") as f:
     writer=csv.writer(f,delimiter="\t");writer.writerow(["function","unit","samples","changed","max_finite_delta","nonfinite_changed","first_index","unit_range_changed","unit_range_max_finite_delta","unit_range_max_absolute"]);writer.writerows(rows)
 md=output.with_suffix(".md")
