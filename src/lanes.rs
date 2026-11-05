@@ -1,8 +1,8 @@
 //! One sample through the same operations as the vector kernels, with every multiply-add fused.
 //!
 //! The scalar tiers use these, so a value converts to the same bits at every tier. They are
-//! color kernels written out per lane. General midp power uses the shared magetypes
-//! scalar backend; `tests/tier_parity.rs` holds the color paths together.
+//! crate-private kernels written out per lane. Keep their operations paired with
+//! the private vector copies; `tests/tier_parity.rs` holds them together.
 
 #[allow(unused_imports)]
 use num_traits::Float;
@@ -11,9 +11,9 @@ use crate::rational_poly::{
     EXT_L2S_P, EXT_L2S_Q, EXT_S2L_P, EXT_S2L_Q, L2S_P, L2S_Q, LINEAR_SCALE, LINEAR_THRESHOLD,
     S2L_P, S2L_Q, SRGB_THRESHOLD, TWELVE_92,
 };
-use crate::tf::fast_math::eval_rational_poly;
 #[cfg(feature = "transfer")]
-use crate::tf::fast_math::{self, fast_log2f};
+use crate::tf::fast_math::fast_log2f;
+use crate::tf::fast_math::{self, eval_rational_poly};
 
 /// `max(v, 0)` as the kernels do it: zero for negative zero and NaN too.
 #[inline(always)]
@@ -44,10 +44,71 @@ fn pow2(x: f32) -> f32 {
     num / den
 }
 
-/// Scalar backend of the shared magetypes approximation, with fused rounding.
+/// The `pow` of [`fast_math::POW_LOG2`] and [`fast_math::POW_EXP2`], for the vector `pow_*`.
 #[inline(always)]
 pub(crate) fn pow(x: f32, n: f32) -> f32 {
-    magetypes::simd::scalar::pow_midp_fused(x, n)
+    exp2(log2(x) * n)
+}
+
+#[inline(always)]
+fn log2(x: f32) -> f32 {
+    use fast_math::POW_LOG2 as C;
+    let adjusted =
+        (x.to_bits() as i32).wrapping_add((0x3f80_0000u32 - fast_math::POW_SQRT1_2) as i32);
+    let n = ((adjusted >> 23) - 127) as f32;
+    let a = f32::from_bits(
+        ((adjusted & 0x007f_ffff).wrapping_add(fast_math::POW_SQRT1_2 as i32)) as u32,
+    );
+    let y = (a - 1.0) / (a + 1.0);
+    let y2 = y * y;
+    let poly = C[3].mul_add(y2, C[2]);
+    let poly = poly.mul_add(y2, C[1]);
+    let poly = poly.mul_add(y2, C[0]);
+    let result = poly.mul_add(y, n);
+    if x == 0.0 {
+        f32::NEG_INFINITY
+    } else if x < 0.0 {
+        f32::NAN
+    } else if x == f32::INFINITY {
+        f32::INFINITY
+    } else {
+        result
+    }
+}
+
+/// Round to nearest with ties to even, like the vector `round`.
+#[inline(always)]
+fn round_even(x: f32) -> f32 {
+    let floor = x.floor();
+    let frac = x - floor;
+    if frac < 0.5 {
+        floor
+    } else if frac > 0.5 || (floor as i32) & 1 != 0 {
+        floor + 1.0
+    } else {
+        floor
+    }
+}
+
+#[inline(always)]
+fn exp2(x: f32) -> f32 {
+    use fast_math::POW_EXP2 as C;
+    if x >= 128.0 {
+        return f32::INFINITY;
+    }
+    if x < -126.0 {
+        return 0.0;
+    }
+    let xi = round_even(x);
+    let xi = if xi < 127.0 { xi } else { 127.0 };
+    let xf = x - xi;
+    let poly = C[6].mul_add(xf, C[5]);
+    let poly = poly.mul_add(xf, C[4]);
+    let poly = poly.mul_add(xf, C[3]);
+    let poly = poly.mul_add(xf, C[2]);
+    let poly = poly.mul_add(xf, C[1]);
+    let poly = poly.mul_add(xf, C[0]);
+    poly * f32::from_bits(((xi as i32).wrapping_add(127) as u32) << 23)
 }
 
 pub(crate) fn srgb_to_linear(v: f32) -> f32 {
