@@ -32,3 +32,10 @@ Its class labels are conservative recommendations, not evidence that two
 implementations can be substituted. Review source contracts and reference
 oracles before consolidating. Keep its output outside a public repository
 because the workspace can contain private projects.
+
+`summarize.py BEFORE AFTER OUTPUT.tsv` compares native captures in numeric
+units. When AFTER contains `__inputs.bin`, it also reports finite output
+changes for original scalar/slice inputs in [0,1]; garb's differently shaped
+byte workloads are excluded from that input-domain inference. New probes
+have no baseline and remain labeled new. NaN signs/payloads are counted
+separately; packed-word changes are not per-channel errors.
