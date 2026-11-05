@@ -132,57 +132,21 @@ mla_for!(f32x4, F32x4Backend);
 mla_for!(f32x8, F32x8Backend);
 mla_for!(f32x16, F32x16Backend);
 
-// `pow` for the gamma and near-black PQ paths, ours so that its rounding is under the same rule as
-// the other kernels. The same coefficients and operations as magetypes' `pow_midp`.
-pub(crate) const POW_SQRT1_2: u32 = 0x3f35_04f3;
-pub(crate) const POW_LOG2: [f32; 4] = [2.885_39, 0.961_800_76, 0.576_974_45, 0.434_411_97];
-pub(crate) const POW_EXP2: [f32; 7] = [
-    1.0,
-    core::f32::consts::LN_2,
-    0.240_226_46,
-    0.055_504_545,
-    0.009_618_055,
-    0.001_333_37,
-    0.000_154_47,
-];
-
+// The approximation and scalar equivalents belong to magetypes. Keep the
+// crate's existing rounding policy: fused natively and with precise-portable,
+// relaxed on default WASM builds.
 macro_rules! pow_for {
     ($name:ident, $float:ident, $int:ident, $convert:ident) => {
         #[inline(always)]
-        pub(crate) fn $name<T: $convert>(t: T, x: $float<T>, n: f32) -> $float<T> {
-            let f = |v: f32| $float::splat_t(t, v);
-            let i = |v: i32| $int::splat_t(t, v);
-
-            // log2
-            let adjusted = x.bitcast_to_i32() + i((0x3f80_0000u32 - POW_SQRT1_2) as i32);
-            let exponent = $float::from_i32_t(t, adjusted.shr_arithmetic_const::<23>() - i(127));
-            let a =
-                $float::from_i32_bitcast_t(t, (adjusted & i(0x007f_ffff)) + i(POW_SQRT1_2 as i32));
-            let y = (a - f(1.0)) / (a + f(1.0));
-            let y2 = y * y;
-            let poly = f(POW_LOG2[3]).mla(y2, f(POW_LOG2[2]));
-            let poly = poly.mla(y2, f(POW_LOG2[1]));
-            let poly = poly.mla(y2, f(POW_LOG2[0]));
-            let log = poly.mla(y, exponent);
-            let log = $float::blend(x.simd_eq(f(0.0)), f(f32::NEG_INFINITY), log);
-            let log = $float::blend(x.simd_lt(f(0.0)), f(f32::NAN), log);
-            let log = $float::blend(x.simd_eq(f(f32::INFINITY)), f(f32::INFINITY), log);
-
-            // exp2
-            let e = log * f(n);
-            let clamped = e.max(f(-126.0)).min(f(128.0));
-            let xi = clamped.round().min(f(127.0));
-            let xf = clamped - xi;
-            let poly = f(POW_EXP2[6]).mla(xf, f(POW_EXP2[5]));
-            let poly = poly.mla(xf, f(POW_EXP2[4]));
-            let poly = poly.mla(xf, f(POW_EXP2[3]));
-            let poly = poly.mla(xf, f(POW_EXP2[2]));
-            let poly = poly.mla(xf, f(POW_EXP2[1]));
-            let poly = poly.mla(xf, f(POW_EXP2[0]));
-            let scale = (xi.to_i32_round() + i(127)).shl_const::<23>();
-            let result = poly * $float::from_i32_bitcast_t(t, scale);
-            let result = $float::blend(e.simd_lt(f(-126.0)), f(0.0), result);
-            $float::blend(e.simd_ge(f(128.0)), f(f32::INFINITY), result)
+        pub(crate) fn $name<T: $convert>(_t: T, x: $float<T>, n: f32) -> $float<T> {
+            #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+            {
+                x.pow_midp(n)
+            }
+            #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+            {
+                x.pow_midp_fused(n)
+            }
         }
     };
 }
