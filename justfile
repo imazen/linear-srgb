@@ -23,3 +23,12 @@ beta-check:
 
 beta-library-check:
     cargo test --locked --all-features --lib
+
+# Frozen cohort: feature-off consumers plus unchanged tier/numeric contracts.
+sansio-cohort-check:
+    cargo fmt --check
+    cargo test --no-default-features --features std --lib
+    cargo test --all-features --lib
+    cargo test --all-features --test tier_parity
+    cargo clippy --no-default-features --features std --lib -- -D warnings
+    cargo clippy --all-features --lib -- -D warnings

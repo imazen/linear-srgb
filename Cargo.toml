@@ -94,6 +94,10 @@ required-features = ["std"]
 name = "asm-stub"
 required-features = ["std", "transfer"]
 
+[[test]]
+name = "tier_parity"
+required-features = ["transfer"]
+
 [[bench]]
 name = "benchmarks"
 harness = false
@@ -110,3 +114,4 @@ harness = false
 [[bench]]
 name = "kernel_tiers"
 harness = false
+required-features = ["transfer"]

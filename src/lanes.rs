@@ -11,7 +11,9 @@ use crate::rational_poly::{
     EXT_L2S_P, EXT_L2S_Q, EXT_S2L_P, EXT_S2L_Q, L2S_P, L2S_Q, LINEAR_SCALE, LINEAR_THRESHOLD,
     S2L_P, S2L_Q, SRGB_THRESHOLD, TWELVE_92,
 };
-use crate::tf::fast_math::{self, eval_rational_poly, fast_log2f};
+#[cfg(feature = "transfer")]
+use crate::tf::fast_math::fast_log2f;
+use crate::tf::fast_math::{self, eval_rational_poly};
 
 /// `max(v, 0)` as the kernels do it: zero for negative zero and NaN too.
 #[inline(always)]
@@ -27,6 +29,7 @@ fn unit(v: f32) -> f32 {
 }
 
 /// `2^x` without the scalar function's clamp.
+#[cfg(feature = "transfer")]
 #[inline(always)]
 fn pow2(x: f32) -> f32 {
     let floor = x.floor();
@@ -164,6 +167,7 @@ pub(crate) fn linear_to_gamma(v: f32, gamma: f32) -> f32 {
     pow(unit(v), 1.0 / gamma)
 }
 
+#[cfg(feature = "transfer")]
 pub(crate) fn bt709_to_linear(v: f32) -> f32 {
     use crate::tf::bt709::{BT709_ALPHA, BT709_BETA};
     if v < 4.5 * BT709_BETA {
@@ -175,6 +179,7 @@ pub(crate) fn bt709_to_linear(v: f32) -> f32 {
     if power > seam { power } else { seam }
 }
 
+#[cfg(feature = "transfer")]
 pub(crate) fn linear_to_bt709(v: f32) -> f32 {
     use crate::tf::bt709::{BT709_ALPHA, BT709_BETA};
     if v < BT709_BETA {
@@ -184,6 +189,7 @@ pub(crate) fn linear_to_bt709(v: f32) -> f32 {
     (1.0 + BT709_ALPHA).mul_add(power, -BT709_ALPHA)
 }
 
+#[cfg(feature = "transfer")]
 pub(crate) fn hlg_to_linear(v: f32) -> f32 {
     use crate::tf::hlg::{HLG_B, HLG_C, HLG_INV_A_LOG2E};
     let a = non_negative(v);
@@ -193,6 +199,7 @@ pub(crate) fn hlg_to_linear(v: f32) -> f32 {
     (pow2((a - HLG_C) * HLG_INV_A_LOG2E) + HLG_B) * (1.0 / 12.0)
 }
 
+#[cfg(feature = "transfer")]
 pub(crate) fn linear_to_hlg(v: f32) -> f32 {
     use crate::tf::hlg::{HLG_A_INV_LOG2E, HLG_B, HLG_C};
     let a = non_negative(v);
@@ -203,12 +210,13 @@ pub(crate) fn linear_to_hlg(v: f32) -> f32 {
     if high > 0.5 { high } else { 0.5 }
 }
 
+#[cfg(feature = "transfer")]
 pub(crate) fn pq_to_linear(v: f32) -> f32 {
     use crate::tf::pq::{
         C1, C2, C3, EOTF_POLY_FLOOR, M1, M2, PQ_EOTF_P_LARGE, PQ_EOTF_P_SMALL, PQ_EOTF_Q_LARGE,
         PQ_EOTF_Q_SMALL,
     };
-    if !(v > 0.0) {
+    if v.is_nan() || v <= 0.0 {
         return 0.0;
     }
     if v < EOTF_POLY_FLOOR {
@@ -225,12 +233,13 @@ pub(crate) fn pq_to_linear(v: f32) -> f32 {
     }
 }
 
+#[cfg(feature = "transfer")]
 pub(crate) fn linear_to_pq(v: f32) -> f32 {
     use crate::tf::pq::{
         C1, C2, C3, M1, M2, OETF_POLY_FLOOR, PQ_INV_P_LARGE, PQ_INV_P_SMALL, PQ_INV_Q_LARGE,
         PQ_INV_Q_SMALL,
     };
-    if !(v > 0.0) {
+    if v.is_nan() || v <= 0.0 {
         return 0.0;
     }
     if v < OETF_POLY_FLOOR {

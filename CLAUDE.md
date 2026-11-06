@@ -35,3 +35,20 @@ assembly differs from the committed fingerprints. The cause has not been
 attributed. Expectations remain unchanged pending review; see
 [issue 28](https://github.com/imazen/linear-srgb/issues/28) and
 [run 39293065161](https://github.com/imazen/linear-srgb/actions/runs/39293065161).
+
+## Frozen consumer feature ownership (2026-11-06)
+
+The sansio review cohort reuses the feature guards from 506004d9 on frozen
+52896f4b. Transfer-disabled consumers formerly fail on private BT.709/PQ
+imports. Feature ownership plus the equivalent NaN/nonpositive predicate spelling from
+cb3ef992 changes; arithmetic expressions, SIMD floors and existing
+expectations are unchanged. Kernel-tier targets retain their transfer feature
+requirement. Later numerical changes on main are outside this cohort.
+
+Qualification in an export outside workspace overrides: `just sansio-cohort-check`
+passes transfer-disabled std (105 library tests), all-feature library (165),
+all three existing tier-parity tests, fmt and strict library Clippy in both
+feature configurations. Run wrapper: rc0,22s, peak RSS0.20GiB. The earlier run
+passes runtime suites but fails the two existing comparison lints; no numeric
+assertions were changed. The predicates preserve NaN, signed-zero, infinity
+and positive/negative handling. Full platform/assembly gates remain separate.
