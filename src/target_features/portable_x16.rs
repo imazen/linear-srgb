@@ -19,11 +19,8 @@ pub fn srgb_to_linear_scalar(values: [f32; 16]) -> [f32; 16] {
 /// Convert all values, including a final partial array.
 #[archmage::rite(scalar)]
 pub fn srgb_to_linear_slice_scalar(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = srgb_to_linear_scalar(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
+    for value in values {
+        *value = crate::lanes::srgb_to_linear(*value);
     }
 }
 
@@ -46,11 +43,8 @@ pub fn linear_to_srgb_scalar(values: [f32; 16]) -> [f32; 16] {
 /// Convert all values, including a final partial array.
 #[archmage::rite(scalar)]
 pub fn linear_to_srgb_slice_scalar(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_srgb_scalar(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
+    for value in values {
+        *value = crate::lanes::linear_to_srgb(*value);
     }
 }
 
@@ -73,11 +67,8 @@ pub fn srgb_to_linear_extended_scalar(values: [f32; 16]) -> [f32; 16] {
 /// Convert all values, including a final partial array.
 #[archmage::rite(scalar)]
 pub fn srgb_to_linear_extended_slice_scalar(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = srgb_to_linear_extended_scalar(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
+    for value in values {
+        *value = crate::lanes::srgb_to_linear_extended(*value);
     }
 }
 
@@ -100,11 +91,8 @@ pub fn linear_to_srgb_extended_scalar(values: [f32; 16]) -> [f32; 16] {
 /// Convert all values, including a final partial array.
 #[archmage::rite(scalar)]
 pub fn linear_to_srgb_extended_slice_scalar(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_srgb_extended_scalar(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
+    for value in values {
+        *value = crate::lanes::linear_to_srgb_extended(*value);
     }
 }
 
@@ -127,11 +115,8 @@ pub fn gamma_to_linear_scalar(values: [f32; 16], gamma: f32) -> [f32; 16] {
 /// Convert all values, including a final partial array.
 #[archmage::rite(scalar)]
 pub fn gamma_to_linear_slice_scalar(values: &mut [f32], gamma: f32) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = gamma_to_linear_scalar(padded, gamma);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
+    for value in values {
+        *value = crate::lanes::gamma_to_linear(*value, gamma);
     }
 }
 
@@ -154,11 +139,8 @@ pub fn linear_to_gamma_scalar(values: [f32; 16], gamma: f32) -> [f32; 16] {
 /// Convert all values, including a final partial array.
 #[archmage::rite(scalar)]
 pub fn linear_to_gamma_slice_scalar(values: &mut [f32], gamma: f32) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_gamma_scalar(padded, gamma);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
+    for value in values {
+        *value = crate::lanes::linear_to_gamma(*value, gamma);
     }
 }
 
@@ -183,12 +165,7 @@ pub fn tf_srgb_to_linear_scalar(values: [f32; 16]) -> [f32; 16] {
 #[cfg(feature = "transfer")]
 #[archmage::rite(scalar)]
 pub fn tf_srgb_to_linear_slice_scalar(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = tf_srgb_to_linear_scalar(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, tf_srgb_to_linear_scalar);
 }
 
 /// Convert 16 values; see the module calling-context requirements.
@@ -212,12 +189,7 @@ pub fn tf_linear_to_srgb_scalar(values: [f32; 16]) -> [f32; 16] {
 #[cfg(feature = "transfer")]
 #[archmage::rite(scalar)]
 pub fn tf_linear_to_srgb_slice_scalar(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = tf_linear_to_srgb_scalar(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, tf_linear_to_srgb_scalar);
 }
 
 /// Convert 16 values; see the module calling-context requirements.
@@ -241,12 +213,7 @@ pub fn bt709_to_linear_scalar(values: [f32; 16]) -> [f32; 16] {
 #[cfg(feature = "transfer")]
 #[archmage::rite(scalar)]
 pub fn bt709_to_linear_slice_scalar(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = bt709_to_linear_scalar(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, bt709_to_linear_scalar);
 }
 
 /// Convert 16 values; see the module calling-context requirements.
@@ -270,12 +237,7 @@ pub fn linear_to_bt709_scalar(values: [f32; 16]) -> [f32; 16] {
 #[cfg(feature = "transfer")]
 #[archmage::rite(scalar)]
 pub fn linear_to_bt709_slice_scalar(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_bt709_scalar(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, linear_to_bt709_scalar);
 }
 
 /// Convert 16 values; see the module calling-context requirements.
@@ -299,12 +261,7 @@ pub fn pq_to_linear_scalar(values: [f32; 16]) -> [f32; 16] {
 #[cfg(feature = "transfer")]
 #[archmage::rite(scalar)]
 pub fn pq_to_linear_slice_scalar(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = pq_to_linear_scalar(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, pq_to_linear_scalar);
 }
 
 /// Convert 16 values; see the module calling-context requirements.
@@ -328,12 +285,7 @@ pub fn linear_to_pq_scalar(values: [f32; 16]) -> [f32; 16] {
 #[cfg(feature = "transfer")]
 #[archmage::rite(scalar)]
 pub fn linear_to_pq_slice_scalar(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_pq_scalar(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, linear_to_pq_scalar);
 }
 
 /// Convert 16 values; see the module calling-context requirements.
@@ -357,12 +309,7 @@ pub fn hlg_to_linear_scalar(values: [f32; 16]) -> [f32; 16] {
 #[cfg(feature = "transfer")]
 #[archmage::rite(scalar)]
 pub fn hlg_to_linear_slice_scalar(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = hlg_to_linear_scalar(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, hlg_to_linear_scalar);
 }
 
 /// Convert 16 values; see the module calling-context requirements.
@@ -386,174 +333,85 @@ pub fn linear_to_hlg_scalar(values: [f32; 16]) -> [f32; 16] {
 #[cfg(feature = "transfer")]
 #[archmage::rite(scalar)]
 pub fn linear_to_hlg_slice_scalar(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_hlg_scalar(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, linear_to_hlg_scalar);
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[archmage::rite(v3)]
 pub fn srgb_to_linear_v3(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::srgb_to_linear_v3(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::srgb_to_linear(archmage::X64V3Token::from_context(), values)
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(v3)]
 pub fn srgb_to_linear_slice_v3(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = srgb_to_linear_v3(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| srgb_to_linear_v3(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[archmage::rite(v3)]
 pub fn linear_to_srgb_v3(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_srgb_v3(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::linear_to_srgb(archmage::X64V3Token::from_context(), values)
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(v3)]
 pub fn linear_to_srgb_slice_v3(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_srgb_v3(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_srgb_v3(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[archmage::rite(v3)]
 pub fn srgb_to_linear_extended_v3(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::srgb_to_linear_extended_v3(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::srgb_to_linear_extended(
+        archmage::X64V3Token::from_context(),
+        values,
+    )
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(v3)]
 pub fn srgb_to_linear_extended_slice_v3(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = srgb_to_linear_extended_v3(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| srgb_to_linear_extended_v3(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[archmage::rite(v3)]
 pub fn linear_to_srgb_extended_v3(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_srgb_extended_v3(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::linear_to_srgb_extended(
+        archmage::X64V3Token::from_context(),
+        values,
+    )
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(v3)]
 pub fn linear_to_srgb_extended_slice_v3(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_srgb_extended_v3(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_srgb_extended_v3(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[archmage::rite(v3)]
 pub fn gamma_to_linear_v3(values: [f32; 16], gamma: f32) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::gamma_to_linear_v3(*src, gamma);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::gamma_to_linear(archmage::X64V3Token::from_context(), values, gamma)
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(v3)]
 pub fn gamma_to_linear_slice_v3(values: &mut [f32], gamma: f32) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = gamma_to_linear_v3(padded, gamma);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| gamma_to_linear_v3(chunk, gamma));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[archmage::rite(v3)]
 pub fn linear_to_gamma_v3(values: [f32; 16], gamma: f32) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_gamma_v3(*src, gamma);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::linear_to_gamma(archmage::X64V3Token::from_context(), values, gamma)
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(v3)]
 pub fn linear_to_gamma_slice_v3(values: &mut [f32], gamma: f32) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_gamma_v3(padded, gamma);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_gamma_v3(chunk, gamma));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
@@ -577,12 +435,7 @@ pub fn tf_srgb_to_linear_v3(values: [f32; 16]) -> [f32; 16] {
 #[cfg(feature = "transfer")]
 #[archmage::rite(v3)]
 pub fn tf_srgb_to_linear_slice_v3(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = tf_srgb_to_linear_v3(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| tf_srgb_to_linear_v3(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
@@ -606,406 +459,227 @@ pub fn tf_linear_to_srgb_v3(values: [f32; 16]) -> [f32; 16] {
 #[cfg(feature = "transfer")]
 #[archmage::rite(v3)]
 pub fn tf_linear_to_srgb_slice_v3(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = tf_linear_to_srgb_v3(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| tf_linear_to_srgb_v3(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "transfer")]
 #[archmage::rite(v3)]
 pub fn bt709_to_linear_v3(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::bt709_to_linear_v3(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    let token = archmage::X64V3Token::from_context();
+    crate::tf::bt709::bt709_to_linear_x16(
+        token,
+        magetypes::simd::generic::f32x16::from_array_t(token, values),
+    )
+    .to_array()
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "transfer")]
 #[archmage::rite(v3)]
 pub fn bt709_to_linear_slice_v3(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = bt709_to_linear_v3(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| bt709_to_linear_v3(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "transfer")]
 #[archmage::rite(v3)]
 pub fn linear_to_bt709_v3(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_bt709_v3(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    let token = archmage::X64V3Token::from_context();
+    crate::tf::bt709::linear_to_bt709_x16(
+        token,
+        magetypes::simd::generic::f32x16::from_array_t(token, values),
+    )
+    .to_array()
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "transfer")]
 #[archmage::rite(v3)]
 pub fn linear_to_bt709_slice_v3(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_bt709_v3(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_bt709_v3(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "transfer")]
 #[archmage::rite(v3)]
 pub fn pq_to_linear_v3(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::pq_to_linear_v3(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    let token = archmage::X64V3Token::from_context();
+    crate::tf::pq::pq_to_linear_x16(
+        token,
+        magetypes::simd::generic::f32x16::from_array_t(token, values),
+    )
+    .to_array()
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "transfer")]
 #[archmage::rite(v3)]
 pub fn pq_to_linear_slice_v3(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = pq_to_linear_v3(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| pq_to_linear_v3(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "transfer")]
 #[archmage::rite(v3)]
 pub fn linear_to_pq_v3(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_pq_v3(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    let token = archmage::X64V3Token::from_context();
+    crate::tf::pq::linear_to_pq_x16(
+        token,
+        magetypes::simd::generic::f32x16::from_array_t(token, values),
+    )
+    .to_array()
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "transfer")]
 #[archmage::rite(v3)]
 pub fn linear_to_pq_slice_v3(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_pq_v3(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_pq_v3(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "transfer")]
 #[archmage::rite(v3)]
 pub fn hlg_to_linear_v3(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::hlg_to_linear_v3(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    let token = archmage::X64V3Token::from_context();
+    crate::tf::hlg::hlg_to_linear_x16(
+        token,
+        magetypes::simd::generic::f32x16::from_array_t(token, values),
+    )
+    .to_array()
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "transfer")]
 #[archmage::rite(v3)]
 pub fn hlg_to_linear_slice_v3(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = hlg_to_linear_v3(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| hlg_to_linear_v3(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "transfer")]
 #[archmage::rite(v3)]
 pub fn linear_to_hlg_v3(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_hlg_v3(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    let token = archmage::X64V3Token::from_context();
+    crate::tf::hlg::linear_to_hlg_x16(
+        token,
+        magetypes::simd::generic::f32x16::from_array_t(token, values),
+    )
+    .to_array()
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "transfer")]
 #[archmage::rite(v3)]
 pub fn linear_to_hlg_slice_v3(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_hlg_v3(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_hlg_v3(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "avx512")]
 #[archmage::rite(v4)]
 pub fn srgb_to_linear_extended_v4(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::srgb_to_linear_extended_v3(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::srgb_to_linear_extended(
+        archmage::X64V4Token::from_context(),
+        values,
+    )
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "avx512")]
 #[archmage::rite(v4)]
 pub fn srgb_to_linear_extended_slice_v4(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = srgb_to_linear_extended_v4(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| srgb_to_linear_extended_v4(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "avx512")]
 #[archmage::rite(v4)]
 pub fn linear_to_srgb_extended_v4(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_srgb_extended_v3(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::linear_to_srgb_extended(
+        archmage::X64V4Token::from_context(),
+        values,
+    )
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "avx512")]
 #[archmage::rite(v4)]
 pub fn linear_to_srgb_extended_slice_v4(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_srgb_extended_v4(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_srgb_extended_v4(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[archmage::rite(neon)]
 pub fn srgb_to_linear_neon(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::srgb_to_linear_neon(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::srgb_to_linear(archmage::NeonToken::from_context(), values)
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(neon)]
 pub fn srgb_to_linear_slice_neon(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = srgb_to_linear_neon(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| srgb_to_linear_neon(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[archmage::rite(neon)]
 pub fn linear_to_srgb_neon(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_srgb_neon(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::linear_to_srgb(archmage::NeonToken::from_context(), values)
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(neon)]
 pub fn linear_to_srgb_slice_neon(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_srgb_neon(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_srgb_neon(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[archmage::rite(neon)]
 pub fn srgb_to_linear_extended_neon(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::srgb_to_linear_extended_neon(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::srgb_to_linear_extended(archmage::NeonToken::from_context(), values)
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(neon)]
 pub fn srgb_to_linear_extended_slice_neon(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = srgb_to_linear_extended_neon(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| srgb_to_linear_extended_neon(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[archmage::rite(neon)]
 pub fn linear_to_srgb_extended_neon(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_srgb_extended_neon(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::linear_to_srgb_extended(archmage::NeonToken::from_context(), values)
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(neon)]
 pub fn linear_to_srgb_extended_slice_neon(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_srgb_extended_neon(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_srgb_extended_neon(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[archmage::rite(neon)]
 pub fn gamma_to_linear_neon(values: [f32; 16], gamma: f32) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::gamma_to_linear_neon(*src, gamma);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::gamma_to_linear(archmage::NeonToken::from_context(), values, gamma)
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(neon)]
 pub fn gamma_to_linear_slice_neon(values: &mut [f32], gamma: f32) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = gamma_to_linear_neon(padded, gamma);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| gamma_to_linear_neon(chunk, gamma));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[archmage::rite(neon)]
 pub fn linear_to_gamma_neon(values: [f32; 16], gamma: f32) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_gamma_neon(*src, gamma);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::linear_to_gamma(archmage::NeonToken::from_context(), values, gamma)
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(neon)]
 pub fn linear_to_gamma_slice_neon(values: &mut [f32], gamma: f32) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_gamma_neon(padded, gamma);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_gamma_neon(chunk, gamma));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
@@ -1029,12 +703,7 @@ pub fn tf_srgb_to_linear_neon(values: [f32; 16]) -> [f32; 16] {
 #[cfg(feature = "transfer")]
 #[archmage::rite(neon)]
 pub fn tf_srgb_to_linear_slice_neon(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = tf_srgb_to_linear_neon(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| tf_srgb_to_linear_neon(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
@@ -1058,348 +727,207 @@ pub fn tf_linear_to_srgb_neon(values: [f32; 16]) -> [f32; 16] {
 #[cfg(feature = "transfer")]
 #[archmage::rite(neon)]
 pub fn tf_linear_to_srgb_slice_neon(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = tf_linear_to_srgb_neon(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| tf_linear_to_srgb_neon(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "transfer")]
 #[archmage::rite(neon)]
 pub fn bt709_to_linear_neon(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::bt709_to_linear_neon(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    let token = archmage::NeonToken::from_context();
+    crate::tf::bt709::bt709_to_linear_x16(
+        token,
+        magetypes::simd::generic::f32x16::from_array_t(token, values),
+    )
+    .to_array()
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "transfer")]
 #[archmage::rite(neon)]
 pub fn bt709_to_linear_slice_neon(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = bt709_to_linear_neon(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| bt709_to_linear_neon(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "transfer")]
 #[archmage::rite(neon)]
 pub fn linear_to_bt709_neon(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_bt709_neon(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    let token = archmage::NeonToken::from_context();
+    crate::tf::bt709::linear_to_bt709_x16(
+        token,
+        magetypes::simd::generic::f32x16::from_array_t(token, values),
+    )
+    .to_array()
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "transfer")]
 #[archmage::rite(neon)]
 pub fn linear_to_bt709_slice_neon(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_bt709_neon(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_bt709_neon(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "transfer")]
 #[archmage::rite(neon)]
 pub fn pq_to_linear_neon(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::pq_to_linear_neon(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    let token = archmage::NeonToken::from_context();
+    crate::tf::pq::pq_to_linear_x16(
+        token,
+        magetypes::simd::generic::f32x16::from_array_t(token, values),
+    )
+    .to_array()
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "transfer")]
 #[archmage::rite(neon)]
 pub fn pq_to_linear_slice_neon(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = pq_to_linear_neon(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| pq_to_linear_neon(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "transfer")]
 #[archmage::rite(neon)]
 pub fn linear_to_pq_neon(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_pq_neon(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    let token = archmage::NeonToken::from_context();
+    crate::tf::pq::linear_to_pq_x16(
+        token,
+        magetypes::simd::generic::f32x16::from_array_t(token, values),
+    )
+    .to_array()
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "transfer")]
 #[archmage::rite(neon)]
 pub fn linear_to_pq_slice_neon(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_pq_neon(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_pq_neon(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "transfer")]
 #[archmage::rite(neon)]
 pub fn hlg_to_linear_neon(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::hlg_to_linear_neon(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    let token = archmage::NeonToken::from_context();
+    crate::tf::hlg::hlg_to_linear_x16(
+        token,
+        magetypes::simd::generic::f32x16::from_array_t(token, values),
+    )
+    .to_array()
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "transfer")]
 #[archmage::rite(neon)]
 pub fn hlg_to_linear_slice_neon(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = hlg_to_linear_neon(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| hlg_to_linear_neon(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "transfer")]
 #[archmage::rite(neon)]
 pub fn linear_to_hlg_neon(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_hlg_neon(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    let token = archmage::NeonToken::from_context();
+    crate::tf::hlg::linear_to_hlg_x16(
+        token,
+        magetypes::simd::generic::f32x16::from_array_t(token, values),
+    )
+    .to_array()
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "transfer")]
 #[archmage::rite(neon)]
 pub fn linear_to_hlg_slice_neon(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_hlg_neon(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_hlg_neon(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[archmage::rite(wasm128)]
 pub fn srgb_to_linear_wasm128(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::srgb_to_linear_wasm128(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::srgb_to_linear(archmage::Wasm128Token::from_context(), values)
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(wasm128)]
 pub fn srgb_to_linear_slice_wasm128(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = srgb_to_linear_wasm128(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| srgb_to_linear_wasm128(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[archmage::rite(wasm128)]
 pub fn linear_to_srgb_wasm128(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_srgb_wasm128(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::linear_to_srgb(archmage::Wasm128Token::from_context(), values)
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(wasm128)]
 pub fn linear_to_srgb_slice_wasm128(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_srgb_wasm128(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_srgb_wasm128(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[archmage::rite(wasm128)]
 pub fn srgb_to_linear_extended_wasm128(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::srgb_to_linear_extended_wasm128(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::srgb_to_linear_extended(
+        archmage::Wasm128Token::from_context(),
+        values,
+    )
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(wasm128)]
 pub fn srgb_to_linear_extended_slice_wasm128(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = srgb_to_linear_extended_wasm128(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| srgb_to_linear_extended_wasm128(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[archmage::rite(wasm128)]
 pub fn linear_to_srgb_extended_wasm128(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_srgb_extended_wasm128(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::linear_to_srgb_extended(
+        archmage::Wasm128Token::from_context(),
+        values,
+    )
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(wasm128)]
 pub fn linear_to_srgb_extended_slice_wasm128(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_srgb_extended_wasm128(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_srgb_extended_wasm128(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[archmage::rite(wasm128)]
 pub fn gamma_to_linear_wasm128(values: [f32; 16], gamma: f32) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::gamma_to_linear_wasm128(*src, gamma);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::gamma_to_linear(
+        archmage::Wasm128Token::from_context(),
+        values,
+        gamma,
+    )
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(wasm128)]
 pub fn gamma_to_linear_slice_wasm128(values: &mut [f32], gamma: f32) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = gamma_to_linear_wasm128(padded, gamma);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| gamma_to_linear_wasm128(chunk, gamma));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[archmage::rite(wasm128)]
 pub fn linear_to_gamma_wasm128(values: [f32; 16], gamma: f32) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_gamma_wasm128(*src, gamma);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    crate::kernels::float::x16::linear_to_gamma(
+        archmage::Wasm128Token::from_context(),
+        values,
+        gamma,
+    )
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(wasm128)]
 pub fn linear_to_gamma_slice_wasm128(values: &mut [f32], gamma: f32) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_gamma_wasm128(padded, gamma);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_gamma_wasm128(chunk, gamma));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
@@ -1423,12 +951,7 @@ pub fn tf_srgb_to_linear_wasm128(values: [f32; 16]) -> [f32; 16] {
 #[cfg(feature = "transfer")]
 #[archmage::rite(wasm128)]
 pub fn tf_srgb_to_linear_slice_wasm128(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = tf_srgb_to_linear_wasm128(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| tf_srgb_to_linear_wasm128(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
@@ -1452,184 +975,119 @@ pub fn tf_linear_to_srgb_wasm128(values: [f32; 16]) -> [f32; 16] {
 #[cfg(feature = "transfer")]
 #[archmage::rite(wasm128)]
 pub fn tf_linear_to_srgb_slice_wasm128(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = tf_linear_to_srgb_wasm128(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| tf_linear_to_srgb_wasm128(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "transfer")]
 #[archmage::rite(wasm128)]
 pub fn bt709_to_linear_wasm128(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::bt709_to_linear_wasm128(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    let token = archmage::Wasm128Token::from_context();
+    crate::tf::bt709::bt709_to_linear_x16(
+        token,
+        magetypes::simd::generic::f32x16::from_array_t(token, values),
+    )
+    .to_array()
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "transfer")]
 #[archmage::rite(wasm128)]
 pub fn bt709_to_linear_slice_wasm128(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = bt709_to_linear_wasm128(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| bt709_to_linear_wasm128(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "transfer")]
 #[archmage::rite(wasm128)]
 pub fn linear_to_bt709_wasm128(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_bt709_wasm128(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    let token = archmage::Wasm128Token::from_context();
+    crate::tf::bt709::linear_to_bt709_x16(
+        token,
+        magetypes::simd::generic::f32x16::from_array_t(token, values),
+    )
+    .to_array()
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "transfer")]
 #[archmage::rite(wasm128)]
 pub fn linear_to_bt709_slice_wasm128(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_bt709_wasm128(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_bt709_wasm128(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "transfer")]
 #[archmage::rite(wasm128)]
 pub fn pq_to_linear_wasm128(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::pq_to_linear_wasm128(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    let token = archmage::Wasm128Token::from_context();
+    crate::tf::pq::pq_to_linear_x16(
+        token,
+        magetypes::simd::generic::f32x16::from_array_t(token, values),
+    )
+    .to_array()
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "transfer")]
 #[archmage::rite(wasm128)]
 pub fn pq_to_linear_slice_wasm128(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = pq_to_linear_wasm128(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| pq_to_linear_wasm128(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "transfer")]
 #[archmage::rite(wasm128)]
 pub fn linear_to_pq_wasm128(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_pq_wasm128(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    let token = archmage::Wasm128Token::from_context();
+    crate::tf::pq::linear_to_pq_x16(
+        token,
+        magetypes::simd::generic::f32x16::from_array_t(token, values),
+    )
+    .to_array()
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "transfer")]
 #[archmage::rite(wasm128)]
 pub fn linear_to_pq_slice_wasm128(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_pq_wasm128(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_pq_wasm128(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "transfer")]
 #[archmage::rite(wasm128)]
 pub fn hlg_to_linear_wasm128(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::hlg_to_linear_wasm128(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    let token = archmage::Wasm128Token::from_context();
+    crate::tf::hlg::hlg_to_linear_x16(
+        token,
+        magetypes::simd::generic::f32x16::from_array_t(token, values),
+    )
+    .to_array()
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "transfer")]
 #[archmage::rite(wasm128)]
 pub fn hlg_to_linear_slice_wasm128(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = hlg_to_linear_wasm128(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| hlg_to_linear_wasm128(chunk));
 }
 
 /// Convert 16 values; see the module calling-context requirements.
 #[cfg(feature = "transfer")]
 #[archmage::rite(wasm128)]
 pub fn linear_to_hlg_wasm128(values: [f32; 16]) -> [f32; 16] {
-    let mut output = [0.0; 16];
-    for (src, dst) in values
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(output.as_chunks_mut::<4>().0)
-    {
-        let converted = super::x4::linear_to_hlg_wasm128(*src);
-        dst.copy_from_slice(&converted);
-    }
-    output
+    let token = archmage::Wasm128Token::from_context();
+    crate::tf::hlg::linear_to_hlg_x16(
+        token,
+        magetypes::simd::generic::f32x16::from_array_t(token, values),
+    )
+    .to_array()
 }
 
 /// Convert all values, including a final partial array.
 #[cfg(feature = "transfer")]
 #[archmage::rite(wasm128)]
 pub fn linear_to_hlg_slice_wasm128(values: &mut [f32]) {
-    for chunk in values.chunks_mut(16) {
-        let mut padded = [0.0; 16];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = linear_to_hlg_wasm128(padded);
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }
+    crate::kernels::map_slice::<16>(values, |chunk| linear_to_hlg_wasm128(chunk));
 }

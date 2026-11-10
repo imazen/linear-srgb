@@ -1,6 +1,6 @@
 //! Bit-exact compatibility and safe composition of the array/slice entry points.
 #![forbid(unsafe_code)]
-#![allow(deprecated)] // The old kernels are the compatibility oracle.
+#![allow(deprecated)] // Check retained adapters; frozen pre-refactor output is captured separately.
 
 use archmage::{SimdToken, arcane};
 

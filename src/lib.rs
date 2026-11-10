@@ -283,6 +283,7 @@ pub const UNPREMUL_ALPHA_THRESHOLD: f32 = 1.0 / 1024.0;
 // Internal modules
 // ============================================================================
 
+mod kernels;
 mod lanes;
 pub(crate) mod scalar;
 pub(crate) mod simd;

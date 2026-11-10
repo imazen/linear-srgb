@@ -11,9 +11,10 @@ use crate::rational_poly::{
     EXT_L2S_P, EXT_L2S_Q, EXT_S2L_P, EXT_S2L_Q, L2S_P, L2S_Q, LINEAR_SCALE, LINEAR_THRESHOLD,
     S2L_P, S2L_Q, SRGB_THRESHOLD, TWELVE_92,
 };
+use crate::tf::fast_math;
+use crate::tf::fast_math::eval_rational_poly;
 #[cfg(feature = "transfer")]
 use crate::tf::fast_math::fast_log2f;
-use crate::tf::fast_math::{self, eval_rational_poly};
 
 /// `max(v, 0)` as the kernels do it: zero for negative zero and NaN too.
 #[inline(always)]
@@ -139,34 +140,6 @@ pub(crate) fn linear_to_srgb_u16(v: f32) -> u16 {
     linear_to_srgb(v).mul_add(65535.0, 0.5) as i32 as u16
 }
 
-pub(crate) fn srgb_to_linear_extended(v: f32) -> f32 {
-    let magnitude = v.abs();
-    let result = if magnitude < SRGB_THRESHOLD {
-        magnitude * LINEAR_SCALE
-    } else {
-        eval_rational_poly(magnitude, EXT_S2L_P, EXT_S2L_Q)
-    };
-    if v < 0.0 { -result } else { result }
-}
-
-pub(crate) fn linear_to_srgb_extended(v: f32) -> f32 {
-    let magnitude = v.abs();
-    let result = if magnitude < LINEAR_THRESHOLD {
-        magnitude * TWELVE_92
-    } else {
-        eval_rational_poly(magnitude.sqrt(), EXT_L2S_P, EXT_L2S_Q)
-    };
-    if v < 0.0 { -result } else { result }
-}
-
-pub(crate) fn gamma_to_linear(v: f32, gamma: f32) -> f32 {
-    pow(unit(v), gamma)
-}
-
-pub(crate) fn linear_to_gamma(v: f32, gamma: f32) -> f32 {
-    pow(unit(v), 1.0 / gamma)
-}
-
 #[cfg(feature = "transfer")]
 pub(crate) fn bt709_to_linear(v: f32) -> f32 {
     use crate::tf::bt709::{BT709_ALPHA, BT709_BETA};
@@ -252,4 +225,32 @@ pub(crate) fn linear_to_pq(v: f32) -> f32 {
     } else {
         eval_rational_poly(a4, PQ_INV_P_LARGE, PQ_INV_Q_LARGE)
     }
+}
+
+pub(crate) fn srgb_to_linear_extended(v: f32) -> f32 {
+    let magnitude = v.abs();
+    let result = if magnitude < SRGB_THRESHOLD {
+        magnitude * LINEAR_SCALE
+    } else {
+        eval_rational_poly(magnitude, EXT_S2L_P, EXT_S2L_Q)
+    };
+    if v < 0.0 { -result } else { result }
+}
+
+pub(crate) fn linear_to_srgb_extended(v: f32) -> f32 {
+    let magnitude = v.abs();
+    let result = if magnitude < LINEAR_THRESHOLD {
+        magnitude * TWELVE_92
+    } else {
+        eval_rational_poly(magnitude.sqrt(), EXT_L2S_P, EXT_L2S_Q)
+    };
+    if v < 0.0 { -result } else { result }
+}
+
+pub(crate) fn gamma_to_linear(v: f32, gamma: f32) -> f32 {
+    pow(unit(v), gamma)
+}
+
+pub(crate) fn linear_to_gamma(v: f32, gamma: f32) -> f32 {
+    pow(unit(v), 1.0 / gamma)
 }

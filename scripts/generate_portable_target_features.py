@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fill token-free array/slice tier families; keep the existing native hooks."""
+"""Complete canonical feature families from private kernels and native hooks."""
 from pathlib import Path
 import re
 import subprocess
@@ -27,12 +27,20 @@ for width in [4, 8, 16]:
             if name not in existing:
                 if tier == 'scalar' and width == 4:
                     t = 'archmage::ScalarToken'
-                    if op in ['srgb_to_linear', 'linear_to_srgb', 'gamma_to_linear', 'linear_to_gamma']:
-                        body = f'crate::tokens::x4::{op}_core({t}, values{callarg})'
+                    if op in ['srgb_to_linear', 'linear_to_srgb', 'gamma_to_linear', 'linear_to_gamma', 'srgb_to_linear_extended', 'linear_to_srgb_extended']:
+                        body = f'crate::kernels::float::x4::{op}({t}, values{callarg})'
                     elif op.startswith('tf_'):
                         body = f'crate::tf::srgb::{op[3:]}_x4({t}, magetypes::simd::generic::f32x4::from_array_t({t}, values)).to_array()'
                     else:
                         body = f'values.map(crate::lanes::{op})'
+                elif tier != 'scalar' and op in ['srgb_to_linear', 'linear_to_srgb', 'gamma_to_linear', 'linear_to_gamma', 'srgb_to_linear_extended', 'linear_to_srgb_extended']:
+                    token = {'v3': 'X64V3Token', 'v4': 'X64V4Token', 'neon': 'NeonToken', 'wasm128': 'Wasm128Token'}[tier]
+                    body = f'crate::kernels::float::x{width}::{op}(archmage::{token}::from_context(), values{callarg})'
+                elif tier != 'scalar' and transfer and not (width == 16 and op.startswith('tf_')):
+                    token = {'v3': 'X64V3Token', 'v4': 'X64V4Token', 'neon': 'NeonToken', 'wasm128': 'Wasm128Token'}[tier]
+                    module = 'srgb' if op.startswith('tf_') else ('bt709' if 'bt709' in op else ('pq' if 'pq' in op else 'hlg'))
+                    kernel = op.removeprefix('tf_')
+                    body = f'let token = archmage::{token}::from_context();\n    crate::tf::{module}::{kernel}_x{width}(token, magetypes::simd::generic::f32x{width}::from_array_t(token, values)).to_array()'
                 else:
                     child_tier = 'v3' if tier == 'v4' else tier
                     body = f'''let mut output = [0.0; {width}];
@@ -44,16 +52,14 @@ for width in [4, 8, 16]:
                 extra += [f'/// Convert {width} values; see the module calling-context requirements.\n{attrs}pub fn {name}(values: [f32; {width}]{arg}) -> [f32; {width}] {{\n    {body}\n}}\n']
             slicename = f'{op}_slice_{tier}'
             if slicename not in existing:
-                extra += [f'''/// Convert all values, including a final partial array.
-{attrs}pub fn {slicename}(values: &mut [f32]{arg}) {{
-    for chunk in values.chunks_mut({width}) {{
-        let mut padded = [0.0; {width}];
-        padded[..chunk.len()].copy_from_slice(chunk);
-        let converted = {name}(padded{callarg});
-        chunk.copy_from_slice(&converted[..chunk.len()]);
-    }}
-}}
-''']
+                if tier == 'scalar' and not transfer:
+                    scalar_call = f'crate::lanes::{op}(*value{callarg})'
+                    slice_body = f'for value in values {{ *value = {scalar_call}; }}'
+                elif tier == 'scalar':
+                    slice_body = f'crate::kernels::map_slice::<{width}>(values, {name});'
+                else:
+                    slice_body = f'crate::kernels::map_slice::<{width}>(values, |chunk| {name}(chunk{callarg}));'
+                extra += [f'/// Convert all values, including a final partial array.\n{attrs}pub fn {slicename}(values: &mut [f32]{arg}) {{\n    {slice_body}\n}}\n']
     source.write_text(text + f'\n// Portable tier completion\ninclude!("portable_x{width}.rs");\n')
     (root / f'src/target_features/portable_x{width}.rs').write_text('\n'.join(extra))
 

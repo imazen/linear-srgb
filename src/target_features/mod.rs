@@ -52,20 +52,20 @@
 //! | `_wasm128` | `simd128` (WebAssembly) |
 //! | `_scalar` | None |
 //!
-//! These functions retain the corresponding [`crate::tokens`] conversion,
-//! clamping, rounding and slice-length contracts. Transfer curves other than
+//! The deprecated [`crate::tokens`] functions forward here and retain the same
+//! conversion, clamping, rounding and slice-length contracts. Transfer curves other than
 //! the base sRGB/gamma operations require Cargo feature `transfer`. They do not
 //! inspect the CPU or select a fallback. The internal SIMD dependencies may
 //! change independently of the caller's copies; only the feature requirements
 //! and ordinary Rust input/output types cross this boundary.
 
-// These wrappers intentionally call the retained legacy kernels.
-#![allow(deprecated)]
+// Canonical feature entry points call private numerical kernels.
 
 //! # Dispatching wider arrays
 //!
 //! Each f32 family has x4, x8 and x16 variants for scalar, V3, V4, NEON
-//! and WASM128. Missing native widths compose x4 kernels; integer hooks keep
+//! and WASM128. Width-generic private kernels select the matching backend;
+//! remaining composed families reuse x4 kernels. Integer hooks keep
 //! their existing target-specific coverage. V4 requires the `avx512` feature.
 //! A caller can dispatch its own entry point and select our matching feature
 //! function without exchanging token types:
@@ -84,9 +84,9 @@
 //! assert!(values.iter().all(|v| *v > 0.0 && *v < 1.0));
 //! ```
 
-macro_rules! forward {
+macro_rules! entry {
     ($width:ident, $tier:ident, $token:path; $(#[$meta:meta])* fn $name:ident($($arg:ident: $ty:ty),*) $(-> $out:ty)?) => {
-        #[doc = concat!("Equivalent to [`crate::tokens::", stringify!($width), "::", stringify!($name), "`] without its token argument. See [calling context](crate::target_features#calling-context) for required CPU features.")]
+        #[doc = concat!("CPU-feature entry point corresponding to [`crate::tokens::", stringify!($width), "::", stringify!($name), "`] without its token argument. See [calling context](crate::target_features#calling-context) for required CPU features.")]
         ///
         /// # Safety
         ///
@@ -99,7 +99,7 @@ macro_rules! forward {
         $(#[$meta])*
         #[archmage::rite($tier)]
         pub fn $name($($arg: $ty),*) $(-> $out)? {
-            legacy::$name(<$token>::from_context(), $($arg),*)
+            crate::kernels::$width::$name(<$token>::from_context(), $($arg),*)
         }
     };
 }

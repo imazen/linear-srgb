@@ -53,7 +53,8 @@ Additional local refs: `abandoned/pulp-rewrite` (`414e59ab`, five unique commits
 
 The f32 array and slice families in `target_features::{x4,x8,x16}` provide
 scalar, V3, V4, NEON and WASM128 variants (V4 requires `avx512`). Existing
-native kernels remain; missing wider tiers compose x4 kernels. This completes
+native kernels remain private; width-generic sRGB/gamma and HDR kernels use
+the matching backend, while remaining composed families reuse x4 kernels. This completes
 calling families without a measured performance claim. Integer conversion
 hooks retain their existing target-specific coverage.
 
@@ -78,3 +79,32 @@ shared-math proposal in [archmage PR #140](https://github.com/imazen/archmage/pu
 is also superseded by the owner's decision to retain crate-private copies.
 Both branches preserve their implementation/measurement evidence. The original
 ARM gamma snapshot pairs are retained with the restored kernels.
+
+## Entry-point ownership (2026-11-10)
+
+`target_features` is the canonical CPU-feature API. Its entry points construct
+internal proofs with `from_context()` and call private kernels; they do not
+perform runtime CPU detection. Deprecated `tokens` functions forward to this
+API. Removing that compatibility surface later will not remove numerical code.
+
+`src/kernels/float.rs` defines the shared sRGB and custom-gamma algorithms for
+x4/x8/x16. `src/kernels/{x4,x8,x16}.rs` retains private native integer and
+transfer implementations and their existing unit coverage. Transfer math in
+`src/tf` remains private to the implementation. Tokens and magetypes vectors
+are permitted inside these private modules.
+
+Ordinary f32 slice dispatch selects the canonical feature functions. RGBA,
+premultiplication and specialized integer loops keep their existing arithmetic
+and use private kernels where applicable. Shared slice helpers process full
+blocks directly and pad only the final partial block. Scalar slice entry
+points retain the original per-sample evaluation policy. Width-generic native
+sRGB/gamma and HDR implementations use their matching backend rather than
+requiring every wider entry to compose x4 calls.
+
+`just check-target-feature-ownership` checks the dependency direction.
+`just ownership-fingerprint` and `just ownership-fingerprint-check <log>`
+compare outputs with captures made before the refactor. The original outputs,
+commands and validation limitations are in
+[the ownership baseline](../benchmarks/entry_point_ownership_2026-11-10.md).
+The legacy/new adapter comparisons remain useful for compatibility; they are
+not independent numerical oracles after both APIs share the implementation.

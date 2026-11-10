@@ -26,6 +26,7 @@ beta-library-check:
 
 # Verify CPU-feature entry points, compatibility, docs and feature combinations.
 verify-target-features:
+    python3 scripts/check_target_feature_ownership.py
     cargo fmt --check
     cargo clippy --all-targets --all-features -- -D warnings
     cargo test --all-features --release
@@ -94,3 +95,22 @@ ownership-fingerprint:
 # Capture the existing dispatcher stubs without changing committed ASM snapshots.
 ownership-codegen:
     cargo rustc --release --all-features --example asm-stub -- --emit=asm
+
+# Enforce dependency direction without relying on public-signature snapshots.
+check-target-feature-ownership:
+    python3 scripts/check_target_feature_ownership.py
+
+# Compare captured probe output against the pre-refactor numerical fingerprints.
+ownership-fingerprint-check output:
+    python3 scripts/check_entry_point_fingerprints.py {{output}}
+
+# Isolated API render: compare original/current without replacing expectations.
+ownership-api workspace output_dir:
+    ZEN_API_DOC=regen cargo run --manifest-path apidoc/Cargo.toml --example capture -- {{workspace}} {{output_dir}}
+
+ownership-asm-compare before after:
+    python3 scripts/compare_entry_point_asm.py {{before}} {{after}} --require-identical
+
+# Render assembly to an isolated review directory; preserve committed expectations.
+ownership-asm output_dir:
+    bash scripts/dump-asm.sh "" {{output_dir}}
