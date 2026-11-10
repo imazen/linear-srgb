@@ -36,7 +36,9 @@ class TargetSurfaceGuard(unittest.TestCase):
             read_surface(ROOT / "docs/public-api/x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu")
 
     def test_missing_capture_fails_loudly(self):
-        with tempfile.TemporaryDirectory(dir=Path.home() / "tmp") as directory:
+        scratch = Path.home() / "tmp"
+        scratch.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=scratch) as directory:
             with self.assertRaisesRegex(AssertionError, "Missing"):
                 read_surface(Path(directory), "wasm32-wasip1")
 
