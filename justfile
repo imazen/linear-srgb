@@ -25,6 +25,18 @@ beta-library-check:
     cargo test --locked --all-features --lib
 
 # Check immutable output chunks, captured from main before PR #30 merges.
+issue-32-probe revision output:
+    python3 tools/precision-review/reproduce_tail.py {{revision}} {{output}}
+
+issue-32-check:
+    cargo test --release --all-features --test slice_position issue_32_srgb_body_and_tail_share_arithmetic
+
+expand-whole-crate source output:
+    python3 tools/precision-review/expand_all.py {{source}} {{output}}
+
+verify-whole-crate directory:
+    python3 tools/precision-review/expand_all.py --verify {{directory}}
+
 numerical-goldens-portability:
     python3 goldens/compare_profiles.py
 

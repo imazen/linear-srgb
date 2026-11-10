@@ -1,6 +1,35 @@
 //! A value converts to the same bits wherever it sits in a slice.
 use linear_srgb::default as d;
 
+/// Issue #32's exact witness must be covered independently of a sampling grid.
+#[test]
+fn issue_32_srgb_body_and_tail_share_arithmetic() {
+    type Conversion = (&'static str, fn(&mut [f32]));
+    let conversions: [Conversion; 2] = [
+        ("decode", d::srgb_to_linear_slice),
+        ("encode", d::linear_to_srgb_slice),
+    ];
+    for (name, convert) in conversions {
+        for input in [0.125_f32, 0.9_f32] {
+            let mut whole = [input; 65];
+            convert(&mut whole);
+            let expected = whole[0].to_bits();
+            for len in 0..=65 {
+                let mut values = vec![input; len];
+                convert(&mut values);
+                for (i, value) in values.iter().enumerate() {
+                    assert_eq!(
+                        value.to_bits(),
+                        expected,
+                        "issue #32: {name} input={:08x} len={len} index={i}",
+                        input.to_bits()
+                    );
+                }
+            }
+        }
+    }
+}
+
 fn check(name: &str, f: &dyn Fn(&mut [f32])) {
     let input: Vec<f32> = (0..67).map(|i| (i as f32 * 0.7371).fract()).collect();
     let mut whole = input.clone();
