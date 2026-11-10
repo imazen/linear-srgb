@@ -10,11 +10,13 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 
 ### Added
 
-- Independent x86-64, ARM64 and WASM public API snapshots and CI checks; validate exact token-free replacements per target rather than only the host capture.
+- Independent x86-64, ARM64 and WASM public API snapshots and CI checks; validate exact token-free replacements per target rather than only the host capture (`343df2c5`, `903c9090`).
 
 - `target_features::{x4,x8}` provides direct replacements for the existing token array/slice entry points inside matching CPU-feature functions, without public archmage token or magetypes vector parameters. It preserves the existing kernels and length contracts (`9b2df432`, `0c5c8bde`, `320dcd6b`).
 
 ### Changed
+
+- Use `attune` for direct feature contexts and ordinary inlined functions for scalar helpers. Centralize the existing fusion choice across vector arithmetic, scalar evaluation and u16 tails without changing its numerical policy (`0a90c800`, `2bd394bd`).
 
 - Make CPU-feature entry points canonical, retain token APIs as compatibility adapters, and share private width-generic kernels and slice-tail handling. Preserve public signatures and numerical policies; refresh the eight assembly snapshot pairs approved for this refactor (`d79656ce`).
 

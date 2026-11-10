@@ -3,7 +3,8 @@
 //! Transfer function implementations for sRGB, BT.709, PQ, and HLG.
 //!
 //! This module provides scalar functions for all four transfer curves.
-//! SIMD `#[rite]` versions are in [`crate::tokens`] (x4/x8/x16).
+//! SIMD implementations are private. Feature-context callers use the x4/x8
+//! array/slice replacements in [`crate::target_features`].
 //!
 //! # Scalar functions
 //!

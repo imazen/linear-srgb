@@ -210,3 +210,28 @@ See [the snapshot guide](public-api/README.md) for setup and file meanings.
 The dev-only renderer uses a pinned zenutils revision adding actual cross-target
 rustdoc builds and target-derived architecture labels; no shipped dependency
 or numerical implementation changes for this tooling update.
+
+
+## Feature contexts and arithmetic policy
+
+Direct feature functions now use `attune`, including the retained compatibility
+helpers that establish a feature context. Scalar functions have no feature
+context to establish: they are ordinary inlined functions, without
+`rite(scalar)`. Generic families that formerly combined `magetypes` and `rite`
+use explicit `attune` family selectors. Runtime capability-proof entry points
+remain separate from these direct feature functions.
+
+The existing arithmetic choice is centralized in
+`tf::fast_math::USE_FUSED_MATH`: native uses guaranteed fusion; default WASM
+uses relaxed multiply-add; WASM with `precise-portable` requests guaranteed
+fusion. `Mla`, scalar-array/slice evaluation and u16 tails consult this same
+constant. Target wrappers and generated helpers no longer carry independent
+WASM/precision cfg branches, and the fused scalar implementations remain
+available as private helpers on every target.
+
+The guaranteed-fused path delegates engine probing and software fallback to
+magetypes. Enabling `precise-portable` does not itself enable WASM relaxed-SIMD
+instructions; those remain a compilation target feature. This cleanup preserves
+the existing numerical policy, including the separately recorded default
+relaxed-SIMD scalar/vector parity finding. It does not make relaxed arithmetic
+promise guaranteed fusion.

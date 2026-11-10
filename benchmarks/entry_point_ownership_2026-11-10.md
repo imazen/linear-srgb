@@ -194,3 +194,34 @@ passed in the later capture command.
 The narrowed API captures and verification logs are preserved under
 `narrow-api-review/` in the i270 artifact directory above; its manifest now
 includes those files and `asm-narrow/`.
+
+
+## Target captures and attune cleanup (2026-11-10)
+
+Independent x86-64, ARM64 and WASM captures now verify their own replacement
+sets (64, 28 and 28 respectively). The three snapshot jobs and mutation guard
+checks run in API CI. The shared renderer adds cross-target rustdoc invocation,
+target-specific JSON lookup and architecture labels resolved from rustc;
+its dev-only git pin is documented in the snapshot guide.
+
+Direct feature contexts use attune. Scalar functions are ordinary inlined
+functions; unused scalar slice variants were removed rather than suppressing
+dead-code warnings. The existing fusion selection is centralized in
+`USE_FUSED_MATH`, including scalar evaluation and u16 tails. Generated target
+wrappers and scalar implementations no longer repeat WASM/precision cfgs.
+
+The native release suite and doctests, strict native and selected WASM lint,
+ARM64 checks, strict-SIMD WASM under both policies, all three API captures,
+all 24 native/WASM frozen hashes and all 24 approved opcode expectations pass.
+The fresh assembly is preserved under `asm-attune/` in the artifact directory
+above. The combined verification resource wrapper reported:
+
+```text
+run-heavy: done rc=0 98s | peak-RSS 0.49GiB | min-avail 23716MiB | peak-load 3.73
+```
+
+The four relaxed-SIMD engine/policy commands were also rerun. Their outcomes
+remain three passes and the known default-policy/fusing-engine dispatch
+assertion failure; this cleanup did not change the arithmetic contract or
+hide that failing test. Logs are preserved under `target-and-attune-review/`
+with updated hashes in the same i270 artifact directory.
