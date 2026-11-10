@@ -77,8 +77,9 @@ The proposed public linear-srgb companions in
 [PR #31](https://github.com/imazen/linear-srgb/pull/31) remain closed. The
 shared-math proposal in [archmage PR #140](https://github.com/imazen/archmage/pull/140)
 is also superseded by the owner's decision to retain crate-private copies.
-Both branches preserve their implementation/measurement evidence. The original
-ARM gamma snapshot pairs are retained with the restored kernels.
+Both branches preserve their implementation/measurement evidence. The restored
+private kernels retain their numerical policy; the ownership refactor updates
+only the eight assembly expectation pairs explicitly approved on 2026-11-10.
 
 ## Entry-point ownership (2026-11-10)
 
@@ -97,7 +98,11 @@ Ordinary f32 slice dispatch selects the canonical feature functions. RGBA,
 premultiplication and specialized integer loops keep their existing arithmetic
 and use private kernels where applicable. Shared slice helpers process full
 blocks directly and pad only the final partial block. Scalar slice entry
-points retain the original per-sample evaluation policy. Width-generic native
+points retain the original per-sample fused evaluation on native and
+`precise-portable` targets. Default WASM scalar entry points and u16 slice
+tails use the relaxed generic kernels, matching vector blocks at every row
+length. `just verify-target-features-wasm-default` exercises this policy with
+the existing dispatch and row-parity assertions. Width-generic native
 sRGB/gamma and HDR implementations use their matching backend rather than
 requiring every wider entry to compose x4 calls.
 

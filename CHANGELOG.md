@@ -24,6 +24,8 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 
 ### Fixed
 
+- Default WASM scalar HDR entry points and u16 slice tails use the same relaxed evaluation as vector blocks, preserving dispatch and row-split parity. Native and `precise-portable` evaluation are unchanged (`e24d12ee`).
+
 - Keep scalar/vector midp math copies crate-private, preserving the native/WASM rounding contracts without new magetypes API or a git dependency pin (`cd3f98a3`).
 
 - x8/x16 sRGB array hooks return exactly 1.0 at and above the clamped white endpoint, matching x4 and the scalar/slice kernels (`ce451a6b`).

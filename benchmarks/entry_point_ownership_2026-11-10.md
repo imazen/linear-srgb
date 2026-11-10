@@ -100,3 +100,46 @@ probe binaries and validation logs were preserved on **i270** at
 their hashes. This path was checked on i270, not dev. It is local validation
 output, not a canonical training-data store. V4 execution used the identical
 prebuilt binaries on r7900x, without a build on that host.
+
+
+## Default-WASM rounding follow-up
+
+The original PR also fails its existing caller-owned PQ dispatch assertion and
+u16 row-split assertion when `precise-portable` is off. Reproduced on unchanged
+`3c498ae8` with `--no-default-features --features std,transfer` under WASI
+SIMD128: `target_features_dispatch` fails at its PQ array equality, and
+`remaining_parity` fails at `decode width=1`. Fused scalar math and relaxed
+SIMD math take different rounding paths.
+
+Fix `e24d12ee` uses the existing relaxed generic kernels for default-WASM
+scalar HDR entries and pads u16 tails through their vector-block calculation.
+Scalar f32 slice entries also follow their relaxed array kernels on this
+configuration. Native and `precise-portable` keep the previous evaluation.
+No numerical assertions or expected outputs were weakened. CI now exercises
+the existing WASM dispatch, compatibility, tier and row-parity integration tests
+in addition to the library tests.
+
+`just verify-ownership-regressions` runs the native suite, strict native and
+WASM lint checks, ARM64 type-check and both WASM numerical policies. WASM
+linting covers the library and the four exercised integration-test targets;
+native-only benchmark harnesses cannot compile for WASM, and unrelated
+architecture-specific test targets have pre-existing WASM unused-item warnings.
+The full native all-target lint remains strict.
+
+After this fix, `just ownership-fingerprint` and
+`just ownership-fingerprint-wasm` still match all 24 original native/WASM
+fingerprint rows. A fresh assembly capture matches all 24 approved opcode
+expectations, and all three API renders remain byte-identical to the unchanged
+original PR. These probes use `--all-features`, including `precise-portable`;
+default-WASM correctness is checked by the existing exact dispatch and row
+assertions rather than by those frozen fingerprints.
+
+The follow-up assembly capture lives in `asm-followup/` within the artifact
+directory above. The original default-WASM failures, successful regression
+logs and fresh fingerprint logs are preserved beside it with updated hashes.
+
+The final follow-up regression command reported:
+
+```text
+run-heavy: done rc=0 28s | peak-RSS 0.14GiB | min-avail 24923MiB | peak-load 2.89
+```
