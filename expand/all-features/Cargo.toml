@@ -1,0 +1,18 @@
+# Separate resolution anchor: cargo expand cannot select features on a
+# dependency package with --features/--all-features. These dependency edges
+# select the real library's features without copying its source or manifest.
+[package]
+name = "linear-srgb-expand-all"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[lib]
+path = "../src/lib.rs"
+
+[dependencies]
+linear-srgb = { path = "../..", features = ["std", "avx512", "alt", "iec", "precise-portable", "transfer", "unsafe_simd"] }
+archmage = { version = "=0.9.31", default-features = false, features = ["macros"] }
+magetypes = { version = "=0.9.31", default-features = false, features = ["w512"] }
