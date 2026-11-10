@@ -23,6 +23,13 @@ api-doc-check:
     python3 scripts/check_target_features_api.py
     python3 scripts/test_target_features_api.py
 
+# Record real expanded SIMD modules, with pinned Rust and macro dependencies.
+expand-snapshots:
+    python3 scripts/expand_snapshots.py
+
+expand-snapshots-check:
+    python3 scripts/expand_snapshots.py --check
+
 # Validate the owner-requested archmage beta constraint update.
 beta-check:
     cargo fmt --check
