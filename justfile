@@ -131,3 +131,7 @@ verify-ownership-regressions:
 # Capture the portable fingerprints with the frozen precise-portable policy.
 ownership-fingerprint-wasm:
     CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime run" CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-C target-feature=+simd128" cargo run --release --all-features --target wasm32-wasip1 --example entry_point_fingerprint
+
+# Exercise relaxed SIMD with an explicitly fusing or nonfusing Wasmtime engine.
+probe-relaxed-wasm fma="true" features="std,transfer":
+    CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime run -W relaxed-simd=true -C cranelift-has-fma={{fma}}" CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-C target-feature=+simd128,+relaxed-simd" cargo test --no-default-features --features "{{features}}" --release --target wasm32-wasip1 --test target_features --test target_features_dispatch --test remaining_parity --test tier_parity -- --nocapture

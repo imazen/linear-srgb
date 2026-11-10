@@ -113,3 +113,58 @@ commands and validation limitations are in
 [the ownership baseline](../benchmarks/entry_point_ownership_2026-11-10.md).
 The legacy/new adapter comparisons remain useful for compatibility; they are
 not independent numerical oracles after both APIs share the implementation.
+
+
+## Remainders and FMA review (2026-11-10)
+
+The ownership refactor moved the existing zero-padded `tail_block` and
+`store_tail` helpers from `simd.rs` into private `kernels`; it did not invent
+that tail strategy. `map_slice` factors out the same full-block plus padded-tail
+loop. The follow-up did change default-WASM u16 tails from scalar-lane evaluation
+to padded vector evaluation, and default-WASM scalar f32 slices from per-sample
+loops to their array kernels. Native/precise-portable scalar loops retain their
+previous evaluation. The private module also extracts and deduplicates math;
+that consolidation goes beyond the minimum needed for a token-free public API.
+
+`tf::fast_math::Mla` already delegates to `mul_add_fused` on native and
+precise-portable builds, and `mul_add_relaxed` on default WASM. Both calls are
+magetypes operations. In a build with `+relaxed-simd`, magetypes' fused WASM
+implementation probes the engine's rounding behavior, caches the result and
+uses relaxed madd only when it fuses; otherwise it computes fused results in
+software. Default WASM's relaxed call does not request that guarantee. Enabling
+relaxed SIMD is a module compilation choice, distinct from the engine probe.
+Sources: [published magetypes FMA contract](https://docs.rs/magetypes/0.9.31/magetypes/simd/generic/struct.f32x4.html#method.mul_add_fused)
+and [the engine probe](https://github.com/imazen/archmage/blob/main/magetypes/src/wasm_fma.rs).
+
+The previous validation used `+simd128`, without `+relaxed-simd`. A new probe
+of numerical source `69eb17ca`, using the published beta.2 dependency floor,
+executes the existing compatibility, dispatch, row and tier tests with
+`+simd128,+relaxed-simd`:
+
+| precise-portable | Wasmtime `cranelift-has-fma` | Selected test command |
+| --- | --- | --- |
+| off | true | Fails sRGB scalar/SIMD array equality at target_features_dispatch.rs:46; later tier tests are not reached |
+| off | false | Passes |
+| on | true | Passes |
+| on | false | Passes |
+
+Reproduce with `just probe-relaxed-wasm true std,transfer`, or use `false` for
+nonfusing engine code generation. Add `,precise-portable` to the feature argument
+for the guaranteed-fused policy. The failing assertion remains intact. The
+scalar relaxed backend multiplies and adds separately while the SIMD relaxed
+backend can fuse, so exact cross-backend parity is not established for default
+WASM on fusing engines. This is an open correctness/coverage finding, not a
+successful validation of that configuration.
+
+The review adds only a reproduction recipe and documentation. It does not
+change numerical policy or undo the user-directed ownership inversion. The
+immediate deliverable remains token-free feature-context array/slice APIs,
+deprecated compatibility entry points, and verified replacement contracts.
+Further consolidation should keep curve evaluation, buffer traversal and
+arithmetic policy separate, with tokens/vector types confined to private code.
+A default-fused WASM policy would use the existing magetypes engine probe but
+also require software fusion when the engine cannot fuse; that policy and its
+cost need a separate decision from public API ownership.
+
+Logs and the four-cell result table are stored under `relaxed-wasm-review/` in
+the ownership artifact directory documented in the baseline, with SHA256SUMS.
