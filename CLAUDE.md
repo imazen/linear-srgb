@@ -16,6 +16,13 @@ against these committed main fixtures; do not recapture the PR to accept drift.
   goldens deliberately expose its numerical delta. The V4 comparison also
   flags x16 sRGB endpoint chunks. See [goldens/PR30.md](goldens/PR30.md).
 
+## Historical assembly reports
+
+The observations below describe the dated May/June and October failures, not
+current open failures. Main `01e77b5b` passes the
+[ASM snapshot workflow](https://github.com/imazen/linear-srgb/actions/runs/42833666685).
+Keep the old measurements as history; do not infer current codegen from them.
+
 - **"ASM snapshots" workflow red on every push since 2026-05-31** (8+ consecutive
   failures through 2026-06-11). Job `ASM snapshot diff (informational)
   (wasm32-unknown-unknown)`, step `Assert essence unchanged (hard gate)`: the
@@ -41,7 +48,7 @@ against these committed main fixtures; do not recapture the PR to accept drift.
   then regen + re-bless. The aarch64 leg is unaffected (native FMLA).
   Repro: `scripts/dump-asm.sh wasm32-unknown-unknown && git diff --stat`.
 
-## Known Bugs: assembly snapshot drift (2026-10-19)
+## Historical assembly snapshot drift (2026-10-19)
 
 The unchanged-source CI commit 595dfcbc passes regular CI but fails both ARM64
 and WASM opcode-essence snapshot checks. The dumps complete; their generated
