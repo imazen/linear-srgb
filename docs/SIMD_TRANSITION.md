@@ -191,3 +191,22 @@ The tracking nightly's negative-auto-trait discrepancy described in the
 ownership baseline does not occur on this toolchain. Override
 `ZEN_API_DOC_TOOLCHAIN` to inspect another nightly; no expected traits were
 weakened to update the narrowed API snapshots.
+
+
+## Per-target API inventories (2026-11-10)
+
+API captures are now independent for x86_64-unknown-linux-gnu,
+aarch64-unknown-linux-gnu and wasm32-wasip1. Their default, optional-feature
+and hidden surfaces live in target directories under `docs/public-api/`.
+The exact replacement check runs per target: 64 x4/x8 replacements on x86-64,
+28 x4 replacements on ARM64, and 28 x4 replacements on WASM. These counts
+include each target's optional transfer feature additions. The prior 64-entry
+count covered x86 only; host snapshots did not inventory NEON/WASM exports.
+
+`just api-doc` regenerates all three and `just api-doc-check` checks all three.
+CI explicitly selects each target in a separate matrix job. Guard mutation
+checks reject missing/extra functions and a host capture substituted for ARM.
+See [the snapshot guide](public-api/README.md) for setup and file meanings.
+The dev-only renderer uses a pinned zenutils revision adding actual cross-target
+rustdoc builds and target-derived architecture labels; no shipped dependency
+or numerical implementation changes for this tooling update.
