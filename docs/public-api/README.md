@@ -1,5 +1,8 @@
 # Public API snapshots
 
+For the generated implementations behind these signatures, see the
+[versioned cargo-expand captures](../expanded/README.md).
+
 Each target has independent supported, optional-feature and hidden-API captures:
 
 | Directory | Feature entry points | Exact replacements across features |

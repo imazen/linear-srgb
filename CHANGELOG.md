@@ -10,6 +10,8 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 
 ### Added
 
+- Versioned cargo-expand captures of SIMD entry points, compatibility adapters, dispatch, kernels and transfer math for x86-64, ARM64 and WASM, with default/all-feature checks and pinned tooling (`03420de5`).
+
 - Independent x86-64, ARM64 and WASM public API snapshots and CI checks; validate exact token-free replacements per target rather than only the host capture (`343df2c5`, `903c9090`).
 
 - `target_features::{x4,x8}` provides direct replacements for the existing token array/slice entry points inside matching CPU-feature functions, without public archmage token or magetypes vector parameters. It preserves the existing kernels and length contracts (`9b2df432`, `0c5c8bde`, `320dcd6b`).

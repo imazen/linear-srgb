@@ -186,11 +186,18 @@ the ownership artifact directory documented in the baseline, with SHA256SUMS.
 
 `just api-doc`, `just api-doc-check` and `just ownership-api` default to the
 installed `nightly-2026-07-13` toolchain, which renders the existing three
-const-generic auto-trait expectations correctly with zenutils-apidoc 0.1.1.
+const-generic auto-trait expectations correctly with zenutils-apidoc 0.1.2.
 The tracking nightly's negative-auto-trait discrepancy described in the
 ownership baseline does not occur on this toolchain. Override
 `ZEN_API_DOC_TOOLCHAIN` to inspect another nightly; no expected traits were
 weakened to update the narrowed API snapshots.
+
+`just expand-snapshots` records the actual expanded `target_features`, `tokens`,
+`simd`, `kernels` and `tf` modules. `just expand-snapshots-check` typechecks and
+compares default/all-feature captures for each API-inventory target. Rust,
+cargo-expand and macro providers are pinned independently of the shipped
+dependency graph. See [the expansion guide](expanded/README.md) for versions,
+coverage and setup. Baseline WASM captures do not enable global relaxed-SIMD.
 
 
 ## Per-target API inventories (2026-11-10)
