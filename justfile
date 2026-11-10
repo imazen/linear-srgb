@@ -32,7 +32,7 @@ numerical-goldens-capture new_directory:
     env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="" RUSTUP_TOOLCHAIN=1.99.1 CARGO_TARGET_DIR=target/goldens cargo run --locked --release --manifest-path goldens/Cargo.toml --example capture -- {{new_directory}}
 
 numerical-goldens-wasm features="":
-    env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="-C target-feature=+simd128" RUSTUP_TOOLCHAIN=1.99.1 CARGO_TARGET_DIR=target/goldens CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime run" cargo test --locked --release --manifest-path goldens/Cargo.toml --no-default-features --features "{{features}}" --target wasm32-wasip1
+    env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="-C target-feature=+simd128" RUSTUP_TOOLCHAIN=1.99.1 CARGO_TARGET_DIR=target/goldens CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime run" cargo test --locked --release --manifest-path goldens/Cargo.toml --no-default-features --features "{{features}}" --target wasm32-wasip1 -- --nocapture
 
 # This explicit mode fails when the caller lacks AVX-512; it never skips it.
 numerical-goldens-v4:

@@ -61,7 +61,7 @@ jobs:
           tool: wasmtime@49.0.2
           fallback: none
       - name: Check frozen strict-SIMD128 output chunks
-        run: cargo test --locked --release --manifest-path goldens/Cargo.toml --no-default-features --features "${{ matrix.features }}" --target wasm32-wasip1
+        run: cargo test --locked --release --manifest-path goldens/Cargo.toml --no-default-features --features "${{ matrix.features }}" --target wasm32-wasip1 -- --nocapture
         env:
           RUSTFLAGS: -C target-feature=+simd128
           CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime run
