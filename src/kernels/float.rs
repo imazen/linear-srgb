@@ -165,5 +165,6 @@ macro_rules! width {
     };
 }
 width!(x4, f32x4, F32x4Backend, F32x4Convert, 4, pow_x4);
+#[cfg(any(target_arch = "x86_64", test))]
 width!(x8, f32x8, F32x8Backend, F32x8Convert, 8, pow_x8);
 width!(x16, f32x16, F32x16Backend, F32x16Convert, 16, pow_x16);

@@ -3,7 +3,9 @@
 #![allow(deprecated)] // Check retained adapters; frozen pre-refactor output is captured separately.
 
 use archmage::{SimdToken, arcane};
-use std::{vec, vec::Vec};
+#[cfg(target_arch = "x86_64")]
+use std::vec;
+use std::vec::Vec;
 
 fn sample(i: usize) -> f32 {
     const VALUES: [f32; 20] = [

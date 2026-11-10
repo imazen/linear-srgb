@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Complete canonical feature families from private kernels and native hooks."""
+"""Generate crate-private helpers for internal dispatch and numerical coverage."""
 from pathlib import Path
 import re
 import subprocess
@@ -54,7 +54,7 @@ for width in [4, 8, 16]:
         dst.copy_from_slice(&converted);
     }}
     output'''
-                extra += [f'/// Convert {width} values; see the module calling-context requirements.\n{attrs}pub fn {name}(values: [f32; {width}]{arg}) -> [f32; {width}] {{\n    {body}\n}}\n']
+                extra += [f'/// Convert {width} values; see the module calling-context requirements.\n{attrs}pub(crate) fn {name}(values: [f32; {width}]{arg}) -> [f32; {width}] {{\n    {body}\n}}\n']
             slicename = f'{op}_slice_{tier}'
             if slicename not in existing:
                 if tier == 'scalar' and not transfer:
@@ -68,8 +68,9 @@ for width in [4, 8, 16]:
                     slice_body = f'crate::kernels::map_slice::<{width}>(values, {name});'
                 else:
                     slice_body = f'crate::kernels::map_slice::<{width}>(values, |chunk| {name}(chunk{callarg}));'
-                extra += [f'/// Convert all values, including a final partial array.\n{attrs}pub fn {slicename}(values: &mut [f32]{arg}) {{\n    {slice_body}\n}}\n']
-    source.write_text(text + f'\n// Portable tier completion\ninclude!("portable_x{width}.rs");\n')
+                extra += [f'/// Convert all values, including a final partial array.\n{attrs}pub(crate) fn {slicename}(values: &mut [f32]{arg}) {{\n    {slice_body}\n}}\n']
+    test_only = "#[cfg(test)]\n" if width == 8 else ""
+    source.write_text(text + f'\n// Portable tier completion\n{test_only}include!("portable_x{width}.rs");\n')
     (root / f'src/target_features/portable_x{width}.rs').write_text('\n'.join(extra))
 
 subprocess.run(["rustfmt", "--edition", "2024", *[str(root / f"src/target_features/portable_x{w}.rs") for w in [4, 8, 16]]], check=True)

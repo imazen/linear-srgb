@@ -16,6 +16,9 @@ def code(path):
 assert "\nmod kernels;" in (root / "src/lib.rs").read_text()
 for directory in ["target_features", "kernels"]:
     for path in (root / "src" / directory).glob("*.rs"):
+        if directory == "target_features" and path.stem in {"compatibility_tests", "dispatch_tests", "fingerprint"}:
+            assert f"#[cfg(test)]\nmod {path.stem};" in (path.parent / "mod.rs").read_text()
+            continue
         assert "crate::tokens" not in code(path), f"Legacy dependency in {path}"
 for path in (root / "src/tokens").glob("x*.rs"):
     source = code(path)

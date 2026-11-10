@@ -86,4 +86,5 @@ entry!(x8, scalar, archmage::ScalarToken; #[cfg(target_arch = "x86_64")] fn srgb
 entry!(x8, scalar, archmage::ScalarToken; #[cfg(target_arch = "x86_64")] fn linear_to_srgb_u16_scalar(values: [f32; 8]) -> [u16; 8]);
 
 // Portable tier completion
+#[cfg(test)]
 include!("portable_x8.rs");

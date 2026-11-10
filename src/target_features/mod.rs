@@ -40,19 +40,19 @@
 //!
 //! # Names and requirements
 //!
-//! Width modules describe array size, not CPU detection: `x4`, `x8`, `x16`.
-//! Suffixes specify the required feature context. `x4` on x86 still requires
-//! V3, despite operating on four values. `v4` also needs Cargo feature `avx512`.
+//! Width modules describe array size, not CPU detection: `x4` and `x8`.
+//! `x8` is available on x86-64, matching its deprecated token API. Suffixes
+//! specify the required feature context. `x4` on x86 still requires V3,
+//! despite operating on four values.
 //!
 //! | Suffix | Required `target_feature(enable = "…")` |
 //! | --- | --- |
 //! | `_v3` | `sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe` |
-//! | `_v4` | All V3 features plus `pclmulqdq,aes,avx512f,avx512bw,avx512cd,avx512dq,avx512vl` |
 //! | `_neon` | `neon` (AArch64) |
 //! | `_wasm128` | `simd128` (WebAssembly) |
 //! | `_scalar` | None |
 //!
-//! The deprecated [`crate::tokens`] functions forward here and retain the same
+//! The deprecated `tokens::x4` and `tokens::x8` functions forward here and retain the same
 //! conversion, clamping, rounding and slice-length contracts. Transfer curves other than
 //! the base sRGB/gamma operations require Cargo feature `transfer`. They do not
 //! inspect the CPU or select a fallback. The internal SIMD dependencies may
@@ -61,27 +61,24 @@
 
 // Canonical feature entry points call private numerical kernels.
 
-//! # Dispatching wider arrays
+//! # Replacement scope
 //!
-//! Each f32 family has x4, x8 and x16 variants for scalar, V3, V4, NEON
-//! and WASM128. Width-generic private kernels select the matching backend;
-//! remaining composed families reuse x4 kernels. Integer hooks keep
-//! their existing target-specific coverage. V4 requires the `avx512` feature.
-//! A caller can dispatch its own entry point and select our matching feature
-//! function without exchanging token types:
+//! Each public function replaces the same function in `tokens::x4` or
+//! `tokens::x8`, omitting its token argument. Additional widths, tiers and
+//! scalar fallbacks used by internal dispatch are crate-private.
+//! `tokens::x16` is deprecated without a direct replacement. Ordinary callers
+//! can use [`crate::default`] for dispatched slice conversions.
 //!
-//! ```
-//! #![forbid(unsafe_code)]
-//! use archmage::{incant, magetypes};
+//! The internal sixteen-value entry points are not a public API:
+//!
+//! ```compile_fail,E0603
 //! use linear_srgb::target_features::x16;
+//! ```
 //!
-//! #[magetypes(v4(cfg(avx512)), v3, neon, wasm128, scalar)]
-//! fn pipeline(_token: Token, values: [f32; 16]) -> [f32; 16] {
-//!     incant!(x16::srgb_to_linear(values) without token)
-//! }
+//! Internal fallbacks also stay outside the public replacement surface:
 //!
-//! let values = incant!(pipeline([0.5; 16]), [v4(cfg(avx512)), v3, neon, wasm128, scalar]);
-//! assert!(values.iter().all(|v| *v > 0.0 && *v < 1.0));
+//! ```compile_fail,E0603
+//! let _ = linear_srgb::target_features::x4::srgb_to_linear_scalar([0.5; 4]);
 //! ```
 
 macro_rules! entry {
@@ -124,10 +121,13 @@ pub mod x4;
 ///     linear_srgb::target_features::x8::srgb_to_linear_v3(values)
 /// }
 /// ```
+#[cfg(target_arch = "x86_64")]
 pub mod x8;
+#[cfg(not(target_arch = "x86_64"))]
+pub(crate) mod x8;
 
-/// Sixteen-value arrays, or slices processed sixteen values at a time.
-pub mod x16;
+/// Internal wide dispatch and compatibility entry points.
+pub(crate) mod x16;
 
 #[cfg(test)]
 mod compatibility_tests;
