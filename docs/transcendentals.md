@@ -50,6 +50,81 @@ Thus portable replacements need to cover scalar and x4/x8/x16 execution,
 including V3, V4, NEON and WASM128. f64 SIMD transcendentals are not used
 by this crate at the inspected revisions.
 
+## External math calls
+
+The following inventory counts production source expressions outside `alt`,
+unit tests and doctests, across optional features and target configurations.
+It counts expressions, not runtime invocations or expanded SIMD variants.
+The math inventory is the same on PR #30.
+
+| Scalar method | Types / source expressions | Callers | Backend without `std` |
+| --- | --- | --- | --- |
+| `powf` | f32: 12; f64: 6 | `scalar.rs`, `iec.rs`, `tf/pq.rs`; generic LUT constructors reach the f64 scalar APIs | `num_traits::Float` → `libm::powf` / `libm::pow` |
+| `sqrt` | f32: 10 | `lanes.rs`: 5; `rational_poly.rs`: 1; `scalar.rs`: 1; `tf/pq.rs`: 2; `tf/hlg.rs`: 1 | `Float` → `libm::sqrtf` |
+| `floor` | f32: 4 | `lanes.rs`: 2; `tf/fast_math.rs`: 1; `lut.rs`: 1 | `Float` → `libm::floorf` |
+| `ceil` | f32: 1 | `lut.rs`: 1 | `Float` → `libm::ceilf` |
+| `mul_add` | f32: 28; f64: 8 | `lanes.rs`: 19 f32; `tf/fast_math.rs`: 8 f32; `lut.rs`: 1 f32; `rational_poly.rs`: 8 f64 | `Float` → `libm::fmaf` / `libm::fma` |
+| `MulAdd::mul_add` | 1 generic expression, used for f32/f64 | `mlaf.rs:30`, reached through `fmla` in scalar/IEC encode; compiled only with the file's hardware-feature condition | `num_traits::MulAdd` → `Float::mul_add` → `libm::fmaf` / `libm::fma` |
+
+With `std`, the ordinary scalar methods above select Rust's inherent float
+methods; num-traits' `Float` implementation also forwards to those methods.
+`MulAdd` forwards through `Float` even with `std`. Inspection of local
+Rust 1.99.1 sources confirms the std math path uses compiler intrinsics;
+this is not a promise of a hardware instruction or the same implementation
+on every target. In particular, platform `powf` is not a portable numerical
+reference. No performance measurement was made in this inventory.
+
+The generic `mlaf` wrapper has another difference: when its compile-time
+hardware condition is false it evaluates `acc + a * b`, without requesting
+fused rounding. This is separate from direct scalar `mul_add`, which always
+requests fused rounding, and from the vector `Mla` policy below. Default
+scalar sRGB therefore still has external math dependencies even though its
+power curve is a polynomial: f32 sqrt on encode and eight f64 FMA expressions
+in the shared evaluator.
+
+The external magetypes operations used by production kernels are:
+
+- f32x4/x8/x16 `sqrt` (23 source expressions), `floor` (3 expressions),
+  and macro-generated `round` and `to_i32_round` (1 expression each).
+- `mul_add_fused` and `mul_add_relaxed`, selected through the local `Mla`
+  trait. There is one source expression for each in `mla_for!`.
+- `abs`, `min`, `max`, numeric `from_i32_t`, truncating `to_i32`, and
+  bitcasts, shifts, comparisons and blends supporting the kernels.
+
+These are vector-library calls, including when instantiated with
+`ScalarToken`; they do not resolve through the local `num_traits::Float`
+imports. In inspected magetypes 0.9.31-beta.2 source, scalar vector sqrt,
+floor and ties-to-even rounding call its own `nostd_math` helpers. Scalar
+fused FMA calls its `soft_fma` hardware/software implementation. Native
+vector backends implement the primitives with target operations; composed
+wide backends delegate to narrower backends. Thus replacing local scalar
+libm calls alone does not unify the scalar and vector implementations.
+There are **no calls to external magetypes `pow_midp`, `log2_midp` or
+`exp2_midp`** in these revisions: those approximations are private local
+copies described above.
+
+Other scalar float methods in production are `abs`, `signum`, `max`,
+`clamp`, `is_nan`, `to_bits` and `from_bits`, plus numeric `From` and `as`
+conversions. They use core operations, rather than the std-only math methods
+or num-traits' libm forwarding. Float `clamp` includes f64 alpha quantization;
+`max` includes scalar BT.709/HLG/PQ. Integer `min`, `div_ceil`, wrapping
+arithmetic and array/index operations are also present, but are not float
+math dependencies. `core::f32::consts::{LN_2, LOG2_E}` supplies constants,
+not calls. Archmage supplies dispatch/macros here; bytemuck supplies casts.
+
+The std-only math dependency names to replace or deliberately retain are
+therefore **f32/f64 power, f32 sqrt, f32 floor/ceil, and f32/f64 fused FMA**,
+including the generic `MulAdd` wrapper. A shared implementation needs a
+declared scalar/vector policy, not platform `powf` as its bitwise oracle.
+Tests/reference tools additionally use external `powi`, `exp`, `ln`,
+`log2` and `exp2`; keep their oracle role separate from production migration.
+
+Backend forwarding was checked against downloaded num-traits 0.2.19 and
+magetypes 0.9.31-beta.2 sources via `cargo read`, not the Cargo registry source
+cache. This checkout has no root Cargo.lock; the manifest allows later
+compatible versions. These dependency observations describe those inspected
+versions, not an asserted current dependency resolution.
+
 ## Compatibility requirements for replacement
 
 - Keep the two approximation families distinct until replacement behavior
@@ -72,8 +147,10 @@ by this crate at the inspected revisions.
   seam handling and alpha preservation in linear-srgb.
 - `precise` and IEC scalar APIs currently use platform `powf` with `std`
   and `num_traits::Float` backed by libm without `std`. A midp replacement
-  does not satisfy their existing precision contract by itself. Scalar
-  libm APIs are outside the slice bit-parity contract.
+  needs validation against their existing accuracy gates; current platform
+  outputs are not a portable bitwise contract. Scalar libm APIs are outside
+  the slice bit-parity contract. A shared scalar/vector implementation can
+  establish a consistent policy without copying platform-dependent bits.
 - Existing numerical gates include [`tests/tier_parity.rs`](../tests/tier_parity.rs),
   [`tests/remaining_parity.rs`](../tests/remaining_parity.rs),
   [`tests/brute_force.rs`](../tests/brute_force.rs),
