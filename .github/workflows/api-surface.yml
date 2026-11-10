@@ -61,3 +61,29 @@ jobs:
         run: python3 scripts/check_target_features_api.py --target "${{ matrix.target }}"
       - name: Check inventory guard mutations
         run: python3 scripts/test_target_features_api.py
+
+  expansions:
+    name: Expanded SIMD (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - wasm32-wasip1
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+          components: rustfmt
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: expand-${{ matrix.target }}
+          workspaces: . -> target/expand
+      - name: Install pinned cargo-expand
+        run: cargo install cargo-expand --locked --version 1.0.126
+      - name: Typecheck and compare default and all-feature expansions
+        run: python3 scripts/expand_snapshots.py --check --target "${{ matrix.target }}"
