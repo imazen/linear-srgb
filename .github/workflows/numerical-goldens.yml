@@ -1,0 +1,67 @@
+name: Numerical goldens
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TARGET_DIR: target/goldens
+  CARGO_TERM_COLOR: always
+
+jobs:
+  native:
+    name: Main output chunks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.1
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: goldens -> ../target/goldens
+      - name: Check formatting and the complete test harness
+        run: |
+          cargo fmt --check --manifest-path goldens/Cargo.toml
+          cargo clippy --locked --manifest-path goldens/Cargo.toml --all-targets --all-features -- -D warnings
+      - name: Check committed main outputs and mutation guards
+        run: cargo test --locked --release --manifest-path goldens/Cargo.toml
+      - name: Check without AVX-512 dispatch
+        run: cargo test --locked --release --manifest-path goldens/Cargo.toml --no-default-features
+
+  wasm:
+    name: Main output chunks (WASM, ${{ matrix.features || 'default' }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        features: ["", "precise-portable"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.1
+          targets: wasm32-wasip1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: goldens -> ../target/goldens
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasmtime@49.0.2
+          fallback: none
+      - name: Check frozen strict-SIMD128 output chunks
+        run: cargo test --locked --release --manifest-path goldens/Cargo.toml --no-default-features --features "${{ matrix.features }}" --target wasm32-wasip1
+        env:
+          RUSTFLAGS: -C target-feature=+simd128
+          CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime run
