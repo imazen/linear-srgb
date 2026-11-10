@@ -1,5 +1,8 @@
 # Precision review, November 2026
 
+For the scalar and SIMD math dependencies, see the
+[transcendental inventory](transcendentals.md).
+
 The default u8 encoder remains approximate. The u16 polynomial is also not a
 correctly rounded encoder for arbitrary f32 input. Exact integer round trips
 do not establish either property.
