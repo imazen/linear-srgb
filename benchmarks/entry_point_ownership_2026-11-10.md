@@ -51,7 +51,11 @@ native x8 v4_transfer 583a6c212cb86b5e
 native x16 v4_transfer 7b77f9068d50a12e
 ```
 
-## Refactor validation
+## Initial refactor validation
+
+This section records the captures before the later public-surface reduction.
+The reduction below intentionally changes public signatures while preserving
+the numerical captures.
 
 The final native V3/scalar and WASM captures match all 24 original rows above.
 Prebuilt original/current probes also ran on r7900x without a remote build;
@@ -143,3 +147,50 @@ The final follow-up regression command reported:
 ```text
 run-heavy: done rc=0 28s | peak-RSS 0.14GiB | min-avail 24923MiB | peak-load 2.89
 ```
+
+
+## Narrow public replacements (2026-11-10)
+
+The user requested direct x4/x8 token replacements only, with no direct public
+replacement for tokens::x16. The default-feature x86 snapshot's target_features
+summary falls from 123 to 34 items (32 functions and two width modules).
+Across the captured default/optional feature sets, the API guard requires exact
+equality with 64 token-free x4/x8 signatures: 28 x4 and 36 x8. The 28 legacy
+x16 signatures remain under the deprecated token module, with private code
+behind them. No numerical implementation or expected bits changed for this
+reduction.
+
+The original compatibility and wide-dispatch assertions moved intact into
+private unit-test modules; consumer integration tests exercise the public
+replacements. The frozen probe moved from an example into
+`src/target_features/fingerprint.rs`; `just ownership-fingerprint` and its
+WASM counterpart still require the original captured hashes. Recipes that
+exercise private compatibility/dispatch now include library unit tests.
+
+The API renderer's existing auto-trait discrepancy is avoided by using the
+installed nightly-2026-07-13 with the same zenutils-apidoc 0.1.1. It renders all
+three original auto-trait-complete types, and `just api-doc-check` now uses that
+toolchain by default. Only the authorized API removal appears in the public
+snapshot change; no auto-trait guarantee was relaxed.
+
+The visibility reduction is `0c5c8bde`; the exact-set API guard, deprecation
+notice and narrowed snapshots are `320dcd6b`. Compatibility assertions moved
+in `511752ec`. The fresh ARM/WASM capture in `asm-narrow/` matches all 24
+approved opcode expectations. Strict native and selected WASM lint, the native
+release suite/doctests, ARM64 checks, strict-SIMD WASM tests under both arithmetic
+policies and all 24 native/WASM fingerprints pass. The narrowed API snapshot
+check also passes. The unrelated relaxed-SIMD fusing-engine parity finding
+remains open.
+
+```text
+run-heavy: done rc=0 83s | peak-RSS 0.50GiB | min-avail 24757MiB | peak-load 2.42
+```
+
+This combined command included numerical regression tests, frozen probes and
+the compatible-nightly API capture. A follow-up removed an unused test-only
+macro import on portable targets; its WASM test compilation and API/ASM checks
+passed in the later capture command.
+
+The narrowed API captures and verification logs are preserved under
+`narrow-api-review/` in the i270 artifact directory above; its manifest now
+includes those files and `asm-narrow/`.

@@ -4,7 +4,7 @@ Observed 2026-11-05. Main: `1340e864`; migration: [PR #30](https://github.com/im
 
 ## Calling convention
 
-Ordinary code uses `linear_srgb::default`. Code already compiled for a CPU tier uses `target_features::{x4,x8,x16}`. Keep the function name and omit the old token argument:
+Ordinary code uses `linear_srgb::default`. Code already compiled for a CPU tier uses `target_features::{x4,x8}`. The public surface replaces only `tokens::x4` and `tokens::x8`. `tokens::x16` is deprecated without a direct replacement. Keep the x4/x8 function name and omit the old token argument:
 
 ```text
 old: tokens::x8::srgb_to_linear_v3(token, values)
@@ -27,7 +27,7 @@ The initial capture contained 14 live remote branches, accounted for below. A la
 | `api/target-features` | PR #30 keeps math crate-private and includes wider f32 dispatch and main's precision fixes through `24a87677`. Review/merge and a separately approved release remain. |
 | `feat/adobe-rgb-romm-trcs` / `a396300c` | One unique commit adding Adobe/ProPhoto functions. [Issue #7](https://github.com/imazen/linear-srgb/issues/7) was deliberately closed as outside the motivating Ultra HDR work. Preserve as scoped-out work, not an approved implementation backlog. |
 | `feat/extended-range-simd` / `95cbcd1e` | [PR #6](https://github.com/imazen/linear-srgb/pull/6) merged; tip has two later documentation/accuracy-test commits not in main. `extended_simd_doc_accuracy_claims` is absent from current tests. Review those residual assertions against today's coefficients before porting; do not import old expected numbers blindly. |
-| `feat/pub-tf-x16` / `f6dffe2d` | One unique commit exposes generic magetypes TF kernels and adds gamma kernels. Current array API already covers gamma at x4/x8/x16; retain any needed algorithm internally rather than merging the old public type coupling. No numerical equivalence claim was measured here. |
+| `feat/pub-tf-x16` / `f6dffe2d` | One unique commit exposes generic magetypes TF kernels and adds gamma kernels. Private implementations already cover gamma at x4/x8/x16; retain any needed algorithm internally rather than merging the old public type coupling. No numerical equivalence claim was measured here. |
 | `feat/simd-extended-srgb` / `ef5a71c9` | [PR #5](https://github.com/imazen/linear-srgb/pull/5) closed unmerged; five divergent commits. Extended-range operations already exist on main. Compare any residual tests/content before reuse; do not replay the historical implementation wholesale. |
 | `feat/simd-u16-decode` / `7ab2e617` | Ancestor; [PR #21](https://github.com/imazen/linear-srgb/pull/21) merged. |
 | `perf/simd-extended-magetypes` / `ca95391c` | Ancestor; [PR #17](https://github.com/imazen/linear-srgb/pull/17) merged. |
@@ -49,19 +49,28 @@ Additional local refs: `abandoned/pulp-rewrite` (`414e59ab`, five unique commits
 - After API review, migrate consumers such as zenresize/zenjpeg only in separately authorized changes. Confirm each resolved dependency includes PR #30 before replacing calls; preserve per-tier numerical behavior and row/stride contracts. An old published version does not have `target_features`.
 - Release still needs README/API review, normal release validation and explicit publication approval. This work did not publish, delete branches or weaken tests.
 
-## Wider dispatch and private math
+## Public replacement scope and private math
 
-The f32 array and slice families in `target_features::{x4,x8,x16}` provide
-scalar, V3, V4, NEON and WASM128 variants (V4 requires `avx512`). Existing
-native kernels remain private; width-generic sRGB/gamma and HDR kernels use
-the matching backend, while remaining composed families reuse x4 kernels. This completes
-calling families without a measured performance claim. Integer conversion
-hooks retain their existing target-specific coverage.
+The public `target_features::{x4,x8}` functions correspond one-for-one to the
+existing token functions, omitting the token argument. `x8` remains x86-64
+only. The user explicitly chose no direct replacement for `tokens::x16`.
+Wider kernels and fallback functions needed by internal dispatch stay private;
+test-only x8 helpers are not compiled into normal library builds. Integer
+conversion hooks retain their existing architecture coverage.
 
-Use `incant!(x16::srgb_to_linear(values) without token)` inside a caller-owned
-`#[magetypes(...)]` entry point, then ordinary `incant!` to dispatch that entry
-point. Bare feature functions still require matching feature contexts on
-native targets. See `tests/target_features_dispatch.rs` for a complete example.
+The x86 snapshots contain exactly 64 public replacement signatures across
+default and optional feature sets (28 x4 and 36 x8), with no additional public
+function family. Their default-feature module summary is 34 items (32 functions
+and two width modules), down from 123 items in the broader proposal. The
+`tokens` summary remains 52 items in that default-feature capture, because its
+compatibility paths and token reexports remain. `just check-target-features-surface`
+checks exact set equality, rejecting extras as well as missing replacements.
+
+Caller-owned dispatch can combine the available public tier functions with the
+caller's own fallback. See `tests/target_features_dispatch.rs`. Numerical
+compatibility for every retained entry and wider internal dispatch remains in
+`src/target_features/compatibility_tests.rs` and `dispatch_tests.rs`; those
+assertions moved into unit tests so private implementations remain covered.
 
 Scalar generic vectors and `mul_add_fused` already exist in published beta.2,
 whose midp transcendentals use relaxed evaluation. Keep the log/exp/pow copies
@@ -83,7 +92,8 @@ only the eight assembly expectation pairs explicitly approved on 2026-11-10.
 
 ## Entry-point ownership (2026-11-10)
 
-`target_features` is the canonical CPU-feature API. Its entry points construct
+`target_features::{x4,x8}` is the public canonical CPU-feature API; internal
+wide entries remain private. Its entry points construct
 internal proofs with `from_context()` and call private kernels; they do not
 perform runtime CPU detection. Deprecated `tokens` functions forward to this
 API. Removing that compatibility surface later will not remove numerical code.
@@ -160,6 +170,8 @@ The review adds only a reproduction recipe and documentation. It does not
 change numerical policy or undo the user-directed ownership inversion. The
 immediate deliverable remains token-free feature-context array/slice APIs,
 deprecated compatibility entry points, and verified replacement contracts.
+The public surface was subsequently reduced to direct x4/x8 replacements at
+the user's request, with no public x16 module.
 Further consolidation should keep curve evaluation, buffer traversal and
 arithmetic policy separate, with tokens/vector types confined to private code.
 A default-fused WASM policy would use the existing magetypes engine probe but
@@ -168,3 +180,14 @@ cost need a separate decision from public API ownership.
 
 Logs and the four-cell result table are stored under `relaxed-wasm-review/` in
 the ownership artifact directory documented in the baseline, with SHA256SUMS.
+
+
+## Snapshot tooling
+
+`just api-doc`, `just api-doc-check` and `just ownership-api` default to the
+installed `nightly-2026-07-13` toolchain, which renders the existing three
+const-generic auto-trait expectations correctly with zenutils-apidoc 0.1.1.
+The tracking nightly's negative-auto-trait discrepancy described in the
+ownership baseline does not occur on this toolchain. Override
+`ZEN_API_DOC_TOOLCHAIN` to inspect another nightly; no expected traits were
+weakened to update the narrowed API snapshots.

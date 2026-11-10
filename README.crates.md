@@ -377,8 +377,9 @@ if let Some(token) = X64V3Token::summon() {
 # }
 ```
 
-The width modules are `x4`, `x8`, and `x16`; suffixes specify the required
-feature context: `_v3`, `_v4`, `_neon`, `_wasm128`, or `_scalar`.
+The public width modules are `x4` and `x8` (`x8` is x86-64 only). They
+replace the same functions in `tokens::x4` and `tokens::x8`, with suffixes
+`_v3`, `_neon`, `_wasm128`, or `_scalar` matching the existing functions.
 **On native targets, these are safe calls inside matching feature functions.**
 An ordinary caller gets E0133: a runtime feature check alone does not provide
 the compiler context. Put the call in a feature function as above; ordinary
@@ -387,12 +388,13 @@ SIMD support when loading the module. See the
 [`target_features` documentation](https://docs.rs/linear-srgb/latest/linear_srgb/target_features/)
 for the complete feature requirements and contracts.
 
-The old `tokens` paths remain available with deprecation warnings. Migrate by
-changing `tokens` to `target_features` and removing the token argument inside
-the matching feature function. Conversion behavior and length contracts stay
-the same. Token reexports and token-taking operation APIs are queued for removal
-in the next version. The f32 families support caller-owned `incant!` dispatch
-at x8 and x16 as well as x4; see the module documentation for an example.
+The old `tokens` paths remain available with deprecation warnings. Migrate
+`tokens::x4` and `tokens::x8` by changing `tokens` to `target_features` and
+removing the token argument inside the matching feature function. Conversion
+behavior and length contracts stay the same. `tokens::x16` is deprecated
+without a direct replacement; ordinary slice callers can use `default`. Token
+reexports and token-taking operation APIs are queued for removal in the next
+version. Additional internal widths and fallbacks are crate-private.
 
 
 ## License

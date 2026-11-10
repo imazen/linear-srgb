@@ -10,9 +10,7 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 
 ### Added
 
-- Complete f32 array/slice CPU-feature families at x4/x8/x16 for scalar, V3, V4, NEON and WASM128, allowing caller-owned `incant!` chains at every width. Native and width-generic private kernels provide the implementations; remaining composed families reuse x4 kernels (`2179d94c`, `d79656ce`).
-
-- `target_features::{x4,x8,x16}` provides array/slice entry points inside matching CPU-feature functions, without public archmage token or magetypes vector parameters. It preserves the existing kernels and length contracts (`9b2df432`).
+- `target_features::{x4,x8}` provides direct replacements for the existing token array/slice entry points inside matching CPU-feature functions, without public archmage token or magetypes vector parameters. It preserves the existing kernels and length contracts (`9b2df432`, `0c5c8bde`, `320dcd6b`).
 
 ### Changed
 
@@ -20,7 +18,8 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 
 ### Deprecated
 
-- `tokens`: use the same function in `target_features`, omitting its token argument inside a matching CPU-feature function. Existing signatures remain available (`9b2df432`).
+- `tokens::x4` and `tokens::x8`: use the same function in `target_features`, omitting its token argument inside a matching CPU-feature function. Existing signatures remain available (`9b2df432`).
+- `tokens::x16` is deprecated without a direct public replacement; its existing functions remain callable. Additional target-feature widths and fallbacks are crate-private (`0c5c8bde`, `320dcd6b`).
 
 ### Fixed
 
