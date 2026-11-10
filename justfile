@@ -86,3 +86,11 @@ precision-native-summary before after output_tsv:
 precision-policy output_dir:
     python3 tools/precision-review/generate.py {{output_dir}} ../garb
     POLICIES=1 cargo run --release --manifest-path {{output_dir}}/Cargo.toml --bin oracle
+
+# Print portable/native array and tail fingerprints for an ownership refactor.
+ownership-fingerprint:
+    cargo run --release --all-features --example entry_point_fingerprint
+
+# Capture the existing dispatcher stubs without changing committed ASM snapshots.
+ownership-codegen:
+    cargo rustc --release --all-features --example asm-stub -- --emit=asm
