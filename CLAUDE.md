@@ -10,6 +10,12 @@ against these committed main fixtures; do not recapture the PR to accept drift.
 
 ## Known Bugs
 
+- Direct x8 V3 sRGB array hooks return `3f7ffffa` (decode) and `3f7ffff9`
+  (encode) for white and the sampled above-white inputs, while x4 returns
+  exactly 1.0. PR #30 contains the wider white-endpoint fix; main's frozen
+  goldens deliberately expose its numerical delta. The V4 comparison also
+  flags x16 sRGB endpoint chunks. See [goldens/PR30.md](goldens/PR30.md).
+
 - **"ASM snapshots" workflow red on every push since 2026-05-31** (8+ consecutive
   failures through 2026-06-11). Job `ASM snapshot diff (informational)
   (wasm32-unknown-unknown)`, step `Assert essence unchanged (hard gate)`: the

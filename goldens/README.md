@@ -13,6 +13,9 @@ the older local beta.2 dependency lock differed in extended-range edge/tail
 hashes on unchanged main. The checked-in fixtures use the committed release
 resolution, not that preliminary capture.
 
+The [pre-merge PR #30 comparison](PR30.md) records the changed chunks and
+measured white-endpoint outputs. Main's frozen expectations remain intact.
+
 ## Stored data and coverage
 
 Large output arrays are never stored. Each row records a case name, output-word
