@@ -1,5 +1,13 @@
 # linear-srgb — Project Notes
 
+## Frozen numerical baseline
+
+`goldens/` freezes the unchanged numerical source at `c5b83e3e` before PR #30.
+It stores per-operation chunk hashes and complete output bits only for 256 u8
+inputs. See [goldens/README.md](goldens/README.md) for pinned dependencies,
+captured arithmetic policies, coverage and review commands. Check new code
+against these committed main fixtures; do not recapture the PR to accept drift.
+
 ## Known Bugs
 
 - **"ASM snapshots" workflow red on every push since 2026-05-31** (8+ consecutive

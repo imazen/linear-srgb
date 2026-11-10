@@ -8,6 +8,10 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 
 - None queued by this review.
 
+### Added
+
+- Frozen pre-PR numerical goldens: per-operation output chunk hashes for Linux x86-64/ARM64, both strict-WASM precision policies and explicit AVX-512 token arrays; complete output bits only for the 256-input u8 decode table (`17159435`).
+
 ### Fixed
 
 - Float LUT interpolation uses a single fused lower-endpoint expression, preserving near-black inputs without cancellation and using the same operations on every target.
