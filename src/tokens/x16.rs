@@ -1,4 +1,5 @@
-//! Compatibility adapters for the deprecated 16-lane token API.
+//! Deprecated 16-lane token API, retained without a direct public replacement.
+//! Use `crate::default` for ordinary dispatched slice conversion.
 //! Numerical implementation lives behind `crate::target_features::x16`.
 
 use archmage::rite;

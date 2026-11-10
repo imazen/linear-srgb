@@ -230,9 +230,10 @@ pub mod lut;
 pub mod target_features;
 
 /// Deprecated token-taking compatibility API. Use [`crate::target_features`]
-/// inside a matching CPU-feature function and omit the token argument.
+/// for x4/x8 inside a matching CPU-feature function and omit the token argument.
+/// The x16 compatibility API is deprecated without a direct replacement.
 #[deprecated(
-    note = "use target_features::{x4, x8, x16} inside a matching CPU-feature function; omit the token argument"
+    note = "use target_features::{x4, x8} inside a matching CPU-feature function; x16 is deprecated without a direct replacement"
 )]
 #[allow(deprecated)] // Compatibility kernels and their tests call each other.
 pub mod tokens;
