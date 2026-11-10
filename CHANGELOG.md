@@ -10,9 +10,13 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 
 ### Added
 
-- Complete f32 array/slice CPU-feature families at x4/x8/x16 for scalar, V3, V4, NEON and WASM128, allowing caller-owned `incant!` chains at every width. Existing native kernels stay in place; missing wider tiers compose x4 kernels (`2179d94c`).
+- Complete f32 array/slice CPU-feature families at x4/x8/x16 for scalar, V3, V4, NEON and WASM128, allowing caller-owned `incant!` chains at every width. Native and width-generic private kernels provide the implementations; remaining composed families reuse x4 kernels (`2179d94c`, `d79656ce`).
 
 - `target_features::{x4,x8,x16}` provides array/slice entry points inside matching CPU-feature functions, without public archmage token or magetypes vector parameters. It preserves the existing kernels and length contracts (`9b2df432`).
+
+### Changed
+
+- Make CPU-feature entry points canonical, retain token APIs as compatibility adapters, and share private width-generic kernels and slice-tail handling. Preserve public signatures and numerical policies; refresh the eight assembly snapshot pairs approved for this refactor (`d79656ce`).
 
 ### Deprecated
 

@@ -92,3 +92,11 @@ The full beta.2 regression command's resource wrapper reported:
 ```text
 run-heavy: done rc=0 49s | peak-RSS 0.41GiB | min-avail 24717MiB | peak-load 2.31
 ```
+
+The refactor is `d79656ce`; the pre-refactor probe is `3c498ae8` on the
+unchanged numerical source at `f36f932c`. Supporting assembly captures,
+probe binaries and validation logs were preserved on **i270** at
+`/mnt/v/output/linear-srgb/api-ownership-2026-11-10/`; `SHA256SUMS` records
+their hashes. This path was checked on i270, not dev. It is local validation
+output, not a canonical training-data store. V4 execution used the identical
+prebuilt binaries on r7900x, without a build on that host.
