@@ -81,8 +81,8 @@ pub fn profile() -> &'static str {
     match (std::env::consts::OS, std::env::consts::ARCH) {
         ("linux", "x86_64") => "x86_64",
         ("linux", "aarch64") => "aarch64",
-        ("wasi", "wasm32") if cfg!(feature = "precise-portable") => "wasm32-precise",
-        ("wasi", "wasm32") => "wasm32-default",
+        (_, "wasm32") if cfg!(feature = "precise-portable") => "wasm32-precise",
+        (_, "wasm32") => "wasm32-default",
         (os, arch) => {
             panic!("no numerical golden profile for {os}/{arch}; capture that backend explicitly")
         }
