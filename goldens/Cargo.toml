@@ -1,0 +1,17 @@
+[package]
+name = "linear-srgb-goldens"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+linear-srgb = { path = "..", default-features = false, features = ["std", "transfer"] }
+archmage = { version = "0.9.31", default-features = false, features = ["macros", "std"] }
+
+[features]
+default = ["avx512"]
+avx512 = ["linear-srgb/avx512"]
+precise-portable = ["linear-srgb/precise-portable"]
+v4 = ["avx512"]

@@ -29,6 +29,7 @@ exclude = [
     # Dev scripts and Python curve-fitting utilities
     "scripts/",
     "tools/",
+    "goldens/",
     # Committed benchmark result docs — historical, not needed by consumers
     "benchmarks/",
     # Root scratch/historical performance notes

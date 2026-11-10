@@ -2,6 +2,7 @@ Cargo.lock
 # The apidoc/ snapshot-runner package commits its lockfile (reproducible
 # regen) — un-ignore it from the blanket Cargo.lock pattern above.
 !apidoc/Cargo.lock
+!goldens/Cargo.lock
 /moxcms
 copter-report/
 
