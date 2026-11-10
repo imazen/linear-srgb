@@ -17,7 +17,7 @@
 use crate::tf::fast_math::Mla;
 // All archmage tokens are available on every platform — real impls on their
 // native arch, zero-construction stubs elsewhere. The `#[arcane]` /
-// `#[rite]` / `#[archmage::magetypes]` macros emit their own cfg guards
+// `#[attune]` / `#[archmage::magetypes]` macros emit their own cfg guards
 // based on the token param's arch, so tier wrappers only compile on their
 // target platform — but we still need the imports in scope unconditionally
 // for the macros to resolve.
@@ -684,16 +684,15 @@ fn srgb_u16_to_linear_slice_tier(token: Token, input: &[u16], output: &mut [f32]
         *out = convert(inp);
     }
 
-    // Relaxed WASM multiplication must use the same evaluation for tails.
-    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
-    if !in_rem.is_empty() {
+    // Keep tails on the same shared arithmetic policy as full blocks.
+    if crate::tf::fast_math::USE_FUSED_MATH {
+        for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
+            *out = crate::lanes::srgb_to_linear(*inp as f32 * (1.0 / 65535.0));
+        }
+    } else if !in_rem.is_empty() {
         let mut padded = [0u16; 16];
         padded[..in_rem.len()].copy_from_slice(in_rem);
         out_rem.copy_from_slice(&convert(&padded)[..in_rem.len()]);
-    }
-    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
-    for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
-        *out = crate::lanes::srgb_to_linear(*inp as f32 * (1.0 / 65535.0));
     }
 }
 
@@ -760,16 +759,15 @@ fn linear_to_srgb_u16_slice_tier(token: Token, input: &[f32], output: &mut [u16]
         *out = convert(inp);
     }
 
-    // Relaxed WASM multiplication must use the same evaluation for tails.
-    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
-    if !in_rem.is_empty() {
+    // Keep tails on the same shared arithmetic policy as full blocks.
+    if crate::tf::fast_math::USE_FUSED_MATH {
+        for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
+            *out = crate::lanes::linear_to_srgb_u16(*inp);
+        }
+    } else if !in_rem.is_empty() {
         let mut padded = [0.0f32; 16];
         padded[..in_rem.len()].copy_from_slice(in_rem);
         out_rem.copy_from_slice(&convert(&padded)[..in_rem.len()]);
-    }
-    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
-    for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
-        *out = crate::lanes::linear_to_srgb_u16(*inp);
     }
 }
 

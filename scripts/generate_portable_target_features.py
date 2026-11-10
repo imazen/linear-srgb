@@ -23,7 +23,9 @@ for width in [4, 8, 16]:
             name = f'{op}_{tier}'
             attrs = ('#[cfg(feature = "transfer")]\n' if transfer else '')
             attrs += '#[cfg(feature = "avx512")]\n' if tier == 'v4' else ''
-            attrs += f'#[archmage::rite({tier})]\n'
+            if tier == 'scalar' and op.startswith('tf_'):
+                attrs += '#[cfg(test)]\n'
+            attrs += '#[inline]\n' if tier == 'scalar' else f'#[archmage::attune({tier}, inline(hint))]\n'
             if name not in existing:
                 if tier == 'scalar' and width == 4:
                     t = 'archmage::ScalarToken'
@@ -33,11 +35,8 @@ for width in [4, 8, 16]:
                         body = f'crate::tf::srgb::{op[3:]}_x4({t}, magetypes::simd::generic::f32x4::from_array_t({t}, values)).to_array()'
                     else:
                         module = 'bt709' if 'bt709' in op else ('pq' if 'pq' in op else 'hlg')
-                        relaxed = f'let token = archmage::ScalarToken; crate::tf::{module}::{op}_x4(token, magetypes::simd::generic::f32x4::from_array_t(token, values)).to_array()'
-                        body = f'''#[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
-    {{ {relaxed} }}
-    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
-    {{ values.map(crate::lanes::{op}) }}'''
+                        vector = f'|chunk| {{ let token = archmage::ScalarToken; crate::tf::{module}::{op}_x4(token, magetypes::simd::generic::f32x4::from_array_t(token, chunk)).to_array() }}'
+                        body = f'crate::kernels::scalar_array(values, {vector}, crate::lanes::{op})'
                 elif tier != 'scalar' and op in ['srgb_to_linear', 'linear_to_srgb', 'gamma_to_linear', 'linear_to_gamma', 'srgb_to_linear_extended', 'linear_to_srgb_extended']:
                     token = {'v3': 'X64V3Token', 'v4': 'X64V4Token', 'neon': 'NeonToken', 'wasm128': 'Wasm128Token'}[tier]
                     body = f'crate::kernels::float::x{width}::{op}(archmage::{token}::from_context(), values{callarg})'
@@ -57,18 +56,18 @@ for width in [4, 8, 16]:
                 extra += [f'/// Convert {width} values; see the module calling-context requirements.\n{attrs}pub(crate) fn {name}(values: [f32; {width}]{arg}) -> [f32; {width}] {{\n    {body}\n}}\n']
             slicename = f'{op}_slice_{tier}'
             if slicename not in existing:
+                if tier == 'scalar' and ((width in [4, 8] and op not in ['srgb_to_linear', 'linear_to_srgb']) or (width == 16 and op.startswith('tf_'))):
+                    continue
                 if tier == 'scalar' and not transfer:
-                    scalar_call = f'crate::lanes::{op}(*value{callarg})'
-                    relaxed_map = f'|chunk| {name}(chunk{callarg})' if gamma else name
-                    slice_body = f'''#[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
-    {{ crate::kernels::map_slice::<{width}>(values, {relaxed_map}); }}
-    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
-    {{ for value in values {{ *value = {scalar_call}; }} }}'''
+                    scalar_call = f'|value| crate::lanes::{op}(value{callarg})' if gamma else f'crate::lanes::{op}'
+                    vector_call = f'|chunk| {name}(chunk{callarg})' if gamma else name
+                    slice_body = f'crate::kernels::scalar_slice::<{width}>(values, {vector_call}, {scalar_call});'
                 elif tier == 'scalar':
                     slice_body = f'crate::kernels::map_slice::<{width}>(values, {name});'
                 else:
                     slice_body = f'crate::kernels::map_slice::<{width}>(values, |chunk| {name}(chunk{callarg}));'
-                extra += [f'/// Convert all values, including a final partial array.\n{attrs}pub(crate) fn {slicename}(values: &mut [f32]{arg}) {{\n    {slice_body}\n}}\n']
+                slice_attrs = '#[cfg(test)]\n' if tier == 'scalar' and width == 4 else ''
+                extra += [f'/// Convert all values, including a final partial array.\n{slice_attrs}{attrs}pub(crate) fn {slicename}(values: &mut [f32]{arg}) {{\n    {slice_body}\n}}\n']
     test_only = "#[cfg(test)]\n" if width == 8 else ""
     source.write_text(text + f'\n// Portable tier completion\n{test_only}include!("portable_x{width}.rs");\n')
     (root / f'src/target_features/portable_x{width}.rs').write_text('\n'.join(extra))

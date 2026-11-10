@@ -108,6 +108,13 @@ pub(crate) const POW2_DEN: [f32; 4] = [2.10242958e-1, -2.22328856e-2, -1.9441499
 use magetypes::simd::backends::{F32x4Backend, F32x4Convert, F32x8Backend, F32x16Backend};
 use magetypes::simd::generic::{f32x4, i32x4};
 
+/// Existing arithmetic contract: fused on native, opt-in guaranteed fusion on WASM.
+/// Magetypes owns the hardware/engine probe and software fallback behind `_fused`.
+pub(crate) const USE_FUSED_MATH: bool = !cfg!(all(
+    target_arch = "wasm32",
+    not(feature = "precise-portable")
+));
+
 /// Multiply-add in the kernels. Fused wherever that costs nothing or the scalar tier needs it, so
 /// every native tier gives the same bits. On WASM, `mul_add_fused` is software unless the engine
 /// fuses, so it stays relaxed there unless the `precise-portable` feature asks for the same bits.
@@ -120,13 +127,10 @@ macro_rules! mla_for {
         impl<T: $backend> Mla for $vector<T> {
             #[inline(always)]
             fn mla(self, a: Self, b: Self) -> Self {
-                #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
-                {
-                    self.mul_add_relaxed(a, b)
-                }
-                #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
-                {
+                if USE_FUSED_MATH {
                     self.mul_add_fused(a, b)
+                } else {
+                    self.mul_add_relaxed(a, b)
                 }
             }
         }

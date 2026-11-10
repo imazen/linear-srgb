@@ -41,3 +41,34 @@ pub(crate) fn map_slice<const N: usize>(
     }
     store_tail(remainder, tail.as_ref());
 }
+
+/// Keep scalar HDR arrays on the same arithmetic policy as their SIMD peers.
+#[cfg(feature = "transfer")]
+#[inline(always)]
+pub(crate) fn scalar_array<const N: usize>(
+    values: [f32; N],
+    vector: impl FnOnce([f32; N]) -> [f32; N],
+    fused: impl FnMut(f32) -> f32,
+) -> [f32; N] {
+    if crate::tf::fast_math::USE_FUSED_MATH {
+        values.map(fused)
+    } else {
+        vector(values)
+    }
+}
+
+/// Preserve per-sample fused scalar loops and relaxed-WASM padded vector tails.
+#[inline(always)]
+pub(crate) fn scalar_slice<const N: usize>(
+    values: &mut [f32],
+    vector: impl FnMut([f32; N]) -> [f32; N],
+    mut fused: impl FnMut(f32) -> f32,
+) {
+    if crate::tf::fast_math::USE_FUSED_MATH {
+        for value in values {
+            *value = fused(*value);
+        }
+    } else {
+        map_slice::<N>(values, vector);
+    }
+}
