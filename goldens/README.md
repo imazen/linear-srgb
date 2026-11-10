@@ -48,6 +48,33 @@ this fixture set. Existing accuracy, parity, monotonicity and row tests remain
 necessary. Native profiles were captured on Linux; other OS math backends are
 not silently assigned a Linux baseline.
 
+## Portability limits
+
+The hash encoding is portable across ISAs, but the test selects an independent
+golden profile for each ISA/arithmetic policy. Passing those checks detects
+drift within a profile; it does **not** enforce cross-ISA output equality.
+
+Comparing the frozen main captures, normalizing only corresponding x4 token
+function suffixes and excluding x86-only x8/x16 APIs:
+
+| Compared with x86-64 | Regular-grid streams identical | Changed edge chunks | Changed tail streams |
+| --- | --- | --- | --- |
+| ARM64 | 99/99 | 23 | 22 |
+| Strict WASM precise-portable | 99/99 | 30 | 22 |
+| Strict WASM default | 23/99 | 73 | 52 |
+
+The regular-grid comparison covers the first 65,536 outputs of each common
+grid stream, excluding the appended 256 edge inputs and the separate tail
+streams. All 256 explicit u8 decode outputs match across these profiles.
+Default WASM also differs in the u16 encode and decode grid cases. The edge
+and tail differences have not been attributed to individual input values;
+they must not be described as full native/precise-WASM bit identity.
+
+Run `just numerical-goldens-portability` to reproduce this comparison. It
+only reads the committed captures and does not bless their differences or
+change expected values. Relaxed-SIMD and non-Linux native math backends remain
+outside the captured profiles.
+
 ## Running and reviewing changes
 
 ```sh

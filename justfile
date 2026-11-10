@@ -25,6 +25,9 @@ beta-library-check:
     cargo test --locked --all-features --lib
 
 # Check immutable output chunks, captured from main before PR #30 merges.
+numerical-goldens-portability:
+    python3 goldens/compare_profiles.py
+
 numerical-goldens-check:
     env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="" RUSTUP_TOOLCHAIN=1.99.1 CARGO_TARGET_DIR=target/goldens cargo test --locked --release --manifest-path goldens/Cargo.toml
 
