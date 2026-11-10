@@ -9,8 +9,15 @@ pub fn srgb_to_linear_scalar(values: [f32; 4]) -> [f32; 4] {
 /// Convert all values, including a final partial array.
 #[archmage::rite(scalar)]
 pub fn srgb_to_linear_slice_scalar(values: &mut [f32]) {
-    for value in values {
-        *value = crate::lanes::srgb_to_linear(*value);
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {
+        crate::kernels::map_slice::<4>(values, srgb_to_linear_scalar);
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {
+        for value in values {
+            *value = crate::lanes::srgb_to_linear(*value);
+        }
     }
 }
 
@@ -23,24 +30,45 @@ pub fn linear_to_srgb_scalar(values: [f32; 4]) -> [f32; 4] {
 /// Convert all values, including a final partial array.
 #[archmage::rite(scalar)]
 pub fn linear_to_srgb_slice_scalar(values: &mut [f32]) {
-    for value in values {
-        *value = crate::lanes::linear_to_srgb(*value);
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {
+        crate::kernels::map_slice::<4>(values, linear_to_srgb_scalar);
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {
+        for value in values {
+            *value = crate::lanes::linear_to_srgb(*value);
+        }
     }
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(scalar)]
 pub fn srgb_to_linear_extended_slice_scalar(values: &mut [f32]) {
-    for value in values {
-        *value = crate::lanes::srgb_to_linear_extended(*value);
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {
+        crate::kernels::map_slice::<4>(values, srgb_to_linear_extended_scalar);
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {
+        for value in values {
+            *value = crate::lanes::srgb_to_linear_extended(*value);
+        }
     }
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::rite(scalar)]
 pub fn linear_to_srgb_extended_slice_scalar(values: &mut [f32]) {
-    for value in values {
-        *value = crate::lanes::linear_to_srgb_extended(*value);
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {
+        crate::kernels::map_slice::<4>(values, linear_to_srgb_extended_scalar);
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {
+        for value in values {
+            *value = crate::lanes::linear_to_srgb_extended(*value);
+        }
     }
 }
 
@@ -53,8 +81,15 @@ pub fn gamma_to_linear_scalar(values: [f32; 4], gamma: f32) -> [f32; 4] {
 /// Convert all values, including a final partial array.
 #[archmage::rite(scalar)]
 pub fn gamma_to_linear_slice_scalar(values: &mut [f32], gamma: f32) {
-    for value in values {
-        *value = crate::lanes::gamma_to_linear(*value, gamma);
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {
+        crate::kernels::map_slice::<4>(values, |chunk| gamma_to_linear_scalar(chunk, gamma));
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {
+        for value in values {
+            *value = crate::lanes::gamma_to_linear(*value, gamma);
+        }
     }
 }
 
@@ -67,8 +102,15 @@ pub fn linear_to_gamma_scalar(values: [f32; 4], gamma: f32) -> [f32; 4] {
 /// Convert all values, including a final partial array.
 #[archmage::rite(scalar)]
 pub fn linear_to_gamma_slice_scalar(values: &mut [f32], gamma: f32) {
-    for value in values {
-        *value = crate::lanes::linear_to_gamma(*value, gamma);
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {
+        crate::kernels::map_slice::<4>(values, |chunk| linear_to_gamma_scalar(chunk, gamma));
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {
+        for value in values {
+            *value = crate::lanes::linear_to_gamma(*value, gamma);
+        }
     }
 }
 
@@ -112,7 +154,19 @@ pub fn tf_linear_to_srgb_slice_scalar(values: &mut [f32]) {
 #[cfg(feature = "transfer")]
 #[archmage::rite(scalar)]
 pub fn bt709_to_linear_scalar(values: [f32; 4]) -> [f32; 4] {
-    values.map(crate::lanes::bt709_to_linear)
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {
+        let token = archmage::ScalarToken;
+        crate::tf::bt709::bt709_to_linear_x4(
+            token,
+            magetypes::simd::generic::f32x4::from_array_t(token, values),
+        )
+        .to_array()
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {
+        values.map(crate::lanes::bt709_to_linear)
+    }
 }
 
 /// Convert all values, including a final partial array.
@@ -126,7 +180,19 @@ pub fn bt709_to_linear_slice_scalar(values: &mut [f32]) {
 #[cfg(feature = "transfer")]
 #[archmage::rite(scalar)]
 pub fn linear_to_bt709_scalar(values: [f32; 4]) -> [f32; 4] {
-    values.map(crate::lanes::linear_to_bt709)
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {
+        let token = archmage::ScalarToken;
+        crate::tf::bt709::linear_to_bt709_x4(
+            token,
+            magetypes::simd::generic::f32x4::from_array_t(token, values),
+        )
+        .to_array()
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {
+        values.map(crate::lanes::linear_to_bt709)
+    }
 }
 
 /// Convert all values, including a final partial array.
@@ -140,7 +206,19 @@ pub fn linear_to_bt709_slice_scalar(values: &mut [f32]) {
 #[cfg(feature = "transfer")]
 #[archmage::rite(scalar)]
 pub fn pq_to_linear_scalar(values: [f32; 4]) -> [f32; 4] {
-    values.map(crate::lanes::pq_to_linear)
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {
+        let token = archmage::ScalarToken;
+        crate::tf::pq::pq_to_linear_x4(
+            token,
+            magetypes::simd::generic::f32x4::from_array_t(token, values),
+        )
+        .to_array()
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {
+        values.map(crate::lanes::pq_to_linear)
+    }
 }
 
 /// Convert all values, including a final partial array.
@@ -154,7 +232,19 @@ pub fn pq_to_linear_slice_scalar(values: &mut [f32]) {
 #[cfg(feature = "transfer")]
 #[archmage::rite(scalar)]
 pub fn linear_to_pq_scalar(values: [f32; 4]) -> [f32; 4] {
-    values.map(crate::lanes::linear_to_pq)
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {
+        let token = archmage::ScalarToken;
+        crate::tf::pq::linear_to_pq_x4(
+            token,
+            magetypes::simd::generic::f32x4::from_array_t(token, values),
+        )
+        .to_array()
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {
+        values.map(crate::lanes::linear_to_pq)
+    }
 }
 
 /// Convert all values, including a final partial array.
@@ -168,7 +258,19 @@ pub fn linear_to_pq_slice_scalar(values: &mut [f32]) {
 #[cfg(feature = "transfer")]
 #[archmage::rite(scalar)]
 pub fn hlg_to_linear_scalar(values: [f32; 4]) -> [f32; 4] {
-    values.map(crate::lanes::hlg_to_linear)
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {
+        let token = archmage::ScalarToken;
+        crate::tf::hlg::hlg_to_linear_x4(
+            token,
+            magetypes::simd::generic::f32x4::from_array_t(token, values),
+        )
+        .to_array()
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {
+        values.map(crate::lanes::hlg_to_linear)
+    }
 }
 
 /// Convert all values, including a final partial array.
@@ -182,7 +284,19 @@ pub fn hlg_to_linear_slice_scalar(values: &mut [f32]) {
 #[cfg(feature = "transfer")]
 #[archmage::rite(scalar)]
 pub fn linear_to_hlg_scalar(values: [f32; 4]) -> [f32; 4] {
-    values.map(crate::lanes::linear_to_hlg)
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {
+        let token = archmage::ScalarToken;
+        crate::tf::hlg::linear_to_hlg_x4(
+            token,
+            magetypes::simd::generic::f32x4::from_array_t(token, values),
+        )
+        .to_array()
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {
+        values.map(crate::lanes::linear_to_hlg)
+    }
 }
 
 /// Convert all values, including a final partial array.

@@ -32,7 +32,12 @@ for width in [4, 8, 16]:
                     elif op.startswith('tf_'):
                         body = f'crate::tf::srgb::{op[3:]}_x4({t}, magetypes::simd::generic::f32x4::from_array_t({t}, values)).to_array()'
                     else:
-                        body = f'values.map(crate::lanes::{op})'
+                        module = 'bt709' if 'bt709' in op else ('pq' if 'pq' in op else 'hlg')
+                        relaxed = f'let token = archmage::ScalarToken; crate::tf::{module}::{op}_x4(token, magetypes::simd::generic::f32x4::from_array_t(token, values)).to_array()'
+                        body = f'''#[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {{ {relaxed} }}
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {{ values.map(crate::lanes::{op}) }}'''
                 elif tier != 'scalar' and op in ['srgb_to_linear', 'linear_to_srgb', 'gamma_to_linear', 'linear_to_gamma', 'srgb_to_linear_extended', 'linear_to_srgb_extended']:
                     token = {'v3': 'X64V3Token', 'v4': 'X64V4Token', 'neon': 'NeonToken', 'wasm128': 'Wasm128Token'}[tier]
                     body = f'crate::kernels::float::x{width}::{op}(archmage::{token}::from_context(), values{callarg})'
@@ -54,7 +59,11 @@ for width in [4, 8, 16]:
             if slicename not in existing:
                 if tier == 'scalar' and not transfer:
                     scalar_call = f'crate::lanes::{op}(*value{callarg})'
-                    slice_body = f'for value in values {{ *value = {scalar_call}; }}'
+                    relaxed_map = f'|chunk| {name}(chunk{callarg})' if gamma else name
+                    slice_body = f'''#[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {{ crate::kernels::map_slice::<{width}>(values, {relaxed_map}); }}
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {{ for value in values {{ *value = {scalar_call}; }} }}'''
                 elif tier == 'scalar':
                     slice_body = f'crate::kernels::map_slice::<{width}>(values, {name});'
                 else:

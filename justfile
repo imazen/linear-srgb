@@ -114,3 +114,20 @@ ownership-asm-compare before after:
 # Render assembly to an isolated review directory; preserve committed expectations.
 ownership-asm output_dir:
     bash scripts/dump-asm.sh "" {{output_dir}}
+
+# Default WASM policy must compose through the scalar and SIMD entry families too.
+verify-target-features-wasm-default:
+    CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime run --env LINEAR_SRGB_REQUIRE_TIERS=Wasm128Token" CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-C target-feature=+simd128" cargo test --no-default-features --features std,transfer --release --lib --test target_features --test target_features_dispatch --test tier_parity --test remaining_parity --target wasm32-wasip1
+
+# Full ownership regression matrix, including both WASM rounding policies.
+verify-ownership-regressions:
+    just verify-target-features
+    cargo clippy --no-default-features --features transfer -- -D warnings
+    cargo check --all-features --tests --target aarch64-unknown-linux-gnu
+    just verify-target-features-wasm-default
+    CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-C target-feature=+simd128" cargo clippy --no-default-features --features std,transfer --target wasm32-wasip1 --lib --test target_features --test target_features_dispatch --test tier_parity --test remaining_parity -- -D warnings
+    CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime run --env LINEAR_SRGB_REQUIRE_TIERS=Wasm128Token" CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-C target-feature=+simd128" cargo test --all-features --release --target wasm32-wasip1 --test target_features --test target_features_dispatch --test tier_parity --test remaining_parity
+
+# Capture the portable fingerprints with the frozen precise-portable policy.
+ownership-fingerprint-wasm:
+    CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime run" CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-C target-feature=+simd128" cargo run --release --all-features --target wasm32-wasip1 --example entry_point_fingerprint

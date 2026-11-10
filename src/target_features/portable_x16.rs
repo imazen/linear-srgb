@@ -19,8 +19,15 @@ pub fn srgb_to_linear_scalar(values: [f32; 16]) -> [f32; 16] {
 /// Convert all values, including a final partial array.
 #[archmage::rite(scalar)]
 pub fn srgb_to_linear_slice_scalar(values: &mut [f32]) {
-    for value in values {
-        *value = crate::lanes::srgb_to_linear(*value);
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {
+        crate::kernels::map_slice::<16>(values, srgb_to_linear_scalar);
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {
+        for value in values {
+            *value = crate::lanes::srgb_to_linear(*value);
+        }
     }
 }
 
@@ -43,8 +50,15 @@ pub fn linear_to_srgb_scalar(values: [f32; 16]) -> [f32; 16] {
 /// Convert all values, including a final partial array.
 #[archmage::rite(scalar)]
 pub fn linear_to_srgb_slice_scalar(values: &mut [f32]) {
-    for value in values {
-        *value = crate::lanes::linear_to_srgb(*value);
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {
+        crate::kernels::map_slice::<16>(values, linear_to_srgb_scalar);
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {
+        for value in values {
+            *value = crate::lanes::linear_to_srgb(*value);
+        }
     }
 }
 
@@ -67,8 +81,15 @@ pub fn srgb_to_linear_extended_scalar(values: [f32; 16]) -> [f32; 16] {
 /// Convert all values, including a final partial array.
 #[archmage::rite(scalar)]
 pub fn srgb_to_linear_extended_slice_scalar(values: &mut [f32]) {
-    for value in values {
-        *value = crate::lanes::srgb_to_linear_extended(*value);
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {
+        crate::kernels::map_slice::<16>(values, srgb_to_linear_extended_scalar);
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {
+        for value in values {
+            *value = crate::lanes::srgb_to_linear_extended(*value);
+        }
     }
 }
 
@@ -91,8 +112,15 @@ pub fn linear_to_srgb_extended_scalar(values: [f32; 16]) -> [f32; 16] {
 /// Convert all values, including a final partial array.
 #[archmage::rite(scalar)]
 pub fn linear_to_srgb_extended_slice_scalar(values: &mut [f32]) {
-    for value in values {
-        *value = crate::lanes::linear_to_srgb_extended(*value);
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {
+        crate::kernels::map_slice::<16>(values, linear_to_srgb_extended_scalar);
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {
+        for value in values {
+            *value = crate::lanes::linear_to_srgb_extended(*value);
+        }
     }
 }
 
@@ -115,8 +143,15 @@ pub fn gamma_to_linear_scalar(values: [f32; 16], gamma: f32) -> [f32; 16] {
 /// Convert all values, including a final partial array.
 #[archmage::rite(scalar)]
 pub fn gamma_to_linear_slice_scalar(values: &mut [f32], gamma: f32) {
-    for value in values {
-        *value = crate::lanes::gamma_to_linear(*value, gamma);
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {
+        crate::kernels::map_slice::<16>(values, |chunk| gamma_to_linear_scalar(chunk, gamma));
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {
+        for value in values {
+            *value = crate::lanes::gamma_to_linear(*value, gamma);
+        }
     }
 }
 
@@ -139,8 +174,15 @@ pub fn linear_to_gamma_scalar(values: [f32; 16], gamma: f32) -> [f32; 16] {
 /// Convert all values, including a final partial array.
 #[archmage::rite(scalar)]
 pub fn linear_to_gamma_slice_scalar(values: &mut [f32], gamma: f32) {
-    for value in values {
-        *value = crate::lanes::linear_to_gamma(*value, gamma);
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    {
+        crate::kernels::map_slice::<16>(values, |chunk| linear_to_gamma_scalar(chunk, gamma));
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
+    {
+        for value in values {
+            *value = crate::lanes::linear_to_gamma(*value, gamma);
+        }
     }
 }
 

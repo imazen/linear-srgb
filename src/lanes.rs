@@ -1,19 +1,23 @@
 //! One sample through the same operations as the vector kernels, with every multiply-add fused.
 //!
-//! The scalar tiers use these, so a value converts to the same bits at every tier. They are
+//! Native and precise-portable scalar tiers use these. Default WASM uses the relaxed
+//! generic vector kernels for float entry points and slice tails. These are
 //! crate-private kernels written out per lane. Keep their operations paired with
 //! the private vector copies; `tests/tier_parity.rs` holds them together.
 
 #[allow(unused_imports)]
 use num_traits::Float;
 
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 use crate::rational_poly::{
-    EXT_L2S_P, EXT_L2S_Q, EXT_S2L_P, EXT_S2L_Q, L2S_P, L2S_Q, LINEAR_SCALE, LINEAR_THRESHOLD,
-    S2L_P, S2L_Q, SRGB_THRESHOLD, TWELVE_92,
+    EXT_L2S_P, EXT_L2S_Q, EXT_S2L_P, EXT_S2L_Q, LINEAR_SCALE, S2L_P, S2L_Q, SRGB_THRESHOLD,
 };
+use crate::rational_poly::{L2S_P, L2S_Q, LINEAR_THRESHOLD, TWELVE_92};
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 use crate::tf::fast_math;
 use crate::tf::fast_math::eval_rational_poly;
 #[cfg(feature = "transfer")]
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 use crate::tf::fast_math::fast_log2f;
 
 /// `max(v, 0)` as the kernels do it: zero for negative zero and NaN too.
@@ -32,6 +36,7 @@ fn unit(v: f32) -> f32 {
 /// `2^x` without the scalar function's clamp.
 #[cfg(feature = "transfer")]
 #[inline(always)]
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 fn pow2(x: f32) -> f32 {
     let floor = x.floor();
     let frac = x - floor;
@@ -47,11 +52,13 @@ fn pow2(x: f32) -> f32 {
 
 /// The `pow` of [`fast_math::POW_LOG2`] and [`fast_math::POW_EXP2`], for the vector `pow_*`.
 #[inline(always)]
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 pub(crate) fn pow(x: f32, n: f32) -> f32 {
     exp2(log2(x) * n)
 }
 
 #[inline(always)]
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 fn log2(x: f32) -> f32 {
     use fast_math::POW_LOG2 as C;
     let adjusted =
@@ -79,6 +86,7 @@ fn log2(x: f32) -> f32 {
 
 /// Round to nearest with ties to even, like the vector `round`.
 #[inline(always)]
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 fn round_even(x: f32) -> f32 {
     let floor = x.floor();
     let frac = x - floor;
@@ -92,6 +100,7 @@ fn round_even(x: f32) -> f32 {
 }
 
 #[inline(always)]
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 fn exp2(x: f32) -> f32 {
     use fast_math::POW_EXP2 as C;
     if x >= 128.0 {
@@ -112,6 +121,7 @@ fn exp2(x: f32) -> f32 {
     poly * f32::from_bits(((xi as i32).wrapping_add(127) as u32) << 23)
 }
 
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 pub(crate) fn srgb_to_linear(v: f32) -> f32 {
     let clamped = unit(v);
     if v >= 1.0 {
@@ -141,6 +151,7 @@ pub(crate) fn linear_to_srgb_u16(v: f32) -> u16 {
 }
 
 #[cfg(feature = "transfer")]
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 pub(crate) fn bt709_to_linear(v: f32) -> f32 {
     use crate::tf::bt709::{BT709_ALPHA, BT709_BETA};
     if v < 4.5 * BT709_BETA {
@@ -153,6 +164,7 @@ pub(crate) fn bt709_to_linear(v: f32) -> f32 {
 }
 
 #[cfg(feature = "transfer")]
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 pub(crate) fn linear_to_bt709(v: f32) -> f32 {
     use crate::tf::bt709::{BT709_ALPHA, BT709_BETA};
     if v < BT709_BETA {
@@ -163,6 +175,7 @@ pub(crate) fn linear_to_bt709(v: f32) -> f32 {
 }
 
 #[cfg(feature = "transfer")]
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 pub(crate) fn hlg_to_linear(v: f32) -> f32 {
     use crate::tf::hlg::{HLG_B, HLG_C, HLG_INV_A_LOG2E};
     let a = non_negative(v);
@@ -173,6 +186,7 @@ pub(crate) fn hlg_to_linear(v: f32) -> f32 {
 }
 
 #[cfg(feature = "transfer")]
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 pub(crate) fn linear_to_hlg(v: f32) -> f32 {
     use crate::tf::hlg::{HLG_A_INV_LOG2E, HLG_B, HLG_C};
     let a = non_negative(v);
@@ -184,6 +198,7 @@ pub(crate) fn linear_to_hlg(v: f32) -> f32 {
 }
 
 #[cfg(feature = "transfer")]
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 pub(crate) fn pq_to_linear(v: f32) -> f32 {
     use crate::tf::pq::{
         C1, C2, C3, EOTF_POLY_FLOOR, M1, M2, PQ_EOTF_P_LARGE, PQ_EOTF_P_SMALL, PQ_EOTF_Q_LARGE,
@@ -207,6 +222,7 @@ pub(crate) fn pq_to_linear(v: f32) -> f32 {
 }
 
 #[cfg(feature = "transfer")]
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 pub(crate) fn linear_to_pq(v: f32) -> f32 {
     use crate::tf::pq::{
         C1, C2, C3, M1, M2, OETF_POLY_FLOOR, PQ_INV_P_LARGE, PQ_INV_P_SMALL, PQ_INV_Q_LARGE,
@@ -227,6 +243,7 @@ pub(crate) fn linear_to_pq(v: f32) -> f32 {
     }
 }
 
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 pub(crate) fn srgb_to_linear_extended(v: f32) -> f32 {
     let magnitude = v.abs();
     let result = if magnitude < SRGB_THRESHOLD {
@@ -237,6 +254,7 @@ pub(crate) fn srgb_to_linear_extended(v: f32) -> f32 {
     if v < 0.0 { -result } else { result }
 }
 
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 pub(crate) fn linear_to_srgb_extended(v: f32) -> f32 {
     let magnitude = v.abs();
     let result = if magnitude < LINEAR_THRESHOLD {
@@ -247,10 +265,12 @@ pub(crate) fn linear_to_srgb_extended(v: f32) -> f32 {
     if v < 0.0 { -result } else { result }
 }
 
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 pub(crate) fn gamma_to_linear(v: f32, gamma: f32) -> f32 {
     pow(unit(v), gamma)
 }
 
+#[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
 pub(crate) fn linear_to_gamma(v: f32, gamma: f32) -> f32 {
     pow(unit(v), 1.0 / gamma)
 }

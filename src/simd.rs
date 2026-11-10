@@ -646,7 +646,7 @@ fn srgb_u16_to_linear_slice_tier(token: Token, input: &[u16], output: &mut [f32]
 
     let (in_chunks, in_rem) = input.as_chunks::<16>();
     let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
-    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+    let convert = |inp: &[u16; 16]| -> [f32; 16] {
         // u16 → f32, normalized to [0, 1]. Scalar widening auto-vectorizes.
         let mut f = [0.0f32; 16];
         for i in 0..16 {
@@ -678,9 +678,20 @@ fn srgb_u16_to_linear_slice_tier(token: Token, input: &[u16], output: &mut [f32]
         // srgb_u16_to_linear(65535) == 1.0 bit-exact (as the LUT does).
         let ge_one = v.simd_ge(one);
         let result = f32x16::blend(ge_one, one, result);
-        *out = result.to_array();
+        result.to_array()
+    };
+    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+        *out = convert(inp);
     }
 
+    // Relaxed WASM multiplication must use the same evaluation for tails.
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    if !in_rem.is_empty() {
+        let mut padded = [0u16; 16];
+        padded[..in_rem.len()].copy_from_slice(in_rem);
+        out_rem.copy_from_slice(&convert(&padded)[..in_rem.len()]);
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
     for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
         *out = crate::lanes::srgb_to_linear(*inp as f32 * (1.0 / 65535.0));
     }
@@ -720,7 +731,7 @@ fn linear_to_srgb_u16_slice_tier(token: Token, input: &[f32], output: &mut [u16]
 
     let (in_chunks, in_rem) = input.as_chunks::<16>();
     let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
-    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+    let convert = |inp: &[f32; 16]| -> [u16; 16] {
         let linear = f32x16::from_array_t(token, *inp);
         let zero = f32x16::zero_t(token);
         let one = f32x16::splat_t(token, 1.0);
@@ -743,10 +754,20 @@ fn linear_to_srgb_u16_slice_tier(token: Token, input: &[f32], output: &mut [u16]
 
         let scaled = srgb.mla(f32x16::splat_t(token, 65535.0), f32x16::splat_t(token, 0.5));
         let idx_i = scaled.to_i32().to_array();
-        for i in 0..16 {
-            out[i] = idx_i[i] as u16;
-        }
+        idx_i.map(|value| value as u16)
+    };
+    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+        *out = convert(inp);
     }
+
+    // Relaxed WASM multiplication must use the same evaluation for tails.
+    #[cfg(all(target_arch = "wasm32", not(feature = "precise-portable")))]
+    if !in_rem.is_empty() {
+        let mut padded = [0.0f32; 16];
+        padded[..in_rem.len()].copy_from_slice(in_rem);
+        out_rem.copy_from_slice(&convert(&padded)[..in_rem.len()]);
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(feature = "precise-portable"))))]
     for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
         *out = crate::lanes::linear_to_srgb_u16(*inp);
     }
