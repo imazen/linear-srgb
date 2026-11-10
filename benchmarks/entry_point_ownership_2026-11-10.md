@@ -225,3 +225,12 @@ remain three passes and the known default-policy/fusing-engine dispatch
 assertion failure; this cleanup did not change the arithmetic contract or
 hide that failing test. Logs are preserved under `target-and-attune-review/`
 with updated hashes in the same i270 artifact directory.
+
+
+A semver CI check caught four legacy proof wrappers becoming direct feature
+functions during the macro cleanup. Explicit attune proof selectors and output
+names preserve their published safe/Fn calling contract. The corrected source
+passes all 202 semver checks against 0.6.12. Consumer callback type-coercion
+regressions now cover the legacy x4 extended-range and x8 u16 helpers, including
+the corresponding portable x4 paths. Ordinary signature snapshots alone cannot
+record this calling-context requirement.

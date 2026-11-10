@@ -103,11 +103,11 @@ pub fn srgb_u8_to_linear_slice_v3(_token: X64V3Token, input: &[u8], output: &mut
 /// `*(1.0/65535.0)` and applies the C0-continuous `S2L_P/Q` rational
 /// polynomial. Boundary values (0, 65535) map exactly to (0.0, 1.0).
 ///
-/// The `#[magetypes(...)]` macro generates `_v3`, `_neon`, `_wasm128`
+/// The `attune` proof-output family generates `_v3`, `_neon`, `_wasm128`
 /// variants from this single body; f32x8 is native on V3 and polyfills
 /// to 2×f32x4 on NEON / WASM128 (fully inlined). Call from inside an
 /// `#[arcane]` function for zero-overhead inlining.
-#[attune(_v3, _neon, _wasm128, _scalar, inline(hint))]
+#[attune(_v3_t, _neon_t, _wasm128_t, _scalar_t, inline(hint), names(_v3_t = srgb_u16_to_linear_v3, _neon_t = srgb_u16_to_linear_neon, _wasm128_t = srgb_u16_to_linear_wasm128, _scalar_t = srgb_u16_to_linear_scalar))]
 pub fn srgb_u16_to_linear(_token: Token, srgb: [u16; 8]) -> [f32; 8] {
     archmage::incant!(crate::target_features::x8::srgb_u16_to_linear(srgb) without token)
 }
@@ -132,11 +132,11 @@ pub fn linear_to_srgb_u8_v3(_token: X64V3Token, linear: [f32; 8]) -> [u8; 8] {
 /// 65535 + 0.5 and truncates to u16. Perfect roundtrip with the decode
 /// polynomial. Inputs ≥ 1.0 map to 65535 bit-exact; inputs ≤ 0.0 map to 0.
 ///
-/// The `#[magetypes(...)]` macro generates `_v3`, `_neon`, `_wasm128`
+/// The `attune` proof-output family generates `_v3`, `_neon`, `_wasm128`
 /// variants from this single body; f32x8 is native on V3 and polyfills
 /// to 2×f32x4 on NEON / WASM128 (fully inlined). Call from inside an
 /// `#[arcane]` function for zero-overhead inlining.
-#[attune(_v3, _neon, _wasm128, _scalar, inline(hint))]
+#[attune(_v3_t, _neon_t, _wasm128_t, _scalar_t, inline(hint), names(_v3_t = linear_to_srgb_u16_v3, _neon_t = linear_to_srgb_u16_neon, _wasm128_t = linear_to_srgb_u16_wasm128, _scalar_t = linear_to_srgb_u16_scalar))]
 pub fn linear_to_srgb_u16(_token: Token, linear: [f32; 8]) -> [u16; 8] {
     archmage::incant!(crate::target_features::x8::linear_to_srgb_u16(linear) without token)
 }

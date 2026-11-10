@@ -43,7 +43,7 @@ pub fn linear_to_srgb_v3(_token: X64V3Token, linear: [f32; 4]) -> [f32; 4] {
 /// Convert 4 sRGB values to linear without clamping (extended range).
 ///
 /// 6/6 rational polynomial fitted to \[0, 8\]. sampled max 8 ULP in \[0,1\], u16-safe to ~4.2.
-#[attune(_v3, _neon, _wasm128, _scalar, inline(hint))]
+#[attune(_v3_t, _neon_t, _wasm128_t, _scalar_t, inline(hint), names(_v3_t = srgb_to_linear_extended_v3, _neon_t = srgb_to_linear_extended_neon, _wasm128_t = srgb_to_linear_extended_wasm128, _scalar_t = srgb_to_linear_extended_scalar))]
 pub fn srgb_to_linear_extended(_token: Token, srgb: [f32; 4]) -> [f32; 4] {
     archmage::incant!(crate::target_features::x4::srgb_to_linear_extended(srgb) without token)
 }
@@ -51,7 +51,7 @@ pub fn srgb_to_linear_extended(_token: Token, srgb: [f32; 4]) -> [f32; 4] {
 /// Convert 4 linear values to sRGB without clamping (extended range).
 ///
 /// 6/6 rational polynomial fitted on √x to \[0, 64\]. sampled max 7 ULP in \[0,1\], u16-safe to 64.
-#[attune(_v3, _neon, _wasm128, _scalar, inline(hint))]
+#[attune(_v3_t, _neon_t, _wasm128_t, _scalar_t, inline(hint), names(_v3_t = linear_to_srgb_extended_v3, _neon_t = linear_to_srgb_extended_neon, _wasm128_t = linear_to_srgb_extended_wasm128, _scalar_t = linear_to_srgb_extended_scalar))]
 pub fn linear_to_srgb_extended(_token: Token, linear: [f32; 4]) -> [f32; 4] {
     archmage::incant!(crate::target_features::x4::linear_to_srgb_extended(linear) without token)
 }

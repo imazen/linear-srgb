@@ -235,3 +235,12 @@ instructions; those remain a compilation target feature. This cleanup preserves
 the existing numerical policy, including the separately recorded default
 relaxed-SIMD scalar/vector parity finding. It does not make relaxed arithmetic
 promise guaranteed fusion.
+
+
+Some deprecated token functions are proof-taking wrappers callable from ordinary
+code and usable as `Fn` callbacks. Those use `attune` proof outputs, with explicit
+names preserving the published `_v3`/`_neon`/`_wasm128`/`_scalar` paths. They must
+not become direct feature functions merely because their names have a tier
+suffix. The token-free replacements intentionally establish direct feature
+contexts. Textual signature inventories cannot detect this distinction;
+semver checks and the consumer callback compile tests protect it.
