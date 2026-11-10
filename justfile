@@ -2,21 +2,26 @@
 
 # Match the public-api parser and preserve correct const-generic auto traits.
 api_doc_toolchain := env_var_or_default("ZEN_API_DOC_TOOLCHAIN", "nightly-2026-07-13")
+api_doc_targets := "x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu wasm32-wasip1"
 
 # Format + regenerate the public-API surface snapshots (docs/public-api/).
 # The snapshot runner lives in the standalone apidoc/ package, so plain
 # `cargo test` never compiles its dependency tree or runs rustdoc.
 fmt:
     cargo fmt --all
-    ZEN_API_DOC_TOOLCHAIN={{api_doc_toolchain}} cargo test --manifest-path apidoc/Cargo.toml
+    just api-doc
 
 # Regenerate the public-API surface snapshots only
 api-doc:
-    ZEN_API_DOC_TOOLCHAIN={{api_doc_toolchain}} cargo test --manifest-path apidoc/Cargo.toml
+    for target in {{api_doc_targets}}; do ZEN_API_DOC_TARGET="$target" ZEN_API_DOC_TOOLCHAIN={{api_doc_toolchain}} cargo test --manifest-path apidoc/Cargo.toml -- --nocapture || exit $?; done
+    python3 scripts/check_target_features_api.py
+    python3 scripts/test_target_features_api.py
 
 # Verify the committed snapshots are current
 api-doc-check:
-    ZEN_API_DOC_TOOLCHAIN={{api_doc_toolchain}} ZEN_API_DOC=check cargo test --manifest-path apidoc/Cargo.toml
+    for target in {{api_doc_targets}}; do ZEN_API_DOC_TARGET="$target" ZEN_API_DOC_TOOLCHAIN={{api_doc_toolchain}} ZEN_API_DOC=check cargo test --manifest-path apidoc/Cargo.toml -- --nocapture || exit $?; done
+    python3 scripts/check_target_features_api.py
+    python3 scripts/test_target_features_api.py
 
 # Validate the owner-requested archmage beta constraint update.
 beta-check:
@@ -45,6 +50,7 @@ verify-target-features-portable:
 # Run after regenerating snapshots; includes aliases collapsed by the renderer.
 check-target-features-surface:
     python3 scripts/check_target_features_api.py
+    python3 scripts/test_target_features_api.py
 
 # Require both x86 SIMD tiers to execute, rather than accept unavailable hardware.
 verify-target-features-native-v4:
@@ -108,8 +114,8 @@ ownership-fingerprint-check output:
     python3 scripts/check_entry_point_fingerprints.py {{output}}
 
 # Isolated API render: compare original/current without replacing expectations.
-ownership-api workspace output_dir:
-    ZEN_API_DOC_TOOLCHAIN={{api_doc_toolchain}} ZEN_API_DOC=regen cargo run --manifest-path apidoc/Cargo.toml --example capture -- {{workspace}} {{output_dir}}
+ownership-api workspace output_dir target="x86_64-unknown-linux-gnu":
+    ZEN_API_DOC_TARGET={{target}} ZEN_API_DOC_TOOLCHAIN={{api_doc_toolchain}} ZEN_API_DOC=regen cargo run --manifest-path apidoc/Cargo.toml --example capture -- {{workspace}} {{output_dir}}
 
 ownership-asm-compare before after:
     python3 scripts/compare_entry_point_asm.py {{before}} {{after}} --require-identical

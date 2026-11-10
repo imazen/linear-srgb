@@ -12,4 +12,5 @@ publish = false
 [workspace]
 
 [dependencies]
-zenutils-apidoc = "0.1.1"
+# Cross-target capture support is not yet published; dev-only pinned source.
+zenutils-apidoc = { version = "0.1.2", git = "https://github.com/imazen/zenutils", rev = "f3058c9cfa9be1707a586f35ab60f103f73179da" }

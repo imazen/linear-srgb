@@ -7,6 +7,8 @@ fn main() {
         args.next().is_none(),
         "expected workspace and output directories"
     );
+    std::env::var("ZEN_API_DOC_TARGET")
+        .expect("select the documented target with ZEN_API_DOC_TARGET");
     zenutils_apidoc::ApiDoc::new()
         .workspace_dir(&workspace)
         .out_dir(&output)
