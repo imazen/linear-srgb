@@ -11,7 +11,7 @@
 //! `#[target_feature]` attributes. A runtime feature check alone does not give
 //! rustc that context. Calling from an ordinary function produces E0133 even
 //! though the conversion is a safe function. Move the call into your feature
-//! function instead of adding an `unsafe` block. An archmage `#[rite(v3)]` or
+//! function instead of adding an `unsafe` block. An archmage `#[attune(v3)]` or
 //! `#[arcane]` body supplies the same context; its token stays with the caller.
 //!
 //! WebAssembly validates the required SIMD instructions when loading the
@@ -82,7 +82,13 @@
 //! ```
 
 macro_rules! entry {
-    ($width:ident, $tier:ident, $token:path; $(#[$meta:meta])* fn $name:ident($($arg:ident: $ty:ty),*) $(-> $out:ty)?) => {
+    ($width:ident, scalar, $token:path; $($item:tt)*) => {
+        entry!(@body $width, $token; #[inline] $($item)*);
+    };
+    ($width:ident, $tier:ident, $token:path; $($item:tt)*) => {
+        entry!(@body $width, $token; #[archmage::attune($tier)] $($item)*);
+    };
+    (@body $width:ident, $token:path; $(#[$meta:meta])* fn $name:ident($($arg:ident: $ty:ty),*) $(-> $out:ty)?) => {
         #[doc = concat!("CPU-feature entry point corresponding to [`crate::tokens::", stringify!($width), "::", stringify!($name), "`] without its token argument. See [calling context](crate::target_features#calling-context) for required CPU features.")]
         ///
         /// # Safety
@@ -94,7 +100,6 @@ macro_rules! entry {
         /// inside that matching context. WASM validates SIMD at module load;
         /// scalar variants have no CPU requirements.
         $(#[$meta])*
-        #[archmage::rite($tier)]
         pub fn $name($($arg: $ty),*) $(-> $out)? {
             crate::kernels::$width::$name(<$token>::from_context(), $($arg),*)
         }
@@ -116,7 +121,7 @@ pub mod x4;
 ///
 /// ```
 /// #![forbid(unsafe_code)]
-/// #[archmage::rite(v3)]
+/// #[archmage::attune(v3)]
 /// fn convert(values: [f32; 8]) -> [f32; 8] {
 ///     linear_srgb::target_features::x8::srgb_to_linear_v3(values)
 /// }

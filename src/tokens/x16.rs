@@ -2,7 +2,7 @@
 //! Use `crate::default` for ordinary dispatched slice conversion.
 //! Numerical implementation lives behind `crate::target_features::x16`.
 
-use archmage::rite;
+use archmage::attune;
 
 pub use archmage::X64V4Token;
 
@@ -16,7 +16,7 @@ pub use archmage::X64V4Token;
 ///
 /// The `X64V4Token` parameter proves AVX-512 support at compile time.
 /// Call from inside an `#[arcane]` function for zero-overhead inlining.
-#[rite]
+#[attune]
 pub fn srgb_to_linear_v4(_token: X64V4Token, srgb: [f32; 16]) -> [f32; 16] {
     crate::target_features::x16::srgb_to_linear_v4(srgb)
 }
@@ -25,7 +25,7 @@ pub fn srgb_to_linear_v4(_token: X64V4Token, srgb: [f32; 16]) -> [f32; 16] {
 ///
 /// The `X64V4Token` parameter proves AVX-512 support at compile time.
 /// Call from inside an `#[arcane]` function for zero-overhead inlining.
-#[rite]
+#[attune]
 pub fn linear_to_srgb_v4(_token: X64V4Token, linear: [f32; 16]) -> [f32; 16] {
     crate::target_features::x16::linear_to_srgb_v4(linear)
 }
@@ -34,7 +34,7 @@ pub fn linear_to_srgb_v4(_token: X64V4Token, linear: [f32; 16]) -> [f32; 16] {
 ///
 /// The `X64V4Token` parameter proves AVX-512 support at compile time.
 /// Call from inside an `#[arcane]` function for zero-overhead inlining.
-#[rite]
+#[attune]
 pub fn gamma_to_linear_v4(_token: X64V4Token, encoded: [f32; 16], gamma: f32) -> [f32; 16] {
     crate::target_features::x16::gamma_to_linear_v4(encoded, gamma)
 }
@@ -43,7 +43,7 @@ pub fn gamma_to_linear_v4(_token: X64V4Token, encoded: [f32; 16], gamma: f32) ->
 ///
 /// The `X64V4Token` parameter proves AVX-512 support at compile time.
 /// Call from inside an `#[arcane]` function for zero-overhead inlining.
-#[rite]
+#[attune]
 pub fn linear_to_gamma_v4(_token: X64V4Token, linear: [f32; 16], gamma: f32) -> [f32; 16] {
     crate::target_features::x16::linear_to_gamma_v4(linear, gamma)
 }
@@ -58,7 +58,7 @@ pub fn linear_to_gamma_v4(_token: X64V4Token, linear: [f32; 16], gamma: f32) -> 
 ///
 /// The `X64V4Token` parameter proves AVX-512 support at compile time.
 /// Call from inside an `#[arcane]` function for zero-overhead inlining.
-#[rite]
+#[attune]
 pub fn srgb_u8_to_linear_v4(_token: X64V4Token, srgb: [u8; 16]) -> [f32; 16] {
     crate::target_features::x16::srgb_u8_to_linear_v4(srgb)
 }
@@ -66,7 +66,7 @@ pub fn srgb_u8_to_linear_v4(_token: X64V4Token, srgb: [u8; 16]) -> [f32; 16] {
 /// Convert sRGB u8 values to linear f32 using 16-wide LUT lookup.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[rite]
+#[attune]
 pub fn srgb_u8_to_linear_slice_v4(_token: X64V4Token, input: &[u8], output: &mut [f32]) {
     crate::target_features::x16::srgb_u8_to_linear_slice_v4(input, output)
 }
@@ -79,7 +79,7 @@ pub fn srgb_u8_to_linear_slice_v4(_token: X64V4Token, input: &[u8], output: &mut
 ///
 /// The `X64V4Token` parameter proves AVX-512 support at compile time.
 /// Call from inside an `#[arcane]` function for zero-overhead inlining.
-#[rite]
+#[attune]
 pub fn linear_to_srgb_u8_v4(_token: X64V4Token, linear: [f32; 16]) -> [u8; 16] {
     crate::target_features::x16::linear_to_srgb_u8_v4(linear)
 }
@@ -91,7 +91,7 @@ pub fn linear_to_srgb_u8_v4(_token: X64V4Token, linear: [f32; 16]) -> [u8; 16] {
 /// Convert sRGB f32 values to linear in-place using 16-wide SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[rite]
+#[attune]
 pub fn srgb_to_linear_slice_v4(_token: X64V4Token, values: &mut [f32]) {
     crate::target_features::x16::srgb_to_linear_slice_v4(values)
 }
@@ -99,7 +99,7 @@ pub fn srgb_to_linear_slice_v4(_token: X64V4Token, values: &mut [f32]) {
 /// Convert linear f32 values to sRGB in-place using 16-wide SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[rite]
+#[attune]
 pub fn linear_to_srgb_slice_v4(_token: X64V4Token, values: &mut [f32]) {
     crate::target_features::x16::linear_to_srgb_slice_v4(values)
 }
@@ -107,7 +107,7 @@ pub fn linear_to_srgb_slice_v4(_token: X64V4Token, values: &mut [f32]) {
 /// Convert gamma-encoded f32 values to linear in-place using 16-wide SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[rite]
+#[attune]
 pub fn gamma_to_linear_slice_v4(_token: X64V4Token, values: &mut [f32], gamma: f32) {
     crate::target_features::x16::gamma_to_linear_slice_v4(values, gamma)
 }
@@ -115,7 +115,7 @@ pub fn gamma_to_linear_slice_v4(_token: X64V4Token, values: &mut [f32], gamma: f
 /// Convert linear f32 values to gamma-encoded in-place using 16-wide SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[rite]
+#[attune]
 pub fn linear_to_gamma_slice_v4(_token: X64V4Token, values: &mut [f32], gamma: f32) {
     crate::target_features::x16::linear_to_gamma_slice_v4(values, gamma)
 }
@@ -123,7 +123,7 @@ pub fn linear_to_gamma_slice_v4(_token: X64V4Token, values: &mut [f32], gamma: f
 /// Convert linear f32 values to sRGB u8 using 16-wide SIMD + LUT.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[rite]
+#[attune]
 pub fn linear_to_srgb_u8_slice_v4(_token: X64V4Token, input: &[f32], output: &mut [u8]) {
     crate::target_features::x16::linear_to_srgb_u8_slice_v4(input, output)
 }
@@ -134,56 +134,56 @@ pub fn linear_to_srgb_u8_slice_v4(_token: X64V4Token, input: &[f32], output: &mu
 
 /// Convert 16 sRGB values to linear (rational polynomial, no powf).
 #[cfg(feature = "transfer")]
-#[rite]
+#[attune]
 pub fn tf_srgb_to_linear_v4(_token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
     crate::target_features::x16::tf_srgb_to_linear_v4(v)
 }
 
 /// Convert 16 linear values to sRGB (rational polynomial, no powf).
 #[cfg(feature = "transfer")]
-#[rite]
+#[attune]
 pub fn tf_linear_to_srgb_v4(_token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
     crate::target_features::x16::tf_linear_to_srgb_v4(v)
 }
 
 /// Convert 16 PQ signal values to linear.
 #[cfg(feature = "transfer")]
-#[rite]
+#[attune]
 pub fn pq_to_linear_v4(_token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
     crate::target_features::x16::pq_to_linear_v4(v)
 }
 
 /// Convert 16 linear values to PQ signal.
 #[cfg(feature = "transfer")]
-#[rite]
+#[attune]
 pub fn linear_to_pq_v4(_token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
     crate::target_features::x16::linear_to_pq_v4(v)
 }
 
 /// Convert 16 BT.709 encoded values to linear (2×x8 via tokens::x8).
 #[cfg(feature = "transfer")]
-#[rite]
+#[attune]
 pub fn bt709_to_linear_v4(_token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
     crate::target_features::x16::bt709_to_linear_v4(v)
 }
 
 /// Convert 16 linear values to BT.709 encoded (2×x8 via tokens::x8).
 #[cfg(feature = "transfer")]
-#[rite]
+#[attune]
 pub fn linear_to_bt709_v4(_token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
     crate::target_features::x16::linear_to_bt709_v4(v)
 }
 
 /// Convert 16 HLG signal values to linear (2×x8 via tokens::x8).
 #[cfg(feature = "transfer")]
-#[rite]
+#[attune]
 pub fn hlg_to_linear_v4(_token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
     crate::target_features::x16::hlg_to_linear_v4(v)
 }
 
 /// Convert 16 linear values to HLG signal (2×x8 via tokens::x8).
 #[cfg(feature = "transfer")]
-#[rite]
+#[attune]
 pub fn linear_to_hlg_v4(_token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
     crate::target_features::x16::linear_to_hlg_v4(v)
 }
@@ -196,7 +196,7 @@ macro_rules! tf_slice_v4 {
         /// # Safety
         ///
         /// Call from an `#[arcane]` context with a valid `X64V4Token`.
-        #[rite]
+        #[attune]
         pub fn $name(_token: X64V4Token, values: &mut [f32]) {
             crate::target_features::x16::$name(values)
         }
