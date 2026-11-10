@@ -2,6 +2,7 @@
 //!
 //! Run with: cargo run --release --example discontinuity_investigation --features "std alt"
 
+#![allow(deprecated)] // Exercise the retained token-taking compatibility API.
 fn main() {
     println!("═══════════════════════════════════════════════════════════════════════");
     println!("  sRGB Transfer Function Discontinuity Investigation");

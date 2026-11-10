@@ -6,9 +6,35 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 
 ### QUEUED BREAKING CHANGES
 
-- None queued by this review.
+- Next version: remove public token reexports and the deprecated token-taking operation surfaces. Keep the current additive release compatible; fixed arrays/slices and CPU-feature contexts are the replacement (`ce451a6b`).
+
+### Added
+
+- Versioned cargo-expand captures of SIMD entry points, compatibility adapters, dispatch, kernels and transfer math for x86-64, ARM64 and WASM, with default/all-feature checks and pinned tooling (`03420de5`).
+
+- Independent x86-64, ARM64 and WASM public API snapshots and CI checks; validate exact token-free replacements per target rather than only the host capture (`343df2c5`, `903c9090`).
+
+- `target_features::{x4,x8}` provides direct replacements for the existing token array/slice entry points inside matching CPU-feature functions, without public archmage token or magetypes vector parameters. It preserves the existing kernels and length contracts (`9b2df432`, `0c5c8bde`, `320dcd6b`).
+
+### Changed
+
+- Use `attune` for direct feature contexts and ordinary inlined functions for scalar helpers. Centralize the existing fusion choice across vector arithmetic, scalar evaluation and u16 tails without changing its numerical policy (`0a90c800`, `2bd394bd`).
+
+- Make CPU-feature entry points canonical, retain token APIs as compatibility adapters, and share private width-generic kernels and slice-tail handling. Preserve public signatures and numerical policies; refresh the eight assembly snapshot pairs approved for this refactor (`d79656ce`).
+
+### Deprecated
+
+- `tokens::x4` and `tokens::x8`: use the same function in `target_features`, omitting its token argument inside a matching CPU-feature function. Existing signatures remain available (`9b2df432`).
+- `tokens::x16` is deprecated without a direct public replacement; its existing functions remain callable. Additional target-feature widths and fallbacks are crate-private (`0c5c8bde`, `320dcd6b`).
 
 ### Fixed
+
+- Default WASM scalar HDR entry points and u16 slice tails use the same relaxed evaluation as vector blocks, preserving dispatch and row-split parity. Native and `precise-portable` evaluation are unchanged (`e24d12ee`).
+
+- Keep scalar/vector midp math copies crate-private, preserving the native/WASM rounding contracts without new magetypes API or a git dependency pin (`cd3f98a3`).
+
+- x8/x16 sRGB array hooks return exactly 1.0 at and above the clamped white endpoint, matching x4 and the scalar/slice kernels (`ce451a6b`).
+
 
 - Float LUT interpolation uses a single fused lower-endpoint expression, preserving near-black inputs without cancellation and using the same operations on every target.
 
@@ -19,7 +45,7 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 - u16 decode tails and RGBA u16 encode use the same RGB arithmetic at every row length; HDR RGBA slices share the plain slice kernels, including the near-black PQ correction (`01b92fa0`).
 
 - `linear_to_srgb_u16_slice` gives the same codes at every tier and row length: its tail and scalar tier ran the higher-precision scalar function, while its vector body runs in f32.
-- Every native tier gives the same bits for the plain slices: V3, V4x, NEON and the scalar tier, on x86-64 and aarch64, and WASM under `+relaxed-simd` on a fusing engine. The scalar tiers run the kernels' own operations per sample with fused math (`src/lanes.rs`), and `pow` for gamma and near-black PQ is now ours. Scalar tier output changes by small amounts. `tests/tier_parity.rs`.
+- Every native tier gives the same bits for the plain slices: V3, V4x, NEON and the scalar tier, on x86-64 and aarch64, and WASM under `+relaxed-simd` on a fusing engine. The scalar tiers run the kernels' own operations per sample with fused math (`src/lanes.rs`), and gamma/near-black PQ use crate-private copies of the midp approximation with explicit fused rounding. Scalar tier output changes by small amounts. `tests/tier_parity.rs`.
 - `linear_to_hlg` no longer steps down at `1/12`, nor `bt709_to_linear` at its threshold.
 - New feature `precise-portable`: the same bits on strict WASM and engines that round relaxed madd twice, up to about 18x slower there. No effect on native targets.
 - The plain slices use `#[attune]` and require archmage/magetypes 0.9.31-beta.2 or later, with a `v4x` tier in place of `v4` behind the `avx512` feature. Their scalar tiers run the scalar functions per sample, so non-AVX2 x86-64 can be slower. Lanes below the PQ floors run a vectorized exact formula, which costs about 25% over 0.9.30-era PQ kernels on near-black rows.

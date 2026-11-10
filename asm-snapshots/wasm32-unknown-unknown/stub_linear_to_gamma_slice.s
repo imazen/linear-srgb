@@ -116,20 +116,20 @@ stub_linear_to_gamma_slice:
 	br_if 0
 	local.get 0
 	local.set 1
-	local.get 6
-	local.set 4
 	local.get 0
 	i32.const 64
 	i32.add 
 	local.set 0
+	local.get 6
+	local.set 4
 	br 1
 	end_block
 	i32.const 0
-	local.set 4
+	local.set 0
 	local.get 6
 	local.set 1
 	i32.const 0
-	local.set 0
+	local.set 4
 	local.get 6
 	i32.eqz
 	br_if 2

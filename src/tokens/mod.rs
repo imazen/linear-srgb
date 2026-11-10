@@ -1,4 +1,10 @@
-//! Inlineable `#[rite]` functions for embedding in your own `#[arcane]` code.
+//! Deprecated: `x4` and `x8` callers use [`crate::target_features`] with the
+//! same function name and arguments except for the token. The `x16` API is
+//! deprecated without a direct replacement. See the calling-context example.
+//!
+//! Compatibility functions retain their original calling-context contracts.
+//! New feature-context code uses the `#[attune]` entry points in
+//! [`crate::target_features`]. Scalar replacements are ordinary functions.
 //!
 //! These functions carry `#[target_feature]` + `#[inline]` directly — no wrapper,
 //! no dispatch overhead. When called from a context with matching features (e.g.
@@ -49,6 +55,9 @@ pub mod x4;
 pub mod x8;
 
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[deprecated(
+    note = "the x16 token API is deprecated without a direct replacement; use crate::default for ordinary slice conversion"
+)]
 pub mod x16;
 
 // Re-export token types so users can `use linear_srgb::tokens::X64V3Token` etc.

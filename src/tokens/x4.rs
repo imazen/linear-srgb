@@ -1,26 +1,7 @@
-//! 4×f32 `#[rite]` functions (128-bit SIMD on all platforms).
-//!
-//! All functions use `[f32; 4]` at the boundary — zero-cost transmute to/from
-//! the underlying SIMD register. No `magetypes` types in the public API.
-//!
-//! Call these from inside your own `#[arcane]` function with a matching token.
-//! They inline fully — no dispatch, no function-pointer indirection.
-//!
-//! # Suffix convention
-//!
-//! - `_v3` — requires `X64V3Token` (x86-64 AVX2+FMA, using 128-bit SSE registers)
-//! - `_neon` — requires [`NeonToken`](archmage::NeonToken) (AArch64 NEON)
-//! - `_wasm128` — requires [`Wasm128Token`](archmage::Wasm128Token) (WebAssembly SIMD128)
-//!
-//! # When to use x4 vs x8 on x86-64
-//!
-//! On x86-64 with AVX2+FMA, both `x4` and `x8` are available. Use `x4` when
-//! your data naturally comes in groups of 4 (e.g., RGBA pixels) or when writing
-//! portable code that mirrors the NEON/WASM API shape. Use `x8` for maximum
-//! throughput on contiguous f32 slices.
+//! Compatibility adapters for the deprecated 4-lane token API.
+//! Numerical implementation lives behind `crate::target_features::x4`.
 
-use crate::tf::fast_math::Mla;
-use archmage::rite;
+use archmage::attune;
 
 #[cfg(target_arch = "x86_64")]
 pub use archmage::X64V3Token;
@@ -31,104 +12,10 @@ pub use archmage::NeonToken;
 #[cfg(target_arch = "wasm32")]
 pub use archmage::Wasm128Token;
 
-use magetypes::simd::backends::{F32x4Backend, F32x4Convert};
-use magetypes::simd::generic::f32x4 as gen_f32x4;
-
 // sRGB transfer function constants (C0-continuous moxcms, matching rational polynomial)
-const SRGB_LINEAR_THRESHOLD: f32 = 0.039_293_37;
-const LINEAR_THRESHOLD: f32 = 0.003_041_282_6;
-const LINEAR_SCALE: f32 = 1.0 / 12.92;
-const TWELVE_92: f32 = 12.92;
 
 // ============================================================================
 // Generic core implementations
-// ============================================================================
-//
-// Inline helpers generic over `T: F32x4Convert`. The per-tier `#[rite]` entry
-// points (V3, NEON, WASM128 sections below) each delegate to these in one
-// line. LLVM inlines the core through the tier's `#[target_feature]` scope,
-// so per-tier codegen is identical to the previous hand-written bodies.
-
-/// sRGB → linear (4 lanes). Clamps input to \[0, 1\]; forces exact 1.0 output
-/// for inputs >= 1.0 to cover polynomial boundary undershoot.
-#[inline(always)]
-fn srgb_to_linear_core<T: F32x4Backend>(token: T, srgb: [f32; 4]) -> [f32; 4] {
-    use crate::rational_poly::{S2L_P, S2L_Q};
-    let zero = gen_f32x4::<T>::zero_t(token);
-    let one = gen_f32x4::<T>::splat_t(token, 1.0);
-    let v = gen_f32x4::<T>::from_array_t(token, srgb);
-    let clamped = v.max(zero).min(one);
-    let linear_result = clamped * gen_f32x4::<T>::splat_t(token, LINEAR_SCALE);
-    // Rational polynomial P(x)/Q(x) via Horner's method
-    let x = clamped;
-    let yp =
-        gen_f32x4::<T>::splat_t(token, S2L_P[4]).mla(x, gen_f32x4::<T>::splat_t(token, S2L_P[3]));
-    let yp = yp.mla(x, gen_f32x4::<T>::splat_t(token, S2L_P[2]));
-    let yp = yp.mla(x, gen_f32x4::<T>::splat_t(token, S2L_P[1]));
-    let yp = yp.mla(x, gen_f32x4::<T>::splat_t(token, S2L_P[0]));
-    let yq =
-        gen_f32x4::<T>::splat_t(token, S2L_Q[4]).mla(x, gen_f32x4::<T>::splat_t(token, S2L_Q[3]));
-    let yq = yq.mla(x, gen_f32x4::<T>::splat_t(token, S2L_Q[2]));
-    let yq = yq.mla(x, gen_f32x4::<T>::splat_t(token, S2L_Q[1]));
-    let yq = yq.mla(x, gen_f32x4::<T>::splat_t(token, S2L_Q[0]));
-    let power_result = (yp / yq).min(one);
-    let mask = clamped.simd_lt(gen_f32x4::<T>::splat_t(token, SRGB_LINEAR_THRESHOLD));
-    let result = gen_f32x4::<T>::blend(mask, linear_result, power_result);
-    let ge_one = v.simd_ge(one);
-    gen_f32x4::<T>::blend(ge_one, one, result).to_array()
-}
-
-/// Linear → sRGB (4 lanes). Clamps input to \[0, 1\]; forces exact 1.0 output
-/// for inputs >= 1.0 to cover polynomial boundary undershoot.
-#[inline(always)]
-fn linear_to_srgb_core<T: F32x4Backend>(token: T, linear: [f32; 4]) -> [f32; 4] {
-    use crate::rational_poly::{L2S_P, L2S_Q};
-    let zero = gen_f32x4::<T>::zero_t(token);
-    let one = gen_f32x4::<T>::splat_t(token, 1.0);
-    let v = gen_f32x4::<T>::from_array_t(token, linear);
-    let clamped = v.max(zero).min(one);
-    let linear_result = clamped * gen_f32x4::<T>::splat_t(token, TWELVE_92);
-    // sqrt transform + rational polynomial P(√x)/Q(√x) via Horner's method
-    let x = clamped.sqrt();
-    let yp =
-        gen_f32x4::<T>::splat_t(token, L2S_P[4]).mla(x, gen_f32x4::<T>::splat_t(token, L2S_P[3]));
-    let yp = yp.mla(x, gen_f32x4::<T>::splat_t(token, L2S_P[2]));
-    let yp = yp.mla(x, gen_f32x4::<T>::splat_t(token, L2S_P[1]));
-    let yp = yp.mla(x, gen_f32x4::<T>::splat_t(token, L2S_P[0]));
-    let yq =
-        gen_f32x4::<T>::splat_t(token, L2S_Q[4]).mla(x, gen_f32x4::<T>::splat_t(token, L2S_Q[3]));
-    let yq = yq.mla(x, gen_f32x4::<T>::splat_t(token, L2S_Q[2]));
-    let yq = yq.mla(x, gen_f32x4::<T>::splat_t(token, L2S_Q[1]));
-    let yq = yq.mla(x, gen_f32x4::<T>::splat_t(token, L2S_Q[0]));
-    let power_result = (yp / yq).min(one);
-    let mask = clamped.simd_lt(gen_f32x4::<T>::splat_t(token, LINEAR_THRESHOLD));
-    let result = gen_f32x4::<T>::blend(mask, linear_result, power_result);
-    let ge_one = v.simd_ge(one);
-    gen_f32x4::<T>::blend(ge_one, one, result).to_array()
-}
-
-/// Custom-gamma encoded → linear (4 lanes). Clamps input to \[0, 1\].
-#[inline(always)]
-fn gamma_to_linear_core<T: F32x4Convert>(token: T, encoded: [f32; 4], gamma: f32) -> [f32; 4] {
-    let zero = gen_f32x4::<T>::zero_t(token);
-    let one = gen_f32x4::<T>::splat_t(token, 1.0);
-    let v = gen_f32x4::<T>::from_array_t(token, encoded)
-        .max(zero)
-        .min(one);
-    crate::tf::fast_math::pow_x4(token, v, gamma).to_array()
-}
-
-/// Linear → custom-gamma encoded (4 lanes). Clamps input to \[0, 1\].
-#[inline(always)]
-fn linear_to_gamma_core<T: F32x4Convert>(token: T, linear: [f32; 4], gamma: f32) -> [f32; 4] {
-    let zero = gen_f32x4::<T>::zero_t(token);
-    let one = gen_f32x4::<T>::splat_t(token, 1.0);
-    let v = gen_f32x4::<T>::from_array_t(token, linear)
-        .max(zero)
-        .min(one);
-    crate::tf::fast_math::pow_x4(token, v, 1.0 / gamma).to_array()
-}
-
 // ============================================================================
 // x86-64 V3 (AVX2+FMA) — 4×f32 with X64V3Token
 // ============================================================================
@@ -139,174 +26,88 @@ fn linear_to_gamma_core<T: F32x4Convert>(token: T, linear: [f32; 4], gamma: f32)
 /// Uses 128-bit SSE registers (VEX-encoded) within the AVX2+FMA context.
 /// Call from inside an `#[arcane]` function for zero-overhead inlining.
 #[cfg(target_arch = "x86_64")]
-#[rite]
-pub fn srgb_to_linear_v3(token: X64V3Token, srgb: [f32; 4]) -> [f32; 4] {
-    srgb_to_linear_core(token, srgb)
+#[attune]
+pub fn srgb_to_linear_v3(_token: X64V3Token, srgb: [f32; 4]) -> [f32; 4] {
+    crate::target_features::x4::srgb_to_linear_v3(srgb)
 }
 
 /// Convert 4 linear values to sRGB. Input clamped to \[0, 1\].
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "x86_64")]
-#[rite]
-pub fn linear_to_srgb_v3(token: X64V3Token, linear: [f32; 4]) -> [f32; 4] {
-    linear_to_srgb_core(token, linear)
+#[attune]
+pub fn linear_to_srgb_v3(_token: X64V3Token, linear: [f32; 4]) -> [f32; 4] {
+    crate::target_features::x4::linear_to_srgb_v3(linear)
 }
 
 /// Convert 4 sRGB values to linear without clamping (extended range).
 ///
 /// 6/6 rational polynomial fitted to \[0, 8\]. sampled max 8 ULP in \[0,1\], u16-safe to ~4.2.
-#[archmage::magetypes(v3, neon, wasm128)]
-#[rite]
-pub fn srgb_to_linear_extended(token: Token, srgb: [f32; 4]) -> [f32; 4] {
-    use crate::rational_poly::{EXT_S2L_P as P, EXT_S2L_Q as Q};
-    #[allow(non_camel_case_types)]
-    type f32x4 = gen_f32x4<Token>;
-    let zero = f32x4::zero_t(token);
-    let v = f32x4::from_array_t(token, srgb);
-    let neg_mask = v.simd_lt(zero);
-    let abs_v = v.abs();
-    let linear_result = abs_v * f32x4::splat_t(token, LINEAR_SCALE);
-    let x = abs_v;
-    let yp = f32x4::splat_t(token, P[6]).mla(x, f32x4::splat_t(token, P[5]));
-    let yp = yp.mla(x, f32x4::splat_t(token, P[4]));
-    let yp = yp.mla(x, f32x4::splat_t(token, P[3]));
-    let yp = yp.mla(x, f32x4::splat_t(token, P[2]));
-    let yp = yp.mla(x, f32x4::splat_t(token, P[1]));
-    let yp = yp.mla(x, f32x4::splat_t(token, P[0]));
-    let yq = f32x4::splat_t(token, Q[6]).mla(x, f32x4::splat_t(token, Q[5]));
-    let yq = yq.mla(x, f32x4::splat_t(token, Q[4]));
-    let yq = yq.mla(x, f32x4::splat_t(token, Q[3]));
-    let yq = yq.mla(x, f32x4::splat_t(token, Q[2]));
-    let yq = yq.mla(x, f32x4::splat_t(token, Q[1]));
-    let yq = yq.mla(x, f32x4::splat_t(token, Q[0]));
-    let power_result = yp / yq;
-    let thresh_mask = abs_v.simd_lt(f32x4::splat_t(token, SRGB_LINEAR_THRESHOLD));
-    let result = f32x4::blend(thresh_mask, linear_result, power_result);
-    f32x4::blend(neg_mask, -result, result).to_array()
+#[attune(_v3_t, _neon_t, _wasm128_t, _scalar_t, inline(hint), names(_v3_t = srgb_to_linear_extended_v3, _neon_t = srgb_to_linear_extended_neon, _wasm128_t = srgb_to_linear_extended_wasm128, _scalar_t = srgb_to_linear_extended_scalar))]
+pub fn srgb_to_linear_extended(_token: Token, srgb: [f32; 4]) -> [f32; 4] {
+    archmage::incant!(crate::target_features::x4::srgb_to_linear_extended(srgb) without token)
 }
 
 /// Convert 4 linear values to sRGB without clamping (extended range).
 ///
 /// 6/6 rational polynomial fitted on √x to \[0, 64\]. sampled max 7 ULP in \[0,1\], u16-safe to 64.
-#[archmage::magetypes(v3, neon, wasm128)]
-#[rite]
-pub fn linear_to_srgb_extended(token: Token, linear: [f32; 4]) -> [f32; 4] {
-    use crate::rational_poly::{EXT_L2S_P as P, EXT_L2S_Q as Q};
-    #[allow(non_camel_case_types)]
-    type f32x4 = gen_f32x4<Token>;
-    let zero = f32x4::zero_t(token);
-    let v = f32x4::from_array_t(token, linear);
-    let neg_mask = v.simd_lt(zero);
-    let abs_v = v.abs();
-    let linear_result = abs_v * f32x4::splat_t(token, TWELVE_92);
-    let x = abs_v.sqrt();
-    let yp = f32x4::splat_t(token, P[6]).mla(x, f32x4::splat_t(token, P[5]));
-    let yp = yp.mla(x, f32x4::splat_t(token, P[4]));
-    let yp = yp.mla(x, f32x4::splat_t(token, P[3]));
-    let yp = yp.mla(x, f32x4::splat_t(token, P[2]));
-    let yp = yp.mla(x, f32x4::splat_t(token, P[1]));
-    let yp = yp.mla(x, f32x4::splat_t(token, P[0]));
-    let yq = f32x4::splat_t(token, Q[6]).mla(x, f32x4::splat_t(token, Q[5]));
-    let yq = yq.mla(x, f32x4::splat_t(token, Q[4]));
-    let yq = yq.mla(x, f32x4::splat_t(token, Q[3]));
-    let yq = yq.mla(x, f32x4::splat_t(token, Q[2]));
-    let yq = yq.mla(x, f32x4::splat_t(token, Q[1]));
-    let yq = yq.mla(x, f32x4::splat_t(token, Q[0]));
-    let power_result = yp / yq;
-    let thresh_mask = abs_v.simd_lt(f32x4::splat_t(token, LINEAR_THRESHOLD));
-    let result = f32x4::blend(thresh_mask, linear_result, power_result);
-    f32x4::blend(neg_mask, -result, result).to_array()
+#[attune(_v3_t, _neon_t, _wasm128_t, _scalar_t, inline(hint), names(_v3_t = linear_to_srgb_extended_v3, _neon_t = linear_to_srgb_extended_neon, _wasm128_t = linear_to_srgb_extended_wasm128, _scalar_t = linear_to_srgb_extended_scalar))]
+pub fn linear_to_srgb_extended(_token: Token, linear: [f32; 4]) -> [f32; 4] {
+    archmage::incant!(crate::target_features::x4::linear_to_srgb_extended(linear) without token)
 }
 
 /// Convert 4 gamma-encoded values to linear. Input clamped to \[0, 1\].
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "x86_64")]
-#[rite]
-pub fn gamma_to_linear_v3(token: X64V3Token, encoded: [f32; 4], gamma: f32) -> [f32; 4] {
-    gamma_to_linear_core(token, encoded, gamma)
+#[attune]
+pub fn gamma_to_linear_v3(_token: X64V3Token, encoded: [f32; 4], gamma: f32) -> [f32; 4] {
+    crate::target_features::x4::gamma_to_linear_v3(encoded, gamma)
 }
 
 /// Convert 4 linear values to gamma-encoded. Input clamped to \[0, 1\].
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "x86_64")]
-#[rite]
-pub fn linear_to_gamma_v3(token: X64V3Token, linear: [f32; 4], gamma: f32) -> [f32; 4] {
-    linear_to_gamma_core(token, linear, gamma)
+#[attune]
+pub fn linear_to_gamma_v3(_token: X64V3Token, linear: [f32; 4], gamma: f32) -> [f32; 4] {
+    crate::target_features::x4::linear_to_gamma_v3(linear, gamma)
 }
 
 /// Convert sRGB f32 values to linear in-place using 4-wide SSE SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "x86_64")]
-#[rite]
-pub fn srgb_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = srgb_to_linear_core(token, *chunk);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = srgb_to_linear_core(token, padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+#[attune]
+pub fn srgb_to_linear_slice_v3(_token: X64V3Token, values: &mut [f32]) {
+    crate::target_features::x4::srgb_to_linear_slice_v3(values)
 }
 
 /// Convert linear f32 values to sRGB in-place using 4-wide SSE SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "x86_64")]
-#[rite]
-pub fn linear_to_srgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = linear_to_srgb_core(token, *chunk);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = linear_to_srgb_core(token, padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+#[attune]
+pub fn linear_to_srgb_slice_v3(_token: X64V3Token, values: &mut [f32]) {
+    crate::target_features::x4::linear_to_srgb_slice_v3(values)
 }
 
 /// Convert gamma-encoded f32 values to linear in-place using 4-wide SSE SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "x86_64")]
-#[rite]
-pub fn gamma_to_linear_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = gamma_to_linear_core(token, *chunk, gamma);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = gamma_to_linear_core(token, padded, gamma);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+#[attune]
+pub fn gamma_to_linear_slice_v3(_token: X64V3Token, values: &mut [f32], gamma: f32) {
+    crate::target_features::x4::gamma_to_linear_slice_v3(values, gamma)
 }
 
 /// Convert linear f32 values to gamma-encoded in-place using 4-wide SSE SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "x86_64")]
-#[rite]
-pub fn linear_to_gamma_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = linear_to_gamma_core(token, *chunk, gamma);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = linear_to_gamma_core(token, padded, gamma);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+#[attune]
+pub fn linear_to_gamma_slice_v3(_token: X64V3Token, values: &mut [f32], gamma: f32) {
+    crate::target_features::x4::linear_to_gamma_slice_v3(values, gamma)
 }
 
 // ============================================================================
@@ -318,108 +119,72 @@ pub fn linear_to_gamma_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f3
 /// The `NeonToken` parameter proves NEON support at compile time.
 /// Call from inside an `#[arcane]` function for zero-overhead inlining.
 #[cfg(target_arch = "aarch64")]
-#[rite]
-pub fn srgb_to_linear_neon(token: NeonToken, srgb: [f32; 4]) -> [f32; 4] {
-    srgb_to_linear_core(token, srgb)
+#[attune]
+pub fn srgb_to_linear_neon(_token: NeonToken, srgb: [f32; 4]) -> [f32; 4] {
+    crate::target_features::x4::srgb_to_linear_neon(srgb)
 }
 
 /// Convert 4 linear values to sRGB. Input clamped to \[0, 1\].
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "aarch64")]
-#[rite]
-pub fn linear_to_srgb_neon(token: NeonToken, linear: [f32; 4]) -> [f32; 4] {
-    linear_to_srgb_core(token, linear)
+#[attune]
+pub fn linear_to_srgb_neon(_token: NeonToken, linear: [f32; 4]) -> [f32; 4] {
+    crate::target_features::x4::linear_to_srgb_neon(linear)
 }
 
 /// Convert 4 gamma-encoded values to linear. Input clamped to \[0, 1\].
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "aarch64")]
-#[rite]
-pub fn gamma_to_linear_neon(token: NeonToken, encoded: [f32; 4], gamma: f32) -> [f32; 4] {
-    gamma_to_linear_core(token, encoded, gamma)
+#[attune]
+pub fn gamma_to_linear_neon(_token: NeonToken, encoded: [f32; 4], gamma: f32) -> [f32; 4] {
+    crate::target_features::x4::gamma_to_linear_neon(encoded, gamma)
 }
 
 /// Convert 4 linear values to gamma-encoded. Input clamped to \[0, 1\].
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "aarch64")]
-#[rite]
-pub fn linear_to_gamma_neon(token: NeonToken, linear: [f32; 4], gamma: f32) -> [f32; 4] {
-    linear_to_gamma_core(token, linear, gamma)
+#[attune]
+pub fn linear_to_gamma_neon(_token: NeonToken, linear: [f32; 4], gamma: f32) -> [f32; 4] {
+    crate::target_features::x4::linear_to_gamma_neon(linear, gamma)
 }
 
 /// Convert sRGB f32 values to linear in-place using 4-wide NEON SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "aarch64")]
-#[rite]
-pub fn srgb_to_linear_slice_neon(token: NeonToken, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = srgb_to_linear_core(token, *chunk);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = srgb_to_linear_core(token, padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+#[attune]
+pub fn srgb_to_linear_slice_neon(_token: NeonToken, values: &mut [f32]) {
+    crate::target_features::x4::srgb_to_linear_slice_neon(values)
 }
 
 /// Convert linear f32 values to sRGB in-place using 4-wide NEON SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "aarch64")]
-#[rite]
-pub fn linear_to_srgb_slice_neon(token: NeonToken, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = linear_to_srgb_core(token, *chunk);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = linear_to_srgb_core(token, padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+#[attune]
+pub fn linear_to_srgb_slice_neon(_token: NeonToken, values: &mut [f32]) {
+    crate::target_features::x4::linear_to_srgb_slice_neon(values)
 }
 
 /// Convert gamma-encoded f32 values to linear in-place using 4-wide NEON SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "aarch64")]
-#[rite]
-pub fn gamma_to_linear_slice_neon(token: NeonToken, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = gamma_to_linear_core(token, *chunk, gamma);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = gamma_to_linear_core(token, padded, gamma);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+#[attune]
+pub fn gamma_to_linear_slice_neon(_token: NeonToken, values: &mut [f32], gamma: f32) {
+    crate::target_features::x4::gamma_to_linear_slice_neon(values, gamma)
 }
 
 /// Convert linear f32 values to gamma-encoded in-place using 4-wide NEON SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "aarch64")]
-#[rite]
-pub fn linear_to_gamma_slice_neon(token: NeonToken, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = linear_to_gamma_core(token, *chunk, gamma);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = linear_to_gamma_core(token, padded, gamma);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+#[attune]
+pub fn linear_to_gamma_slice_neon(_token: NeonToken, values: &mut [f32], gamma: f32) {
+    crate::target_features::x4::linear_to_gamma_slice_neon(values, gamma)
 }
 
 // ============================================================================
@@ -431,108 +196,72 @@ pub fn linear_to_gamma_slice_neon(token: NeonToken, values: &mut [f32], gamma: f
 /// The `Wasm128Token` parameter proves SIMD128 support at compile time.
 /// Call from inside an `#[arcane]` function for zero-overhead inlining.
 #[cfg(target_arch = "wasm32")]
-#[rite]
-pub fn srgb_to_linear_wasm128(token: Wasm128Token, srgb: [f32; 4]) -> [f32; 4] {
-    srgb_to_linear_core(token, srgb)
+#[attune]
+pub fn srgb_to_linear_wasm128(_token: Wasm128Token, srgb: [f32; 4]) -> [f32; 4] {
+    crate::target_features::x4::srgb_to_linear_wasm128(srgb)
 }
 
 /// Convert 4 linear values to sRGB. Input clamped to \[0, 1\].
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "wasm32")]
-#[rite]
-pub fn linear_to_srgb_wasm128(token: Wasm128Token, linear: [f32; 4]) -> [f32; 4] {
-    linear_to_srgb_core(token, linear)
+#[attune]
+pub fn linear_to_srgb_wasm128(_token: Wasm128Token, linear: [f32; 4]) -> [f32; 4] {
+    crate::target_features::x4::linear_to_srgb_wasm128(linear)
 }
 
 /// Convert 4 gamma-encoded values to linear. Input clamped to \[0, 1\].
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "wasm32")]
-#[rite]
-pub fn gamma_to_linear_wasm128(token: Wasm128Token, encoded: [f32; 4], gamma: f32) -> [f32; 4] {
-    gamma_to_linear_core(token, encoded, gamma)
+#[attune]
+pub fn gamma_to_linear_wasm128(_token: Wasm128Token, encoded: [f32; 4], gamma: f32) -> [f32; 4] {
+    crate::target_features::x4::gamma_to_linear_wasm128(encoded, gamma)
 }
 
 /// Convert 4 linear values to gamma-encoded. Input clamped to \[0, 1\].
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "wasm32")]
-#[rite]
-pub fn linear_to_gamma_wasm128(token: Wasm128Token, linear: [f32; 4], gamma: f32) -> [f32; 4] {
-    linear_to_gamma_core(token, linear, gamma)
+#[attune]
+pub fn linear_to_gamma_wasm128(_token: Wasm128Token, linear: [f32; 4], gamma: f32) -> [f32; 4] {
+    crate::target_features::x4::linear_to_gamma_wasm128(linear, gamma)
 }
 
 /// Convert sRGB f32 values to linear in-place using 4-wide WASM SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "wasm32")]
-#[rite]
-pub fn srgb_to_linear_slice_wasm128(token: Wasm128Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = srgb_to_linear_core(token, *chunk);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = srgb_to_linear_core(token, padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+#[attune]
+pub fn srgb_to_linear_slice_wasm128(_token: Wasm128Token, values: &mut [f32]) {
+    crate::target_features::x4::srgb_to_linear_slice_wasm128(values)
 }
 
 /// Convert linear f32 values to sRGB in-place using 4-wide WASM SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "wasm32")]
-#[rite]
-pub fn linear_to_srgb_slice_wasm128(token: Wasm128Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = linear_to_srgb_core(token, *chunk);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = linear_to_srgb_core(token, padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+#[attune]
+pub fn linear_to_srgb_slice_wasm128(_token: Wasm128Token, values: &mut [f32]) {
+    crate::target_features::x4::linear_to_srgb_slice_wasm128(values)
 }
 
 /// Convert gamma-encoded f32 values to linear in-place using 4-wide WASM SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "wasm32")]
-#[rite]
-pub fn gamma_to_linear_slice_wasm128(token: Wasm128Token, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = gamma_to_linear_core(token, *chunk, gamma);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = gamma_to_linear_core(token, padded, gamma);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+#[attune]
+pub fn gamma_to_linear_slice_wasm128(_token: Wasm128Token, values: &mut [f32], gamma: f32) {
+    crate::target_features::x4::gamma_to_linear_slice_wasm128(values, gamma)
 }
 
 /// Convert linear f32 values to gamma-encoded in-place using 4-wide WASM SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[cfg(target_arch = "wasm32")]
-#[rite]
-pub fn linear_to_gamma_slice_wasm128(token: Wasm128Token, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = linear_to_gamma_core(token, *chunk, gamma);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = linear_to_gamma_core(token, padded, gamma);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+#[attune]
+pub fn linear_to_gamma_slice_wasm128(_token: Wasm128Token, values: &mut [f32], gamma: f32) {
+    crate::target_features::x4::linear_to_gamma_slice_wasm128(values, gamma)
 }
 
 // ============================================================================
@@ -547,9 +276,9 @@ macro_rules! x86_tf_rite {
         ///
         /// Call from an `#[arcane]` context with a valid `X64V3Token`.
         #[cfg(all(feature = "transfer", target_arch = "x86_64"))]
-        #[rite]
-        pub fn $name(token: X64V3Token, v: [f32; 4]) -> [f32; 4] {
-            $inner(token, gen_f32x4::from_array_t(token, v)).to_array()
+        #[attune]
+        pub fn $name(_token: X64V3Token, v: [f32; 4]) -> [f32; 4] {
+            crate::target_features::x4::$name(v)
         }
     };
 }
@@ -571,18 +300,9 @@ macro_rules! x86_tf_slice_rite {
         ///
         /// Call from an `#[arcane]` context with a valid `X64V3Token`.
         #[cfg(all(feature = "transfer", target_arch = "x86_64"))]
-        #[rite]
-        pub fn $name(token: X64V3Token, values: &mut [f32]) {
-            let (chunks, remainder) = values.as_chunks_mut::<4>();
-            for chunk in chunks {
-                *chunk = $rite(token, *chunk);
-            }
-            if !remainder.is_empty() {
-                let mut padded = [0.0; 4];
-                padded[..remainder.len()].copy_from_slice(remainder);
-                let converted = $rite(token, padded);
-                remainder.copy_from_slice(&converted[..remainder.len()]);
-            }
+        #[attune]
+        pub fn $name(_token: X64V3Token, values: &mut [f32]) {
+            crate::target_features::x4::$name(values)
         }
     };
 }
@@ -636,9 +356,9 @@ macro_rules! neon_tf_rite {
     ($name:ident, $inner:path) => {
         /// Transfer function rite (4×f32, AArch64 NEON). Requires `transfer` feature.
         #[cfg(all(feature = "transfer", target_arch = "aarch64"))]
-        #[rite]
-        pub fn $name(token: NeonToken, v: [f32; 4]) -> [f32; 4] {
-            $inner(token, gen_f32x4::from_array_t(token, v)).to_array()
+        #[attune]
+        pub fn $name(_token: NeonToken, v: [f32; 4]) -> [f32; 4] {
+            crate::target_features::x4::$name(v)
         }
     };
 }
@@ -656,18 +376,9 @@ macro_rules! neon_tf_slice_rite {
     ($name:ident, $rite:ident, $scalar:path) => {
         /// Transfer function slice rite (4×f32, AArch64 NEON). Requires `transfer` feature.
         #[cfg(all(feature = "transfer", target_arch = "aarch64"))]
-        #[rite]
-        pub fn $name(token: NeonToken, values: &mut [f32]) {
-            let (chunks, remainder) = values.as_chunks_mut::<4>();
-            for chunk in chunks {
-                *chunk = $rite(token, *chunk);
-            }
-            if !remainder.is_empty() {
-                let mut padded = [0.0; 4];
-                padded[..remainder.len()].copy_from_slice(remainder);
-                let converted = $rite(token, padded);
-                remainder.copy_from_slice(&converted[..remainder.len()]);
-            }
+        #[attune]
+        pub fn $name(_token: NeonToken, values: &mut [f32]) {
+            crate::target_features::x4::$name(values)
         }
     };
 }
@@ -721,9 +432,9 @@ macro_rules! wasm_tf_rite {
     ($name:ident, $inner:path) => {
         /// Transfer function rite (4×f32, WASM SIMD128). Requires `transfer` feature.
         #[cfg(all(feature = "transfer", target_arch = "wasm32"))]
-        #[rite]
-        pub fn $name(token: Wasm128Token, v: [f32; 4]) -> [f32; 4] {
-            $inner(token, gen_f32x4::from_array_t(token, v)).to_array()
+        #[attune]
+        pub fn $name(_token: Wasm128Token, v: [f32; 4]) -> [f32; 4] {
+            crate::target_features::x4::$name(v)
         }
     };
 }
@@ -753,18 +464,9 @@ macro_rules! wasm_tf_slice_rite {
     ($name:ident, $rite:ident, $scalar:path) => {
         /// Transfer function slice rite (4×f32, WASM SIMD128). Requires `transfer` feature.
         #[cfg(all(feature = "transfer", target_arch = "wasm32"))]
-        #[rite]
-        pub fn $name(token: Wasm128Token, values: &mut [f32]) {
-            let (chunks, remainder) = values.as_chunks_mut::<4>();
-            for chunk in chunks {
-                *chunk = $rite(token, *chunk);
-            }
-            if !remainder.is_empty() {
-                let mut padded = [0.0; 4];
-                padded[..remainder.len()].copy_from_slice(remainder);
-                let converted = $rite(token, padded);
-                remainder.copy_from_slice(&converted[..remainder.len()]);
-            }
+        #[attune]
+        pub fn $name(_token: Wasm128Token, values: &mut [f32]) {
+            crate::target_features::x4::$name(values)
         }
     };
 }
@@ -813,231 +515,3 @@ wasm_tf_slice_rite!(
 // ============================================================================
 // Tests
 // ============================================================================
-
-#[cfg(test)]
-#[cfg(target_arch = "x86_64")]
-mod tests_x86 {
-    use super::*;
-    use archmage::SimdToken;
-
-    #[cfg(not(feature = "std"))]
-    use alloc::vec::Vec;
-
-    fn get_token() -> Option<X64V3Token> {
-        X64V3Token::try_new()
-    }
-
-    #[archmage::arcane]
-    fn call_srgb_to_linear(token: X64V3Token, input: [f32; 4]) -> [f32; 4] {
-        srgb_to_linear_v3(token, input)
-    }
-
-    #[archmage::arcane]
-    fn call_linear_to_srgb(token: X64V3Token, input: [f32; 4]) -> [f32; 4] {
-        linear_to_srgb_v3(token, input)
-    }
-
-    #[archmage::arcane]
-    fn call_srgb_to_linear_slice(token: X64V3Token, values: &mut [f32]) {
-        srgb_to_linear_slice_v3(token, values);
-    }
-
-    #[archmage::arcane]
-    fn call_linear_to_srgb_slice(token: X64V3Token, values: &mut [f32]) {
-        linear_to_srgb_slice_v3(token, values);
-    }
-
-    #[test]
-    fn test_x4_srgb_roundtrip() {
-        let Some(token) = get_token() else {
-            std::eprintln!("Skipping test: X64V3 not available");
-            return;
-        };
-
-        let input = [0.0, 0.3, 0.7, 1.0];
-        let linear = call_srgb_to_linear(token, input);
-        let roundtrip = call_linear_to_srgb(token, linear);
-
-        for (i, (&orig, &rt)) in input.iter().zip(roundtrip.iter()).enumerate() {
-            assert!(
-                (orig - rt).abs() < 1e-4,
-                "roundtrip failed at {}: {} -> {}",
-                i,
-                orig,
-                rt
-            );
-        }
-    }
-
-    #[test]
-    fn test_x4_matches_scalar() {
-        let Some(token) = get_token() else {
-            std::eprintln!("Skipping test: X64V3 not available");
-            return;
-        };
-
-        let input = [0.0, 0.3, 0.7, 1.0];
-        let result = call_srgb_to_linear(token, input);
-
-        for (i, (&got, &inp)) in result.iter().zip(input.iter()).enumerate() {
-            let expected = crate::scalar::srgb_to_linear(inp);
-            assert!(
-                (got - expected).abs() < 1e-5,
-                "mismatch at {}: got {}, expected {}",
-                i,
-                got,
-                expected
-            );
-        }
-    }
-
-    #[test]
-    fn test_x4_matches_x8() {
-        let Some(token) = get_token() else {
-            std::eprintln!("Skipping test: X64V3 not available");
-            return;
-        };
-
-        // Verify x4 produces same results as x8 for the same inputs
-        let input = [0.1, 0.4, 0.7, 0.95];
-        let x4_result = call_srgb_to_linear(token, input);
-
-        // Compare to scalar (which x8 also matches)
-        for (i, (&got, &inp)) in x4_result.iter().zip(input.iter()).enumerate() {
-            let expected = crate::rational_poly::srgb_to_linear_fast(inp);
-            assert!(
-                (got - expected).abs() < 1e-6,
-                "x4 vs rational_poly mismatch at {}: got {}, expected {}",
-                i,
-                got,
-                expected
-            );
-        }
-    }
-
-    #[test]
-    fn test_slice_roundtrip() {
-        let Some(token) = get_token() else {
-            std::eprintln!("Skipping test: X64V3 not available");
-            return;
-        };
-
-        let mut values: Vec<f32> = (0..100).map(|i| i as f32 / 99.0).collect();
-        let original = values.clone();
-
-        call_srgb_to_linear_slice(token, &mut values);
-        call_linear_to_srgb_slice(token, &mut values);
-
-        for (i, (&orig, &conv)) in original.iter().zip(values.iter()).enumerate() {
-            assert!(
-                (orig - conv).abs() < 1e-4,
-                "roundtrip failed at {}: {} -> {}",
-                i,
-                orig,
-                conv
-            );
-        }
-    }
-}
-
-#[cfg(test)]
-#[cfg(target_arch = "aarch64")]
-mod tests_aarch64 {
-    use super::*;
-    use archmage::SimdToken;
-
-    #[cfg(not(feature = "std"))]
-    use alloc::vec::Vec;
-
-    fn get_token() -> Option<NeonToken> {
-        NeonToken::try_new()
-    }
-
-    #[archmage::arcane]
-    fn call_srgb_to_linear(token: NeonToken, input: [f32; 4]) -> [f32; 4] {
-        srgb_to_linear_neon(token, input)
-    }
-
-    #[archmage::arcane]
-    fn call_linear_to_srgb(token: NeonToken, input: [f32; 4]) -> [f32; 4] {
-        linear_to_srgb_neon(token, input)
-    }
-
-    #[archmage::arcane]
-    fn call_srgb_to_linear_slice(token: NeonToken, values: &mut [f32]) {
-        srgb_to_linear_slice_neon(token, values);
-    }
-
-    #[archmage::arcane]
-    fn call_linear_to_srgb_slice(token: NeonToken, values: &mut [f32]) {
-        linear_to_srgb_slice_neon(token, values);
-    }
-
-    #[test]
-    fn test_x4_srgb_roundtrip() {
-        let Some(token) = get_token() else {
-            std::eprintln!("Skipping test: NEON not available");
-            return;
-        };
-
-        let input = [0.0, 0.3, 0.7, 1.0];
-        let linear = call_srgb_to_linear(token, input);
-        let roundtrip = call_linear_to_srgb(token, linear);
-
-        for (i, (&orig, &rt)) in input.iter().zip(roundtrip.iter()).enumerate() {
-            assert!(
-                (orig - rt).abs() < 1e-4,
-                "roundtrip failed at {}: {} -> {}",
-                i,
-                orig,
-                rt
-            );
-        }
-    }
-
-    #[test]
-    fn test_x4_matches_scalar() {
-        let Some(token) = get_token() else {
-            std::eprintln!("Skipping test: NEON not available");
-            return;
-        };
-
-        let input = [0.0, 0.3, 0.7, 1.0];
-        let result = call_srgb_to_linear(token, input);
-
-        for (i, (&got, &inp)) in result.iter().zip(input.iter()).enumerate() {
-            let expected = crate::scalar::srgb_to_linear(inp);
-            assert!(
-                (got - expected).abs() < 1e-5,
-                "mismatch at {}: got {}, expected {}",
-                i,
-                got,
-                expected
-            );
-        }
-    }
-
-    #[test]
-    fn test_slice_roundtrip() {
-        let Some(token) = get_token() else {
-            std::eprintln!("Skipping test: NEON not available");
-            return;
-        };
-
-        let mut values: Vec<f32> = (0..100).map(|i| i as f32 / 99.0).collect();
-        let original = values.clone();
-
-        call_srgb_to_linear_slice(token, &mut values);
-        call_linear_to_srgb_slice(token, &mut values);
-
-        for (i, (&orig, &conv)) in original.iter().zip(values.iter()).enumerate() {
-            assert!(
-                (orig - conv).abs() < 1e-4,
-                "roundtrip failed at {}: {} -> {}",
-                i,
-                orig,
-                conv
-            );
-        }
-    }
-}

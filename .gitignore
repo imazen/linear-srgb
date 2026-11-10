@@ -1,7 +1,8 @@
 Cargo.lock
-# The apidoc/ snapshot-runner package commits its lockfile (reproducible
-# regen) — un-ignore it from the blanket Cargo.lock pattern above.
+# Dev-only API and expansion runners commit their resolution locks.
 !apidoc/Cargo.lock
+!expand/Cargo.lock
+!expand/all-features/Cargo.lock
 /moxcms
 copter-report/
 

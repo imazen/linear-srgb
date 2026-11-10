@@ -138,6 +138,7 @@ TARGETS=(
 )
 
 filter="${1:-}"
+output_root="${2:-asm-snapshots}"
 
 for entry in "${TARGETS[@]}"; do
     IFS='|' read -r target features rustflags asmargs <<< "$entry"
@@ -147,7 +148,7 @@ for entry in "${TARGETS[@]}"; do
     fi
 
     echo "==> $target (features=$features)"
-    out_dir="asm-snapshots/$target"
+    out_dir="$output_root/$target"
     mkdir -p "$out_dir"
 
     # Pre-build once so cargo-asm doesn't recompile per stub. Errors from this

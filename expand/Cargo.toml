@@ -1,0 +1,13 @@
+# Dev-only dependency-resolution anchor for reproducible expansion captures.
+[package]
+name = "linear-srgb-expand"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+linear-srgb = { path = ".." }
+archmage = { version = "=0.9.31", default-features = false, features = ["macros"] }
+magetypes = { version = "=0.9.31", default-features = false, features = ["w512"] }

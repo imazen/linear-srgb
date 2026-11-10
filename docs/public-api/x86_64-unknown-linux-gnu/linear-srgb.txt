@@ -1,0 +1,277 @@
+# linear-srgb public API — supported surface (default features)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+#
+# files: linear-srgb.txt 84 lines (supported surface) | linear-srgb.features.txt 23 added (features: alt,avx512,iec,precise-portable,std,transfer,unsafe_simd) | linear-srgb.internal.txt 40 lines (57 hidden + 0 excluded-feature)
+# arch-unique surface: x86_64 86
+
+## summary
+#
+#   pub modules                                 7
+#   pub types (struct/enum/trait/alias)        11
+#   pub consts/statics                          3
+#   free functions                             49
+#   inherent methods                           16
+#   trait roster entries (type × trait)         3
+#   auto-trait-complete types                   3
+#
+# per-module pub lines:
+#   (root)                           10
+#   default                          38
+#   lut                              28
+#   precise                           8
+#   tf                                2
+
+## items (80 lines)
+
+pub mod linear_srgb
+pub mod default
+pub fn lut::SrgbConverter::batch_linear_to_srgb(&self, &[f32], &mut [u8])
+pub fn lut::SrgbConverter::batch_srgb_to_linear(&self, &[u8], &mut [f32])
+pub fn lut::SrgbConverter::linear_to_srgb(&self, f32) -> f32
+pub fn lut::SrgbConverter::linear_to_srgb_u8(&self, f32) -> u8
+pub const fn lut::SrgbConverter::new() -> Self [also: (root)]
+pub fn lut::SrgbConverter::srgb_u8_to_linear(&self, u8) -> f32
+pub fn default::gamma_to_linear(f32, f32) -> f32
+pub fn default::gamma_to_linear_premultiply_rgba_slice(&mut [f32], f32)
+pub fn default::gamma_to_linear_rgba_slice(&mut [f32], f32)
+pub fn default::gamma_to_linear_slice(&mut [f32], f32)
+pub fn default::linear_to_gamma(f32, f32) -> f32
+pub fn default::linear_to_gamma_rgba_slice(&mut [f32], f32)
+pub fn default::linear_to_gamma_slice(&mut [f32], f32)
+pub fn default::linear_to_srgb_extended_rgba_slice(&mut [f32])
+pub fn default::linear_to_srgb_extended_slice(&mut [f32])
+pub fn default::linear_to_srgb_rgba_slice(&mut [f32])
+pub fn default::linear_to_srgb_slice(&mut [f32])
+pub fn default::linear_to_srgb_u16(f32) -> u16
+pub fn default::linear_to_srgb_u16_fast(f32) -> u16
+pub fn default::linear_to_srgb_u16_rgba_slice(&[f32], &mut [u16])
+pub fn default::linear_to_srgb_u16_rgba_slice_fast(&[f32], &mut [u16])
+pub fn default::linear_to_srgb_u16_slice(&[f32], &mut [u16])
+pub fn default::linear_to_srgb_u16_slice_fast(&[f32], &mut [u16])
+pub fn default::linear_to_srgb_u8(f32) -> u8
+pub fn default::linear_to_srgb_u8_rgba_slice(&[f32], &mut [u8])
+pub fn default::linear_to_srgb_u8_slice(&[f32], &mut [u8])
+pub fn default::srgb_to_linear_extended_rgba_slice(&mut [f32])
+pub fn default::srgb_to_linear_extended_slice(&mut [f32])
+pub fn default::srgb_to_linear_premultiply_rgba_slice(&mut [f32])
+pub fn default::srgb_to_linear_rgba_slice(&mut [f32])
+pub fn default::srgb_to_linear_slice(&mut [f32])
+pub fn default::srgb_u16_to_linear(u16) -> f32
+pub fn default::srgb_u16_to_linear_rgba_slice(&[u16], &mut [f32])
+pub fn default::srgb_u16_to_linear_slice(&[u16], &mut [f32])
+pub fn default::srgb_u8_to_linear(u8) -> f32
+pub fn default::srgb_u8_to_linear_premultiply_rgba_slice(&[u8], &mut [f32])
+pub fn default::srgb_u8_to_linear_rgba_slice(&[u8], &mut [f32])
+pub fn default::srgb_u8_to_linear_slice(&[u8], &mut [f32])
+pub fn default::unpremultiply_linear_to_gamma_rgba_slice(&mut [f32], f32)
+pub fn default::unpremultiply_linear_to_srgb_rgba_slice(&mut [f32])
+pub fn default::unpremultiply_linear_to_srgb_u8_rgba_slice(&[f32], &mut [u8])
+pub mod lut
+pub struct lut::EncodingTable<const N: usize>
+pub fn lut::EncodingTable<N>::as_slice(&self) -> &[f32]
+pub fn lut::EncodingTable<N>::lookup(&self, usize) -> f32
+pub fn lut::EncodingTable<N>::new() -> Self
+pub struct lut::LinearizationTable<const N: usize>
+pub fn lut::LinearizationTable<N>::as_slice(&self) -> &[f32]
+pub fn lut::LinearizationTable<N>::lookup(&self, usize) -> f32
+pub fn lut::LinearizationTable<N>::new() -> Self
+pub struct lut::SrgbConverter [also: default]
+pub fn lut::SrgbConverter::batch_linear_to_srgb(&self, &[f32], &mut [u8])
+pub fn lut::SrgbConverter::batch_srgb_to_linear(&self, &[u8], &mut [f32])
+pub fn lut::SrgbConverter::linear_to_srgb(&self, f32) -> f32
+pub fn lut::SrgbConverter::linear_to_srgb_u8(&self, f32) -> u8
+pub fn lut::SrgbConverter::srgb_u8_to_linear(&self, u8) -> f32
+pub fn lut::lut_interp_linear_float(f32, &[f32]) -> f32
+pub fn lut::lut_interp_linear_u16(u16, &[u16]) -> u16
+pub type lut::EncodeTable12 = lut::EncodingTable<4096>
+pub type lut::EncodeTable16 = lut::EncodingTable<65536>
+pub type lut::EncodeTable8 = lut::EncodingTable<256>
+pub type lut::LinearTable10 = lut::LinearizationTable<1024>
+pub type lut::LinearTable12 = lut::LinearizationTable<4096>
+pub type lut::LinearTable16 = lut::LinearizationTable<65536>
+pub type lut::LinearTable8 = lut::LinearizationTable<256>
+pub mod precise
+pub fn precise::gamma_to_linear_f64(f64, f64) -> f64
+pub fn precise::linear_to_gamma_f64(f64, f64) -> f64
+pub fn precise::linear_to_srgb_extended(f32) -> f32
+pub fn precise::linear_to_srgb_f64(f64) -> f64
+pub fn precise::srgb_to_linear_extended(f32) -> f32
+pub fn precise::srgb_to_linear_f64(f64) -> f64
+pub mod target_features
+pub mod tf
+pub fn tf::linear_to_srgb(f32) -> f32 [also: default, precise]
+pub fn tf::srgb_to_linear(f32) -> f32 [also: default, precise]
+pub mod tokens
+pub const UNPREMUL_ALPHA_THRESHOLD: f32
+
+## trait impls (3 types)
+
+lut::EncodingTable<N>: Default
+lut::LinearizationTable<N>: Default
+lut::SrgbConverter: Default
+
+## auto traits
+
+3 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+## arch shapes (66 shapes: 66 on every recorded arch, 0 arch-unique)
+
+[x86_64] pub fn target_features::<lanes>::gamma_to_linear_<tier>([f32; 4], f32) -> [f32; 4]
+[x86_64] pub fn target_features::<lanes>::gamma_to_linear_<tier>([f32; 8], f32) -> [f32; 8]
+[x86_64] pub fn target_features::<lanes>::gamma_to_linear_slice_<tier>(&mut [f32], f32)
+[x86_64] pub fn target_features::<lanes>::linear_to_gamma_<tier>([f32; 4], f32) -> [f32; 4]
+[x86_64] pub fn target_features::<lanes>::linear_to_gamma_<tier>([f32; 8], f32) -> [f32; 8]
+[x86_64] pub fn target_features::<lanes>::linear_to_gamma_slice_<tier>(&mut [f32], f32)
+[x86_64] pub fn target_features::<lanes>::linear_to_srgb_<tier>([f32; 4]) -> [f32; 4]
+[x86_64] pub fn target_features::<lanes>::linear_to_srgb_<tier>([f32; 8]) -> [f32; 8]
+[x86_64] pub fn target_features::<lanes>::linear_to_srgb_extended_<tier>([f32; 4]) -> [f32; 4]
+[x86_64] pub fn target_features::<lanes>::linear_to_srgb_extended_<tier>([f32; 8]) -> [f32; 8]
+[x86_64] pub fn target_features::<lanes>::linear_to_srgb_extended_scalar([f32; 4]) -> [f32; 4]
+[x86_64] pub fn target_features::<lanes>::linear_to_srgb_extended_slice_<tier>(&mut [f32])
+[x86_64] pub fn target_features::<lanes>::linear_to_srgb_slice_<tier>(&mut [f32])
+[x86_64] pub fn target_features::<lanes>::linear_to_srgb_u16_<tier>([f32; 8]) -> [u16; 8]
+[x86_64] pub fn target_features::<lanes>::linear_to_srgb_u16_scalar([f32; 8]) -> [u16; 8]
+[x86_64] pub fn target_features::<lanes>::linear_to_srgb_u8_<tier>([f32; 8]) -> [u8; 8]
+[x86_64] pub fn target_features::<lanes>::linear_to_srgb_u8_slice_<tier>(&[f32], &mut [u8])
+[x86_64] pub fn target_features::<lanes>::srgb_to_linear_<tier>([f32; 4]) -> [f32; 4]
+[x86_64] pub fn target_features::<lanes>::srgb_to_linear_<tier>([f32; 8]) -> [f32; 8]
+[x86_64] pub fn target_features::<lanes>::srgb_to_linear_extended_<tier>([f32; 4]) -> [f32; 4]
+[x86_64] pub fn target_features::<lanes>::srgb_to_linear_extended_<tier>([f32; 8]) -> [f32; 8]
+[x86_64] pub fn target_features::<lanes>::srgb_to_linear_extended_scalar([f32; 4]) -> [f32; 4]
+[x86_64] pub fn target_features::<lanes>::srgb_to_linear_extended_slice_<tier>(&mut [f32])
+[x86_64] pub fn target_features::<lanes>::srgb_to_linear_slice_<tier>(&mut [f32])
+[x86_64] pub fn target_features::<lanes>::srgb_u16_to_linear_<tier>([u16; 8]) -> [f32; 8]
+[x86_64] pub fn target_features::<lanes>::srgb_u16_to_linear_scalar([u16; 8]) -> [f32; 8]
+[x86_64] pub fn target_features::<lanes>::srgb_u8_to_linear_<tier>([u8; 8]) -> [f32; 8]
+[x86_64] pub fn target_features::<lanes>::srgb_u8_to_linear_slice_<tier>(&[u8], &mut [f32])
+[x86_64] pub fn tokens::<lanes>::gamma_to_linear_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 16], f32) -> [f32; 16]
+[x86_64] pub fn tokens::<lanes>::gamma_to_linear_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 4], f32) -> [f32; 4]
+[x86_64] pub fn tokens::<lanes>::gamma_to_linear_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 8], f32) -> [f32; 8]
+[x86_64] pub fn tokens::<lanes>::gamma_to_linear_slice_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, &mut [f32], f32)
+[x86_64] pub fn tokens::<lanes>::linear_to_gamma_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 16], f32) -> [f32; 16]
+[x86_64] pub fn tokens::<lanes>::linear_to_gamma_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 4], f32) -> [f32; 4]
+[x86_64] pub fn tokens::<lanes>::linear_to_gamma_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 8], f32) -> [f32; 8]
+[x86_64] pub fn tokens::<lanes>::linear_to_gamma_slice_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, &mut [f32], f32)
+[x86_64] pub fn tokens::<lanes>::linear_to_srgb_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 16]) -> [f32; 16]
+[x86_64] pub fn tokens::<lanes>::linear_to_srgb_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 4]) -> [f32; 4]
+[x86_64] pub fn tokens::<lanes>::linear_to_srgb_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 8]) -> [f32; 8]
+[x86_64] pub fn tokens::<lanes>::linear_to_srgb_extended_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 4]) -> [f32; 4]
+[x86_64] pub fn tokens::<lanes>::linear_to_srgb_extended_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 8]) -> [f32; 8]
+[x86_64] pub fn tokens::<lanes>::linear_to_srgb_extended_scalar(archmage::tokens::ScalarToken, [f32; 4]) -> [f32; 4]
+[x86_64] pub fn tokens::<lanes>::linear_to_srgb_extended_slice_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, &mut [f32])
+[x86_64] pub fn tokens::<lanes>::linear_to_srgb_slice_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, &mut [f32])
+[x86_64] pub fn tokens::<lanes>::linear_to_srgb_u16_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 8]) -> [u16; 8]
+[x86_64] pub fn tokens::<lanes>::linear_to_srgb_u16_scalar(archmage::tokens::ScalarToken, [f32; 8]) -> [u16; 8]
+[x86_64] pub fn tokens::<lanes>::linear_to_srgb_u8_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 16]) -> [u8; 16]
+[x86_64] pub fn tokens::<lanes>::linear_to_srgb_u8_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 8]) -> [u8; 8]
+[x86_64] pub fn tokens::<lanes>::linear_to_srgb_u8_slice_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, &[f32], &mut [u8])
+[x86_64] pub fn tokens::<lanes>::srgb_to_linear_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 16]) -> [f32; 16]
+[x86_64] pub fn tokens::<lanes>::srgb_to_linear_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 4]) -> [f32; 4]
+[x86_64] pub fn tokens::<lanes>::srgb_to_linear_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 8]) -> [f32; 8]
+[x86_64] pub fn tokens::<lanes>::srgb_to_linear_extended_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 4]) -> [f32; 4]
+[x86_64] pub fn tokens::<lanes>::srgb_to_linear_extended_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [f32; 8]) -> [f32; 8]
+[x86_64] pub fn tokens::<lanes>::srgb_to_linear_extended_scalar(archmage::tokens::ScalarToken, [f32; 4]) -> [f32; 4]
+[x86_64] pub fn tokens::<lanes>::srgb_to_linear_extended_slice_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, &mut [f32])
+[x86_64] pub fn tokens::<lanes>::srgb_to_linear_slice_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, &mut [f32])
+[x86_64] pub fn tokens::<lanes>::srgb_u16_to_linear_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [u16; 8]) -> [f32; 8]
+[x86_64] pub fn tokens::<lanes>::srgb_u16_to_linear_scalar(archmage::tokens::ScalarToken, [u16; 8]) -> [f32; 8]
+[x86_64] pub fn tokens::<lanes>::srgb_u8_to_linear_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [u8; 16]) -> [f32; 16]
+[x86_64] pub fn tokens::<lanes>::srgb_u8_to_linear_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, [u8; 8]) -> [f32; 8]
+[x86_64] pub fn tokens::<lanes>::srgb_u8_to_linear_slice_<tier>(archmage::tokens::generated::<arch>::<ArchToken>, &[u8], &mut [f32])
+[x86_64] pub mod target_features::<lanes>
+[x86_64] pub mod tokens::<lanes>
+[x86_64] pub use tokens::<ArchToken>
+[x86_64] pub use tokens::<lanes>::<ArchToken>
+
+## arch surface: x86_64 (86 lines)
+
+pub fn target_features::x4::gamma_to_linear_slice_v3(&mut [f32], f32)
+pub fn target_features::x4::gamma_to_linear_v3([f32; 4], f32) -> [f32; 4]
+pub fn target_features::x4::linear_to_gamma_slice_v3(&mut [f32], f32)
+pub fn target_features::x4::linear_to_gamma_v3([f32; 4], f32) -> [f32; 4]
+pub fn target_features::x4::linear_to_srgb_extended_scalar([f32; 4]) -> [f32; 4]
+pub fn target_features::x4::linear_to_srgb_extended_v3([f32; 4]) -> [f32; 4]
+pub fn target_features::x4::linear_to_srgb_slice_v3(&mut [f32])
+pub fn target_features::x4::linear_to_srgb_v3([f32; 4]) -> [f32; 4]
+pub fn target_features::x4::srgb_to_linear_extended_scalar([f32; 4]) -> [f32; 4]
+pub fn target_features::x4::srgb_to_linear_extended_v3([f32; 4]) -> [f32; 4]
+pub fn target_features::x4::srgb_to_linear_slice_v3(&mut [f32])
+pub fn target_features::x4::srgb_to_linear_v3([f32; 4]) -> [f32; 4]
+pub fn target_features::x8::gamma_to_linear_slice_v3(&mut [f32], f32)
+pub fn target_features::x8::gamma_to_linear_v3([f32; 8], f32) -> [f32; 8]
+pub fn target_features::x8::linear_to_gamma_slice_v3(&mut [f32], f32)
+pub fn target_features::x8::linear_to_gamma_v3([f32; 8], f32) -> [f32; 8]
+pub fn target_features::x8::linear_to_srgb_extended_slice_v3(&mut [f32])
+pub fn target_features::x8::linear_to_srgb_extended_v3([f32; 8]) -> [f32; 8]
+pub fn target_features::x8::linear_to_srgb_slice_v3(&mut [f32])
+pub fn target_features::x8::linear_to_srgb_u16_scalar([f32; 8]) -> [u16; 8]
+pub fn target_features::x8::linear_to_srgb_u16_v3([f32; 8]) -> [u16; 8]
+pub fn target_features::x8::linear_to_srgb_u8_slice_v3(&[f32], &mut [u8])
+pub fn target_features::x8::linear_to_srgb_u8_v3([f32; 8]) -> [u8; 8]
+pub fn target_features::x8::linear_to_srgb_v3([f32; 8]) -> [f32; 8]
+pub fn target_features::x8::srgb_to_linear_extended_slice_v3(&mut [f32])
+pub fn target_features::x8::srgb_to_linear_extended_v3([f32; 8]) -> [f32; 8]
+pub fn target_features::x8::srgb_to_linear_slice_v3(&mut [f32])
+pub fn target_features::x8::srgb_to_linear_v3([f32; 8]) -> [f32; 8]
+pub fn target_features::x8::srgb_u16_to_linear_scalar([u16; 8]) -> [f32; 8]
+pub fn target_features::x8::srgb_u16_to_linear_v3([u16; 8]) -> [f32; 8]
+pub fn target_features::x8::srgb_u8_to_linear_slice_v3(&[u8], &mut [f32])
+pub fn target_features::x8::srgb_u8_to_linear_v3([u8; 8]) -> [f32; 8]
+pub fn tokens::x16::gamma_to_linear_slice_v4(archmage::tokens::generated::x86::X64V4Token, &mut [f32], f32)
+pub fn tokens::x16::gamma_to_linear_v4(archmage::tokens::generated::x86::X64V4Token, [f32; 16], f32) -> [f32; 16]
+pub fn tokens::x16::linear_to_gamma_slice_v4(archmage::tokens::generated::x86::X64V4Token, &mut [f32], f32)
+pub fn tokens::x16::linear_to_gamma_v4(archmage::tokens::generated::x86::X64V4Token, [f32; 16], f32) -> [f32; 16]
+pub fn tokens::x16::linear_to_srgb_slice_v4(archmage::tokens::generated::x86::X64V4Token, &mut [f32])
+pub fn tokens::x16::linear_to_srgb_u8_slice_v4(archmage::tokens::generated::x86::X64V4Token, &[f32], &mut [u8])
+pub fn tokens::x16::linear_to_srgb_u8_v4(archmage::tokens::generated::x86::X64V4Token, [f32; 16]) -> [u8; 16]
+pub fn tokens::x16::linear_to_srgb_v4(archmage::tokens::generated::x86::X64V4Token, [f32; 16]) -> [f32; 16]
+pub fn tokens::x16::srgb_to_linear_slice_v4(archmage::tokens::generated::x86::X64V4Token, &mut [f32])
+pub fn tokens::x16::srgb_to_linear_v4(archmage::tokens::generated::x86::X64V4Token, [f32; 16]) -> [f32; 16]
+pub fn tokens::x16::srgb_u8_to_linear_slice_v4(archmage::tokens::generated::x86::X64V4Token, &[u8], &mut [f32])
+pub fn tokens::x16::srgb_u8_to_linear_v4(archmage::tokens::generated::x86::X64V4Token, [u8; 16]) -> [f32; 16]
+pub fn tokens::x4::gamma_to_linear_slice_v3(archmage::tokens::generated::x86::X64V3Token, &mut [f32], f32)
+pub fn tokens::x4::gamma_to_linear_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 4], f32) -> [f32; 4]
+pub fn tokens::x4::linear_to_gamma_slice_v3(archmage::tokens::generated::x86::X64V3Token, &mut [f32], f32)
+pub fn tokens::x4::linear_to_gamma_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 4], f32) -> [f32; 4]
+pub fn tokens::x4::linear_to_srgb_extended_scalar(archmage::tokens::ScalarToken, [f32; 4]) -> [f32; 4]
+pub fn tokens::x4::linear_to_srgb_extended_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 4]) -> [f32; 4]
+pub fn tokens::x4::linear_to_srgb_slice_v3(archmage::tokens::generated::x86::X64V3Token, &mut [f32])
+pub fn tokens::x4::linear_to_srgb_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 4]) -> [f32; 4]
+pub fn tokens::x4::srgb_to_linear_extended_scalar(archmage::tokens::ScalarToken, [f32; 4]) -> [f32; 4]
+pub fn tokens::x4::srgb_to_linear_extended_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 4]) -> [f32; 4]
+pub fn tokens::x4::srgb_to_linear_slice_v3(archmage::tokens::generated::x86::X64V3Token, &mut [f32])
+pub fn tokens::x4::srgb_to_linear_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 4]) -> [f32; 4]
+pub fn tokens::x8::gamma_to_linear_slice_v3(archmage::tokens::generated::x86::X64V3Token, &mut [f32], f32)
+pub fn tokens::x8::gamma_to_linear_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 8], f32) -> [f32; 8]
+pub fn tokens::x8::linear_to_gamma_slice_v3(archmage::tokens::generated::x86::X64V3Token, &mut [f32], f32)
+pub fn tokens::x8::linear_to_gamma_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 8], f32) -> [f32; 8]
+pub fn tokens::x8::linear_to_srgb_extended_slice_v3(archmage::tokens::generated::x86::X64V3Token, &mut [f32])
+pub fn tokens::x8::linear_to_srgb_extended_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 8]) -> [f32; 8]
+pub fn tokens::x8::linear_to_srgb_slice_v3(archmage::tokens::generated::x86::X64V3Token, &mut [f32])
+pub fn tokens::x8::linear_to_srgb_u16_scalar(archmage::tokens::ScalarToken, [f32; 8]) -> [u16; 8]
+pub fn tokens::x8::linear_to_srgb_u16_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 8]) -> [u16; 8]
+pub fn tokens::x8::linear_to_srgb_u8_slice_v3(archmage::tokens::generated::x86::X64V3Token, &[f32], &mut [u8])
+pub fn tokens::x8::linear_to_srgb_u8_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 8]) -> [u8; 8]
+pub fn tokens::x8::linear_to_srgb_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 8]) -> [f32; 8]
+pub fn tokens::x8::srgb_to_linear_extended_slice_v3(archmage::tokens::generated::x86::X64V3Token, &mut [f32])
+pub fn tokens::x8::srgb_to_linear_extended_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 8]) -> [f32; 8]
+pub fn tokens::x8::srgb_to_linear_slice_v3(archmage::tokens::generated::x86::X64V3Token, &mut [f32])
+pub fn tokens::x8::srgb_to_linear_v3(archmage::tokens::generated::x86::X64V3Token, [f32; 8]) -> [f32; 8]
+pub fn tokens::x8::srgb_u16_to_linear_scalar(archmage::tokens::ScalarToken, [u16; 8]) -> [f32; 8]
+pub fn tokens::x8::srgb_u16_to_linear_v3(archmage::tokens::generated::x86::X64V3Token, [u16; 8]) -> [f32; 8]
+pub fn tokens::x8::srgb_u8_to_linear_slice_v3(archmage::tokens::generated::x86::X64V3Token, &[u8], &mut [f32])
+pub fn tokens::x8::srgb_u8_to_linear_v3(archmage::tokens::generated::x86::X64V3Token, [u8; 8]) -> [f32; 8]
+pub mod target_features::x4
+pub mod target_features::x8
+pub mod tokens::x16
+pub mod tokens::x4
+pub mod tokens::x8
+pub use tokens::X64V3Token
+pub use tokens::X64V4Token
+pub use tokens::x16::X64V4Token
+pub use tokens::x4::X64V3Token
+pub use tokens::x8::X64V3Token
