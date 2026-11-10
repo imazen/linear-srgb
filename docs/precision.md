@@ -47,6 +47,25 @@ different NaN signs/payloads on scalar and SIMD. Strict WASM needs
 `precise-portable` for fused arithmetic; relaxed SIMD depends on the engine.
 Libm-based scalar APIs are outside the slice parity contract.
 
+## `precise-portable` usage audit (2026-11-10)
+
+The feature is off by default. It changes the WASM `Mla` implementation from
+`mul_add_relaxed` to `mul_add_fused`; native targets select fused arithmetic
+regardless. It does not replace platform scalar power or establish a portable
+implementation of every math operation. The empty Cargo feature declaration
+still enables the corresponding Rust `cfg`.
+
+The explicit strict-WASM precise mode runs in
+[the numerical golden workflow](../.github/workflows/numerical-goldens.yml).
+It was also exercised in the earlier
+[zenpixels tier-bit study](https://github.com/imazen/zenpixels/blob/3286169c7ef5b1e66ac841c3d8204eb54e390f8c/benchmarks/tier-bits/README.md).
+The downstream
+[zenpixels-convert feature](https://github.com/imazen/zenpixels/blob/3286169c7ef5b1e66ac841c3d8204eb54e390f8c/zenpixels-convert/Cargo.toml)
+forwards to `linear-srgb/precise-portable`, but its defaults do not enable it.
+Searching accessible imazen default-branch Cargo manifests found no other
+explicit downstream enablement. This does not establish production usage or
+exclude command-line feature selection, private builds or unindexed branches.
+
 ## Other precision policies
 
 - Integer output saturates. Extended f32 functions preserve signs and permit
