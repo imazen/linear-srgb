@@ -25,7 +25,7 @@ def environment():
     env = os.environ.copy()
     # A caller's native/relaxed-SIMD flags must not silently change the captures.
     for key in list(env):
-        if key in {"RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "RUSTC", "CARGO_BUILD_TARGET"} or (
+        if key in {"RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_BUILD_RUSTFLAGS", "RUSTC", "CARGO_BUILD_TARGET"} or (
             key.startswith("CARGO_TARGET_") and key.endswith("_RUSTFLAGS")
         ):
             del env[key]
@@ -35,6 +35,9 @@ def environment():
         RUSTUP_TOOLCHAIN=TOOLCHAIN,
         CARGO_TARGET_DIR=str(ROOT / "target/expand"),
         CARGO_TERM_COLOR="never",
+        # Empty overrides also suppress flags from the caller's Cargo config.
+        RUSTFLAGS="",
+        CARGO_ENCODED_RUSTFLAGS="",
         TMPDIR=str(scratch),
     )
     return env
