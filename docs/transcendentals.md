@@ -1,5 +1,32 @@
 # Transcendental inventory for portable math
 
+## Upstream source available after this inventory (2026-11-10)
+
+The current archmage repository contains a standalone
+[Magemath crate](https://github.com/imazen/archmage/tree/main/magemath) with
+configurable **f32** power, exponential and logarithm implementations. Its
+[power contract](https://github.com/imazen/archmage/blob/main/docs/POWF.md)
+defines bit-exact approximation graphs, bounded domains and matching typed
+vector/scalar-tail calls. MIDP is an approximation contract, not a substitute
+for the existing precise/IEC accuracy requirements. A binary64 graph used
+internally for f32 HIGHP is not an exposed general f64 power replacement.
+
+Integrating it here still requires matching each curve's domain, evaluating
+speculative inactive lanes safely, preserving scalar/tail arithmetic, and
+checking the existing accuracy gates and immutable main goldens. ISA-specific
+NaN/min/max/zero behavior also needs pointwise investigation; shared power
+alone does not establish complete transfer-function portability.
+
+For bit-exact arithmetic, native FMA and engine-proven relaxed-WASM fusion
+have hardware paths; strict/nonfusing WASM needs exact software fallback.
+The [upstream performance reference](https://github.com/imazen/archmage/blob/main/docs/POWF_REFERENCE.md)
+does not provide a qualified strict/relaxed-WASM timing result. This inventory
+has no measured linear-srgb integration slowdown or implementation-time budget.
+The source API remains subject to its upstream review; this note does not
+change linear-srgb's shipped dependency resolution.
+
+## Original source inventory
+
 Inspected 2026-11-10: main `24a876779772d8fddeb08b179354df05b1541c5c`
 and [PR #30](https://github.com/imazen/linear-srgb/pull/30), head
 `f36f932c74db8b9cdd4f6687eed36459a30c085b` (`api/target-features`).
