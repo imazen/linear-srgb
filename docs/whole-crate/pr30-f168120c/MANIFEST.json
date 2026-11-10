@@ -1,0 +1,149 @@
+{
+  "source_revision": "f168120c29a5e3f8e9f71ba0cd17e68ca1d3d4d5",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "cargo_expand": "cargo-expand 1.0.126",
+  "coverage": "complete compiled library; no ITEM filter",
+  "max_part_bytes": 500000,
+  "captures": [
+    {
+      "target": "x86_64-unknown-linux-gnu",
+      "preset": "default",
+      "path": "x86_64-unknown-linux-gnu/default.expanded.rs",
+      "bytes": 495576,
+      "sha256": "edd2759909beccbbeac0339ab47fca222742042ea9d64adad020b2fdb7b4a1f1",
+      "features": [
+        "avx512",
+        "default",
+        "std"
+      ],
+      "parts": [
+        {
+          "path": "parts/x86_64-unknown-linux-gnu/default/crate.part-01.expanded.rs",
+          "bytes": 495576,
+          "sha256": "edd2759909beccbbeac0339ab47fca222742042ea9d64adad020b2fdb7b4a1f1"
+        }
+      ],
+      "lock_sha256": "baa249ace65f09fadc01877561cdd51456e6ea2b609ef4a283daab4bc0ec1070"
+    },
+    {
+      "target": "x86_64-unknown-linux-gnu",
+      "preset": "all-features",
+      "path": "x86_64-unknown-linux-gnu/all-features.expanded.rs",
+      "bytes": 704437,
+      "sha256": "598f2d94c1a678591c9ec7f567a8fcee62aac2ea1df66f062395ce1d7e17537c",
+      "features": [
+        "alt",
+        "avx512",
+        "default",
+        "iec",
+        "precise-portable",
+        "std",
+        "transfer",
+        "unsafe_simd"
+      ],
+      "parts": [
+        {
+          "path": "parts/x86_64-unknown-linux-gnu/all-features/crate.part-01.expanded.rs",
+          "bytes": 499989,
+          "sha256": "2797c4c4e21123264cc12793421133e0c36699a9748bf4cb69c862950e8a1e0e"
+        },
+        {
+          "path": "parts/x86_64-unknown-linux-gnu/all-features/crate.part-02.expanded.rs",
+          "bytes": 204448,
+          "sha256": "8d77232f2ee82b6c5c98fbc2b1dbfc482975d44f21a926f6a8a951bf027cc47e"
+        }
+      ],
+      "lock_sha256": "a0d29ae434c92b6ce81b6f9641d822b03799e7f7dd6872c708565392d72e54ea"
+    },
+    {
+      "target": "aarch64-unknown-linux-gnu",
+      "preset": "default",
+      "path": "aarch64-unknown-linux-gnu/default.expanded.rs",
+      "bytes": 318348,
+      "sha256": "d8e08bfccbab79dfb4348abbfc3c7d941e8f2ba12dafc2f99aa34590e9370d07",
+      "features": [
+        "avx512",
+        "default",
+        "std"
+      ],
+      "parts": [
+        {
+          "path": "parts/aarch64-unknown-linux-gnu/default/crate.part-01.expanded.rs",
+          "bytes": 318348,
+          "sha256": "d8e08bfccbab79dfb4348abbfc3c7d941e8f2ba12dafc2f99aa34590e9370d07"
+        }
+      ],
+      "lock_sha256": "baa249ace65f09fadc01877561cdd51456e6ea2b609ef4a283daab4bc0ec1070"
+    },
+    {
+      "target": "aarch64-unknown-linux-gnu",
+      "preset": "all-features",
+      "path": "aarch64-unknown-linux-gnu/all-features.expanded.rs",
+      "bytes": 427125,
+      "sha256": "33196cf20997f976441a934b4cb6131a1906ea0de5465cda39fd285cf463d80d",
+      "features": [
+        "alt",
+        "avx512",
+        "default",
+        "iec",
+        "precise-portable",
+        "std",
+        "transfer",
+        "unsafe_simd"
+      ],
+      "parts": [
+        {
+          "path": "parts/aarch64-unknown-linux-gnu/all-features/crate.part-01.expanded.rs",
+          "bytes": 427125,
+          "sha256": "33196cf20997f976441a934b4cb6131a1906ea0de5465cda39fd285cf463d80d"
+        }
+      ],
+      "lock_sha256": "a0d29ae434c92b6ce81b6f9641d822b03799e7f7dd6872c708565392d72e54ea"
+    },
+    {
+      "target": "wasm32-wasip1",
+      "preset": "default",
+      "path": "wasm32-wasip1/default.expanded.rs",
+      "bytes": 313453,
+      "sha256": "a9a4d723a2ff54b74e48ae9fec1d08f7724c6c163aa8f16da43641968d4e6594",
+      "features": [
+        "avx512",
+        "default",
+        "std"
+      ],
+      "parts": [
+        {
+          "path": "parts/wasm32-wasip1/default/crate.part-01.expanded.rs",
+          "bytes": 313453,
+          "sha256": "a9a4d723a2ff54b74e48ae9fec1d08f7724c6c163aa8f16da43641968d4e6594"
+        }
+      ],
+      "lock_sha256": "baa249ace65f09fadc01877561cdd51456e6ea2b609ef4a283daab4bc0ec1070"
+    },
+    {
+      "target": "wasm32-wasip1",
+      "preset": "all-features",
+      "path": "wasm32-wasip1/all-features.expanded.rs",
+      "bytes": 423797,
+      "sha256": "dd1b73e71bc4657f5572c384f344649c71a5734e20daf76e8eecd7d26aac761b",
+      "features": [
+        "alt",
+        "avx512",
+        "default",
+        "iec",
+        "precise-portable",
+        "std",
+        "transfer",
+        "unsafe_simd"
+      ],
+      "parts": [
+        {
+          "path": "parts/wasm32-wasip1/all-features/crate.part-01.expanded.rs",
+          "bytes": 423797,
+          "sha256": "dd1b73e71bc4657f5572c384f344649c71a5734e20daf76e8eecd7d26aac761b"
+        }
+      ],
+      "lock_sha256": "a0d29ae434c92b6ce81b6f9641d822b03799e7f7dd6872c708565392d72e54ea"
+    }
+  ]
+}

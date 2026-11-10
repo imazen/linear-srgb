@@ -1,5 +1,24 @@
 # Precision driver
 
+## Row precision and complete source review
+
+`just issue-32-check` protects the exact chunk/tail witness from
+[issue #32](https://github.com/imazen/linear-srgb/issues/32). To reproduce a
+committed source revision in an isolated archive, use
+`just issue-32-probe REVISION NEW_DURABLE_DIRECTORY`; a historical mismatch
+intentionally exits nonzero and retains its source, lock and stdout.
+
+`just expand-whole-crate ARCHIVED_PR_SOURCE NEW_DIRECTORY` uses the PR's
+pinned resolution anchors and feature guard, but exports the entire compiled
+library without an ITEM filter. `just verify-whole-crate DIRECTORY` validates
+the full six-configuration matrix and lossless source parts. See the
+[complete review exports](../../docs/whole-crate/README.md) and
+[portability/precision assessment](../../docs/predictable-math.md) for measured
+results and coverage limits. These checks do not alter numerical policies or
+bless changed output bits.
+
+## Released/current precision driver
+
 Run from the repository root under a resource wrapper:
 
 ```sh

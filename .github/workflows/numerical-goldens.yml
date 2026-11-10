@@ -35,6 +35,8 @@ jobs:
         run: |
           cargo fmt --check --manifest-path goldens/Cargo.toml
           cargo clippy --locked --manifest-path goldens/Cargo.toml --all-targets --all-features -- -D warnings
+      - name: Verify complete-crate review export integrity
+        run: python3 tools/precision-review/expand_all.py --verify docs/whole-crate/pr30-f168120c
       - name: Check committed main outputs and mutation guards
         run: cargo test --locked --release --manifest-path goldens/Cargo.toml
       - name: Check without AVX-512 dispatch
@@ -62,6 +64,16 @@ jobs:
           fallback: none
       - name: Check frozen strict-SIMD128 output chunks
         run: cargo test --locked --release --manifest-path goldens/Cargo.toml --no-default-features --features "${{ matrix.features }}" --target wasm32-wasip1 -- --nocapture
+        env:
+          RUSTFLAGS: -C target-feature=+simd128
+          CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime run
+      - name: Check issue 32 exact row-position witnesses
+        run: |
+          precision_features="std,transfer"
+          if [ -n "${{ matrix.features }}" ]; then
+            precision_features="$precision_features,${{ matrix.features }}"
+          fi
+          cargo test --release --no-default-features --features "$precision_features" --target wasm32-wasip1 --test slice_position issue_32_srgb_body_and_tail_share_arithmetic -- --nocapture
         env:
           RUSTFLAGS: -C target-feature=+simd128
           CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime run
