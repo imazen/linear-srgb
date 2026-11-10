@@ -37,7 +37,7 @@ verify-target-features:
 # Type-check ARM and execute the portable SIMD entry points under WASI.
 verify-target-features-portable:
     cargo check --all-features --tests --target aarch64-unknown-linux-gnu
-    CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime run --env LINEAR_SRGB_REQUIRE_TIERS=Wasm128Token" CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-C target-feature=+simd128" cargo test --all-features --test target_features --test target_features_dispatch --target wasm32-wasip1
+    CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime run --env LINEAR_SRGB_REQUIRE_TIERS=Wasm128Token" CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-C target-feature=+simd128" cargo test --all-features --lib --test target_features --test target_features_dispatch --target wasm32-wasip1
 
 # Run after regenerating snapshots; includes aliases collapsed by the renderer.
 check-target-features-surface:
@@ -45,7 +45,7 @@ check-target-features-surface:
 
 # Require both x86 SIMD tiers to execute, rather than accept unavailable hardware.
 verify-target-features-native-v4:
-    LINEAR_SRGB_REQUIRE_TIERS=X64V3Token,X64V4Token cargo test --all-features --test target_features
+    LINEAR_SRGB_REQUIRE_TIERS=X64V3Token,X64V4Token cargo test --all-features --lib target_features::compatibility_tests
 
 # Regenerate the missing width/tier entry points from their shared operation list.
 generate-portable-target-features:
@@ -90,7 +90,7 @@ precision-policy output_dir:
 
 # Print portable/native array and tail fingerprints for an ownership refactor.
 ownership-fingerprint:
-    cargo run --release --all-features --example entry_point_fingerprint
+    LINEAR_SRGB_REQUIRE_TIERS=X64V3Token cargo test --release --all-features --lib target_features::fingerprint::entry_point_fingerprint -- --nocapture
 
 # Capture the existing dispatcher stubs without changing committed ASM snapshots.
 ownership-codegen:
@@ -126,12 +126,12 @@ verify-ownership-regressions:
     cargo check --all-features --tests --target aarch64-unknown-linux-gnu
     just verify-target-features-wasm-default
     CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-C target-feature=+simd128" cargo clippy --no-default-features --features std,transfer --target wasm32-wasip1 --lib --test target_features --test target_features_dispatch --test tier_parity --test remaining_parity -- -D warnings
-    CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime run --env LINEAR_SRGB_REQUIRE_TIERS=Wasm128Token" CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-C target-feature=+simd128" cargo test --all-features --release --target wasm32-wasip1 --test target_features --test target_features_dispatch --test tier_parity --test remaining_parity
+    CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime run --env LINEAR_SRGB_REQUIRE_TIERS=Wasm128Token" CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-C target-feature=+simd128" cargo test --all-features --release --target wasm32-wasip1 --lib --test target_features --test target_features_dispatch --test tier_parity --test remaining_parity
 
 # Capture the portable fingerprints with the frozen precise-portable policy.
 ownership-fingerprint-wasm:
-    CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime run" CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-C target-feature=+simd128" cargo run --release --all-features --target wasm32-wasip1 --example entry_point_fingerprint
+    CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime run" CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-C target-feature=+simd128" cargo test --release --all-features --target wasm32-wasip1 --lib target_features::fingerprint::entry_point_fingerprint -- --nocapture
 
 # Exercise relaxed SIMD with an explicitly fusing or nonfusing Wasmtime engine.
 probe-relaxed-wasm fma="true" features="std,transfer":
-    CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime run -W relaxed-simd=true -C cranelift-has-fma={{fma}}" CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-C target-feature=+simd128,+relaxed-simd" cargo test --no-default-features --features "{{features}}" --release --target wasm32-wasip1 --test target_features --test target_features_dispatch --test remaining_parity --test tier_parity -- --nocapture
+    CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime run -W relaxed-simd=true -C cranelift-has-fma={{fma}}" CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-C target-feature=+simd128,+relaxed-simd" cargo test --no-default-features --features "{{features}}" --release --target wasm32-wasip1 --lib --test target_features --test target_features_dispatch --test remaining_parity --test tier_parity -- --nocapture

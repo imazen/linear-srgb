@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 use archmage::{SimdToken, arcane};
+use std::{println, vec::Vec};
 
 fn sample(i: usize) -> f32 {
     const EDGES: [f32; 19] = [
@@ -46,7 +47,7 @@ fn fold(hash: &mut u64, values: &[f32]) {
 
 macro_rules! capture {
     ($width:ident, $n:literal, $tier:ident; [$($plain:ident),*]; $decode:ident, $encode:ident, $decode_slice:ident, $encode_slice:ident) => {{
-        use linear_srgb::target_features::$width as api;
+        use crate::target_features::$width as api;
         let mut hash = 0xcbf29ce484222325;
         macro_rules! plain {
             ($name:ident) => {
@@ -143,12 +144,20 @@ fn capture_tier_wasm128(_token: archmage::Wasm128Token) {
     #[cfg(feature = "transfer")]
     capture!(x16, 16, wasm128_transfer; [tf_srgb_to_linear_wasm128, tf_linear_to_srgb_wasm128, bt709_to_linear_wasm128, linear_to_bt709_wasm128, pq_to_linear_wasm128, linear_to_pq_wasm128, hlg_to_linear_wasm128, linear_to_hlg_wasm128]; gamma_to_linear_wasm128, linear_to_gamma_wasm128, srgb_to_linear_slice_wasm128, linear_to_srgb_slice_wasm128);
 }
-fn main() {
+#[test]
+fn entry_point_fingerprint() {
+    println!();
     capture_tier_scalar(archmage::ScalarToken);
     #[cfg(target_arch = "x86_64")]
     {
-        let token = archmage::X64V3Token::summon().expect("V3 required for this native probe");
-        capture_tier_v3(token);
+        let token = archmage::X64V3Token::summon();
+        let required = std::env::var("LINEAR_SRGB_REQUIRE_TIERS").unwrap_or_default();
+        if required.split(',').any(|tier| tier == "X64V3Token") {
+            assert!(token.is_some(), "V3 required for this native probe");
+        }
+        if let Some(token) = token {
+            capture_tier_v3(token);
+        }
         #[cfg(feature = "avx512")]
         if let Some(token) = archmage::X64V4Token::summon() {
             capture_tier_v4(token);

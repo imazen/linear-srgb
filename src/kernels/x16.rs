@@ -1,5 +1,6 @@
 //! Private 16-lane kernels used by the canonical CPU-feature entry points.
 
+#[cfg(feature = "transfer")]
 use crate::tf::fast_math::Mla;
 use archmage::rite;
 

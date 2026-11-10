@@ -128,3 +128,10 @@ pub mod x8;
 
 /// Sixteen-value arrays, or slices processed sixteen values at a time.
 pub mod x16;
+
+#[cfg(test)]
+mod compatibility_tests;
+#[cfg(test)]
+mod dispatch_tests;
+#[cfg(test)]
+mod fingerprint;
