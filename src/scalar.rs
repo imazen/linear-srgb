@@ -220,7 +220,7 @@ pub fn linear_to_srgb_u8(linear: f32) -> u8 {
 /// Convert 16-bit sRGB to linear f32 using a 65536-entry LUT.
 ///
 /// Zero math — pure table lookup. The LUT is lazily initialized on first call
-/// via `OnceLock` (256KB heap, SIMD-generated in ~75µs).
+/// via `OnceLock`, using the scalar f64-intermediate polynomial.
 ///
 /// Without `std`, falls back to the rational polynomial.
 #[inline]

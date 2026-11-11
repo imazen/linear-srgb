@@ -36,6 +36,14 @@ graph for a future portable policy changes one of those behaviors. Merely
 routing the scalar API through current f32 kernels needs monotonicity and
 accuracy validation; widening all batch kernels needs a performance study.
 
+Normalization and Cargo features also matter. The scalar u16 decoder under
+`std` indexes a table generated with the f64-intermediate polynomial after
+`i * (1.0 / 65535.0)`; its no-std fallback evaluates after `i / 65535.0`.
+The batch u16 decoder instead uses the f32 polynomial with reciprocal
+multiplication. A portable policy must specify these operations and feature
+paths, rather than relying on the shared function/curve names. This is a
+source-graph observation, not an additional measured mismatch count.
+
 ## Implementation cost and runtime choices
 
 - **Row consistency:** the reported historical defect already has a main fix.
