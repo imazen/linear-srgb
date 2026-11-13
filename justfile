@@ -37,6 +37,19 @@ expand-whole-crate source output:
 verify-whole-crate directory:
     python3 tools/precision-review/expand_all.py --verify {{directory}}
 
+# Run these development recipes through scripts/run-heavy; no shipped dependency changes.
+magemath-probe-prepare archmage output:
+    python3 tools/precision-review/magemath_probe.py '{{archmage}}' '{{output}}'
+
+magemath-probe output target="x86_64-unknown-linux-gnu" flags="" runner="":
+    env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS='{{flags}}' CARGO_TARGET_WASM32_WASIP1_RUNNER='{{runner}}' cargo +1.99.1 run --locked --release --manifest-path '{{output}}/Cargo.toml' --target '{{target}}' --bin probe
+
+magemath-contracts source target="x86_64-unknown-linux-gnu" flags="" runner="" features="std,w512":
+    env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS='{{flags}}' CARGO_TARGET_WASM32_WASIP1_RUNNER='{{runner}}' cargo +1.99.1 test --locked --release --manifest-path '{{source}}/Cargo.toml' -p magemath --no-default-features --features '{{features}}' --target '{{target}}' --test contracts --test powf_highp
+
+magemath-wasm-token-check source runner:
+    env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS='-C target-feature=+simd128,+relaxed-simd' CARGO_TARGET_WASM32_WASIP1_RUNNER='{{runner}}' cargo +1.99.1 test --locked --release --manifest-path '{{source}}/Cargo.toml' -p magetypes --features std,w512,archmage/testable_dispatch --target wasm32-wasip1 --test subtier_ops wasm_relaxed_fma_backend_and_dispatch -- --nocapture
+
 numerical-goldens-portability:
     python3 goldens/compare_profiles.py
 

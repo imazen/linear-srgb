@@ -1,5 +1,11 @@
 # Transcendental inventory for portable math
 
+The [2026-11-13 PR #168 review](archmage-pr168.md) checks current upstream
+coverage for portable and backend-dependent variants. Its full-domain HIGHP
+supplies portable **f32** power, including subnormals; general f64 power and
+our curve-level integration remain separate work. Historical counts below
+describe the recorded linear-srgb revisions.
+
 ## Upstream source available after this inventory (2026-11-10)
 
 The current archmage repository contains a standalone

@@ -1,5 +1,31 @@
 # Precision driver
 
+## Magemath policy integration probe
+
+`just magemath-probe-prepare ARCHMAGE_SOURCE NEW_DIRECTORY` prepares a separate
+Cargo package using exact upstream path dependencies and this checkout's
+actual `src/tf/fast_math.rs`. It records input hashes in `SOURCE.json`; retain
+the resulting Cargo.lock. The source directory can be an immutable PR archive,
+so a busy sibling checkout need not be changed.
+
+Run `just magemath-probe DIRECTORY TARGET FLAGS RUNNER` through `run-heavy`.
+The probe requires SIMD128 for a WASM target. Relaxed builds require the
+runner to pass `ARCHMAGE_EXPECT_RELAXED_FUSION=yes` or `no` into the guest,
+and check the actual new token against that expectation. For example:
+
+```sh
+run-heavy --mem 12G --jobs 6 -- just magemath-probe "$OUTPUT" wasm32-wasip1 \
+  '-C target-feature=+simd128,+relaxed-simd' \
+  'wasmtime --env ARCHMAGE_EXPECT_RELAXED_FUSION=yes'
+```
+
+The comparison counts graph compatibility, not mathematical accuracy or
+speed. Both policies also assert vector/same-token scalar agreement.
+`magemath-contracts` runs the archived upstream contract/HIGHP fixtures;
+`magemath-wasm-token-check` checks the new token's primitive FMA and dispatch
+on a caller-declared engine. The [PR #168 assessment](../../docs/archmage-pr168.md)
+records tested revisions, inputs, results and remaining work.
+
 ## Row precision and complete source review
 
 `just issue-32-check` protects the exact chunk/tail witness from

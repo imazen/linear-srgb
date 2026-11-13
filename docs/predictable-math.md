@@ -1,5 +1,9 @@
 # Portable, predictable math: scope checked 2026-11-11
 
+The [2026-11-13 PR #168 assessment](archmage-pr168.md) updates upstream
+coverage, tests both arithmetic policies and records the remaining integration
+work. The observations below retain their original revision scope.
+
 The work has three independent contracts: matching outputs across ISAs,
 matching outputs across scalar/array/slice/tail entry points, and mathematical
 accuracy/monotonicity. A shared dependency, coefficient table or FMA primitive

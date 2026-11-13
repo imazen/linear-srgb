@@ -10,6 +10,8 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 
 ### Added
 
+- Archmage PR #168 integration assessment and isolated Magemath portable/backend-dependent compatibility probes; production math, dependency requirements and numerical goldens are unchanged.
+
 - Exact issue #32 chunk/tail witnesses, isolated committed-source reproduction, and complete PR-crate expanded-source review captures with lossless source-part verification. Numerical implementations, accuracy gates and output goldens are unchanged.
 
 - Frozen pre-PR numerical goldens: per-operation output chunk hashes for Linux x86-64/ARM64, both strict-WASM precision policies and explicit AVX-512 token arrays; complete output bits only for the 256-input u8 decode table (`17159435`).
