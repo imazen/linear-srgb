@@ -162,19 +162,40 @@ for entry in "${TARGETS[@]}"; do
     for stub in "${STUBS[@]}"; do
         out_file="$out_dir/${stub}.s"
         essence_file="$out_dir/${stub}.essence"
+        local_args=()
+        # These WASM stubs now call their tier kernel out of line. Include
+        # its body so the gate still covers gamma evaluation.
+        case "$target:$stub" in
+            wasm32-*:stub_*gamma*) local_args+=(--context=1) ;;
+        esac
         # shellcheck disable=SC2086
         RUSTFLAGS="$rustflags" cargo asm \
             --example asm-stub \
             --features "$features" \
             --target "$target" \
-            $asmargs \
+            $asmargs "${local_args[@]}" \
             "$stub" \
             2>/dev/null > "$out_file"
         # cargo-asm sometimes prepends an empty line; trim leading blanks.
         sed -i '/./,$!d' "$out_file"
 
         # Distill to opcode essence. See header comment for rationale.
+        context_hash=""
+        if grep -q '^=\+ Additional context =\+$' "$out_file"; then
+            # Keep the large out-of-line bodies under the opcode gate without
+            # duplicating them in every wrapper snapshot.
+            context_hash=$(
+                sed '1,/^=\+ Additional context =\+$/d' "$out_file" |
+                    normalize_asm_essence "$target" | sha256sum | cut -d' ' -f1
+            )
+            sed -i '/^=\+ Additional context =\+$/,$d' "$out_file"
+        fi
+        # Stabilize whitespace added by cargo-show-asm's renderer.
+        sed -i -e 's/[[:blank:]]*$//' -e '${/^$/d;}' "$out_file"
         normalize_asm_essence "$target" < "$out_file" > "$essence_file"
+        if [[ -n "$context_hash" ]]; then
+            printf 'CALLEE_OPCODE_SHA256 %s\n' "$context_hash" >> "$essence_file"
+        fi
 
         printf '  %s -> %s (%d lines, .essence %d lines)\n' \
             "$stub" "$out_file" \

@@ -3,7 +3,20 @@
 Cross-compiled assembly dumps of the public dispatchers in `examples/asm-stub.rs`,
 captured by `cargo asm` and re-checked in CI. Each `stub_<fn>` is
 `#[inline(never)] #[no_mangle]` so it survives as its own symbol in the
-example binary, with the public dispatcher's per-tier code inlined into it.
+example binary. The WASM gamma snapshots also include the first-level
+callee in the opcode gate, where the tier kernel runs out of line. The
+normalized callee opcodes are hashed to avoid repeating large bodies across
+wrapper snapshots. Use `cargo asm --context=1` to view those bodies.
+
+## Magemath transfer migration
+
+The refreshed ARM64 and WASM captures include the white snap and toe
+comparisons, the reference power fallback outside the extended sRGB fits,
+and the checked Magemath gamma profiles. The extended-range captures include
+guarded `powf` calls. The ordinary clamped sRGB captures still evaluate their
+polynomials vectorially. The WASM gamma stubs call their tier kernels, so the
+capture follows those calls to keep the arithmetic in the opcode gate.
+[Baseline CI capture](https://github.com/imazen/linear-srgb/actions/runs/44432829293)
 
 ## Two files per stub
 

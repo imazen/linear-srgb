@@ -37,16 +37,16 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	ldr x8, [x8, :got_lo12:archmage::tokens::generated::arm::NEON_CACHE]
 	ldrb w8, [x8]
 	cmp w8, #1
-	b.eq .LBB16_15
+	b.eq .LBB21_15
 	cmp w8, #2
-	b.ne .LBB16_14
-.LBB16_2:
+	b.ne .LBB21_14
+.LBB21_2:
 	and x8, x1, #0x1ffffffffffffff0
 	ands x21, x1, #0xc
 	lsr x22, x1, #4
 	add x19, x0, x8, lsl #2
 	lsl x20, x21, #2
-	b.eq .LBB16_4
+	b.eq .LBB21_4
 	mov w8, #64
 	mov x23, x0
 	mov w1, wzr
@@ -64,10 +64,10 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	stp q0, q1, [x29, #-192]
 	ldp q0, q2, [x29, #-96]
 	stp q0, q2, [x29, #-160]
-	b .LBB16_5
-.LBB16_4:
+	b .LBB21_5
+.LBB21_4:
 	mov w9, wzr
-.LBB16_5:
+.LBB21_5:
 	mov w8, #47186
 	mov w10, #25800
 	fmov v17.4s, #1.00000000
@@ -117,10 +117,10 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	csel x9, xzr, x1, eq
 	str w10, [sp, #12]
 	str q0, [sp, #16]
-	b .LBB16_8
-.LBB16_6:
+	b .LBB21_8
+.LBB21_6:
 	add x10, x0, #64
-.LBB16_7:
+.LBB21_7:
 	fmov s0, #1.00000000
 	ldr s24, [x0, #12]
 	ldr s1, [sp, #12]
@@ -150,9 +150,9 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	fcsel s28, s28, s5, gt
 	fcmp s26, s1
 	mov v9.s[0], v28.s[0]
-	fmax v29.4s, v27.4s, v7.4s
+	fmaxnm v29.4s, v27.4s, v7.4s
 	mov v9.s[1], v28.s[0]
-	fmin v30.4s, v29.4s, v17.4s
+	fminnm v30.4s, v29.4s, v17.4s
 	ldr q29, [x0, #16]
 	mov v9.s[2], v28.s[0]
 	ldr s28, [x0, #60]
@@ -163,11 +163,11 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	fmul v29.4s, v29.4s, v9.4s
 	fmov v9.4s, #1.00000000
 	mov v9.s[0], v12.s[0]
-	fmax v31.4s, v29.4s, v7.4s
+	fmaxnm v31.4s, v29.4s, v7.4s
 	fdiv s10, s0, s28
 	ldp q21, q0, [sp, #64]
 	mov v9.s[1], v12.s[0]
-	fmin v31.4s, v31.4s, v17.4s
+	fminnm v31.4s, v31.4s, v17.4s
 	fmla v11.4s, v3.4s, v8.4s
 	fadd v13.4s, v8.4s, v0.4s
 	mov v15.16b, v21.16b
@@ -191,28 +191,28 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	mov v11.s[0], v10.s[0]
 	mov v13.16b, v4.16b
 	mov v15.16b, v6.16b
-	fmax v9.4s, v8.4s, v7.4s
+	fmaxnm v9.4s, v8.4s, v7.4s
 	fdiv v18.4s, v12.4s, v14.4s
 	ldr q12, [x0, #48]
 	mov v11.s[1], v10.s[0]
 	fmla v13.4s, v3.4s, v19.4s
 	fadd v14.4s, v19.4s, v0.4s
 	mov v11.s[2], v10.s[0]
-	fmin v10.4s, v9.4s, v17.4s
+	fminnm v10.4s, v9.4s, v17.4s
 	fmla v15.4s, v19.4s, v13.4s
 	fmla v16.4s, v19.4s, v14.4s
 	mov v14.16b, v1.16b
 	fmul v9.4s, v12.4s, v11.4s
 	fsqrt v11.4s, v10.4s
 	fmla v14.4s, v19.4s, v15.4s
-	fmax v12.4s, v9.4s, v7.4s
+	fmaxnm v12.4s, v9.4s, v7.4s
 	mov v7.16b, v2.16b
-	fmin v18.4s, v18.4s, v17.4s
+	fminnm v18.4s, v18.4s, v17.4s
 	fmla v5.4s, v19.4s, v14.4s
 	mov v14.16b, v22.16b
 	fmla v7.4s, v19.4s, v16.4s
 	mov v16.16b, v4.16b
-	fmin v12.4s, v12.4s, v17.4s
+	fminnm v12.4s, v12.4s, v17.4s
 	fmla v20.4s, v19.4s, v7.4s
 	mov v19.16b, v21.16b
 	mov v7.16b, v6.16b
@@ -234,21 +234,21 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	fmla v6.4s, v13.4s, v4.4s
 	fmla v21.4s, v13.4s, v19.4s
 	fmla v15.4s, v11.4s, v20.4s
-	fcmgt v20.4s, v0.4s, v30.4s
+	fcmge v20.4s, v0.4s, v30.4s
 	fmla v1.4s, v13.4s, v6.4s
 	fmla v2.4s, v13.4s, v21.4s
 	fdiv v7.4s, v14.4s, v15.4s
-	fmin v5.4s, v5.4s, v17.4s
+	fminnm v5.4s, v5.4s, v17.4s
 	fmla v22.4s, v13.4s, v1.4s
 	fmla v23.4s, v13.4s, v2.4s
 	ldr q13, [sp, #176]
 	fmul v19.4s, v30.4s, v13.4s
 	fmul v30.4s, v31.4s, v13.4s
-	fcmgt v31.4s, v0.4s, v31.4s
+	fcmge v31.4s, v0.4s, v31.4s
 	fmul v11.4s, v10.4s, v13.4s
-	fcmgt v10.4s, v0.4s, v10.4s
+	fcmge v10.4s, v0.4s, v10.4s
 	fmul v13.4s, v12.4s, v13.4s
-	fcmgt v12.4s, v0.4s, v12.4s
+	fcmge v12.4s, v0.4s, v12.4s
 	bit v18.16b, v19.16b, v20.16b
 	fcmge v19.4s, v27.4s, v17.4s
 	bit v5.16b, v30.16b, v31.16b
@@ -256,7 +256,7 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	fcmge v20.4s, v29.4s, v17.4s
 	fcmge v27.4s, v8.4s, v17.4s
 	fcmge v29.4s, v9.4s, v17.4s
-	fmin v7.4s, v7.4s, v17.4s
+	fminnm v7.4s, v7.4s, v17.4s
 	bit v18.16b, v17.16b, v19.16b
 	bit v5.16b, v17.16b, v20.16b
 	bit v7.16b, v11.16b, v10.16b
@@ -264,29 +264,29 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	str s24, [x0, #12]
 	str s25, [x0, #28]
 	bit v7.16b, v17.16b, v27.16b
-	fmin v16.4s, v16.4s, v17.4s
+	fminnm v16.4s, v16.4s, v17.4s
 	bit v16.16b, v13.16b, v12.16b
 	bit v16.16b, v17.16b, v29.16b
 	stp q7, q16, [x0, #32]
 	str s26, [x0, #44]
 	str s28, [x0, #60]
 	mov x0, x10
-.LBB16_8:
+.LBB21_8:
 	cmp x0, x8
 	ccmp x0, #0, #4, ne
-	b.ne .LBB16_6
-	cbz x9, .LBB16_11
+	b.ne .LBB21_6
+	cbz x9, .LBB21_11
 	mov x10, xzr
 	mov x0, x9
 	mov x9, xzr
-	b .LBB16_7
-.LBB16_11:
+	b .LBB21_7
+.LBB21_11:
 	ldur w8, [x29, #-196]
-	cbz w8, .LBB16_13
+	cbz w8, .LBB21_13
 	mov x0, x19
 	mov x2, x20
 	bl memcpy
-.LBB16_13:
+.LBB21_13:
 	.cfi_def_cfa wsp, 464
 	ldp x20, x19, [sp, #448]
 	ldp x22, x21, [sp, #432]
@@ -315,7 +315,7 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	.cfi_restore b14
 	.cfi_restore b15
 	ret
-.LBB16_14:
+.LBB21_14:
 	.cfi_restore_state
 	mov x19, x0
 	mov x20, x1
@@ -323,8 +323,8 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	mov x1, x20
 	mov w8, w0
 	mov x0, x19
-	cbnz w8, .LBB16_2
-.LBB16_15:
+	cbnz w8, .LBB21_2
+.LBB21_15:
 	.cfi_def_cfa wsp, 464
 	ldp x20, x19, [sp, #448]
 	ldp x22, x21, [sp, #432]
