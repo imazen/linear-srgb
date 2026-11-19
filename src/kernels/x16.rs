@@ -1,7 +1,5 @@
 //! Private 16-lane kernels used by the canonical CPU-feature entry points.
 
-#[cfg(feature = "transfer")]
-use crate::tf::fast_math::Mla;
 use archmage::attune;
 
 use archmage::X64V4Token;
@@ -244,37 +242,14 @@ pub(crate) fn linear_to_srgb_u8_slice_v4(token: X64V4Token, input: &[f32], outpu
 #[cfg(feature = "transfer")]
 #[attune(inline(hint))]
 pub(crate) fn tf_srgb_to_linear_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
-    use crate::rational_poly::{LINEAR_SCALE, S2L_P, S2L_Q, SRGB_THRESHOLD};
-
-    let v = mt_f32x16::from_array_t(token, v);
-    let one = mt_f32x16::splat_t(token, 1.0);
-    let threshold = mt_f32x16::splat_t(token, SRGB_THRESHOLD);
-    let inv_12_92 = mt_f32x16::splat_t(token, LINEAR_SCALE);
-
-    let linear = v * inv_12_92;
-    let poly = eval_rational_poly_x16(token, v, S2L_P, S2L_Q).min(one);
-
-    let mask = v.simd_le(threshold);
-    mt_f32x16::blend(mask, linear, poly).to_array()
+    super::float::x16::srgb_to_linear(token, v)
 }
 
 /// Convert 16 linear values to sRGB (rational polynomial, no powf).
 #[cfg(feature = "transfer")]
 #[attune(inline(hint))]
 pub(crate) fn tf_linear_to_srgb_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
-    use crate::rational_poly::{L2S_P, L2S_Q, LINEAR_THRESHOLD, TWELVE_92};
-
-    let v = mt_f32x16::from_array_t(token, v);
-    let one = mt_f32x16::splat_t(token, 1.0);
-    let threshold = mt_f32x16::splat_t(token, LINEAR_THRESHOLD);
-    let scale = mt_f32x16::splat_t(token, TWELVE_92);
-
-    let linear = v * scale;
-    let s = v.sqrt();
-    let poly = eval_rational_poly_x16(token, s, L2S_P, L2S_Q).min(one);
-
-    let mask = v.simd_le(threshold);
-    mt_f32x16::blend(mask, linear, poly).to_array()
+    super::float::x16::linear_to_srgb(token, v)
 }
 
 /// Convert 16 PQ signal values to linear.
@@ -391,29 +366,6 @@ tf_slice_v4!(
     linear_to_hlg_v4,
     crate::tf::linear_to_hlg
 );
-
-#[cfg(feature = "transfer")]
-#[inline(always)]
-fn eval_rational_poly_x16(
-    t: X64V4Token,
-    x: magetypes::simd::v4::f32x16,
-    p: [f32; 5],
-    q: [f32; 5],
-) -> magetypes::simd::v4::f32x16 {
-    let mut yp = mt_f32x16::splat_t(t, p[4]);
-    yp = yp.mla(x, mt_f32x16::splat_t(t, p[3]));
-    yp = yp.mla(x, mt_f32x16::splat_t(t, p[2]));
-    yp = yp.mla(x, mt_f32x16::splat_t(t, p[1]));
-    yp = yp.mla(x, mt_f32x16::splat_t(t, p[0]));
-
-    let mut yq = mt_f32x16::splat_t(t, q[4]);
-    yq = yq.mla(x, mt_f32x16::splat_t(t, q[3]));
-    yq = yq.mla(x, mt_f32x16::splat_t(t, q[2]));
-    yq = yq.mla(x, mt_f32x16::splat_t(t, q[1]));
-    yq = yq.mla(x, mt_f32x16::splat_t(t, q[0]));
-
-    yp / yq
-}
 
 // ============================================================================
 // Tests

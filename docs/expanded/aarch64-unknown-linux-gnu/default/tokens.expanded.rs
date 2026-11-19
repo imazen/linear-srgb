@@ -2,8 +2,8 @@
 // rustc 1.99.0 (b940084d7 2026-09-28); cargo-expand 1.0.126
 // Target: aarch64-unknown-linux-gnu; preset: default; module: tokens
 // Library features: avx512, default, std
-// Providers: archmage 0.9.31, archmage-macros 0.9.31, magetypes 0.9.31
-// Resolution lock SHA-256: baa249ace65f09fadc01877561cdd51456e6ea2b609ef4a283daab4bc0ec1070
+// Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
+// Resolution lock SHA-256: 32b94422ac5d017b841b4107976d0df074cc54bcb1c10333e99bb56687bd10a3
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 /// Deprecated token-taking compatibility API. Use [`crate::target_features`]

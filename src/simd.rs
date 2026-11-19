@@ -14,7 +14,7 @@
 //! ## Single-value LUT Functions
 //! - `srgb_u8_to_linear` - u8 → f32 via lookup table
 
-use crate::tf::fast_math::Mla;
+use crate::tf::polynomial::Mla;
 // All archmage tokens are available on every platform — real impls on their
 // native arch, zero-construction stubs elsewhere. The `#[arcane]` /
 // `#[attune]` / `#[archmage::magetypes]` macros emit their own cfg guards
@@ -57,9 +57,11 @@ fn srgb_to_linear_rgba_slice_tier(_token: Token, values: &mut [f32]) {
     let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
     let mut tail = tail_block::<16>(remainder);
     for chunk in chunks.iter_mut().chain(tail.as_mut()) {
-        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
+        let original = f32x16::from_array_t(_token, *chunk);
         *chunk = mt_srgb_to_linear(_token, *chunk);
-        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
+        *chunk = f32x16::from_array_t(_token, *chunk)
+            .with_rgba_alpha(original)
+            .to_array();
     }
     store_tail(remainder, tail.as_ref());
 }
@@ -123,9 +125,11 @@ fn linear_to_srgb_rgba_slice_tier(_token: Token, values: &mut [f32]) {
     let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
     let mut tail = tail_block::<16>(remainder);
     for chunk in chunks.iter_mut().chain(tail.as_mut()) {
-        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
+        let original = f32x16::from_array_t(_token, *chunk);
         *chunk = mt_linear_to_srgb(_token, *chunk);
-        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
+        *chunk = f32x16::from_array_t(_token, *chunk)
+            .with_rgba_alpha(original)
+            .to_array();
     }
     store_tail(remainder, tail.as_ref());
 }
@@ -306,10 +310,12 @@ fn srgb_to_linear_extended_rgba_slice_tier(token: Token, values: &mut [f32]) {
     let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
     let mut tail = tail_block::<16>(remainder);
     for chunk in chunks.iter_mut().chain(tail.as_mut()) {
-        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
+        let original = f32x16::from_array_t(token, *chunk);
         let v = f32x16::from_array_t(token, *chunk);
-        *chunk = crate::tf::srgb::srgb_to_linear_extended_x16(token, v).to_array();
-        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
+        *chunk = crate::kernels::float::x16::srgb_to_linear_extended(token, v.to_array());
+        *chunk = f32x16::from_array_t(token, *chunk)
+            .with_rgba_alpha(original)
+            .to_array();
     }
     store_tail(remainder, tail.as_ref());
 }
@@ -352,10 +358,12 @@ fn linear_to_srgb_extended_rgba_slice_tier(token: Token, values: &mut [f32]) {
     let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
     let mut tail = tail_block::<16>(remainder);
     for chunk in chunks.iter_mut().chain(tail.as_mut()) {
-        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
+        let original = f32x16::from_array_t(token, *chunk);
         let v = f32x16::from_array_t(token, *chunk);
-        *chunk = crate::tf::srgb::linear_to_srgb_extended_x16(token, v).to_array();
-        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
+        *chunk = crate::kernels::float::x16::linear_to_srgb_extended(token, v.to_array());
+        *chunk = f32x16::from_array_t(token, *chunk)
+            .with_rgba_alpha(original)
+            .to_array();
     }
     store_tail(remainder, tail.as_ref());
 }
@@ -685,7 +693,7 @@ fn srgb_u16_to_linear_slice_tier(token: Token, input: &[u16], output: &mut [f32]
     }
 
     // Keep tails on the same shared arithmetic policy as full blocks.
-    if crate::tf::fast_math::USE_FUSED_MATH {
+    if crate::tf::polynomial::USE_FUSED_MATH {
         for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
             *out = crate::lanes::srgb_to_linear(*inp as f32 * (1.0 / 65535.0));
         }
@@ -760,7 +768,7 @@ fn linear_to_srgb_u16_slice_tier(token: Token, input: &[f32], output: &mut [u16]
     }
 
     // Keep tails on the same shared arithmetic policy as full blocks.
-    if crate::tf::fast_math::USE_FUSED_MATH {
+    if crate::tf::polynomial::USE_FUSED_MATH {
         for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
             *out = crate::lanes::linear_to_srgb_u16(*inp);
         }
@@ -1386,13 +1394,12 @@ fn gamma_to_linear_rgba_slice_tier(token: Token, values: &mut [f32], gamma: f32)
     let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
     let mut tail = tail_block::<16>(remainder);
     for chunk in chunks.iter_mut().chain(tail.as_mut()) {
-        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
+        let original = f32x16::from_array_t(token, *chunk);
         let v = f32x16::from_array_t(token, *chunk);
-        let clamped = v
-            .max(f32x16::zero_t(token))
-            .min(f32x16::splat_t(token, 1.0));
-        *chunk = crate::tf::fast_math::pow_x16(token, clamped, gamma).to_array();
-        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
+        *chunk = crate::tf::math::gamma_x16(token, v, gamma).to_array();
+        *chunk = f32x16::from_array_t(token, *chunk)
+            .with_rgba_alpha(original)
+            .to_array();
     }
     store_tail(remainder, tail.as_ref());
 }
@@ -1434,13 +1441,12 @@ fn linear_to_gamma_rgba_slice_tier(token: Token, values: &mut [f32], gamma: f32)
     let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
     let mut tail = tail_block::<16>(remainder);
     for chunk in chunks.iter_mut().chain(tail.as_mut()) {
-        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
+        let original = f32x16::from_array_t(token, *chunk);
         let v = f32x16::from_array_t(token, *chunk);
-        let clamped = v
-            .max(f32x16::zero_t(token))
-            .min(f32x16::splat_t(token, 1.0));
-        *chunk = crate::tf::fast_math::pow_x16(token, clamped, 1.0 / gamma).to_array();
-        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
+        *chunk = crate::tf::math::gamma_x16(token, v, 1.0 / gamma).to_array();
+        *chunk = f32x16::from_array_t(token, *chunk)
+            .with_rgba_alpha(original)
+            .to_array();
     }
     store_tail(remainder, tail.as_ref());
 }
@@ -3575,6 +3581,7 @@ mod tests {
     #[cfg(feature = "transfer")]
     mod tf_slice_parity {
         use super::super::*;
+        use std::vec::Vec;
 
         fn sweep() -> Vec<f32> {
             // Include small remainder past the widest SIMD width (16) to

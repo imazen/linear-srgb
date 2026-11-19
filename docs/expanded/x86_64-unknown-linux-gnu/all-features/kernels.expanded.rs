@@ -2,8 +2,8 @@
 // rustc 1.99.0 (b940084d7 2026-09-28); cargo-expand 1.0.126
 // Target: x86_64-unknown-linux-gnu; preset: all-features; module: kernels
 // Library features: alt, avx512, default, iec, precise-portable, std, transfer, unsafe_simd
-// Providers: archmage 0.9.31, archmage-macros 0.9.31, magetypes 0.9.31
-// Resolution lock SHA-256: a0d29ae434c92b6ce81b6f9641d822b03799e7f7dd6872c708565392d72e54ea
+// Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
+// Resolution lock SHA-256: 28b394595cbab5036bb0de58aae94159fe72486a4ca2a76ebd9f68a4e5646763
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 mod kernels {
@@ -14,7 +14,7 @@ mod kernels {
             LINEAR_SCALE, LINEAR_THRESHOLD, SRGB_THRESHOLD as SRGB_LINEAR_THRESHOLD,
             TWELVE_92,
         };
-        use crate::tf::fast_math::Mla;
+        use crate::tf::polynomial::Mla;
         use magetypes::simd::{backends::*, generic::*};
         pub(crate) mod x4 {
             use super::*;
@@ -42,7 +42,7 @@ mod kernels {
                 let yq = yq.mla(x, f32x4::<T>::splat_t(token, S2L_Q[0]));
                 let power_result = (yp / yq).min(one);
                 let mask = clamped
-                    .simd_lt(f32x4::<T>::splat_t(token, SRGB_LINEAR_THRESHOLD));
+                    .simd_le(f32x4::<T>::splat_t(token, SRGB_LINEAR_THRESHOLD));
                 let result = f32x4::<T>::blend(mask, linear_result, power_result);
                 let ge_one = v.simd_ge(one);
                 f32x4::<T>::blend(ge_one, one, result).to_array()
@@ -70,7 +70,7 @@ mod kernels {
                 let yq = yq.mla(x, f32x4::<T>::splat_t(token, L2S_Q[1]));
                 let yq = yq.mla(x, f32x4::<T>::splat_t(token, L2S_Q[0]));
                 let power_result = (yp / yq).min(one);
-                let mask = clamped.simd_lt(f32x4::<T>::splat_t(token, LINEAR_THRESHOLD));
+                let mask = clamped.simd_le(f32x4::<T>::splat_t(token, LINEAR_THRESHOLD));
                 let result = f32x4::<T>::blend(mask, linear_result, power_result);
                 let ge_one = v.simd_ge(one);
                 f32x4::<T>::blend(ge_one, one, result).to_array()
@@ -81,10 +81,8 @@ mod kernels {
                 encoded: [f32; 4],
                 gamma: f32,
             ) -> [f32; 4] {
-                let zero = f32x4::<T>::zero_t(token);
-                let one = f32x4::<T>::splat_t(token, 1.0);
-                let v = f32x4::<T>::from_array_t(token, encoded).max(zero).min(one);
-                crate::tf::fast_math::pow_x4(token, v, gamma).to_array()
+                let v = f32x4::<T>::from_array_t(token, encoded);
+                crate::tf::math::gamma_x4(token, v, gamma).to_array()
             }
             #[inline(always)]
             pub(crate) fn linear_to_gamma<T: F32x4Convert>(
@@ -92,10 +90,8 @@ mod kernels {
                 linear: [f32; 4],
                 gamma: f32,
             ) -> [f32; 4] {
-                let zero = f32x4::<T>::zero_t(token);
-                let one = f32x4::<T>::splat_t(token, 1.0);
-                let v = f32x4::<T>::from_array_t(token, linear).max(zero).min(one);
-                crate::tf::fast_math::pow_x4(token, v, 1.0 / gamma).to_array()
+                let v = f32x4::<T>::from_array_t(token, linear);
+                crate::tf::math::gamma_x4(token, v, 1.0 / gamma).to_array()
             }
             #[inline(always)]
             pub(crate) fn srgb_to_linear_extended<T: F32x4Backend>(
@@ -103,9 +99,8 @@ mod kernels {
                 srgb: [f32; 4],
             ) -> [f32; 4] {
                 use crate::rational_poly::{EXT_S2L_P as P, EXT_S2L_Q as Q};
-                let zero = f32x4::zero_t(token);
+                let sign = f32x4::splat_t(token, -0.0);
                 let v = f32x4::from_array_t(token, srgb);
-                let neg_mask = v.simd_lt(zero);
                 let abs_v = v.abs();
                 let linear_result = abs_v * f32x4::splat_t(token, LINEAR_SCALE);
                 let x = abs_v;
@@ -125,8 +120,14 @@ mod kernels {
                 let thresh_mask = abs_v
                     .simd_lt(f32x4::splat_t(token, SRGB_LINEAR_THRESHOLD));
                 let result = f32x4::blend(thresh_mask, linear_result, power_result);
-                let result = f32x4::blend(neg_mask, -result, result);
-                result.to_array()
+                let result = result.abs() | (v & sign);
+                let mut result = result.to_array();
+                for (source, output) in v.to_array().into_iter().zip(&mut result) {
+                    if source.abs() > 8.0 {
+                        *output = crate::scalar::srgb_to_linear_extended(source);
+                    }
+                }
+                result
             }
             #[inline(always)]
             pub(crate) fn linear_to_srgb_extended<T: F32x4Backend>(
@@ -134,9 +135,8 @@ mod kernels {
                 linear: [f32; 4],
             ) -> [f32; 4] {
                 use crate::rational_poly::{EXT_L2S_P as P, EXT_L2S_Q as Q};
-                let zero = f32x4::zero_t(token);
+                let sign = f32x4::splat_t(token, -0.0);
                 let v = f32x4::from_array_t(token, linear);
-                let neg_mask = v.simd_lt(zero);
                 let abs_v = v.abs();
                 let linear_result = abs_v * f32x4::splat_t(token, TWELVE_92);
                 let x = abs_v.sqrt();
@@ -155,8 +155,14 @@ mod kernels {
                 let power_result = yp / yq;
                 let thresh_mask = abs_v.simd_lt(f32x4::splat_t(token, LINEAR_THRESHOLD));
                 let result = f32x4::blend(thresh_mask, linear_result, power_result);
-                let result = f32x4::blend(neg_mask, -result, result);
-                result.to_array()
+                let result = result.abs() | (v & sign);
+                let mut result = result.to_array();
+                for (source, output) in v.to_array().into_iter().zip(&mut result) {
+                    if source.abs() > 64.0 {
+                        *output = crate::scalar::linear_to_srgb_extended(source);
+                    }
+                }
+                result
             }
         }
         pub(crate) mod x8 {
@@ -185,7 +191,7 @@ mod kernels {
                 let yq = yq.mla(x, f32x8::<T>::splat_t(token, S2L_Q[0]));
                 let power_result = (yp / yq).min(one);
                 let mask = clamped
-                    .simd_lt(f32x8::<T>::splat_t(token, SRGB_LINEAR_THRESHOLD));
+                    .simd_le(f32x8::<T>::splat_t(token, SRGB_LINEAR_THRESHOLD));
                 let result = f32x8::<T>::blend(mask, linear_result, power_result);
                 let ge_one = v.simd_ge(one);
                 f32x8::<T>::blend(ge_one, one, result).to_array()
@@ -213,7 +219,7 @@ mod kernels {
                 let yq = yq.mla(x, f32x8::<T>::splat_t(token, L2S_Q[1]));
                 let yq = yq.mla(x, f32x8::<T>::splat_t(token, L2S_Q[0]));
                 let power_result = (yp / yq).min(one);
-                let mask = clamped.simd_lt(f32x8::<T>::splat_t(token, LINEAR_THRESHOLD));
+                let mask = clamped.simd_le(f32x8::<T>::splat_t(token, LINEAR_THRESHOLD));
                 let result = f32x8::<T>::blend(mask, linear_result, power_result);
                 let ge_one = v.simd_ge(one);
                 f32x8::<T>::blend(ge_one, one, result).to_array()
@@ -224,10 +230,8 @@ mod kernels {
                 encoded: [f32; 8],
                 gamma: f32,
             ) -> [f32; 8] {
-                let zero = f32x8::<T>::zero_t(token);
-                let one = f32x8::<T>::splat_t(token, 1.0);
-                let v = f32x8::<T>::from_array_t(token, encoded).max(zero).min(one);
-                crate::tf::fast_math::pow_x8(token, v, gamma).to_array()
+                let v = f32x8::<T>::from_array_t(token, encoded);
+                crate::tf::math::gamma_x8(token, v, gamma).to_array()
             }
             #[inline(always)]
             pub(crate) fn linear_to_gamma<T: F32x8Convert>(
@@ -235,10 +239,8 @@ mod kernels {
                 linear: [f32; 8],
                 gamma: f32,
             ) -> [f32; 8] {
-                let zero = f32x8::<T>::zero_t(token);
-                let one = f32x8::<T>::splat_t(token, 1.0);
-                let v = f32x8::<T>::from_array_t(token, linear).max(zero).min(one);
-                crate::tf::fast_math::pow_x8(token, v, 1.0 / gamma).to_array()
+                let v = f32x8::<T>::from_array_t(token, linear);
+                crate::tf::math::gamma_x8(token, v, 1.0 / gamma).to_array()
             }
             #[inline(always)]
             pub(crate) fn srgb_to_linear_extended<T: F32x8Backend>(
@@ -246,9 +248,8 @@ mod kernels {
                 srgb: [f32; 8],
             ) -> [f32; 8] {
                 use crate::rational_poly::{EXT_S2L_P as P, EXT_S2L_Q as Q};
-                let zero = f32x8::zero_t(token);
+                let sign = f32x8::splat_t(token, -0.0);
                 let v = f32x8::from_array_t(token, srgb);
-                let neg_mask = v.simd_lt(zero);
                 let abs_v = v.abs();
                 let linear_result = abs_v * f32x8::splat_t(token, LINEAR_SCALE);
                 let x = abs_v;
@@ -268,8 +269,14 @@ mod kernels {
                 let thresh_mask = abs_v
                     .simd_lt(f32x8::splat_t(token, SRGB_LINEAR_THRESHOLD));
                 let result = f32x8::blend(thresh_mask, linear_result, power_result);
-                let result = f32x8::blend(neg_mask, -result, result);
-                result.to_array()
+                let result = result.abs() | (v & sign);
+                let mut result = result.to_array();
+                for (source, output) in v.to_array().into_iter().zip(&mut result) {
+                    if source.abs() > 8.0 {
+                        *output = crate::scalar::srgb_to_linear_extended(source);
+                    }
+                }
+                result
             }
             #[inline(always)]
             pub(crate) fn linear_to_srgb_extended<T: F32x8Backend>(
@@ -277,9 +284,8 @@ mod kernels {
                 linear: [f32; 8],
             ) -> [f32; 8] {
                 use crate::rational_poly::{EXT_L2S_P as P, EXT_L2S_Q as Q};
-                let zero = f32x8::zero_t(token);
+                let sign = f32x8::splat_t(token, -0.0);
                 let v = f32x8::from_array_t(token, linear);
-                let neg_mask = v.simd_lt(zero);
                 let abs_v = v.abs();
                 let linear_result = abs_v * f32x8::splat_t(token, TWELVE_92);
                 let x = abs_v.sqrt();
@@ -298,8 +304,14 @@ mod kernels {
                 let power_result = yp / yq;
                 let thresh_mask = abs_v.simd_lt(f32x8::splat_t(token, LINEAR_THRESHOLD));
                 let result = f32x8::blend(thresh_mask, linear_result, power_result);
-                let result = f32x8::blend(neg_mask, -result, result);
-                result.to_array()
+                let result = result.abs() | (v & sign);
+                let mut result = result.to_array();
+                for (source, output) in v.to_array().into_iter().zip(&mut result) {
+                    if source.abs() > 64.0 {
+                        *output = crate::scalar::linear_to_srgb_extended(source);
+                    }
+                }
+                result
             }
         }
         pub(crate) mod x16 {
@@ -328,7 +340,7 @@ mod kernels {
                 let yq = yq.mla(x, f32x16::<T>::splat_t(token, S2L_Q[0]));
                 let power_result = (yp / yq).min(one);
                 let mask = clamped
-                    .simd_lt(f32x16::<T>::splat_t(token, SRGB_LINEAR_THRESHOLD));
+                    .simd_le(f32x16::<T>::splat_t(token, SRGB_LINEAR_THRESHOLD));
                 let result = f32x16::<T>::blend(mask, linear_result, power_result);
                 let ge_one = v.simd_ge(one);
                 f32x16::<T>::blend(ge_one, one, result).to_array()
@@ -357,7 +369,7 @@ mod kernels {
                 let yq = yq.mla(x, f32x16::<T>::splat_t(token, L2S_Q[0]));
                 let power_result = (yp / yq).min(one);
                 let mask = clamped
-                    .simd_lt(f32x16::<T>::splat_t(token, LINEAR_THRESHOLD));
+                    .simd_le(f32x16::<T>::splat_t(token, LINEAR_THRESHOLD));
                 let result = f32x16::<T>::blend(mask, linear_result, power_result);
                 let ge_one = v.simd_ge(one);
                 f32x16::<T>::blend(ge_one, one, result).to_array()
@@ -368,10 +380,8 @@ mod kernels {
                 encoded: [f32; 16],
                 gamma: f32,
             ) -> [f32; 16] {
-                let zero = f32x16::<T>::zero_t(token);
-                let one = f32x16::<T>::splat_t(token, 1.0);
-                let v = f32x16::<T>::from_array_t(token, encoded).max(zero).min(one);
-                crate::tf::fast_math::pow_x16(token, v, gamma).to_array()
+                let v = f32x16::<T>::from_array_t(token, encoded);
+                crate::tf::math::gamma_x16(token, v, gamma).to_array()
             }
             #[inline(always)]
             pub(crate) fn linear_to_gamma<T: F32x16Convert>(
@@ -379,10 +389,8 @@ mod kernels {
                 linear: [f32; 16],
                 gamma: f32,
             ) -> [f32; 16] {
-                let zero = f32x16::<T>::zero_t(token);
-                let one = f32x16::<T>::splat_t(token, 1.0);
-                let v = f32x16::<T>::from_array_t(token, linear).max(zero).min(one);
-                crate::tf::fast_math::pow_x16(token, v, 1.0 / gamma).to_array()
+                let v = f32x16::<T>::from_array_t(token, linear);
+                crate::tf::math::gamma_x16(token, v, 1.0 / gamma).to_array()
             }
             #[inline(always)]
             pub(crate) fn srgb_to_linear_extended<T: F32x16Backend>(
@@ -390,9 +398,8 @@ mod kernels {
                 srgb: [f32; 16],
             ) -> [f32; 16] {
                 use crate::rational_poly::{EXT_S2L_P as P, EXT_S2L_Q as Q};
-                let zero = f32x16::zero_t(token);
+                let sign = f32x16::splat_t(token, -0.0);
                 let v = f32x16::from_array_t(token, srgb);
-                let neg_mask = v.simd_lt(zero);
                 let abs_v = v.abs();
                 let linear_result = abs_v * f32x16::splat_t(token, LINEAR_SCALE);
                 let x = abs_v;
@@ -414,8 +421,14 @@ mod kernels {
                 let thresh_mask = abs_v
                     .simd_lt(f32x16::splat_t(token, SRGB_LINEAR_THRESHOLD));
                 let result = f32x16::blend(thresh_mask, linear_result, power_result);
-                let result = f32x16::blend(neg_mask, -result, result);
-                result.to_array()
+                let result = result.abs() | (v & sign);
+                let mut result = result.to_array();
+                for (source, output) in v.to_array().into_iter().zip(&mut result) {
+                    if source.abs() > 8.0 {
+                        *output = crate::scalar::srgb_to_linear_extended(source);
+                    }
+                }
+                result
             }
             #[inline(always)]
             pub(crate) fn linear_to_srgb_extended<T: F32x16Backend>(
@@ -423,9 +436,8 @@ mod kernels {
                 linear: [f32; 16],
             ) -> [f32; 16] {
                 use crate::rational_poly::{EXT_L2S_P as P, EXT_L2S_Q as Q};
-                let zero = f32x16::zero_t(token);
+                let sign = f32x16::splat_t(token, -0.0);
                 let v = f32x16::from_array_t(token, linear);
-                let neg_mask = v.simd_lt(zero);
                 let abs_v = v.abs();
                 let linear_result = abs_v * f32x16::splat_t(token, TWELVE_92);
                 let x = abs_v.sqrt();
@@ -447,14 +459,19 @@ mod kernels {
                 let thresh_mask = abs_v
                     .simd_lt(f32x16::splat_t(token, LINEAR_THRESHOLD));
                 let result = f32x16::blend(thresh_mask, linear_result, power_result);
-                let result = f32x16::blend(neg_mask, -result, result);
-                result.to_array()
+                let result = result.abs() | (v & sign);
+                let mut result = result.to_array();
+                for (source, output) in v.to_array().into_iter().zip(&mut result) {
+                    if source.abs() > 64.0 {
+                        *output = crate::scalar::linear_to_srgb_extended(source);
+                    }
+                }
+                result
             }
         }
     }
     pub(crate) mod x16 {
         //! Private 16-lane kernels used by the canonical CPU-feature entry points.
-        use crate::tf::fast_math::Mla;
         use archmage::attune;
         use archmage::X64V4Token;
         use magetypes::simd::v4::f32x16 as mt_f32x16;
@@ -758,15 +775,7 @@ mod kernels {
             token: X64V4Token,
             v: [f32; 16],
         ) -> [f32; 16] {
-            use crate::rational_poly::{LINEAR_SCALE, S2L_P, S2L_Q, SRGB_THRESHOLD};
-            let v = mt_f32x16::from_array_t(token, v);
-            let one = mt_f32x16::splat_t(token, 1.0);
-            let threshold = mt_f32x16::splat_t(token, SRGB_THRESHOLD);
-            let inv_12_92 = mt_f32x16::splat_t(token, LINEAR_SCALE);
-            let linear = v * inv_12_92;
-            let poly = eval_rational_poly_x16(token, v, S2L_P, S2L_Q).min(one);
-            let mask = v.simd_le(threshold);
-            mt_f32x16::blend(mask, linear, poly).to_array()
+            super::float::x16::srgb_to_linear(token, v)
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe,pclmulqdq,aes,avx512f,avx512bw,avx512cd,avx512dq,avx512vl"
@@ -777,16 +786,7 @@ mod kernels {
             token: X64V4Token,
             v: [f32; 16],
         ) -> [f32; 16] {
-            use crate::rational_poly::{L2S_P, L2S_Q, LINEAR_THRESHOLD, TWELVE_92};
-            let v = mt_f32x16::from_array_t(token, v);
-            let one = mt_f32x16::splat_t(token, 1.0);
-            let threshold = mt_f32x16::splat_t(token, LINEAR_THRESHOLD);
-            let scale = mt_f32x16::splat_t(token, TWELVE_92);
-            let linear = v * scale;
-            let s = v.sqrt();
-            let poly = eval_rational_poly_x16(token, s, L2S_P, L2S_Q).min(one);
-            let mask = v.simd_le(threshold);
-            mt_f32x16::blend(mask, linear, poly).to_array()
+            super::float::x16::linear_to_srgb(token, v)
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe,pclmulqdq,aes,avx512f,avx512bw,avx512cd,avx512dq,avx512vl"
@@ -1015,25 +1015,6 @@ mod kernels {
                 let converted = linear_to_hlg_v4(token, padded);
                 remainder.copy_from_slice(&converted[..remainder.len()]);
             }
-        }
-        #[inline(always)]
-        fn eval_rational_poly_x16(
-            t: X64V4Token,
-            x: magetypes::simd::v4::f32x16,
-            p: [f32; 5],
-            q: [f32; 5],
-        ) -> magetypes::simd::v4::f32x16 {
-            let mut yp = mt_f32x16::splat_t(t, p[4]);
-            yp = yp.mla(x, mt_f32x16::splat_t(t, p[3]));
-            yp = yp.mla(x, mt_f32x16::splat_t(t, p[2]));
-            yp = yp.mla(x, mt_f32x16::splat_t(t, p[1]));
-            yp = yp.mla(x, mt_f32x16::splat_t(t, p[0]));
-            let mut yq = mt_f32x16::splat_t(t, q[4]);
-            yq = yq.mla(x, mt_f32x16::splat_t(t, q[3]));
-            yq = yq.mla(x, mt_f32x16::splat_t(t, q[2]));
-            yq = yq.mla(x, mt_f32x16::splat_t(t, q[1]));
-            yq = yq.mla(x, mt_f32x16::splat_t(t, q[0]));
-            yp / yq
         }
     }
     pub(crate) mod x4 {
@@ -1510,7 +1491,7 @@ mod kernels {
     }
     pub(crate) mod x8 {
         //! Private 8-lane kernels used by the canonical CPU-feature entry points.
-        use crate::tf::fast_math::Mla;
+        use crate::tf::polynomial::Mla;
         use archmage::attune;
         use archmage::X64V3Token;
         use magetypes::simd::f32x8 as mt_f32x8;
@@ -2293,7 +2274,7 @@ mod kernels {
         vector: impl FnOnce([f32; N]) -> [f32; N],
         fused: impl FnMut(f32) -> f32,
     ) -> [f32; N] {
-        if crate::tf::fast_math::USE_FUSED_MATH {
+        if crate::tf::polynomial::USE_FUSED_MATH {
             values.map(fused)
         } else {
             vector(values)
@@ -2306,7 +2287,7 @@ mod kernels {
         vector: impl FnMut([f32; N]) -> [f32; N],
         mut fused: impl FnMut(f32) -> f32,
     ) {
-        if crate::tf::fast_math::USE_FUSED_MATH {
+        if crate::tf::polynomial::USE_FUSED_MATH {
             for value in values {
                 *value = fused(*value);
             }

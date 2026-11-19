@@ -9,5 +9,5 @@ publish = false
 
 [dependencies]
 linear-srgb = { path = ".." }
-archmage = { version = "=0.9.31", default-features = false, features = ["macros"] }
-magetypes = { version = "=0.9.31", default-features = false, features = ["w512"] }
+archmage = { version = "=0.9.32", git = "https://github.com/imazen/archmage", rev = "423998254fcb3f6e268841918e4280d05741914e", default-features = false, features = ["macros"] }
+magetypes = { version = "=0.9.32", git = "https://github.com/imazen/archmage", rev = "423998254fcb3f6e268841918e4280d05741914e", default-features = false, features = ["w512"] }

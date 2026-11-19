@@ -1,6 +1,6 @@
 //! Private 8-lane kernels used by the canonical CPU-feature entry points.
 
-use crate::tf::fast_math::Mla;
+use crate::tf::polynomial::Mla;
 use archmage::attune;
 
 // 8-wide is AVX2/V3-only; NEON and Wasm128 are 4-wide and live in `tokens::x4`.

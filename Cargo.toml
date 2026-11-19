@@ -52,22 +52,23 @@ all-features = true
 [dependencies]
 num-traits = { version = "0.2.19", default-features = false, features = ["libm"] }
 bytemuck = "1.25.2"
-archmage = { version = ">=0.9.31-beta.2, <0.10.0", default-features = false, features = ["macros"] }
-magetypes = { version = ">=0.9.31-beta.2, <0.10.0", default-features = false, features = ["w512"] }
+magemath = { git = "https://github.com/imazen/archmage", rev = "423998254fcb3f6e268841918e4280d05741914e", version = "0.1.0", default-features = false, features = ["w512"] }
+archmage = { version = "0.9.32", git = "https://github.com/imazen/archmage", rev = "423998254fcb3f6e268841918e4280d05741914e", default-features = false, features = ["macros"] }
+magetypes = { version = "0.9.32", git = "https://github.com/imazen/archmage", rev = "423998254fcb3f6e268841918e4280d05741914e", default-features = false, features = ["w512"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 zenbench = { version = "0.1.11", features = ["criterion-compat"] }
 # `testable_dispatch` lets the tier-isolation benches disable a compile-time
 # guaranteed baseline token (NEON on aarch64) so the scalar tier is actually
 # measurable there, instead of silently reporting NEON numbers as "scalar".
-archmage = { version = ">=0.9.31-beta.2, <0.10.0", features = ["testable_dispatch"] }
+archmage = { version = "0.9.32", git = "https://github.com/imazen/archmage", rev = "423998254fcb3f6e268841918e4280d05741914e", features = ["testable_dispatch"] }
 
 [features]
 default = ["std", "avx512"]
 # Enable std library (required for runtime SIMD dispatch)
 std = ["num-traits/std", "archmage/std", "magetypes/std"]
 # AVX-512 support (V4/V4x tiers for incant! dispatch and rites)
-avx512 = ["archmage/avx512", "magetypes/avx512"]
+avx512 = ["archmage/avx512", "magetypes/avx512", "magemath/avx512"]
 # Request single-rounding arithmetic on WASM, matching the native fused policy.
 # Magetypes probes relaxed-SIMD engines for fusion and otherwise fuses in software.
 # This does not enable the relaxed-simd target feature. Native is already fused.
@@ -130,3 +131,8 @@ required-features = ["std"]
 [[example]]
 name = "lut_init_time"
 required-features = ["std"]
+
+# Use the reviewed SIMD stack until 0.9.32 ships on crates.io.
+[patch.crates-io]
+archmage = { git = "https://github.com/imazen/archmage", rev = "423998254fcb3f6e268841918e4280d05741914e" }
+magetypes = { git = "https://github.com/imazen/archmage", rev = "423998254fcb3f6e268841918e4280d05741914e" }

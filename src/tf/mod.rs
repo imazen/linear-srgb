@@ -12,12 +12,12 @@
 //! |---|---|---|
 //! | `srgb_to_linear` | sRGB | rational polynomial |
 //! | `linear_to_srgb` | sRGB | rational polynomial |
-//! | `bt709_to_linear` | BT.709 | fast_powf approximation |
-//! | `linear_to_bt709` | BT.709 | fast_powf approximation |
+//! | `bt709_to_linear` | BT.709 | Magemath power profile |
+//! | `linear_to_bt709` | BT.709 | Magemath power profile |
 //! | `pq_to_linear` | PQ ST 2084 | rational polynomial |
 //! | `linear_to_pq` | PQ ST 2084 | rational polynomial |
-//! | `hlg_to_linear` | HLG ARIB STD-B67 | fast_pow2f approximation |
-//! | `linear_to_hlg` | HLG ARIB STD-B67 | fast_log2f approximation |
+//! | `hlg_to_linear` | HLG ARIB STD-B67 | Magemath exponential profile |
+//! | `linear_to_hlg` | HLG ARIB STD-B67 | Magemath logarithm profile |
 //!
 //! # Accuracy
 //!
@@ -33,14 +33,15 @@
 #[allow(unused_imports)]
 use num_traits::Float; // provides powf/sqrt via libm in no_std
 
-// Submodules with implementations. sRGB + fast_math are always compiled
+// Submodules with implementations. sRGB + polynomial are always compiled
 // (the extended-range sRGB slice path in simd.rs is NOT gated on `transfer`
 // and depends on these); bt709/pq/hlg are opt-in via the `transfer` feature.
 #[cfg(feature = "transfer")]
 pub(crate) mod bt709;
-pub(crate) mod fast_math;
 #[cfg(feature = "transfer")]
 pub(crate) mod hlg;
+pub(crate) mod math;
+pub(crate) mod polynomial;
 #[cfg(feature = "transfer")]
 pub(crate) mod pq;
 pub(crate) mod srgb;
@@ -74,7 +75,7 @@ pub use bt709::{bt709_to_linear, linear_to_bt709};
 #[cfg(feature = "transfer")]
 pub use hlg::{hlg_to_linear, linear_to_hlg};
 #[cfg(feature = "transfer")]
-pub use pq::{linear_to_pq, pq_to_linear};
+pub use pq::{linear_to_pq, linear_to_pq_precise_slice, pq_to_linear, pq_to_linear_precise_slice};
 
 // =============================================================================
 // Tests
@@ -84,6 +85,7 @@ pub use pq::{linear_to_pq, pq_to_linear};
 #[allow(deprecated)] // Verify the retained token-taking kernels.
 mod tests {
     use super::*;
+    use std::eprintln;
 
     // C0-continuous (moxcms) constants matching the polynomial approximation.
     const TEST_SRGB_A: f64 = 0.0550107189475866;
@@ -342,7 +344,7 @@ mod tests {
     fn fast_log2f_accuracy() {
         for i in 1..=10000 {
             let x = i as f32 / 10000.0;
-            let fast = fast_math::fast_log2f(x);
+            let fast = math::log2(x);
             let exact = (x as f64).log2() as f32;
             let err = (fast - exact).abs();
             assert!(
@@ -353,10 +355,13 @@ mod tests {
     }
 
     #[test]
-    fn fast_pow2f_accuracy() {
+    fn exp2_profiles_handle_subnormal_output() {
+        assert_eq!(math::exp2(-129.0).to_bits(), 1 << 20);
+        assert_eq!(math::exp2(-149.0).to_bits(), 1);
+        assert_eq!(math::exp2(-150.0).to_bits(), 0);
         for i in -100..=100 {
             let x = i as f32 / 10.0;
-            let fast = fast_math::fast_pow2f(x);
+            let fast = math::exp2(x);
             let exact = (x as f64).exp2() as f32;
             let rel_err = if exact.abs() > 1e-10 {
                 ((fast - exact) / exact).abs()

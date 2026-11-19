@@ -1,7 +1,8 @@
 //! HLG (ARIB STD-B67) transfer function (scalar + generic SIMD).
 
-use super::fast_math;
-use crate::tf::fast_math::Mla;
+use super::math;
+use crate::tf::polynomial::Mla;
+use magemath::SimdMath;
 #[allow(unused_imports)]
 use num_traits::Float; // provides sqrt via libm in no_std
 
@@ -15,19 +16,19 @@ pub(crate) const HLG_C: f32 = 0.55991073; // 0.5 - A * ln(4 * A)
 pub(crate) const HLG_A_INV_LOG2E: f32 = HLG_A * core::f32::consts::LN_2; // A * ln(2) for log2 conversion
 pub(crate) const HLG_INV_A_LOG2E: f32 = core::f32::consts::LOG2_E / HLG_A; // log2(e) / A for exp2 conversion
 
-/// HLG inverse OETF: signal → scene linear. Uses fast_pow2f for exp().
+/// HLG inverse OETF: signal → scene linear. Uses Magemath for the exponential segment.
 #[inline(always)]
 pub fn hlg_to_linear(v: f32) -> f32 {
     if v <= 0.0 {
         0.0
     } else if v <= 0.5 {
-        (v * v) / 3.0
+        (v * v) * (1.0 / 3.0)
     } else {
-        (fast_math::fast_pow2f((v - HLG_C) * HLG_INV_A_LOG2E) + HLG_B) / 12.0
+        (math::exp2((v - HLG_C) * HLG_INV_A_LOG2E) + HLG_B) * (1.0 / 12.0)
     }
 }
 
-/// HLG OETF: scene linear → signal. Uses fast_log2f for ln().
+/// HLG OETF: scene linear → signal. Uses Magemath for the logarithmic segment.
 #[inline(always)]
 pub fn linear_to_hlg(v: f32) -> f32 {
     if v <= 0.0 {
@@ -35,7 +36,9 @@ pub fn linear_to_hlg(v: f32) -> f32 {
     } else if v <= 1.0 / 12.0 {
         (3.0 * v).sqrt()
     } else {
-        (HLG_A_INV_LOG2E * fast_math::fast_log2f(12.0 * v - HLG_B) + HLG_C).max(0.5)
+        HLG_A_INV_LOG2E
+            .mul_add(math::log2(12.0 * v - HLG_B), HLG_C)
+            .max(0.5)
     }
 }
 
@@ -64,7 +67,7 @@ pub(crate) fn hlg_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let low = (a * a) * third;
 
     let exp_arg = (a - hlg_c) * hlg_inv_a_log2e;
-    let exp_val = fast_math::fast_pow2f_x4(t, exp_arg);
+    let exp_val = exp_arg.exp2::<{ math::EXP }>();
     let high = (exp_val + hlg_b) * inv_12;
 
     let mask = a.simd_le(half);
@@ -90,7 +93,7 @@ pub(crate) fn linear_to_hlg_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let low = (three * a).sqrt();
 
     let arg = twelve * a - hlg_b;
-    let log2_val = fast_math::fast_log2f_x4(t, arg);
+    let log2_val = arg.log2::<{ math::LOG }>();
     let high = hlg_a_ln2.mla(log2_val, hlg_c).max(f32x4::splat_t(t, 0.5));
 
     let mask = a.simd_le(threshold);
@@ -119,7 +122,7 @@ pub(crate) fn hlg_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let low = (a * a) * third;
 
     let exp_arg = (a - hlg_c) * hlg_inv_a_log2e;
-    let exp_val = fast_math::fast_pow2f_x8(t, exp_arg);
+    let exp_val = exp_arg.exp2::<{ math::EXP }>();
     let high = (exp_val + hlg_b) * inv_12;
 
     let mask = a.simd_le(half);
@@ -141,7 +144,7 @@ pub(crate) fn linear_to_hlg_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let low = (three * a).sqrt();
 
     let arg = twelve * a - hlg_b;
-    let log2_val = fast_math::fast_log2f_x8(t, arg);
+    let log2_val = arg.log2::<{ math::LOG }>();
     let high = hlg_a_ln2.mla(log2_val, hlg_c).max(f32x8::splat_t(t, 0.5));
 
     let mask = a.simd_le(threshold);
@@ -170,7 +173,7 @@ pub(crate) fn hlg_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<
     let low = (a * a) * third;
 
     let exp_arg = (a - hlg_c) * hlg_inv_a_log2e;
-    let exp_val = fast_math::fast_pow2f_x16(t, exp_arg);
+    let exp_val = exp_arg.exp2::<{ math::EXP }>();
     let high = (exp_val + hlg_b) * inv_12;
 
     let mask = a.simd_le(half);
@@ -191,7 +194,7 @@ pub(crate) fn linear_to_hlg_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<
     let low = (three * a).sqrt();
 
     let arg = twelve * a - hlg_b;
-    let log2_val = fast_math::fast_log2f_x16(t, arg);
+    let log2_val = arg.log2::<{ math::LOG }>();
     let high = hlg_a_ln2.mla(log2_val, hlg_c).max(f32x16::splat_t(t, 0.5));
 
     let mask = a.simd_le(threshold);

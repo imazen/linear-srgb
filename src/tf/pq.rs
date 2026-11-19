@@ -1,7 +1,7 @@
 //! PQ (SMPTE ST 2084) transfer function (scalar + generic SIMD).
 
-use super::fast_math;
-use crate::tf::fast_math::Mla;
+use super::polynomial;
+use crate::tf::polynomial::Mla;
 #[allow(unused_imports)]
 use num_traits::Float; // provides powf/sqrt via libm in no_std
 
@@ -9,77 +9,91 @@ use num_traits::Float; // provides powf/sqrt via libm in no_std
 // Scalar
 // =============================================================================
 
-/// PQ EOTF: signal → linear. Two-range rational polynomial, sub-U16 roundtrip.
-///
-/// Zero `powf()` calls for signal > 0.02 — uses `x + x*x` input transformation
-/// with separate polynomial fits for low and high signal ranges.
-/// Very small signal values use exact formula.
-#[inline(always)]
+/// PQ EOTF for normalized signal values. Uses the ST 2084 formula in the dark
+/// toe and a two-segment rational approximation over the remainder of the range.
+#[inline]
 pub fn pq_to_linear(v: f32) -> f32 {
-    if v <= 0.0 {
-        return 0.0;
+    if v.is_nan() || v <= 0.0 || v >= 1.0 || v < EOTF_POLY_FLOOR {
+        return pq_to_linear_precise(v);
     }
-    if v < EOTF_POLY_FLOOR {
-        return pq_to_linear_exact(v);
-    }
-    let x = v + v * v;
+    let x = v.mul_add(v, v);
     if v < 0.25 {
-        fast_math::eval_rational_poly(x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL)
+        polynomial::eval_rational_poly(x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL)
     } else {
-        fast_math::eval_rational_poly(x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE)
+        polynomial::eval_rational_poly(x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE)
     }
 }
 
-/// PQ inverse EOTF: linear → signal. Rational polynomial on x^(1/4), max error ~3e-6.
-///
-/// Two-range approximation. Very small values (v < 1e-7) use exact powf.
-/// Coefficients from libjxl.
-#[inline(always)]
+/// PQ inverse EOTF for normalized linear light. Uses the ST 2084 formula for
+/// values below 1e-4 and a rational approximation above that threshold.
+#[inline]
 pub fn linear_to_pq(v: f32) -> f32 {
-    if v <= 0.0 {
-        return 0.0;
-    }
-    if v < OETF_POLY_FLOOR {
-        return pq_from_linear_exact(v);
+    if v.is_nan() || v <= 0.0 || v >= 1.0 || v < OETF_POLY_FLOOR {
+        return linear_to_pq_precise(v);
     }
     let a = v.sqrt().sqrt();
     if a < 0.1 {
-        fast_math::eval_rational_poly(a, PQ_INV_P_SMALL, PQ_INV_Q_SMALL)
+        polynomial::eval_rational_poly(a, PQ_INV_P_SMALL, PQ_INV_Q_SMALL)
     } else {
-        fast_math::eval_rational_poly(a, PQ_INV_P_LARGE, PQ_INV_Q_LARGE)
+        polynomial::eval_rational_poly(a, PQ_INV_P_LARGE, PQ_INV_Q_LARGE)
     }
 }
 
-pub(crate) const M1: f32 = 0.1593017578125;
-pub(crate) const M2: f32 = 78.84375;
-pub(crate) const C1: f32 = 0.8359375;
-pub(crate) const C2: f32 = 18.8515625;
-pub(crate) const C3: f32 = 18.6875;
+const M1: f64 = 2610.0 / 16384.0;
+const M2: f64 = 2523.0 / 32.0;
+const C1: f64 = 3424.0 / 4096.0;
+const C2: f64 = 2413.0 / 128.0;
+const C3: f64 = 2392.0 / 128.0;
 
-/// Below this signal the EOTF polynomial fails: it has a pole near 0.007, so the exact formula
-/// runs.
-pub(crate) const EOTF_POLY_FLOOR: f32 = 0.02;
-/// Below this linear value (0.001 cd/m²) the inverse-EOTF polynomial loses relative accuracy:
-/// worst 7.4e-6 relative in 1e-7..1e-6, but 9.2e-5 in 1e-8..1e-7.
-pub(crate) const OETF_POLY_FLOOR: f32 = 1e-7;
+const EOTF_POLY_FLOOR: f32 = 0.02;
+const OETF_POLY_FLOOR: f32 = 1e-4;
 
-#[inline(always)]
-fn pq_to_linear_exact(v: f32) -> f32 {
-    let vp = v.powf(1.0 / M2);
-    let num = (vp - C1).max(0.0);
-    let den = C2 - C3 * vp;
-    if den <= 0.0 {
+#[inline]
+fn pq_to_linear_precise(v: f32) -> f32 {
+    if v.is_nan() {
+        return v;
+    }
+    if v <= 0.0 {
+        return 0.0;
+    }
+    if v >= 1.0 {
         return 1.0;
     }
-    (num / den).powf(1.0 / M1)
+    let vp = f64::from(v).powf(1.0 / M2);
+    (((vp - C1).max(0.0) / (C2 - C3 * vp)).powf(1.0 / M1)) as f32
 }
 
-#[inline(always)]
-fn pq_from_linear_exact(v: f32) -> f32 {
-    let vp = v.powf(M1);
-    let num = C1 + C2 * vp;
-    let den = 1.0 + C3 * vp;
-    (num / den).powf(M2)
+#[inline]
+fn linear_to_pq_precise(v: f32) -> f32 {
+    if v.is_nan() {
+        return v;
+    }
+    if v <= 0.0 {
+        return 0.0;
+    }
+    if v >= 1.0 {
+        return 1.0;
+    }
+    let vp = f64::from(v).powf(M1);
+    ((C1 + C2 * vp) / (1.0 + C3 * vp)).powf(M2) as f32
+}
+
+/// Convert normalized ST 2084 signals to linear light normalized to 10,000 nits.
+/// Uses the reference formula with f64 intermediates throughout the range.
+/// Inputs clip to [0, 1], NaNs propagate, and black and white are exact.
+pub fn pq_to_linear_precise_slice(values: &mut [f32]) {
+    for value in values {
+        *value = pq_to_linear_precise(*value);
+    }
+}
+
+/// Convert linear light normalized to 10,000 nits to normalized ST 2084 signals.
+/// Uses the reference formula with f64 intermediates throughout the range.
+/// Inputs clip to [0, 1], NaNs propagate, and zero encodes to exact zero.
+pub fn linear_to_pq_precise_slice(values: &mut [f32]) {
+    for value in values {
+        *value = linear_to_pq_precise(*value);
+    }
 }
 
 // =============================================================================
@@ -132,175 +146,77 @@ pub(crate) const PQ_INV_P_SMALL: [f32; 5] = [
 pub(crate) const PQ_INV_Q_SMALL: [f32; 5] =
     [3.371868e1, 1.477719e3, 1.608477e4, -4.389884e4, -2.072546e5];
 
-// =============================================================================
-// Generic SIMD — x4
-// =============================================================================
+use magetypes::simd::{backends::*, generic::*};
 
-use magetypes::simd::backends::F32x4Convert;
-use magetypes::simd::generic::f32x4;
+macro_rules! pq_for {
+    ($decode:ident, $encode:ident, $float:ident, $backend:ident, $rational:ident) => {
+        #[inline(always)]
+        pub(crate) fn $decode<T: $backend>(t: T, v: $float<T>) -> $float<T> {
+            let floor = $float::splat_t(t, EOTF_POLY_FLOOR);
+            let one = $float::splat_t(t, 1.0);
+            // Keep the small fit above its pole even on lanes replaced below.
+            let a = v.max(floor).min(one);
+            let x = a.mla(a, a);
+            let large = polynomial::$rational(t, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE);
+            let small = polynomial::$rational(t, x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL);
+            let result = $float::blend(a.simd_lt($float::splat_t(t, 0.25)), small, large);
+            let fallback = v.simd_lt(floor) | v.simd_ge(one) | v.simd_ne(v);
+            if fallback.bitcast_to_i32().any_true() {
+                let mut result = result.to_array();
+                for (source, output) in v.to_array().into_iter().zip(&mut result) {
+                    if source.is_nan() || !(EOTF_POLY_FLOOR..1.0).contains(&source) {
+                        *output = pq_to_linear_precise(source);
+                    }
+                }
+                $float::from_array_t(t, result)
+            } else {
+                result
+            }
+        }
 
-#[allow(dead_code)]
-#[inline(always)]
-pub(crate) fn pq_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
-    let zero = f32x4::zero_t(t);
-    let a = v.max(zero);
-    let x = a.mla(a, a);
-
-    let threshold = f32x4::splat_t(t, 0.25);
-    let large = fast_math::eval_rational_poly_x4(t, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE);
-    let small = fast_math::eval_rational_poly_x4(t, x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL);
-
-    let mask = a.simd_lt(threshold);
-    let result = f32x4::blend(mask, small, large);
-
-    let pos_mask = v.simd_gt(zero);
-    let result = result & pos_mask;
-    let low = v.simd_lt(f32x4::splat_t(t, EOTF_POLY_FLOOR)) & pos_mask;
-    if low.bitcast_to_i32().any_true() {
-        let vp = fast_math::pow_x4(t, a, 1.0 / M2);
-        let num = (vp - f32x4::splat_t(t, C1)).max(zero);
-        let den = f32x4::splat_t(t, C2) - f32x4::splat_t(t, C3) * vp;
-        return f32x4::blend(low, fast_math::pow_x4(t, num / den, 1.0 / M1), result);
-    }
-    result
+        #[inline(always)]
+        pub(crate) fn $encode<T: $backend>(t: T, v: $float<T>) -> $float<T> {
+            let floor = $float::splat_t(t, OETF_POLY_FLOOR);
+            let one = $float::splat_t(t, 1.0);
+            let a = v.max(floor).min(one);
+            let a4 = a.sqrt().sqrt();
+            let large = polynomial::$rational(t, a4, PQ_INV_P_LARGE, PQ_INV_Q_LARGE);
+            let small = polynomial::$rational(t, a4, PQ_INV_P_SMALL, PQ_INV_Q_SMALL);
+            let result = $float::blend(a4.simd_lt($float::splat_t(t, 0.1)), small, large);
+            let fallback = v.simd_lt(floor) | v.simd_ge(one) | v.simd_ne(v);
+            if fallback.bitcast_to_i32().any_true() {
+                let mut result = result.to_array();
+                for (source, output) in v.to_array().into_iter().zip(&mut result) {
+                    if source.is_nan() || !(OETF_POLY_FLOOR..1.0).contains(&source) {
+                        *output = linear_to_pq_precise(source);
+                    }
+                }
+                $float::from_array_t(t, result)
+            } else {
+                result
+            }
+        }
+    };
 }
 
-#[allow(dead_code)]
-#[inline(always)]
-pub(crate) fn linear_to_pq_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
-    let zero = f32x4::zero_t(t);
-    let a = v.max(zero);
-    let a4 = a.sqrt().sqrt();
-
-    let threshold = f32x4::splat_t(t, 0.1);
-    let large = fast_math::eval_rational_poly_x4(t, a4, PQ_INV_P_LARGE, PQ_INV_Q_LARGE);
-    let small = fast_math::eval_rational_poly_x4(t, a4, PQ_INV_P_SMALL, PQ_INV_Q_SMALL);
-
-    let mask = a4.simd_lt(threshold);
-    let result = f32x4::blend(mask, small, large);
-
-    let pos_mask = v.simd_gt(zero);
-    let result = result & pos_mask;
-    let low = v.simd_lt(f32x4::splat_t(t, OETF_POLY_FLOOR)) & pos_mask;
-    if low.bitcast_to_i32().any_true() {
-        let vp = fast_math::pow_x4(t, a, M1);
-        let num = f32x4::splat_t(t, C1) + f32x4::splat_t(t, C2) * vp;
-        let den = f32x4::splat_t(t, 1.0) + f32x4::splat_t(t, C3) * vp;
-        return f32x4::blend(low, fast_math::pow_x4(t, num / den, M2), result);
-    }
-    result
-}
-
-// =============================================================================
-// Generic SIMD — x8
-// =============================================================================
-
-use magetypes::simd::backends::F32x8Convert;
-use magetypes::simd::generic::f32x8;
-
-#[inline(always)]
-pub(crate) fn pq_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
-    let zero = f32x8::zero_t(t);
-    let a = v.max(zero);
-    let x = a.mla(a, a);
-
-    let threshold = f32x8::splat_t(t, 0.25);
-    let large = fast_math::eval_rational_poly_x8(t, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE);
-    let small = fast_math::eval_rational_poly_x8(t, x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL);
-
-    let mask = a.simd_lt(threshold);
-    let result = f32x8::blend(mask, small, large);
-
-    let pos_mask = v.simd_gt(zero);
-    let result = result & pos_mask;
-    let low = v.simd_lt(f32x8::splat_t(t, EOTF_POLY_FLOOR)) & pos_mask;
-    if low.bitcast_to_i32().any_true() {
-        let vp = fast_math::pow_x8(t, a, 1.0 / M2);
-        let num = (vp - f32x8::splat_t(t, C1)).max(zero);
-        let den = f32x8::splat_t(t, C2) - f32x8::splat_t(t, C3) * vp;
-        return f32x8::blend(low, fast_math::pow_x8(t, num / den, 1.0 / M1), result);
-    }
-    result
-}
-
-#[inline(always)]
-pub(crate) fn linear_to_pq_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
-    let zero = f32x8::zero_t(t);
-    let a = v.max(zero);
-    let a4 = a.sqrt().sqrt();
-
-    let threshold = f32x8::splat_t(t, 0.1);
-    let large = fast_math::eval_rational_poly_x8(t, a4, PQ_INV_P_LARGE, PQ_INV_Q_LARGE);
-    let small = fast_math::eval_rational_poly_x8(t, a4, PQ_INV_P_SMALL, PQ_INV_Q_SMALL);
-
-    let mask = a4.simd_lt(threshold);
-    let result = f32x8::blend(mask, small, large);
-
-    let pos_mask = v.simd_gt(zero);
-    let result = result & pos_mask;
-    let low = v.simd_lt(f32x8::splat_t(t, OETF_POLY_FLOOR)) & pos_mask;
-    if low.bitcast_to_i32().any_true() {
-        let vp = fast_math::pow_x8(t, a, M1);
-        let num = f32x8::splat_t(t, C1) + f32x8::splat_t(t, C2) * vp;
-        let den = f32x8::splat_t(t, 1.0) + f32x8::splat_t(t, C3) * vp;
-        return f32x8::blend(low, fast_math::pow_x8(t, num / den, M2), result);
-    }
-    result
-}
-
-// =============================================================================
-// Generic SIMD — x16
-// =============================================================================
-
-use magetypes::simd::backends::F32x16Convert;
-use magetypes::simd::generic::f32x16;
-
-#[inline(always)]
-pub(crate) fn pq_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
-    let zero = f32x16::zero_t(t);
-    let a = v.max(zero);
-    let x = a.mla(a, a);
-
-    let threshold = f32x16::splat_t(t, 0.25);
-    let large = fast_math::eval_rational_poly_x16(t, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE);
-    let small = fast_math::eval_rational_poly_x16(t, x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL);
-
-    let mask = a.simd_lt(threshold);
-    let result = f32x16::blend(mask, small, large);
-
-    let pos_mask = v.simd_gt(zero);
-    let result = result & pos_mask;
-    let low = v.simd_lt(f32x16::splat_t(t, EOTF_POLY_FLOOR)) & pos_mask;
-    if low.bitcast_to_i32().any_true() {
-        let vp = fast_math::pow_x16(t, a, 1.0 / M2);
-        let num = (vp - f32x16::splat_t(t, C1)).max(zero);
-        let den = f32x16::splat_t(t, C2) - f32x16::splat_t(t, C3) * vp;
-        return f32x16::blend(low, fast_math::pow_x16(t, num / den, 1.0 / M1), result);
-    }
-    result
-}
-
-#[inline(always)]
-pub(crate) fn linear_to_pq_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
-    let zero = f32x16::zero_t(t);
-    let a = v.max(zero);
-    let a4 = a.sqrt().sqrt();
-
-    let threshold = f32x16::splat_t(t, 0.1);
-    let large = fast_math::eval_rational_poly_x16(t, a4, PQ_INV_P_LARGE, PQ_INV_Q_LARGE);
-    let small = fast_math::eval_rational_poly_x16(t, a4, PQ_INV_P_SMALL, PQ_INV_Q_SMALL);
-
-    let mask = a4.simd_lt(threshold);
-    let result = f32x16::blend(mask, small, large);
-
-    let pos_mask = v.simd_gt(zero);
-    let result = result & pos_mask;
-    let low = v.simd_lt(f32x16::splat_t(t, OETF_POLY_FLOOR)) & pos_mask;
-    if low.bitcast_to_i32().any_true() {
-        let vp = fast_math::pow_x16(t, a, M1);
-        let num = f32x16::splat_t(t, C1) + f32x16::splat_t(t, C2) * vp;
-        let den = f32x16::splat_t(t, 1.0) + f32x16::splat_t(t, C3) * vp;
-        return f32x16::blend(low, fast_math::pow_x16(t, num / den, M2), result);
-    }
-    result
-}
+pq_for!(
+    pq_to_linear_x4,
+    linear_to_pq_x4,
+    f32x4,
+    F32x4Convert,
+    eval_rational_poly_x4
+);
+pq_for!(
+    pq_to_linear_x8,
+    linear_to_pq_x8,
+    f32x8,
+    F32x8Convert,
+    eval_rational_poly_x8
+);
+pq_for!(
+    pq_to_linear_x16,
+    linear_to_pq_x16,
+    f32x16,
+    F32x16Convert,
+    eval_rational_poly_x16
+);

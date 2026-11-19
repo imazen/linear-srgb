@@ -2,11 +2,12 @@
 use crate::rational_poly::{
     LINEAR_SCALE, LINEAR_THRESHOLD, SRGB_THRESHOLD as SRGB_LINEAR_THRESHOLD, TWELVE_92,
 };
-use crate::tf::fast_math::Mla;
+use crate::tf::polynomial::Mla;
 use magetypes::simd::{backends::*, generic::*};
 
 macro_rules! width {
-    ($module:ident, $float:ident, $backend:ident, $convert:ident, $width:literal, $pow:ident) => {
+    ($(#[$attr:meta])* $module:ident, $float:ident, $backend:ident, $convert:ident, $width:literal, $pow:ident) => {
+        $(#[$attr])*
         pub(crate) mod $module {
             use super::*;
             #[inline(always)]
@@ -33,7 +34,7 @@ macro_rules! width {
                 let yq = yq.mla(x, $float::<T>::splat_t(token, S2L_Q[1]));
                 let yq = yq.mla(x, $float::<T>::splat_t(token, S2L_Q[0]));
                 let power_result = (yp / yq).min(one);
-                let mask = clamped.simd_lt($float::<T>::splat_t(token, SRGB_LINEAR_THRESHOLD));
+                let mask = clamped.simd_le($float::<T>::splat_t(token, SRGB_LINEAR_THRESHOLD));
                 let result = $float::<T>::blend(mask, linear_result, power_result);
                 let ge_one = v.simd_ge(one);
                 $float::<T>::blend(ge_one, one, result).to_array()
@@ -62,7 +63,7 @@ macro_rules! width {
                 let yq = yq.mla(x, $float::<T>::splat_t(token, L2S_Q[1]));
                 let yq = yq.mla(x, $float::<T>::splat_t(token, L2S_Q[0]));
                 let power_result = (yp / yq).min(one);
-                let mask = clamped.simd_lt($float::<T>::splat_t(token, LINEAR_THRESHOLD));
+                let mask = clamped.simd_le($float::<T>::splat_t(token, LINEAR_THRESHOLD));
                 let result = $float::<T>::blend(mask, linear_result, power_result);
                 let ge_one = v.simd_ge(one);
                 $float::<T>::blend(ge_one, one, result).to_array()
@@ -73,10 +74,8 @@ macro_rules! width {
                 encoded: [f32; $width],
                 gamma: f32,
             ) -> [f32; $width] {
-                let zero = $float::<T>::zero_t(token);
-                let one = $float::<T>::splat_t(token, 1.0);
-                let v = $float::<T>::from_array_t(token, encoded).max(zero).min(one);
-                crate::tf::fast_math::$pow(token, v, gamma).to_array()
+                let v = $float::<T>::from_array_t(token, encoded);
+                crate::tf::math::$pow(token, v, gamma).to_array()
             }
             #[inline(always)]
             pub(crate) fn linear_to_gamma<T: $convert>(
@@ -84,10 +83,8 @@ macro_rules! width {
                 linear: [f32; $width],
                 gamma: f32,
             ) -> [f32; $width] {
-                let zero = $float::<T>::zero_t(token);
-                let one = $float::<T>::splat_t(token, 1.0);
-                let v = $float::<T>::from_array_t(token, linear).max(zero).min(one);
-                crate::tf::fast_math::$pow(token, v, 1.0 / gamma).to_array()
+                let v = $float::<T>::from_array_t(token, linear);
+                crate::tf::math::$pow(token, v, 1.0 / gamma).to_array()
             }
             #[inline(always)]
             pub(crate) fn srgb_to_linear_extended<T: $backend>(
@@ -96,9 +93,8 @@ macro_rules! width {
             ) -> [f32; $width] {
                 use crate::rational_poly::{EXT_S2L_P as P, EXT_S2L_Q as Q};
 
-                let zero = $float::zero_t(token);
+                let sign = $float::splat_t(token, -0.0);
                 let v = $float::from_array_t(token, srgb);
-                let neg_mask = v.simd_lt(zero);
                 let abs_v = v.abs();
 
                 let linear_result = abs_v * $float::splat_t(token, LINEAR_SCALE);
@@ -122,8 +118,14 @@ macro_rules! width {
 
                 let thresh_mask = abs_v.simd_lt($float::splat_t(token, SRGB_LINEAR_THRESHOLD));
                 let result = $float::blend(thresh_mask, linear_result, power_result);
-                let result = $float::blend(neg_mask, -result, result);
-                result.to_array()
+                let result = result.abs() | (v & sign);
+                let mut result = result.to_array();
+                for (source, output) in v.to_array().into_iter().zip(&mut result) {
+                    if source.abs() > 8.0 {
+                        *output = crate::scalar::srgb_to_linear_extended(source);
+                    }
+                }
+                result
             }
             #[inline(always)]
             pub(crate) fn linear_to_srgb_extended<T: $backend>(
@@ -132,9 +134,8 @@ macro_rules! width {
             ) -> [f32; $width] {
                 use crate::rational_poly::{EXT_L2S_P as P, EXT_L2S_Q as Q};
 
-                let zero = $float::zero_t(token);
+                let sign = $float::splat_t(token, -0.0);
                 let v = $float::from_array_t(token, linear);
-                let neg_mask = v.simd_lt(zero);
                 let abs_v = v.abs();
 
                 let linear_result = abs_v * $float::splat_t(token, TWELVE_92);
@@ -158,13 +159,26 @@ macro_rules! width {
 
                 let thresh_mask = abs_v.simd_lt($float::splat_t(token, LINEAR_THRESHOLD));
                 let result = $float::blend(thresh_mask, linear_result, power_result);
-                let result = $float::blend(neg_mask, -result, result);
-                result.to_array()
+                let result = result.abs() | (v & sign);
+                let mut result = result.to_array();
+                for (source, output) in v.to_array().into_iter().zip(&mut result) {
+                    if source.abs() > 64.0 {
+                        *output = crate::scalar::linear_to_srgb_extended(source);
+                    }
+                }
+                result
             }
         }
     };
 }
-width!(x4, f32x4, F32x4Backend, F32x4Convert, 4, pow_x4);
-#[cfg(any(target_arch = "x86_64", test))]
-width!(x8, f32x8, F32x8Backend, F32x8Convert, 8, pow_x8);
-width!(x16, f32x16, F32x16Backend, F32x16Convert, 16, pow_x16);
+width!(x4, f32x4, F32x4Backend, F32x4Convert, 4, gamma_x4);
+width!(
+    #[cfg_attr(not(any(target_arch = "x86_64", test)), allow(dead_code))]
+    x8,
+    f32x8,
+    F32x8Backend,
+    F32x8Convert,
+    8,
+    gamma_x8
+);
+width!(x16, f32x16, F32x16Backend, F32x16Convert, 16, gamma_x16);

@@ -50,7 +50,7 @@ pub(crate) fn scalar_array<const N: usize>(
     vector: impl FnOnce([f32; N]) -> [f32; N],
     fused: impl FnMut(f32) -> f32,
 ) -> [f32; N] {
-    if crate::tf::fast_math::USE_FUSED_MATH {
+    if crate::tf::polynomial::USE_FUSED_MATH {
         values.map(fused)
     } else {
         vector(values)
@@ -64,7 +64,7 @@ pub(crate) fn scalar_slice<const N: usize>(
     vector: impl FnMut([f32; N]) -> [f32; N],
     mut fused: impl FnMut(f32) -> f32,
 ) {
-    if crate::tf::fast_math::USE_FUSED_MATH {
+    if crate::tf::polynomial::USE_FUSED_MATH {
         for value in values {
             *value = fused(*value);
         }

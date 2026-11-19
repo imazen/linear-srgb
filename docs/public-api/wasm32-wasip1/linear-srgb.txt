@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: linear-srgb.txt 84 lines (supported surface) | linear-srgb.features.txt 23 added (features: alt,avx512,iec,precise-portable,std,transfer,unsafe_simd) | linear-srgb.internal.txt 40 lines (57 hidden + 0 excluded-feature)
+# files: linear-srgb.txt 84 lines (supported surface) | linear-srgb.features.txt 25 added (features: alt,avx512,iec,precise-portable,std,transfer,unsafe_simd) | linear-srgb.internal.txt 40 lines (57 hidden + 0 excluded-feature)
 # arch-unique surface: wasm32 28
 
 ## summary

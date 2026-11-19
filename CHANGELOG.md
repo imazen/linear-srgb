@@ -10,6 +10,9 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 
 ### Added
 
+- Full-range ST 2084 encode and decode slice functions with f64 intermediates and exact black and white anchors.
+
+
 - Versioned cargo-expand captures of SIMD entry points, compatibility adapters, dispatch, kernels and transfer math for x86-64, ARM64 and WASM, with default/all-feature checks and pinned tooling (`03420de5`).
 
 - Independent x86-64, ARM64 and WASM public API snapshots and CI checks; validate exact token-free replacements per target rather than only the host capture (`343df2c5`, `903c9090`).
@@ -28,6 +31,11 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 - `tokens::x16` is deprecated without a direct public replacement; its existing functions remain callable. Additional target-feature widths and fallbacks are crate-private (`0c5c8bde`, `320dcd6b`).
 
 ### Fixed
+
+- Guard PQ SIMD dark intervals before the rational fits, use the reference toe for encoding and decoding, and propagate NaNs.
+- Align clamped sRGB endpoints, preserve signed zero in extended sRGB, and fall back to the analytic curve outside the fitted range.
+- Share Magemath profiles between transfer and pure-gamma kernels, including scalar tails.
+
 
 - Default WASM scalar HDR entry points and u16 slice tails use the same relaxed evaluation as vector blocks, preserving dispatch and row-split parity. Native and `precise-portable` evaluation are unchanged (`e24d12ee`).
 
