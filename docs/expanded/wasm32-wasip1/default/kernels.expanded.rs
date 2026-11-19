@@ -3,7 +3,7 @@
 // Target: wasm32-wasip1; preset: default; module: kernels
 // Library features: avx512, default, std
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 8e8a453cd4aa95369f2982e341e2a8dd5629244e46774c59456ee5bd6055a90d
+// Resolution lock SHA-256: c80cf2dbf03fab2ecc8153531de93332c3b317254afcd27693551053f8983957
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 mod kernels {
@@ -36,7 +36,7 @@ mod kernels {
                 let clamped = if false {
                     v & v.simd_gt(zero)
                 } else {
-                    const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                    const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
                         .non_nan_rhs()
                         .bits();
                     v.max_with::<NON_NAN_RHS>(zero)
@@ -80,7 +80,7 @@ mod kernels {
                 let clamped = if false {
                     v & v.simd_gt(zero)
                 } else {
-                    const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                    const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
                         .non_nan_rhs()
                         .bits();
                     v.max_with::<NON_NAN_RHS>(zero)
@@ -242,7 +242,7 @@ mod kernels {
                 let clamped = if false {
                     v & v.simd_gt(zero)
                 } else {
-                    const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                    const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
                         .non_nan_rhs()
                         .bits();
                     v.max_with::<NON_NAN_RHS>(zero)
@@ -286,7 +286,7 @@ mod kernels {
                 let clamped = if false {
                     v & v.simd_gt(zero)
                 } else {
-                    const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                    const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
                         .non_nan_rhs()
                         .bits();
                     v.max_with::<NON_NAN_RHS>(zero)
@@ -448,7 +448,7 @@ mod kernels {
                 let clamped = if false {
                     v & v.simd_gt(zero)
                 } else {
-                    const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                    const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
                         .non_nan_rhs()
                         .bits();
                     v.max_with::<NON_NAN_RHS>(zero)
@@ -492,7 +492,7 @@ mod kernels {
                 let clamped = if false {
                     v & v.simd_gt(zero)
                 } else {
-                    const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                    const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
                         .non_nan_rhs()
                         .bits();
                     v.max_with::<NON_NAN_RHS>(zero)

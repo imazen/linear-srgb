@@ -3,7 +3,7 @@
 // Target: x86_64-unknown-linux-gnu; preset: default; module: target_features
 // Library features: avx512, default, std
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 8e8a453cd4aa95369f2982e341e2a8dd5629244e46774c59456ee5bd6055a90d
+// Resolution lock SHA-256: c80cf2dbf03fab2ecc8153531de93332c3b317254afcd27693551053f8983957
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 pub mod target_features {

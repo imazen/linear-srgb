@@ -50,7 +50,9 @@ macro_rules! floor_zero {
         if cfg!(target_arch = "aarch64") {
             $value & $value.simd_gt($zero)
         } else {
-            const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new().non_nan_rhs().bits();
+            const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                .non_nan_rhs()
+                .bits();
             $value.max_with::<NON_NAN_RHS>($zero)
         }
     };

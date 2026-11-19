@@ -3,7 +3,7 @@
 // Target: wasm32-wasip1; preset: all-features; module: tf
 // Library features: alt, avx512, default, iec, precise-portable, std, transfer, unsafe_simd
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: ef68f276ec2d4603773cbb3fb3e290a50df14aeeac7e1dbfc12a187153909976
+// Resolution lock SHA-256: 4257569ea0044dd13895dc842db4d8764a9fb56b48894a42a91221be07851e5e
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 /// Transfer functions: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).
@@ -493,7 +493,7 @@ pub mod tf {
             let a = if false {
                 v & v.simd_gt(zero)
             } else {
-                const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
                     .non_nan_rhs()
                     .bits();
                 v.max_with::<NON_NAN_RHS>(zero)
@@ -518,7 +518,7 @@ pub mod tf {
             let a = if false {
                 v & v.simd_gt(zero)
             } else {
-                const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
                     .non_nan_rhs()
                     .bits();
                 v.max_with::<NON_NAN_RHS>(zero)
@@ -544,7 +544,7 @@ pub mod tf {
             let a = if false {
                 v & v.simd_gt(zero)
             } else {
-                const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
                     .non_nan_rhs()
                     .bits();
                 v.max_with::<NON_NAN_RHS>(zero)
@@ -568,7 +568,7 @@ pub mod tf {
             let a = if false {
                 v & v.simd_gt(zero)
             } else {
-                const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
                     .non_nan_rhs()
                     .bits();
                 v.max_with::<NON_NAN_RHS>(zero)
@@ -597,7 +597,7 @@ pub mod tf {
             let a = if false {
                 v & v.simd_gt(zero)
             } else {
-                const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
                     .non_nan_rhs()
                     .bits();
                 v.max_with::<NON_NAN_RHS>(zero)
@@ -624,7 +624,7 @@ pub mod tf {
             let a = if false {
                 v & v.simd_gt(zero)
             } else {
-                const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
                     .non_nan_rhs()
                     .bits();
                 v.max_with::<NON_NAN_RHS>(zero)

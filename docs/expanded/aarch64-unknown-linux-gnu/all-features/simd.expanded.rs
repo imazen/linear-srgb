@@ -3,7 +3,7 @@
 // Target: aarch64-unknown-linux-gnu; preset: all-features; module: simd
 // Library features: alt, avx512, default, iec, precise-portable, std, transfer, unsafe_simd
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: ef68f276ec2d4603773cbb3fb3e290a50df14aeeac7e1dbfc12a187153909976
+// Resolution lock SHA-256: 4257569ea0044dd13895dc842db4d8764a9fb56b48894a42a91221be07851e5e
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 pub(crate) mod simd {
@@ -1159,7 +1159,10 @@ pub(crate) mod simd {
             let srgb = f32x16::blend(ge_one, one, srgb);
             let scaled = srgb
                 .mla(f32x16::splat_t(token, 65535.0), f32x16::splat_t(token, 0.5));
-            const TRUNC: u32 = magetypes::IntConvert::new().trunc().in_range().bits();
+            const TRUNC: u32 = magetypes::numerics::IntConvert::new()
+                .trunc()
+                .in_range()
+                .bits();
             scaled.min_fast(f32x16::splat_t(token, 65535.0)).to_u16_with::<TRUNC>()
         };
         for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
@@ -1648,8 +1651,11 @@ pub(crate) mod simd {
     ) {
         #[allow(non_camel_case_types, dead_code)]
         type f32x16 = ::magetypes::simd::generic::f32x16<archmage::NeonToken>;
-        const APPROX: u32 = magetypes::RecipOptions::new().approx().bits();
-        const TRUNC: u32 = magetypes::IntConvert::new().trunc().in_range().bits();
+        const APPROX: u32 = magetypes::numerics::RecipOptions::new().approx().bits();
+        const TRUNC: u32 = magetypes::numerics::IntConvert::new()
+            .trunc()
+            .in_range()
+            .bits();
         let lut = crate::const_luts::linear_to_srgb_u8();
         let zero = f32x16::zero_t(token);
         let one = f32x16::splat_t(token, 1.0);
@@ -1721,8 +1727,11 @@ pub(crate) mod simd {
     ) {
         #[allow(non_camel_case_types, dead_code)]
         type f32x16 = ::magetypes::simd::generic::f32x16<archmage::ScalarToken>;
-        const APPROX: u32 = magetypes::RecipOptions::new().approx().bits();
-        const TRUNC: u32 = magetypes::IntConvert::new().trunc().in_range().bits();
+        const APPROX: u32 = magetypes::numerics::RecipOptions::new().approx().bits();
+        const TRUNC: u32 = magetypes::numerics::IntConvert::new()
+            .trunc()
+            .in_range()
+            .bits();
         let lut = crate::const_luts::linear_to_srgb_u8();
         let zero = f32x16::zero_t(token);
         let one = f32x16::splat_t(token, 1.0);

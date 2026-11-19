@@ -712,7 +712,10 @@ fn linear_to_srgb_u16_slice_tier(token: Token, input: &[f32], output: &mut [u16]
         let srgb = f32x16::blend(ge_one, one, srgb);
 
         let scaled = srgb.mla(f32x16::splat_t(token, 65535.0), f32x16::splat_t(token, 0.5));
-        const TRUNC: u32 = magetypes::IntConvert::new().trunc().in_range().bits();
+        const TRUNC: u32 = magetypes::numerics::IntConvert::new()
+            .trunc()
+            .in_range()
+            .bits();
         scaled
             .min_fast(f32x16::splat_t(token, 65535.0))
             .to_u16_with::<TRUNC>()
@@ -1023,8 +1026,11 @@ pub fn srgb_u8_to_linear_premultiply_rgba_slice(input: &[u8], output: &mut [f32]
 
 #[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn unpremultiply_linear_to_srgb_u8_rgba_slice_tier(token: Token, input: &[f32], output: &mut [u8]) {
-    const APPROX: u32 = magetypes::RecipOptions::new().approx().bits();
-    const TRUNC: u32 = magetypes::IntConvert::new().trunc().in_range().bits();
+    const APPROX: u32 = magetypes::numerics::RecipOptions::new().approx().bits();
+    const TRUNC: u32 = magetypes::numerics::IntConvert::new()
+        .trunc()
+        .in_range()
+        .bits();
     let lut = crate::const_luts::linear_to_srgb_u8();
     let zero = f32x16::zero_t(token);
     let one = f32x16::splat_t(token, 1.0);

@@ -3,7 +3,7 @@
 // Target: wasm32-wasip1; preset: default; module: simd
 // Library features: avx512, default, std
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 8e8a453cd4aa95369f2982e341e2a8dd5629244e46774c59456ee5bd6055a90d
+// Resolution lock SHA-256: c80cf2dbf03fab2ecc8153531de93332c3b317254afcd27693551053f8983957
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 pub(crate) mod simd {
@@ -1077,7 +1077,10 @@ pub(crate) mod simd {
             let srgb = f32x16::blend(ge_one, one, srgb);
             let scaled = srgb
                 .mla(f32x16::splat_t(token, 65535.0), f32x16::splat_t(token, 0.5));
-            const TRUNC: u32 = magetypes::IntConvert::new().trunc().in_range().bits();
+            const TRUNC: u32 = magetypes::numerics::IntConvert::new()
+                .trunc()
+                .in_range()
+                .bits();
             scaled.min_fast(f32x16::splat_t(token, 65535.0)).to_u16_with::<TRUNC>()
         };
         for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
@@ -1545,8 +1548,11 @@ pub(crate) mod simd {
     ) {
         #[allow(non_camel_case_types, dead_code)]
         type f32x16 = ::magetypes::simd::generic::f32x16<archmage::Wasm128Token>;
-        const APPROX: u32 = magetypes::RecipOptions::new().approx().bits();
-        const TRUNC: u32 = magetypes::IntConvert::new().trunc().in_range().bits();
+        const APPROX: u32 = magetypes::numerics::RecipOptions::new().approx().bits();
+        const TRUNC: u32 = magetypes::numerics::IntConvert::new()
+            .trunc()
+            .in_range()
+            .bits();
         let lut = crate::const_luts::linear_to_srgb_u8();
         let zero = f32x16::zero_t(token);
         let one = f32x16::splat_t(token, 1.0);
@@ -1603,8 +1609,11 @@ pub(crate) mod simd {
     ) {
         #[allow(non_camel_case_types, dead_code)]
         type f32x16 = ::magetypes::simd::generic::f32x16<archmage::ScalarToken>;
-        const APPROX: u32 = magetypes::RecipOptions::new().approx().bits();
-        const TRUNC: u32 = magetypes::IntConvert::new().trunc().in_range().bits();
+        const APPROX: u32 = magetypes::numerics::RecipOptions::new().approx().bits();
+        const TRUNC: u32 = magetypes::numerics::IntConvert::new()
+            .trunc()
+            .in_range()
+            .bits();
         let lut = crate::const_luts::linear_to_srgb_u8();
         let zero = f32x16::zero_t(token);
         let one = f32x16::splat_t(token, 1.0);
