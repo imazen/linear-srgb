@@ -38,21 +38,31 @@ pub(crate) const LOG: u128 = magemath::logf::LogfOptions::new()
     .caller()
     .bits();
 
+#[cfg(all(test, feature = "transfer"))]
+pub(crate) fn exp2(x: f32) -> f32 {
+    exp2_with_token(ScalarToken, x)
+}
+
 #[cfg(feature = "transfer")]
 #[inline(always)]
-pub(crate) fn exp2(x: f32) -> f32 {
+pub(crate) fn exp2_with_token<T: F32x4Convert>(token: T, x: f32) -> f32 {
     // Expf's Midp graph flushes subnormal outputs. HLG's vector argument
     // stays above this range, but callers of this scalar helper may enter it.
     if x < -126.0 {
         return num_traits::Float::exp2(x);
     }
-    magemath::expf::Expf::<EXP>::exp2_with_token(ScalarToken, x).expect("full exp2 domain")
+    magemath::expf::Expf::<EXP>::exp2_with_token(token, x).expect("full exp2 domain")
+}
+
+#[cfg(all(test, feature = "transfer"))]
+pub(crate) fn log2(x: f32) -> f32 {
+    log2_with_token(ScalarToken, x)
 }
 
 #[cfg(feature = "transfer")]
 #[inline(always)]
-pub(crate) fn log2(x: f32) -> f32 {
-    magemath::logf::Logf::<LOG>::log2_with_token(ScalarToken, x).expect("full log2 domain")
+pub(crate) fn log2_with_token<T: F32x4Convert>(token: T, x: f32) -> f32 {
+    magemath::logf::Logf::<LOG>::log2_with_token(token, x).expect("full log2 domain")
 }
 
 #[inline(always)]
@@ -62,8 +72,10 @@ fn full_pow(base: f32, n: f32) -> f32 {
 
 #[cfg(feature = "transfer")]
 #[inline(always)]
-pub(crate) fn fixed_pow<const CFG: u128>(x: f32, exponent: f32) -> f32 {
-    Powf::<CFG>::scalar_const_with_token(ScalarToken, x).unwrap_or_else(|_| full_pow(x, exponent))
+pub(crate) fn fixed_pow<const CFG: u128, T: F32x4Convert>(token: T, x: f32, exponent: f32) -> f32 {
+    Powf::<CFG>::scalar_const_with_token(token, x).unwrap_or_else(|_| {
+        Powf::<FULL_POW>::scalar_with_token(token, x, exponent).expect("full power domain")
+    })
 }
 
 #[inline(always)]

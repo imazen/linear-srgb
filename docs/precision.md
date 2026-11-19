@@ -39,10 +39,31 @@ Trailing f32 samples, scalar-tier output, near-black PQ output, and some u16
 RGBA samples change. Consumers with output digests must review and regenerate
 them after the dependency update. No digest fixtures were relaxed.
 
-Native tier parity applies to finite inputs. Extended paths can produce
-different NaN signs/payloads on scalar and SIMD. Strict WASM needs
-`precise-portable` for fused arithmetic; relaxed SIMD depends on the engine.
-Libm-based scalar APIs are outside the slice parity contract.
+The BT.709, PQ and HLG single-value and slice kernels use the same
+arithmetic policy. Held native proofs use hardware fusion, and the scalar
+tier uses portable fusion on native. Strict WASM uses separate operations
+unless `precise-portable` requests fused arithmetic. Default relaxed SIMD
+follows the engine's rounding mode. Libm-based sRGB formulas retain their
+own precision contract.
+
+| Curve | NaN | Negative infinity | Positive infinity |
+| --- | --- | --- | --- |
+| Clamped sRGB and IEC sRGB | +0 | +0 | 1 |
+| Extended sRGB | NaN | −∞ | +∞ |
+| Gamma | NaN | +0 | 1 |
+| BT.709 | NaN | −∞ | +∞ |
+| PQ | NaN | +0 | 1 |
+| HLG | +0 | +0 | +∞ |
+
+Clamped sRGB, gamma, PQ and HLG return positive zero for either input zero.
+Extended sRGB and BT.709 keep the sign of zero. NaN payloads can vary.
+Gamma's scalar and slice paths share the subnormal policy. PQ OETF uses
+the reference formula for positive inputs below 1e-7 and the small
+rational fit from 1e-7 up to its segment boundary.
+
+The extended sRGB encoder retains its fit through magnitude 64. On native
+x86-64, the output is 5.913036 at 64 and 5.9130306 at the next f32 input,
+a downward step of about 5.25e-6 at the switch to the analytic curve.
 
 ## Other precision policies
 

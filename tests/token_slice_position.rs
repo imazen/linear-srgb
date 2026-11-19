@@ -2,6 +2,8 @@
 #![allow(deprecated)] // Exercise the retained token-taking compatibility API.
 #[cfg(target_arch = "aarch64")]
 use archmage::NeonToken;
+#[cfg(target_arch = "wasm32")]
+use archmage::Wasm128Token;
 #[cfg(target_arch = "x86_64")]
 use archmage::X64V3Token;
 #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
@@ -97,6 +99,28 @@ hooks!(
     ]
 );
 
+#[cfg(target_arch = "wasm32")]
+hooks!(
+    wasm,
+    Wasm128Token,
+    linear_srgb::tokens::x4,
+    [srgb_to_linear_slice_wasm128, linear_to_srgb_slice_wasm128]
+);
+#[cfg(all(target_arch = "wasm32", feature = "transfer"))]
+hooks!(
+    tf_wasm,
+    Wasm128Token,
+    linear_srgb::tokens::x4,
+    [
+        bt709_to_linear_slice_wasm128,
+        linear_to_bt709_slice_wasm128,
+        pq_to_linear_slice_wasm128,
+        linear_to_pq_slice_wasm128,
+        hlg_to_linear_slice_wasm128,
+        linear_to_hlg_slice_wasm128
+    ]
+);
+
 #[test]
 fn token_slice_rows_match() {
     let input: Vec<f32> = (0..1600).map(|i| (i as f32 / 1600.0).powi(4)).collect();
@@ -117,5 +141,11 @@ fn token_slice_rows_match() {
         neon(t, &input);
         #[cfg(feature = "transfer")]
         tf_neon(t, &input);
+    }
+    #[cfg(target_arch = "wasm32")]
+    if let Some(t) = Wasm128Token::summon() {
+        wasm(t, &input);
+        #[cfg(feature = "transfer")]
+        tf_wasm(t, &input);
     }
 }

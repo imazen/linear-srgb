@@ -173,7 +173,7 @@ pub(crate) fn srgb_u16_to_linear(token: Token, srgb: [u16; 8]) -> [f32; 8] {
 
     let power_result = (yp / yq).min(one);
 
-    let mask = v.simd_lt(f32x8::splat_t(token, SRGB_LINEAR_THRESHOLD));
+    let mask = v.simd_le(f32x8::splat_t(token, SRGB_LINEAR_THRESHOLD));
     let result = f32x8::blend(mask, linear_result, power_result);
     // Match the scalar `srgb_to_linear_fast` early-exit so u16=65535 → 1.0
     // bit-exact: the normalized v rounds to 1 + 2^-16 in f32 and the
@@ -247,7 +247,7 @@ pub(crate) fn linear_to_srgb_u16(token: Token, linear: [f32; 8]) -> [u16; 8] {
 
     let power_result = (yp / yq).min(one);
 
-    let thresh_mask = clamped.simd_lt(f32x8::splat_t(token, LINEAR_THRESHOLD));
+    let thresh_mask = clamped.simd_le(f32x8::splat_t(token, LINEAR_THRESHOLD));
     let srgb = f32x8::blend(thresh_mask, linear_result, power_result);
 
     // Force 1.0 for inputs >= 1.0 so the u16 endpoint lands exactly on 65535

@@ -33,7 +33,7 @@ def environment():
     scratch.mkdir(parents=True, exist_ok=True)
     env.update(
         RUSTUP_TOOLCHAIN=TOOLCHAIN,
-        CARGO_TARGET_DIR=str(ROOT / "target/expand"),
+        CARGO_TARGET_DIR=str(Path(env.get("CARGO_TARGET_DIR", ROOT / "target")) / "expand"),
         CARGO_TERM_COLOR="never",
         # Empty overrides also suppress flags from the caller's Cargo config.
         RUSTFLAGS="",

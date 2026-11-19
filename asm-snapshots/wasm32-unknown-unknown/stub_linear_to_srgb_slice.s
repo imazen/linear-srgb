@@ -132,113 +132,102 @@ stub_linear_to_srgb_slice:
 	local.get 1
 	v128.const 0, 0, 128, 63, 0, 0, 128, 63, 0, 0, 128, 63, 0, 0, 128, 63
 	local.tee 9
-	local.get 1
-	v128.load 48:p2align=2
+	v128.const 0x1p0, 0x1p0, 0x1p0, 0x1p0
 	local.tee 10
 	v128.const 0x0p0, 0x0p0, 0x0p0, 0x0p0
 	local.tee 11
-	local.get 10
-	f32x4.pmax
-	v128.const 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+	local.get 1
+	v128.load 48:p2align=2
 	local.tee 12
-	v128.bitselect
-	local.tee 13
-	v128.const 0x1p0, 0x1p0, 0x1p0, 0x1p0
-	local.tee 14
-	local.get 13
+	f32x4.pmax
 	f32x4.pmin
-	local.get 12
-	v128.bitselect
-	local.tee 15
+	local.tee 13
 	v128.const 0x1.9d70a4p3, 0x1.9d70a4p3, 0x1.9d70a4p3, 0x1.9d70a4p3
+	local.tee 14
+	f32x4.mul
+	local.get 13
+	f32x4.sqrt
+	local.tee 15
+	local.get 15
+	local.get 15
+	local.get 15
+	v128.const 0x1.bec99p4, 0x1.bec99p4, 0x1.bec99p4, 0x1.bec99p4
 	local.tee 16
 	f32x4.mul
-	local.get 15
-	f32x4.sqrt
-	local.tee 13
-	local.get 13
-	local.get 13
-	local.get 13
-	v128.const 0x1.bec99p4, 0x1.bec99p4, 0x1.bec99p4, 0x1.bec99p4
-	local.tee 17
-	f32x4.mul
 	v128.const 0x1.902b84p5, 0x1.902b84p5, 0x1.902b84p5, 0x1.902b84p5
-	local.tee 18
+	local.tee 17
 	f32x4.add
 	f32x4.mul
 	v128.const 0x1.72539ap3, 0x1.72539ap3, 0x1.72539ap3, 0x1.72539ap3
-	local.tee 19
+	local.tee 18
 	f32x4.add
 	f32x4.mul
 	v128.const 0x1.7e7074p-4, 0x1.7e7074p-4, 0x1.7e7074p-4, 0x1.7e7074p-4
-	local.tee 20
+	local.tee 19
 	f32x4.add
 	f32x4.mul
 	v128.const -0x1.bc7a84p-7, -0x1.bc7a84p-7, -0x1.bc7a84p-7, -0x1.bc7a84p-7
-	local.tee 21
+	local.tee 20
 	f32x4.add
-	local.get 13
-	local.get 13
-	local.get 13
-	local.get 13
+	local.get 15
+	local.get 15
+	local.get 15
+	local.get 15
 	v128.const 0x1.14776ap5, 0x1.14776ap5, 0x1.14776ap5, 0x1.14776ap5
-	local.tee 22
+	local.tee 21
 	f32x4.add
 	f32x4.mul
 	v128.const 0x1.66381cp5, 0x1.66381cp5, 0x1.66381cp5, 0x1.66381cp5
-	local.tee 23
+	local.tee 22
 	f32x4.add
 	f32x4.mul
 	v128.const 0x1.1ff722p3, 0x1.1ff722p3, 0x1.1ff722p3, 0x1.1ff722p3
-	local.tee 24
+	local.tee 23
 	f32x4.add
 	f32x4.mul
 	v128.const 0x1.0db3d2p-2, 0x1.0db3d2p-2, 0x1.0db3d2p-2, 0x1.0db3d2p-2
-	local.tee 25
+	local.tee 24
 	f32x4.add
 	f32x4.div
-	local.tee 13
-	local.get 14
-	local.get 13
-	f32x4.pmin
-	local.get 12
-	v128.bitselect
+	local.tee 15
+	local.get 10
 	local.get 15
+	f32x4.pmin
+	v128.const 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+	local.tee 25
+	v128.bitselect
+	local.get 13
 	v128.const 0x1.8ea082p-9, 0x1.8ea082p-9, 0x1.8ea082p-9, 0x1.8ea082p-9
 	local.tee 26
 	f32x4.le
 	v128.bitselect
+	local.get 12
 	local.get 10
-	local.get 14
 	f32x4.ge
 	v128.bitselect
 	v128.store 48:p2align=2
 	local.get 1
 	local.get 9
+	local.get 10
+	local.get 11
 	local.get 1
 	v128.load 32:p2align=2
-	local.tee 10
-	local.get 11
-	local.get 10
+	local.tee 12
 	f32x4.pmax
-	local.get 12
-	v128.bitselect
+	f32x4.pmin
 	local.tee 13
 	local.get 14
+	f32x4.mul
 	local.get 13
-	f32x4.pmin
-	local.get 12
-	v128.bitselect
+	f32x4.sqrt
 	local.tee 15
+	local.get 15
+	local.get 15
+	local.get 15
 	local.get 16
 	f32x4.mul
-	local.get 15
-	f32x4.sqrt
-	local.tee 13
-	local.get 13
-	local.get 13
-	local.get 13
 	local.get 17
+	f32x4.add
 	f32x4.mul
 	local.get 18
 	f32x4.add
@@ -248,13 +237,13 @@ stub_linear_to_srgb_slice:
 	f32x4.mul
 	local.get 20
 	f32x4.add
-	f32x4.mul
+	local.get 15
+	local.get 15
+	local.get 15
+	local.get 15
 	local.get 21
 	f32x4.add
-	local.get 13
-	local.get 13
-	local.get 13
-	local.get 13
+	f32x4.mul
 	local.get 22
 	f32x4.add
 	f32x4.mul
@@ -263,51 +252,44 @@ stub_linear_to_srgb_slice:
 	f32x4.mul
 	local.get 24
 	f32x4.add
-	f32x4.mul
-	local.get 25
-	f32x4.add
 	f32x4.div
-	local.tee 13
-	local.get 14
-	local.get 13
-	f32x4.pmin
-	local.get 12
-	v128.bitselect
+	local.tee 15
+	local.get 10
 	local.get 15
+	f32x4.pmin
+	local.get 25
+	v128.bitselect
+	local.get 13
 	local.get 26
 	f32x4.le
 	v128.bitselect
+	local.get 12
 	local.get 10
-	local.get 14
 	f32x4.ge
 	v128.bitselect
 	v128.store 32:p2align=2
 	local.get 1
 	local.get 9
+	local.get 10
+	local.get 11
 	local.get 1
 	v128.load 16:p2align=2
-	local.tee 10
-	local.get 11
-	local.get 10
+	local.tee 12
 	f32x4.pmax
-	local.get 12
-	v128.bitselect
+	f32x4.pmin
 	local.tee 13
 	local.get 14
+	f32x4.mul
 	local.get 13
-	f32x4.pmin
-	local.get 12
-	v128.bitselect
+	f32x4.sqrt
 	local.tee 15
+	local.get 15
+	local.get 15
+	local.get 15
 	local.get 16
 	f32x4.mul
-	local.get 15
-	f32x4.sqrt
-	local.tee 13
-	local.get 13
-	local.get 13
-	local.get 13
 	local.get 17
+	f32x4.add
 	f32x4.mul
 	local.get 18
 	f32x4.add
@@ -317,13 +299,13 @@ stub_linear_to_srgb_slice:
 	f32x4.mul
 	local.get 20
 	f32x4.add
-	f32x4.mul
+	local.get 15
+	local.get 15
+	local.get 15
+	local.get 15
 	local.get 21
 	f32x4.add
-	local.get 13
-	local.get 13
-	local.get 13
-	local.get 13
+	f32x4.mul
 	local.get 22
 	f32x4.add
 	f32x4.mul
@@ -332,51 +314,44 @@ stub_linear_to_srgb_slice:
 	f32x4.mul
 	local.get 24
 	f32x4.add
-	f32x4.mul
-	local.get 25
-	f32x4.add
 	f32x4.div
-	local.tee 13
-	local.get 14
-	local.get 13
-	f32x4.pmin
-	local.get 12
-	v128.bitselect
+	local.tee 15
+	local.get 10
 	local.get 15
+	f32x4.pmin
+	local.get 25
+	v128.bitselect
+	local.get 13
 	local.get 26
 	f32x4.le
 	v128.bitselect
+	local.get 12
 	local.get 10
-	local.get 14
 	f32x4.ge
 	v128.bitselect
 	v128.store 16:p2align=2
 	local.get 1
 	local.get 9
+	local.get 10
+	local.get 11
 	local.get 1
 	v128.load 0:p2align=2
-	local.tee 10
-	local.get 11
-	local.get 10
-	f32x4.pmax
-	local.get 12
-	v128.bitselect
 	local.tee 13
-	local.get 14
-	local.get 13
+	f32x4.pmax
 	f32x4.pmin
-	local.get 12
-	v128.bitselect
 	local.tee 11
-	local.get 16
+	local.get 14
 	f32x4.mul
 	local.get 11
 	f32x4.sqrt
-	local.tee 13
-	local.get 13
-	local.get 13
-	local.get 13
+	local.tee 15
+	local.get 15
+	local.get 15
+	local.get 15
+	local.get 16
+	f32x4.mul
 	local.get 17
+	f32x4.add
 	f32x4.mul
 	local.get 18
 	f32x4.add
@@ -386,13 +361,13 @@ stub_linear_to_srgb_slice:
 	f32x4.mul
 	local.get 20
 	f32x4.add
-	f32x4.mul
+	local.get 15
+	local.get 15
+	local.get 15
+	local.get 15
 	local.get 21
 	f32x4.add
-	local.get 13
-	local.get 13
-	local.get 13
-	local.get 13
+	f32x4.mul
 	local.get 22
 	f32x4.add
 	f32x4.mul
@@ -401,22 +376,19 @@ stub_linear_to_srgb_slice:
 	f32x4.mul
 	local.get 24
 	f32x4.add
-	f32x4.mul
-	local.get 25
-	f32x4.add
 	f32x4.div
-	local.tee 13
-	local.get 14
-	local.get 13
+	local.tee 15
+	local.get 10
+	local.get 15
 	f32x4.pmin
-	local.get 12
+	local.get 25
 	v128.bitselect
 	local.get 11
 	local.get 26
 	f32x4.le
 	v128.bitselect
+	local.get 13
 	local.get 10
-	local.get 14
 	f32x4.ge
 	v128.bitselect
 	v128.store 0:p2align=2

@@ -22,7 +22,7 @@ macro_rules! width {
                 use crate::rational_poly::{S2L_P, S2L_Q};
                 let zero = $float::<T>::zero_t(token);
                 let one = $float::<T>::splat_t(token, 1.0);
-                let clamped = v.max(zero).min(one);
+                let clamped = crate::tf::polynomial::floor_zero!(v, zero).min_fast(one);
                 let linear_result = clamped * $float::<T>::splat_t(token, LINEAR_SCALE);
                 // Rational polynomial P(x)/Q(x) via Horner's method
                 let x = clamped;
@@ -54,7 +54,7 @@ macro_rules! width {
                 use crate::rational_poly::{L2S_P, L2S_Q};
                 let zero = $float::<T>::zero_t(token);
                 let one = $float::<T>::splat_t(token, 1.0);
-                let clamped = v.max(zero).min(one);
+                let clamped = crate::tf::polynomial::floor_zero!(v, zero).min_fast(one);
                 let linear_result = clamped * $float::<T>::splat_t(token, TWELVE_92);
                 // sqrt transform + rational polynomial P(√x)/Q(√x) via Horner's method
                 let x = clamped.sqrt();
@@ -180,7 +180,7 @@ macro_rules! width {
                     let mut result = result.to_array();
                     for (source, output) in v.to_array().into_iter().zip(&mut result) {
                         if source.abs() > 64.0 {
-                            *output = crate::scalar::linear_to_srgb_extended(source);
+                            *output = crate::scalar::linear_to_srgb_extended_with_token(token, source);
                         }
                     }
                     $float::from_array_t(token, result)

@@ -33,7 +33,15 @@ mod kernels {
                 use crate::rational_poly::{S2L_P, S2L_Q};
                 let zero = f32x4::<T>::zero_t(token);
                 let one = f32x4::<T>::splat_t(token, 1.0);
-                let clamped = v.max(zero).min(one);
+                let clamped = if false {
+                    v & v.simd_gt(zero)
+                } else {
+                    const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                        .non_nan_rhs()
+                        .bits();
+                    v.max_with::<NON_NAN_RHS>(zero)
+                }
+                    .min_fast(one);
                 let linear_result = clamped * f32x4::<T>::splat_t(token, LINEAR_SCALE);
                 let x = clamped;
                 let yp = f32x4::<T>::splat_t(token, S2L_P[4])
@@ -69,7 +77,15 @@ mod kernels {
                 use crate::rational_poly::{L2S_P, L2S_Q};
                 let zero = f32x4::<T>::zero_t(token);
                 let one = f32x4::<T>::splat_t(token, 1.0);
-                let clamped = v.max(zero).min(one);
+                let clamped = if false {
+                    v & v.simd_gt(zero)
+                } else {
+                    const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                        .non_nan_rhs()
+                        .bits();
+                    v.max_with::<NON_NAN_RHS>(zero)
+                }
+                    .min_fast(one);
                 let linear_result = clamped * f32x4::<T>::splat_t(token, TWELVE_92);
                 let x = clamped.sqrt();
                 let yp = f32x4::<T>::splat_t(token, L2S_P[4])
@@ -193,7 +209,10 @@ mod kernels {
                     let mut result = result.to_array();
                     for (source, output) in v.to_array().into_iter().zip(&mut result) {
                         if source.abs() > 64.0 {
-                            *output = crate::scalar::linear_to_srgb_extended(source);
+                            *output = crate::scalar::linear_to_srgb_extended_with_token(
+                                token,
+                                source,
+                            );
                         }
                     }
                     f32x4::from_array_t(token, result)
@@ -219,7 +238,15 @@ mod kernels {
                 use crate::rational_poly::{S2L_P, S2L_Q};
                 let zero = f32x8::<T>::zero_t(token);
                 let one = f32x8::<T>::splat_t(token, 1.0);
-                let clamped = v.max(zero).min(one);
+                let clamped = if false {
+                    v & v.simd_gt(zero)
+                } else {
+                    const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                        .non_nan_rhs()
+                        .bits();
+                    v.max_with::<NON_NAN_RHS>(zero)
+                }
+                    .min_fast(one);
                 let linear_result = clamped * f32x8::<T>::splat_t(token, LINEAR_SCALE);
                 let x = clamped;
                 let yp = f32x8::<T>::splat_t(token, S2L_P[4])
@@ -255,7 +282,15 @@ mod kernels {
                 use crate::rational_poly::{L2S_P, L2S_Q};
                 let zero = f32x8::<T>::zero_t(token);
                 let one = f32x8::<T>::splat_t(token, 1.0);
-                let clamped = v.max(zero).min(one);
+                let clamped = if false {
+                    v & v.simd_gt(zero)
+                } else {
+                    const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                        .non_nan_rhs()
+                        .bits();
+                    v.max_with::<NON_NAN_RHS>(zero)
+                }
+                    .min_fast(one);
                 let linear_result = clamped * f32x8::<T>::splat_t(token, TWELVE_92);
                 let x = clamped.sqrt();
                 let yp = f32x8::<T>::splat_t(token, L2S_P[4])
@@ -379,7 +414,10 @@ mod kernels {
                     let mut result = result.to_array();
                     for (source, output) in v.to_array().into_iter().zip(&mut result) {
                         if source.abs() > 64.0 {
-                            *output = crate::scalar::linear_to_srgb_extended(source);
+                            *output = crate::scalar::linear_to_srgb_extended_with_token(
+                                token,
+                                source,
+                            );
                         }
                     }
                     f32x8::from_array_t(token, result)
@@ -406,7 +444,15 @@ mod kernels {
                 use crate::rational_poly::{S2L_P, S2L_Q};
                 let zero = f32x16::<T>::zero_t(token);
                 let one = f32x16::<T>::splat_t(token, 1.0);
-                let clamped = v.max(zero).min(one);
+                let clamped = if false {
+                    v & v.simd_gt(zero)
+                } else {
+                    const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                        .non_nan_rhs()
+                        .bits();
+                    v.max_with::<NON_NAN_RHS>(zero)
+                }
+                    .min_fast(one);
                 let linear_result = clamped * f32x16::<T>::splat_t(token, LINEAR_SCALE);
                 let x = clamped;
                 let yp = f32x16::<T>::splat_t(token, S2L_P[4])
@@ -442,7 +488,15 @@ mod kernels {
                 use crate::rational_poly::{L2S_P, L2S_Q};
                 let zero = f32x16::<T>::zero_t(token);
                 let one = f32x16::<T>::splat_t(token, 1.0);
-                let clamped = v.max(zero).min(one);
+                let clamped = if false {
+                    v & v.simd_gt(zero)
+                } else {
+                    const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                        .non_nan_rhs()
+                        .bits();
+                    v.max_with::<NON_NAN_RHS>(zero)
+                }
+                    .min_fast(one);
                 let linear_result = clamped * f32x16::<T>::splat_t(token, TWELVE_92);
                 let x = clamped.sqrt();
                 let yp = f32x16::<T>::splat_t(token, L2S_P[4])
@@ -578,7 +632,10 @@ mod kernels {
                     let mut result = result.to_array();
                     for (source, output) in v.to_array().into_iter().zip(&mut result) {
                         if source.abs() > 64.0 {
-                            *output = crate::scalar::linear_to_srgb_extended(source);
+                            *output = crate::scalar::linear_to_srgb_extended_with_token(
+                                token,
+                                source,
+                            );
                         }
                     }
                     f32x16::from_array_t(token, result)
@@ -1287,7 +1344,7 @@ mod kernels {
             let yq = yq.mla(v, f32x8::splat_t(token, S2L_Q[1]));
             let yq = yq.mla(v, f32x8::splat_t(token, S2L_Q[0]));
             let power_result = (yp / yq).min(one);
-            let mask = v.simd_lt(f32x8::splat_t(token, SRGB_LINEAR_THRESHOLD));
+            let mask = v.simd_le(f32x8::splat_t(token, SRGB_LINEAR_THRESHOLD));
             let result = f32x8::blend(mask, linear_result, power_result);
             let ge_one = v.simd_ge(one);
             f32x8::blend(ge_one, one, result).to_array()
@@ -1328,7 +1385,7 @@ mod kernels {
             let yq = yq.mla(v, f32x8::splat_t(token, S2L_Q[1]));
             let yq = yq.mla(v, f32x8::splat_t(token, S2L_Q[0]));
             let power_result = (yp / yq).min(one);
-            let mask = v.simd_lt(f32x8::splat_t(token, SRGB_LINEAR_THRESHOLD));
+            let mask = v.simd_le(f32x8::splat_t(token, SRGB_LINEAR_THRESHOLD));
             let result = f32x8::blend(mask, linear_result, power_result);
             let ge_one = v.simd_ge(one);
             f32x8::blend(ge_one, one, result).to_array()
@@ -1406,7 +1463,7 @@ mod kernels {
             let yq = yq.mla(x, f32x8::splat_t(token, L2S_Q[1]));
             let yq = yq.mla(x, f32x8::splat_t(token, L2S_Q[0]));
             let power_result = (yp / yq).min(one);
-            let thresh_mask = clamped.simd_lt(f32x8::splat_t(token, LINEAR_THRESHOLD));
+            let thresh_mask = clamped.simd_le(f32x8::splat_t(token, LINEAR_THRESHOLD));
             let srgb = f32x8::blend(thresh_mask, linear_result, power_result);
             let ge_one = v.simd_ge(one);
             let srgb = f32x8::blend(ge_one, one, srgb);
@@ -1460,7 +1517,7 @@ mod kernels {
             let yq = yq.mla(x, f32x8::splat_t(token, L2S_Q[1]));
             let yq = yq.mla(x, f32x8::splat_t(token, L2S_Q[0]));
             let power_result = (yp / yq).min(one);
-            let thresh_mask = clamped.simd_lt(f32x8::splat_t(token, LINEAR_THRESHOLD));
+            let thresh_mask = clamped.simd_le(f32x8::splat_t(token, LINEAR_THRESHOLD));
             let srgb = f32x8::blend(thresh_mask, linear_result, power_result);
             let ge_one = v.simd_ge(one);
             let srgb = f32x8::blend(ge_one, one, srgb);

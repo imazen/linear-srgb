@@ -15,7 +15,7 @@
 //!
 //! Requires the `iec` feature.
 
-use crate::mlaf::fmla;
+use crate::mlaf::{fmla_f32, fmla_f64};
 #[allow(unused_imports)]
 use num_traits::Float;
 
@@ -40,7 +40,7 @@ const INV_GAMMA_F32: f32 = INV_GAMMA as f32;
 /// Input clamped to \[0, 1\].
 #[inline]
 pub fn srgb_to_linear_f64(gamma: f64) -> f64 {
-    if gamma < 0.0 {
+    if gamma <= 0.0 || gamma.is_nan() {
         0.0
     } else if gamma <= SRGB_LINEAR_THRESHOLD {
         gamma * LINEAR_SCALE
@@ -57,7 +57,7 @@ pub fn srgb_to_linear_f64(gamma: f64) -> f64 {
 /// Input clamped to \[0, 1\].
 #[inline]
 pub fn srgb_to_linear(gamma: f32) -> f32 {
-    if gamma < 0.0 {
+    if gamma <= 0.0 || gamma.is_nan() {
         0.0
     } else if gamma <= SRGB_LINEAR_THRESHOLD_F32 {
         gamma * LINEAR_SCALE_F32
@@ -74,12 +74,12 @@ pub fn srgb_to_linear(gamma: f32) -> f32 {
 /// Input clamped to \[0, 1\].
 #[inline]
 pub fn linear_to_srgb_f64(linear: f64) -> f64 {
-    if linear < 0.0 {
+    if linear <= 0.0 || linear.is_nan() {
         0.0
     } else if linear <= LINEAR_THRESHOLD {
         linear * 12.92
     } else if linear < 1.0 {
-        fmla(SRGB_A_PLUS_1, linear.powf(INV_GAMMA), -SRGB_A)
+        fmla_f64(SRGB_A_PLUS_1, linear.powf(INV_GAMMA), -SRGB_A)
     } else {
         1.0
     }
@@ -91,12 +91,12 @@ pub fn linear_to_srgb_f64(linear: f64) -> f64 {
 /// Input clamped to \[0, 1\].
 #[inline]
 pub fn linear_to_srgb(linear: f32) -> f32 {
-    if linear < 0.0 {
+    if linear <= 0.0 || linear.is_nan() {
         0.0
     } else if linear <= LINEAR_THRESHOLD_F32 {
         linear * 12.92
     } else if linear < 1.0 {
-        fmla(SRGB_A_PLUS_1_F32, linear.powf(INV_GAMMA_F32), -SRGB_A_F32)
+        fmla_f32(SRGB_A_PLUS_1_F32, linear.powf(INV_GAMMA_F32), -SRGB_A_F32)
     } else {
         1.0
     }

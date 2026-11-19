@@ -23,7 +23,7 @@
 //! Roundtrip error is sub-U16 (< 1/65535) across the full [0, 1] range.
 
 #[allow(unused_imports)]
-use num_traits::Float; // provides mul_add/sqrt via libm in no_std
+use num_traits::Float; // provides sqrt via libm in no_std
 
 // =============================================================================
 // Coefficients (lowest-degree-first: p[0] + p[1]*x + p[2]*x^2 + ...)
@@ -161,15 +161,15 @@ pub(crate) const TWELVE_92: f32 = 12.92;
 fn eval_rational_poly_5(x: f32, p: [f32; 5], q: [f32; 5]) -> f32 {
     let x = x as f64;
 
-    let yp = (p[4] as f64).mul_add(x, p[3] as f64);
-    let yp = yp.mul_add(x, p[2] as f64);
-    let yp = yp.mul_add(x, p[1] as f64);
-    let yp = yp.mul_add(x, p[0] as f64);
+    let yp = f64::from(p[4]) * x + f64::from(p[3]);
+    let yp = yp * x + f64::from(p[2]);
+    let yp = yp * x + f64::from(p[1]);
+    let yp = yp * x + f64::from(p[0]);
 
-    let yq = (q[4] as f64).mul_add(x, q[3] as f64);
-    let yq = yq.mul_add(x, q[2] as f64);
-    let yq = yq.mul_add(x, q[1] as f64);
-    let yq = yq.mul_add(x, q[0] as f64);
+    let yq = f64::from(q[4]) * x + f64::from(q[3]);
+    let yq = yq * x + f64::from(q[2]);
+    let yq = yq * x + f64::from(q[1]);
+    let yq = yq * x + f64::from(q[0]);
 
     (yp / yq) as f32
 }
@@ -183,7 +183,7 @@ fn eval_rational_poly_5(x: f32, p: [f32; 5], q: [f32; 5]) -> f32 {
 /// **Clamps** inputs to \[0, 1\]. For platform `powf()`, see [`crate::precise::srgb_to_linear`].
 #[inline]
 pub fn srgb_to_linear_fast(gamma: f32) -> f32 {
-    if gamma < 0.0 {
+    if gamma <= 0.0 || gamma.is_nan() {
         return 0.0;
     }
     if gamma >= 1.0 {
@@ -204,7 +204,7 @@ pub fn srgb_to_linear_fast(gamma: f32) -> f32 {
 /// **Clamps** inputs to \[0, 1\]. For platform `powf()`, see [`crate::precise::linear_to_srgb`].
 #[inline]
 pub fn linear_to_srgb_fast(linear: f32) -> f32 {
-    if linear < 0.0 {
+    if linear <= 0.0 || linear.is_nan() {
         return 0.0;
     }
     if linear >= 1.0 {

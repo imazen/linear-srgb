@@ -7,9 +7,9 @@
 //! - Early exit for out-of-range values (0 and 1) avoids transcendentals
 //! - FMA instructions for the encoding formula
 
-use crate::mlaf::fmla;
+use crate::mlaf::{fmla_f32, fmla_f64};
 #[allow(unused_imports)]
-use num_traits::Float; // provides powf/sqrt/mul_add via libm in no_std
+use num_traits::Float; // provides powf/sqrt via libm in no_std
 
 // sRGB C0-continuous constants (moxcms reference).
 // These eliminate the ~2.3e-9 discontinuity in the IEC 61966-2-1 textbook values.
@@ -46,9 +46,9 @@ const INV_GAMMA_F32: f32 = INV_GAMMA as f32;
 /// **Clamps** inputs to \[0, 1\]. No extended-range f64 variant exists.
 #[inline]
 pub fn srgb_to_linear_f64(gamma: f64) -> f64 {
-    if gamma < 0.0 {
+    if gamma <= 0.0 || gamma.is_nan() {
         0.0
-    } else if gamma < SRGB_LINEAR_THRESHOLD {
+    } else if gamma <= SRGB_LINEAR_THRESHOLD {
         // Linear segment (cheap multiply)
         gamma * LINEAR_SCALE
     } else if gamma < 1.0 {
@@ -68,9 +68,9 @@ pub fn srgb_to_linear_f64(gamma: f64) -> f64 {
 /// values, use [`srgb_to_linear_extended`] instead.
 #[inline]
 pub fn srgb_to_linear(gamma: f32) -> f32 {
-    if gamma < 0.0 {
+    if gamma <= 0.0 || gamma.is_nan() {
         0.0
-    } else if gamma < SRGB_LINEAR_THRESHOLD_F32 {
+    } else if gamma <= SRGB_LINEAR_THRESHOLD_F32 {
         gamma * LINEAR_SCALE_F32
     } else if gamma < 1.0 {
         ((gamma + SRGB_A_F32) / SRGB_A_PLUS_1_F32).powf(GAMMA as f32)
@@ -87,14 +87,14 @@ pub fn srgb_to_linear(gamma: f32) -> f32 {
 /// **Clamps** inputs to \[0, 1\]. No extended-range f64 variant exists.
 #[inline]
 pub fn linear_to_srgb_f64(linear: f64) -> f64 {
-    if linear < 0.0 {
+    if linear <= 0.0 || linear.is_nan() {
         0.0
-    } else if linear < LINEAR_THRESHOLD {
+    } else if linear <= LINEAR_THRESHOLD {
         // Linear segment (cheap multiply)
         linear * 12.92
     } else if linear < 1.0 {
         // Power segment with FMA: 1.055 * pow(linear, 1/2.4) - 0.055
-        fmla(SRGB_A_PLUS_1, linear.powf(INV_GAMMA), -SRGB_A)
+        fmla_f64(SRGB_A_PLUS_1, linear.powf(INV_GAMMA), -SRGB_A)
     } else {
         1.0
     }
@@ -109,12 +109,12 @@ pub fn linear_to_srgb_f64(linear: f64) -> f64 {
 /// values, use [`linear_to_srgb_extended`] instead.
 #[inline]
 pub fn linear_to_srgb(linear: f32) -> f32 {
-    if linear < 0.0 {
+    if linear <= 0.0 || linear.is_nan() {
         0.0
-    } else if linear < LINEAR_THRESHOLD_F32 {
+    } else if linear <= LINEAR_THRESHOLD_F32 {
         linear * 12.92
     } else if linear < 1.0 {
-        fmla(SRGB_A_PLUS_1_F32, linear.powf(INV_GAMMA_F32), -SRGB_A_F32)
+        fmla_f32(SRGB_A_PLUS_1_F32, linear.powf(INV_GAMMA_F32), -SRGB_A_F32)
     } else {
         1.0
     }
@@ -193,12 +193,25 @@ pub fn srgb_to_linear_extended(gamma: f32) -> f32 {
 /// The power curve is applied to the magnitude and the sign is restored.
 #[inline]
 pub fn linear_to_srgb_extended(linear: f32) -> f32 {
+    linear_to_srgb_extended_with_token(archmage::ScalarToken, linear)
+}
+
+#[inline(always)]
+pub(crate) fn linear_to_srgb_extended_with_token<T: magetypes::scalar::F32ScalarBackend>(
+    token: T,
+    linear: f32,
+) -> f32 {
     let sign = linear.signum();
     let abs_v = linear.abs();
     if abs_v < LINEAR_THRESHOLD_F32 {
         linear * 12.92
     } else {
-        sign * fmla(SRGB_A_PLUS_1_F32, abs_v.powf(INV_GAMMA_F32), -SRGB_A_F32)
+        sign * crate::mlaf::fmla_f32_with_token(
+            token,
+            SRGB_A_PLUS_1_F32,
+            abs_v.powf(INV_GAMMA_F32),
+            -SRGB_A_F32,
+        )
     }
 }
 
@@ -296,10 +309,14 @@ pub fn linear_to_srgb_u16_fast(linear: f32) -> u16 {
 /// ```
 #[inline]
 pub fn gamma_to_linear(encoded: f32, gamma: f32) -> f32 {
-    if encoded <= 0.0 {
+    if encoded.is_nan() {
+        encoded
+    } else if encoded <= 0.0 {
         0.0
     } else if encoded >= 1.0 {
         1.0
+    } else if encoded.is_subnormal() {
+        crate::tf::math::gamma(encoded, gamma)
     } else {
         encoded.powf(gamma)
     }
@@ -322,10 +339,14 @@ pub fn gamma_to_linear(encoded: f32, gamma: f32) -> f32 {
 /// ```
 #[inline]
 pub fn linear_to_gamma(linear: f32, gamma: f32) -> f32 {
-    if linear <= 0.0 {
+    if linear.is_nan() {
+        linear
+    } else if linear <= 0.0 {
         0.0
     } else if linear >= 1.0 {
         1.0
+    } else if linear.is_subnormal() {
+        crate::tf::math::gamma(linear, 1.0 / gamma)
     } else {
         linear.powf(1.0 / gamma)
     }
@@ -336,7 +357,9 @@ pub fn linear_to_gamma(linear: f32, gamma: f32) -> f32 {
 /// High-precision version of [`gamma_to_linear`].
 #[inline]
 pub fn gamma_to_linear_f64(encoded: f64, gamma: f64) -> f64 {
-    if encoded <= 0.0 {
+    if encoded.is_nan() {
+        encoded
+    } else if encoded <= 0.0 {
         0.0
     } else if encoded >= 1.0 {
         1.0
@@ -350,7 +373,9 @@ pub fn gamma_to_linear_f64(encoded: f64, gamma: f64) -> f64 {
 /// High-precision version of [`linear_to_gamma`].
 #[inline]
 pub fn linear_to_gamma_f64(linear: f64, gamma: f64) -> f64 {
-    if linear <= 0.0 {
+    if linear.is_nan() {
+        linear
+    } else if linear <= 0.0 {
         0.0
     } else if linear >= 1.0 {
         1.0

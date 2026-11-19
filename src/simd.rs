@@ -28,9 +28,7 @@ use archmage::{
 use archmage::{attune, attuned};
 
 // Shared private kernels preserve evaluation across public entry points.
-use crate::kernels::float::x16::{
-    linear_to_srgb as mt_linear_to_srgb, srgb_to_linear as mt_srgb_to_linear,
-};
+use crate::kernels::float::x16::{linear_to_srgb_vector, srgb_to_linear_vector};
 
 use crate::kernels::{store_tail, tail_block};
 
@@ -402,18 +400,10 @@ fn srgb_to_linear_premultiply_rgba_slice_tier(token: Token, values: &mut [f32]) 
     let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
     let mut tail = tail_block::<16>(remainder);
     for chunk in chunks.iter_mut().chain(tail.as_mut()) {
-        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
-        let converted_arr = mt_srgb_to_linear(token, *chunk);
-        let converted = f32x16::from_array_t(token, converted_arr);
-        let alpha = f32x16::from_array_t(
-            token,
-            [
-                a[0], a[0], a[0], 1.0, a[1], a[1], a[1], 1.0, a[2], a[2], a[2], 1.0, a[3], a[3],
-                a[3], 1.0,
-            ],
-        );
-        *chunk = (converted * alpha).to_array();
-        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
+        let original = f32x16::load_t(token, chunk);
+        (srgb_to_linear_vector(token, original) * original.broadcast_rgba_alpha())
+            .with_rgba_alpha(original)
+            .store(chunk);
     }
     store_tail(remainder, tail.as_ref());
 }
@@ -456,41 +446,15 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier(token: Token, values: &mut [f32]
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
     let mut tail = tail_block::<16>(remainder);
+    let one = f32x16::splat_t(token, 1.0);
+    let threshold = f32x16::splat_t(token, crate::UNPREMUL_ALPHA_THRESHOLD);
     for chunk in chunks.iter_mut().chain(tail.as_mut()) {
-        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
-        let inv = [
-            if a[0] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[0]
-            } else {
-                0.0
-            },
-            if a[1] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[1]
-            } else {
-                0.0
-            },
-            if a[2] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[2]
-            } else {
-                0.0
-            },
-            if a[3] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[3]
-            } else {
-                0.0
-            },
-        ];
-        let v = f32x16::from_array_t(token, *chunk);
-        let inv_alpha = f32x16::from_array_t(
-            token,
-            [
-                inv[0], inv[0], inv[0], 1.0, inv[1], inv[1], inv[1], 1.0, inv[2], inv[2], inv[2],
-                1.0, inv[3], inv[3], inv[3], 1.0,
-            ],
-        );
-        let unpremul = (v * inv_alpha).to_array();
-        *chunk = mt_linear_to_srgb(token, unpremul);
-        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
+        let original = f32x16::load_t(token, chunk);
+        let alpha = original.broadcast_rgba_alpha();
+        let inv_alpha = (one / alpha) & alpha.simd_gt(threshold);
+        linear_to_srgb_vector(token, original * inv_alpha)
+            .with_rgba_alpha(original)
+            .store(chunk);
     }
     store_tail(remainder, tail.as_ref());
 }
@@ -683,7 +647,7 @@ fn srgb_u16_to_linear_slice_tier(token: Token, input: &[u16], output: &mut [f32]
     // Keep tails on the same shared arithmetic policy as full blocks.
     if crate::tf::polynomial::USE_FUSED_MATH {
         for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
-            *out = crate::lanes::srgb_to_linear(*inp as f32 * (1.0 / 65535.0));
+            *out = crate::lanes::srgb_to_linear_with_token(token, *inp as f32 * (1.0 / 65535.0));
         }
     } else if !in_rem.is_empty() {
         let mut padded = [0u16; 16];
@@ -742,7 +706,7 @@ fn linear_to_srgb_u16_slice_tier(token: Token, input: &[f32], output: &mut [u16]
         let yq = yq.mla(x, f32x16::splat_t(token, L2S_Q[1]));
         let yq = yq.mla(x, f32x16::splat_t(token, L2S_Q[0]));
         let power_result = (yp / yq).min(one);
-        let thresh_mask = clamped.simd_lt(f32x16::splat_t(token, LINEAR_THRESHOLD));
+        let thresh_mask = clamped.simd_le(f32x16::splat_t(token, LINEAR_THRESHOLD));
         let srgb = f32x16::blend(thresh_mask, linear_result, power_result);
         let ge_one = linear.simd_ge(one);
         let srgb = f32x16::blend(ge_one, one, srgb);
@@ -760,7 +724,7 @@ fn linear_to_srgb_u16_slice_tier(token: Token, input: &[f32], output: &mut [u16]
     // Keep tails on the same shared arithmetic policy as full blocks.
     if crate::tf::polynomial::USE_FUSED_MATH {
         for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
-            *out = crate::lanes::linear_to_srgb_u16(*inp);
+            *out = crate::lanes::linear_to_srgb_u16_with_token(token, *inp);
         }
     } else if !in_rem.is_empty() {
         let mut padded = [0.0f32; 16];
@@ -769,9 +733,9 @@ fn linear_to_srgb_u16_slice_tier(token: Token, input: &[f32], output: &mut [u16]
     }
 }
 
-fn linear_to_srgb_u16_slice_tier_scalar_t(_token: ScalarToken, input: &[f32], output: &mut [u16]) {
+fn linear_to_srgb_u16_slice_tier_scalar_t(token: ScalarToken, input: &[f32], output: &mut [u16]) {
     for (inp, out) in input.iter().zip(output.iter_mut()) {
-        *out = crate::lanes::linear_to_srgb_u16(*inp);
+        *out = crate::lanes::linear_to_srgb_u16_with_token(token, *inp);
     }
 }
 
@@ -3470,7 +3434,7 @@ mod tests {
     fn simd_power_result_clamped_near_one() {
         // The rational polynomial can slightly overshoot 1.0 for inputs
         // very close to 1.0 due to FMA rounding. The SIMD dispatch path
-        // (mt_srgb_to_linear / mt_linear_to_srgb) must apply .min(one)
+        // The shared sRGB vector kernels must apply .min(one)
         // to match the token implementations.
         //
         // Generate values near 1.0 where overshoot is most likely.

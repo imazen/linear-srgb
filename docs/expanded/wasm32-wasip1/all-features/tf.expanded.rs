@@ -55,35 +55,148 @@ pub mod tf {
     pub(crate) mod bt709 {
         //! BT.709 transfer function (scalar + generic SIMD).
         use super::math;
-        use crate::tf::polynomial::Mla;
+        use super::polynomial::{Mla, mla_scalar};
         use magemath::SimdMath;
-        #[allow(unused_imports)]
-        use num_traits::Float;
         pub(crate) const BT709_ALPHA: f32 = 0.09929682680944;
         pub(crate) const BT709_BETA: f32 = 0.018053968510807;
+        const BT709_DECODE_MIN: f32 = (4.5 * BT709_BETA) * (1.0 / 4.5);
         /// BT.709 EOTF: encoded → linear. Uses the configured Magemath power profile.
-        #[inline(always)]
+        #[inline]
         pub fn bt709_to_linear(v: f32) -> f32 {
-            if v < 4.5 * BT709_BETA {
+            {
+                '__attune_call_0: {
+                    {
+                        if let Some(__attune_proof) = <::archmage::Wasm128Token as ::archmage::SimdToken>::summon() {
+                            break '__attune_call_0 bt709_to_linear_scalar_wasm128_t(
+                                __attune_proof,
+                                v,
+                            );
+                        }
+                    }
+                    { bt709_to_linear_scalar_scalar_t(::archmage::ScalarToken, v) }
+                }
+            }
+        }
+        #[target_feature(enable = "simd128")]
+        #[inline]
+        fn __attune_bt709_to_linear_scalar_wasm128(
+            token: ::archmage::Wasm128Token,
+            v: f32,
+        ) -> f32 {
+            #[allow(non_camel_case_types, dead_code)]
+            type f32x4 = ::magetypes::simd::generic::f32x4<::archmage::Wasm128Token>;
+            bt709_to_linear_with_token(token, v)
+        }
+        #[inline(always)]
+        #[allow(clippy::inline_always, dead_code)]
+        fn bt709_to_linear_scalar_wasm128_t(
+            token: ::archmage::Wasm128Token,
+            v: f32,
+        ) -> f32 {
+            __attune_bt709_to_linear_scalar_wasm128(token, v)
+        }
+        #[inline]
+        fn __attune_bt709_to_linear_scalar_scalar(
+            token: ::archmage::ScalarToken,
+            v: f32,
+        ) -> f32 {
+            #[allow(non_camel_case_types, dead_code)]
+            type f32x4 = ::magetypes::simd::generic::f32x4<::archmage::ScalarToken>;
+            bt709_to_linear_with_token(token, v)
+        }
+        #[inline(always)]
+        #[allow(clippy::inline_always, dead_code)]
+        fn bt709_to_linear_scalar_scalar_t(
+            token: ::archmage::ScalarToken,
+            v: f32,
+        ) -> f32 {
+            __attune_bt709_to_linear_scalar_scalar(token, v)
+        }
+        #[inline(always)]
+        pub(crate) fn bt709_to_linear_with_token<T: F32x4Convert>(
+            token: T,
+            v: f32,
+        ) -> f32 {
+            if v.is_nan() {
+                v
+            } else if v < 4.5 * BT709_BETA {
                 v * (1.0 / 4.5)
             } else {
                 math::fixed_pow::<
                     { math::BT709_DECODE_POWER },
-                >((v + BT709_ALPHA) / (1.0 + BT709_ALPHA), 1.0 / 0.45)
-                    .max(BT709_BETA)
+                    _,
+                >(token, (v + BT709_ALPHA) / (1.0 + BT709_ALPHA), 1.0 / 0.45)
+                    .max(BT709_DECODE_MIN)
             }
         }
         /// BT.709 inverse EOTF: linear → encoded. Uses the configured Magemath power profile.
-        #[inline(always)]
+        #[inline]
         pub fn linear_to_bt709(v: f32) -> f32 {
-            if v < BT709_BETA {
+            {
+                '__attune_call_0: {
+                    {
+                        if let Some(__attune_proof) = <::archmage::Wasm128Token as ::archmage::SimdToken>::summon() {
+                            break '__attune_call_0 linear_to_bt709_scalar_wasm128_t(
+                                __attune_proof,
+                                v,
+                            );
+                        }
+                    }
+                    { linear_to_bt709_scalar_scalar_t(::archmage::ScalarToken, v) }
+                }
+            }
+        }
+        #[target_feature(enable = "simd128")]
+        #[inline]
+        fn __attune_linear_to_bt709_scalar_wasm128(
+            token: ::archmage::Wasm128Token,
+            v: f32,
+        ) -> f32 {
+            #[allow(non_camel_case_types, dead_code)]
+            type f32x4 = ::magetypes::simd::generic::f32x4<::archmage::Wasm128Token>;
+            linear_to_bt709_with_token(token, v)
+        }
+        #[inline(always)]
+        #[allow(clippy::inline_always, dead_code)]
+        fn linear_to_bt709_scalar_wasm128_t(
+            token: ::archmage::Wasm128Token,
+            v: f32,
+        ) -> f32 {
+            __attune_linear_to_bt709_scalar_wasm128(token, v)
+        }
+        #[inline]
+        fn __attune_linear_to_bt709_scalar_scalar(
+            token: ::archmage::ScalarToken,
+            v: f32,
+        ) -> f32 {
+            #[allow(non_camel_case_types, dead_code)]
+            type f32x4 = ::magetypes::simd::generic::f32x4<::archmage::ScalarToken>;
+            linear_to_bt709_with_token(token, v)
+        }
+        #[inline(always)]
+        #[allow(clippy::inline_always, dead_code)]
+        fn linear_to_bt709_scalar_scalar_t(
+            token: ::archmage::ScalarToken,
+            v: f32,
+        ) -> f32 {
+            __attune_linear_to_bt709_scalar_scalar(token, v)
+        }
+        #[inline(always)]
+        pub(crate) fn linear_to_bt709_with_token<T: F32x4Convert>(
+            token: T,
+            v: f32,
+        ) -> f32 {
+            if v.is_nan() {
+                v
+            } else if v < BT709_BETA {
                 4.5 * v
             } else {
-                (1.0 + BT709_ALPHA)
-                    .mul_add(
-                        math::fixed_pow::<{ math::BT709_ENCODE_POWER }>(v, 0.45),
-                        -BT709_ALPHA,
-                    )
+                mla_scalar(
+                    token,
+                    1.0 + BT709_ALPHA,
+                    math::fixed_pow::<{ math::BT709_ENCODE_POWER }, _>(token, v, 0.45),
+                    -BT709_ALPHA,
+                )
             }
         }
         use magetypes::simd::backends::F32x4Convert;
@@ -103,9 +216,12 @@ pub mod tf {
             let mask = v.simd_lt(threshold);
             let input = f32x4::blend(mask, f32x4::splat_t(t, 1.0), normalized);
             let Ok(power) = input.try_powf_const::<{ math::BT709_DECODE_POWER }>() else {
-                return f32x4::from_array_t(t, v.to_array().map(bt709_to_linear));
+                return f32x4::from_array_t(
+                    t,
+                    v.to_array().map(|x| bt709_to_linear_with_token(t, x)),
+                );
             };
-            let power = power.max(f32x4::splat_t(t, (4.5 * BT709_BETA) * (1.0 / 4.5)));
+            let power = power.max(f32x4::splat_t(t, BT709_DECODE_MIN));
             f32x4::blend(mask, linear, power)
         }
         #[allow(dead_code)]
@@ -122,7 +238,10 @@ pub mod tf {
             let mask = v.simd_lt(threshold);
             let input = f32x4::blend(mask, f32x4::splat_t(t, 1.0), v);
             let Ok(power) = input.try_powf_const::<{ math::BT709_ENCODE_POWER }>() else {
-                return f32x4::from_array_t(t, v.to_array().map(linear_to_bt709));
+                return f32x4::from_array_t(
+                    t,
+                    v.to_array().map(|x| linear_to_bt709_with_token(t, x)),
+                );
             };
             let power = one_plus_alpha.mla(power, -alpha);
             f32x4::blend(mask, linear, power)
@@ -130,7 +249,7 @@ pub mod tf {
         use magetypes::simd::backends::F32x8Convert;
         use magetypes::simd::generic::f32x8;
         #[inline(always)]
-        pub(crate) fn bt709_to_linear_x8<T: F32x8Convert>(
+        pub(crate) fn bt709_to_linear_x8<T: F32x8Convert + F32x4Convert>(
             t: T,
             v: f32x8<T>,
         ) -> f32x8<T> {
@@ -143,13 +262,16 @@ pub mod tf {
             let mask = v.simd_lt(threshold);
             let input = f32x8::blend(mask, f32x8::splat_t(t, 1.0), normalized);
             let Ok(power) = input.try_powf_const::<{ math::BT709_DECODE_POWER }>() else {
-                return f32x8::from_array_t(t, v.to_array().map(bt709_to_linear));
+                return f32x8::from_array_t(
+                    t,
+                    v.to_array().map(|x| bt709_to_linear_with_token(t, x)),
+                );
             };
-            let power = power.max(f32x8::splat_t(t, (4.5 * BT709_BETA) * (1.0 / 4.5)));
+            let power = power.max(f32x8::splat_t(t, BT709_DECODE_MIN));
             f32x8::blend(mask, linear, power)
         }
         #[inline(always)]
-        pub(crate) fn linear_to_bt709_x8<T: F32x8Convert>(
+        pub(crate) fn linear_to_bt709_x8<T: F32x8Convert + F32x4Convert>(
             t: T,
             v: f32x8<T>,
         ) -> f32x8<T> {
@@ -161,7 +283,10 @@ pub mod tf {
             let mask = v.simd_lt(threshold);
             let input = f32x8::blend(mask, f32x8::splat_t(t, 1.0), v);
             let Ok(power) = input.try_powf_const::<{ math::BT709_ENCODE_POWER }>() else {
-                return f32x8::from_array_t(t, v.to_array().map(linear_to_bt709));
+                return f32x8::from_array_t(
+                    t,
+                    v.to_array().map(|x| linear_to_bt709_with_token(t, x)),
+                );
             };
             let power = one_plus_alpha.mla(power, -alpha);
             f32x8::blend(mask, linear, power)
@@ -169,7 +294,7 @@ pub mod tf {
         use magetypes::simd::backends::F32x16Convert;
         use magetypes::simd::generic::f32x16;
         #[inline(always)]
-        pub(crate) fn bt709_to_linear_x16<T: F32x16Convert>(
+        pub(crate) fn bt709_to_linear_x16<T: F32x16Convert + F32x4Convert>(
             t: T,
             v: f32x16<T>,
         ) -> f32x16<T> {
@@ -182,13 +307,16 @@ pub mod tf {
             let mask = v.simd_lt(threshold);
             let input = f32x16::blend(mask, f32x16::splat_t(t, 1.0), normalized);
             let Ok(power) = input.try_powf_const::<{ math::BT709_DECODE_POWER }>() else {
-                return f32x16::from_array_t(t, v.to_array().map(bt709_to_linear));
+                return f32x16::from_array_t(
+                    t,
+                    v.to_array().map(|x| bt709_to_linear_with_token(t, x)),
+                );
             };
-            let power = power.max(f32x16::splat_t(t, (4.5 * BT709_BETA) * (1.0 / 4.5)));
+            let power = power.max(f32x16::splat_t(t, BT709_DECODE_MIN));
             f32x16::blend(mask, linear, power)
         }
         #[inline(always)]
-        pub(crate) fn linear_to_bt709_x16<T: F32x16Convert>(
+        pub(crate) fn linear_to_bt709_x16<T: F32x16Convert + F32x4Convert>(
             t: T,
             v: f32x16<T>,
         ) -> f32x16<T> {
@@ -200,7 +328,10 @@ pub mod tf {
             let mask = v.simd_lt(threshold);
             let input = f32x16::blend(mask, f32x16::splat_t(t, 1.0), v);
             let Ok(power) = input.try_powf_const::<{ math::BT709_ENCODE_POWER }>() else {
-                return f32x16::from_array_t(t, v.to_array().map(linear_to_bt709));
+                return f32x16::from_array_t(
+                    t,
+                    v.to_array().map(|x| linear_to_bt709_with_token(t, x)),
+                );
             };
             let power = one_plus_alpha.mla(power, -alpha);
             f32x16::blend(mask, linear, power)
@@ -209,35 +340,142 @@ pub mod tf {
     pub(crate) mod hlg {
         //! HLG (ARIB STD-B67) transfer function (scalar + generic SIMD).
         use super::math;
-        use crate::tf::polynomial::Mla;
+        use super::polynomial::{Mla, floor_zero, mla_scalar};
         use magemath::SimdMath;
-        #[allow(unused_imports)]
-        use num_traits::Float;
         const HLG_A: f32 = 0.17883277;
         pub(crate) const HLG_B: f32 = 0.28466892;
         pub(crate) const HLG_C: f32 = 0.55991073;
         pub(crate) const HLG_A_INV_LOG2E: f32 = HLG_A * core::f32::consts::LN_2;
         pub(crate) const HLG_INV_A_LOG2E: f32 = core::f32::consts::LOG2_E / HLG_A;
         /// HLG inverse OETF: signal → scene linear. Uses Magemath for the exponential segment.
-        #[inline(always)]
+        #[inline]
         pub fn hlg_to_linear(v: f32) -> f32 {
-            if v <= 0.0 {
+            {
+                '__attune_call_0: {
+                    {
+                        if let Some(__attune_proof) = <::archmage::Wasm128Token as ::archmage::SimdToken>::summon() {
+                            break '__attune_call_0 hlg_to_linear_scalar_wasm128_t(
+                                __attune_proof,
+                                v,
+                            );
+                        }
+                    }
+                    { hlg_to_linear_scalar_scalar_t(::archmage::ScalarToken, v) }
+                }
+            }
+        }
+        #[target_feature(enable = "simd128")]
+        #[inline]
+        fn __attune_hlg_to_linear_scalar_wasm128(
+            token: ::archmage::Wasm128Token,
+            v: f32,
+        ) -> f32 {
+            #[allow(non_camel_case_types, dead_code)]
+            type f32x4 = ::magetypes::simd::generic::f32x4<::archmage::Wasm128Token>;
+            hlg_to_linear_with_token(token, v)
+        }
+        #[inline(always)]
+        #[allow(clippy::inline_always, dead_code)]
+        fn hlg_to_linear_scalar_wasm128_t(
+            token: ::archmage::Wasm128Token,
+            v: f32,
+        ) -> f32 {
+            __attune_hlg_to_linear_scalar_wasm128(token, v)
+        }
+        #[inline]
+        fn __attune_hlg_to_linear_scalar_scalar(
+            token: ::archmage::ScalarToken,
+            v: f32,
+        ) -> f32 {
+            #[allow(non_camel_case_types, dead_code)]
+            type f32x4 = ::magetypes::simd::generic::f32x4<::archmage::ScalarToken>;
+            hlg_to_linear_with_token(token, v)
+        }
+        #[inline(always)]
+        #[allow(clippy::inline_always, dead_code)]
+        fn hlg_to_linear_scalar_scalar_t(token: ::archmage::ScalarToken, v: f32) -> f32 {
+            __attune_hlg_to_linear_scalar_scalar(token, v)
+        }
+        #[inline(always)]
+        pub(crate) fn hlg_to_linear_with_token<T: F32x4Convert>(
+            token: T,
+            v: f32,
+        ) -> f32 {
+            if v <= 0.0 || v.is_nan() {
                 0.0
             } else if v <= 0.5 {
                 (v * v) * (1.0 / 3.0)
             } else {
-                (math::exp2((v - HLG_C) * HLG_INV_A_LOG2E) + HLG_B) * (1.0 / 12.0)
+                (math::exp2_with_token(token, (v - HLG_C) * HLG_INV_A_LOG2E) + HLG_B)
+                    * (1.0 / 12.0)
             }
         }
         /// HLG OETF: scene linear → signal. Uses Magemath for the logarithmic segment.
-        #[inline(always)]
+        #[inline]
         pub fn linear_to_hlg(v: f32) -> f32 {
-            if v <= 0.0 {
+            {
+                '__attune_call_0: {
+                    {
+                        if let Some(__attune_proof) = <::archmage::Wasm128Token as ::archmage::SimdToken>::summon() {
+                            break '__attune_call_0 linear_to_hlg_scalar_wasm128_t(
+                                __attune_proof,
+                                v,
+                            );
+                        }
+                    }
+                    { linear_to_hlg_scalar_scalar_t(::archmage::ScalarToken, v) }
+                }
+            }
+        }
+        #[target_feature(enable = "simd128")]
+        #[inline]
+        fn __attune_linear_to_hlg_scalar_wasm128(
+            token: ::archmage::Wasm128Token,
+            v: f32,
+        ) -> f32 {
+            #[allow(non_camel_case_types, dead_code)]
+            type f32x4 = ::magetypes::simd::generic::f32x4<::archmage::Wasm128Token>;
+            linear_to_hlg_with_token(token, v)
+        }
+        #[inline(always)]
+        #[allow(clippy::inline_always, dead_code)]
+        fn linear_to_hlg_scalar_wasm128_t(
+            token: ::archmage::Wasm128Token,
+            v: f32,
+        ) -> f32 {
+            __attune_linear_to_hlg_scalar_wasm128(token, v)
+        }
+        #[inline]
+        fn __attune_linear_to_hlg_scalar_scalar(
+            token: ::archmage::ScalarToken,
+            v: f32,
+        ) -> f32 {
+            #[allow(non_camel_case_types, dead_code)]
+            type f32x4 = ::magetypes::simd::generic::f32x4<::archmage::ScalarToken>;
+            linear_to_hlg_with_token(token, v)
+        }
+        #[inline(always)]
+        #[allow(clippy::inline_always, dead_code)]
+        fn linear_to_hlg_scalar_scalar_t(token: ::archmage::ScalarToken, v: f32) -> f32 {
+            __attune_linear_to_hlg_scalar_scalar(token, v)
+        }
+        #[inline(always)]
+        pub(crate) fn linear_to_hlg_with_token<T: F32x4Convert>(
+            token: T,
+            v: f32,
+        ) -> f32 {
+            if v <= 0.0 || v.is_nan() {
                 0.0
             } else if v <= 1.0 / 12.0 {
-                (3.0 * v).sqrt()
+                magetypes::scalar::sqrt_f32(3.0 * v)
             } else {
-                HLG_A_INV_LOG2E.mul_add(math::log2(12.0 * v - HLG_B), HLG_C).max(0.5)
+                mla_scalar(
+                        token,
+                        HLG_A_INV_LOG2E,
+                        math::log2_with_token(token, 12.0 * v - HLG_B),
+                        HLG_C,
+                    )
+                    .max(0.5)
             }
         }
         use magetypes::simd::backends::F32x4Convert;
@@ -252,7 +490,14 @@ pub mod tf {
             let hlg_b = f32x4::splat_t(t, HLG_B);
             let hlg_c = f32x4::splat_t(t, HLG_C);
             let hlg_inv_a_log2e = f32x4::splat_t(t, HLG_INV_A_LOG2E);
-            let a = v.max(zero);
+            let a = if false {
+                v & v.simd_gt(zero)
+            } else {
+                const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                    .non_nan_rhs()
+                    .bits();
+                v.max_with::<NON_NAN_RHS>(zero)
+            };
             let low = (a * a) * third;
             let exp_arg = (a - hlg_c) * hlg_inv_a_log2e;
             let exp_val = exp_arg.exp2::<{ math::EXP }>();
@@ -270,7 +515,14 @@ pub mod tf {
             let hlg_a_ln2 = f32x4::splat_t(t, HLG_A_INV_LOG2E);
             let hlg_b = f32x4::splat_t(t, HLG_B);
             let hlg_c = f32x4::splat_t(t, HLG_C);
-            let a = v.max(zero);
+            let a = if false {
+                v & v.simd_gt(zero)
+            } else {
+                const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                    .non_nan_rhs()
+                    .bits();
+                v.max_with::<NON_NAN_RHS>(zero)
+            };
             let low = (three * a).sqrt();
             let arg = twelve * a - hlg_b;
             let log2_val = arg.log2::<{ math::LOG }>();
@@ -289,7 +541,14 @@ pub mod tf {
             let hlg_b = f32x8::splat_t(t, HLG_B);
             let hlg_c = f32x8::splat_t(t, HLG_C);
             let hlg_inv_a_log2e = f32x8::splat_t(t, HLG_INV_A_LOG2E);
-            let a = v.max(zero);
+            let a = if false {
+                v & v.simd_gt(zero)
+            } else {
+                const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                    .non_nan_rhs()
+                    .bits();
+                v.max_with::<NON_NAN_RHS>(zero)
+            };
             let low = (a * a) * third;
             let exp_arg = (a - hlg_c) * hlg_inv_a_log2e;
             let exp_val = exp_arg.exp2::<{ math::EXP }>();
@@ -306,7 +565,14 @@ pub mod tf {
             let hlg_a_ln2 = f32x8::splat_t(t, HLG_A_INV_LOG2E);
             let hlg_b = f32x8::splat_t(t, HLG_B);
             let hlg_c = f32x8::splat_t(t, HLG_C);
-            let a = v.max(zero);
+            let a = if false {
+                v & v.simd_gt(zero)
+            } else {
+                const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                    .non_nan_rhs()
+                    .bits();
+                v.max_with::<NON_NAN_RHS>(zero)
+            };
             let low = (three * a).sqrt();
             let arg = twelve * a - hlg_b;
             let log2_val = arg.log2::<{ math::LOG }>();
@@ -328,7 +594,14 @@ pub mod tf {
             let hlg_b = f32x16::splat_t(t, HLG_B);
             let hlg_c = f32x16::splat_t(t, HLG_C);
             let hlg_inv_a_log2e = f32x16::splat_t(t, HLG_INV_A_LOG2E);
-            let a = v.max(zero);
+            let a = if false {
+                v & v.simd_gt(zero)
+            } else {
+                const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                    .non_nan_rhs()
+                    .bits();
+                v.max_with::<NON_NAN_RHS>(zero)
+            };
             let low = (a * a) * third;
             let exp_arg = (a - hlg_c) * hlg_inv_a_log2e;
             let exp_val = exp_arg.exp2::<{ math::EXP }>();
@@ -348,7 +621,14 @@ pub mod tf {
             let hlg_a_ln2 = f32x16::splat_t(t, HLG_A_INV_LOG2E);
             let hlg_b = f32x16::splat_t(t, HLG_B);
             let hlg_c = f32x16::splat_t(t, HLG_C);
-            let a = v.max(zero);
+            let a = if false {
+                v & v.simd_gt(zero)
+            } else {
+                const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new()
+                    .non_nan_rhs()
+                    .bits();
+                v.max_with::<NON_NAN_RHS>(zero)
+            };
             let low = (three * a).sqrt();
             let arg = twelve * a - hlg_b;
             let log2_val = arg.log2::<{ math::LOG }>();
@@ -391,16 +671,16 @@ pub mod tf {
             .caller()
             .bits();
         #[inline(always)]
-        pub(crate) fn exp2(x: f32) -> f32 {
+        pub(crate) fn exp2_with_token<T: F32x4Convert>(token: T, x: f32) -> f32 {
             if x < -126.0 {
                 return num_traits::Float::exp2(x);
             }
-            magemath::expf::Expf::<EXP>::exp2_with_token(ScalarToken, x)
+            magemath::expf::Expf::<EXP>::exp2_with_token(token, x)
                 .expect("full exp2 domain")
         }
         #[inline(always)]
-        pub(crate) fn log2(x: f32) -> f32 {
-            magemath::logf::Logf::<LOG>::log2_with_token(ScalarToken, x)
+        pub(crate) fn log2_with_token<T: F32x4Convert>(token: T, x: f32) -> f32 {
+            magemath::logf::Logf::<LOG>::log2_with_token(token, x)
                 .expect("full log2 domain")
         }
         #[inline(always)]
@@ -409,9 +689,16 @@ pub mod tf {
                 .expect("full power domain")
         }
         #[inline(always)]
-        pub(crate) fn fixed_pow<const CFG: u128>(x: f32, exponent: f32) -> f32 {
-            Powf::<CFG>::scalar_const_with_token(ScalarToken, x)
-                .unwrap_or_else(|_| full_pow(x, exponent))
+        pub(crate) fn fixed_pow<const CFG: u128, T: F32x4Convert>(
+            token: T,
+            x: f32,
+            exponent: f32,
+        ) -> f32 {
+            Powf::<CFG>::scalar_const_with_token(token, x)
+                .unwrap_or_else(|_| {
+                    Powf::<FULL_POW>::scalar_with_token(token, x, exponent)
+                        .expect("full power domain")
+                })
         }
         #[inline(always)]
         pub(crate) fn gamma(x: f32, n: f32) -> f32 {
@@ -515,31 +802,43 @@ pub mod tf {
     }
     pub(crate) mod polynomial {
         //! Rational polynomial evaluation and transfer-kernel rounding policy.
-        use magetypes::simd::{backends::*, generic::*};
-        #[allow(unused_imports)]
-        use num_traits::Float;
+        use magetypes::{scalar::F32ScalarBackend, simd::{backends::*, generic::*}};
         /// Evaluate a rational polynomial P(x)/Q(x) using Horner's method.
         ///
         /// Coefficients are stored lowest-degree-first: `p[0] + p[1]*x + p[2]*x^2 + ...`
         #[inline(always)]
-        pub(crate) fn eval_rational_poly<const P: usize, const Q: usize>(
-            x: f32,
-            p: [f32; P],
-            q: [f32; Q],
-        ) -> f32 {
+        pub(crate) fn eval_rational_poly<
+            T: F32ScalarBackend,
+            const P: usize,
+            const Q: usize,
+        >(token: T, x: f32, p: [f32; P], q: [f32; Q]) -> f32 {
             let mut yp = p[P - 1];
             for i in (0..P - 1).rev() {
-                yp = yp.mul_add(x, p[i]);
+                yp = mla_scalar(token, yp, x, p[i]);
             }
             let mut yq = q[Q - 1];
             for i in (0..Q - 1).rev() {
-                yq = yq.mul_add(x, q[i]);
+                yq = mla_scalar(token, yq, x, q[i]);
             }
             yp / yq
         }
         /// Existing arithmetic contract: fused on native, opt-in guaranteed fusion on WASM.
         /// Magetypes owns the hardware/engine probe and software fallback behind `_fused`.
         pub(crate) const USE_FUSED_MATH: bool = !false;
+        #[inline(always)]
+        pub(crate) fn mla_scalar<T: F32ScalarBackend>(
+            token: T,
+            a: f32,
+            b: f32,
+            c: f32,
+        ) -> f32 {
+            if USE_FUSED_MATH {
+                crate::mlaf::fmla_f32_with_token(token, a, b, c)
+            } else {
+                token.mul_add_relaxed_f32(a, b, c)
+            }
+        }
+        pub(crate) use floor_zero;
         /// Multiply-add in the kernels. Fused wherever that costs nothing or the scalar tier needs it, so
         /// every native tier gives the same bits. On WASM, `mul_add_fused` is software unless the engine
         /// fuses, so it stays relaxed there unless the `precise-portable` feature asks for the same bits.
@@ -622,35 +921,148 @@ pub mod tf {
     pub(crate) mod pq {
         //! PQ (SMPTE ST 2084) transfer function (scalar + generic SIMD).
         use super::polynomial;
-        use crate::tf::polynomial::Mla;
+        use super::polynomial::{Mla, mla_scalar};
+        use magetypes::scalar::sqrt_f32;
         #[allow(unused_imports)]
         use num_traits::Float;
         /// PQ EOTF for normalized signal values. Uses the ST 2084 formula in the dark
         /// toe and a two-segment rational approximation over the remainder of the range.
         #[inline]
         pub fn pq_to_linear(v: f32) -> f32 {
+            {
+                '__attune_call_0: {
+                    {
+                        if let Some(__attune_proof) = <::archmage::Wasm128Token as ::archmage::SimdToken>::summon() {
+                            break '__attune_call_0 pq_to_linear_scalar_wasm128_t(
+                                __attune_proof,
+                                v,
+                            );
+                        }
+                    }
+                    { pq_to_linear_scalar_scalar_t(::archmage::ScalarToken, v) }
+                }
+            }
+        }
+        #[target_feature(enable = "simd128")]
+        #[inline]
+        fn __attune_pq_to_linear_scalar_wasm128(
+            token: ::archmage::Wasm128Token,
+            v: f32,
+        ) -> f32 {
+            #[allow(non_camel_case_types, dead_code)]
+            type f32x4 = ::magetypes::simd::generic::f32x4<::archmage::Wasm128Token>;
+            pq_to_linear_with_token(token, v)
+        }
+        #[inline(always)]
+        #[allow(clippy::inline_always, dead_code)]
+        fn pq_to_linear_scalar_wasm128_t(
+            token: ::archmage::Wasm128Token,
+            v: f32,
+        ) -> f32 {
+            __attune_pq_to_linear_scalar_wasm128(token, v)
+        }
+        #[inline]
+        fn __attune_pq_to_linear_scalar_scalar(
+            token: ::archmage::ScalarToken,
+            v: f32,
+        ) -> f32 {
+            #[allow(non_camel_case_types, dead_code)]
+            type f32x4 = ::magetypes::simd::generic::f32x4<::archmage::ScalarToken>;
+            pq_to_linear_with_token(token, v)
+        }
+        #[inline(always)]
+        #[allow(clippy::inline_always, dead_code)]
+        fn pq_to_linear_scalar_scalar_t(token: ::archmage::ScalarToken, v: f32) -> f32 {
+            __attune_pq_to_linear_scalar_scalar(token, v)
+        }
+        #[inline(always)]
+        pub(crate) fn pq_to_linear_with_token<T: magetypes::scalar::F32ScalarBackend>(
+            token: T,
+            v: f32,
+        ) -> f32 {
             if v.is_nan() || v <= 0.0 || v >= 1.0 || v < EOTF_POLY_FLOOR {
                 return pq_to_linear_precise(v);
             }
-            let x = v.mul_add(v, v);
+            let x = mla_scalar(token, v, v, v);
             if v < 0.25 {
-                polynomial::eval_rational_poly(x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL)
+                polynomial::eval_rational_poly(
+                    token,
+                    x,
+                    PQ_EOTF_P_SMALL,
+                    PQ_EOTF_Q_SMALL,
+                )
             } else {
-                polynomial::eval_rational_poly(x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE)
+                polynomial::eval_rational_poly(
+                    token,
+                    x,
+                    PQ_EOTF_P_LARGE,
+                    PQ_EOTF_Q_LARGE,
+                )
             }
         }
         /// PQ inverse EOTF for normalized linear light. Uses the ST 2084 formula for
-        /// values below 1e-4 and a rational approximation above that threshold.
+        /// values below 1e-7 and a rational approximation above that threshold.
         #[inline]
         pub fn linear_to_pq(v: f32) -> f32 {
+            {
+                '__attune_call_0: {
+                    {
+                        if let Some(__attune_proof) = <::archmage::Wasm128Token as ::archmage::SimdToken>::summon() {
+                            break '__attune_call_0 linear_to_pq_scalar_wasm128_t(
+                                __attune_proof,
+                                v,
+                            );
+                        }
+                    }
+                    { linear_to_pq_scalar_scalar_t(::archmage::ScalarToken, v) }
+                }
+            }
+        }
+        #[target_feature(enable = "simd128")]
+        #[inline]
+        fn __attune_linear_to_pq_scalar_wasm128(
+            token: ::archmage::Wasm128Token,
+            v: f32,
+        ) -> f32 {
+            #[allow(non_camel_case_types, dead_code)]
+            type f32x4 = ::magetypes::simd::generic::f32x4<::archmage::Wasm128Token>;
+            linear_to_pq_with_token(token, v)
+        }
+        #[inline(always)]
+        #[allow(clippy::inline_always, dead_code)]
+        fn linear_to_pq_scalar_wasm128_t(
+            token: ::archmage::Wasm128Token,
+            v: f32,
+        ) -> f32 {
+            __attune_linear_to_pq_scalar_wasm128(token, v)
+        }
+        #[inline]
+        fn __attune_linear_to_pq_scalar_scalar(
+            token: ::archmage::ScalarToken,
+            v: f32,
+        ) -> f32 {
+            #[allow(non_camel_case_types, dead_code)]
+            type f32x4 = ::magetypes::simd::generic::f32x4<::archmage::ScalarToken>;
+            linear_to_pq_with_token(token, v)
+        }
+        #[inline(always)]
+        #[allow(clippy::inline_always, dead_code)]
+        fn linear_to_pq_scalar_scalar_t(token: ::archmage::ScalarToken, v: f32) -> f32 {
+            __attune_linear_to_pq_scalar_scalar(token, v)
+        }
+        #[inline(always)]
+        pub(crate) fn linear_to_pq_with_token<T: magetypes::scalar::F32ScalarBackend>(
+            token: T,
+            v: f32,
+        ) -> f32 {
             if v.is_nan() || v <= 0.0 || v >= 1.0 || v < OETF_POLY_FLOOR {
                 return linear_to_pq_precise(v);
             }
-            let a = v.sqrt().sqrt();
+            let a = sqrt_f32(sqrt_f32(v));
             if a < 0.1 {
-                polynomial::eval_rational_poly(a, PQ_INV_P_SMALL, PQ_INV_Q_SMALL)
+                polynomial::eval_rational_poly(token, a, PQ_INV_P_SMALL, PQ_INV_Q_SMALL)
             } else {
-                polynomial::eval_rational_poly(a, PQ_INV_P_LARGE, PQ_INV_Q_LARGE)
+                polynomial::eval_rational_poly(token, a, PQ_INV_P_LARGE, PQ_INV_Q_LARGE)
             }
         }
         const M1: f64 = 2610.0 / 16384.0;
@@ -659,7 +1071,7 @@ pub mod tf {
         const C2: f64 = 2413.0 / 128.0;
         const C3: f64 = 2392.0 / 128.0;
         const EOTF_POLY_FLOOR: f32 = 0.02;
-        const OETF_POLY_FLOOR: f32 = 1e-4;
+        const OETF_POLY_FLOOR: f32 = 1e-7;
         #[inline]
         fn pq_to_linear_precise(v: f32) -> f32 {
             if v.is_nan() {

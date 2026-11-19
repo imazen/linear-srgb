@@ -6,30 +6,28 @@ stub_linear_to_srgb_slice:
 	.cfi_startproc
 	sub sp, sp, #256
 	.cfi_def_cfa_offset 256
-	str d14, [sp, #144]
-	stp d13, d12, [sp, #152]
-	stp d11, d10, [sp, #168]
-	stp d9, d8, [sp, #184]
-	stp x29, x30, [sp, #200]
-	str x23, [sp, #216]
+	stp d13, d12, [sp, #144]
+	stp d11, d10, [sp, #160]
+	stp d9, d8, [sp, #176]
+	stp x29, x30, [sp, #192]
+	str x23, [sp, #208]
 	stp x22, x21, [sp, #224]
 	stp x20, x19, [sp, #240]
-	add x29, sp, #200
-	.cfi_def_cfa w29, 56
+	add x29, sp, #192
+	.cfi_def_cfa w29, 64
 	.cfi_offset w19, -8
 	.cfi_offset w20, -16
 	.cfi_offset w21, -24
 	.cfi_offset w22, -32
-	.cfi_offset w23, -40
-	.cfi_offset w30, -48
-	.cfi_offset w29, -56
-	.cfi_offset b8, -64
-	.cfi_offset b9, -72
-	.cfi_offset b10, -80
-	.cfi_offset b11, -88
-	.cfi_offset b12, -96
-	.cfi_offset b13, -104
-	.cfi_offset b14, -112
+	.cfi_offset w23, -48
+	.cfi_offset w30, -56
+	.cfi_offset w29, -64
+	.cfi_offset b8, -72
+	.cfi_offset b9, -80
+	.cfi_offset b10, -88
+	.cfi_offset b11, -96
+	.cfi_offset b12, -104
+	.cfi_offset b13, -112
 	.cfi_remember_state
 	adrp x8, :got:archmage::tokens::generated::arm::NEON_CACHE
 	ldr x8, [x8, :got_lo12:archmage::tokens::generated::arm::NEON_CACHE]
@@ -71,152 +69,155 @@ stub_linear_to_srgb_slice:
 	fmov v0.4s, #1.00000000
 	movk w8, #15175, lsl #16
 	movk w10, #16863, lsl #16
-	movi v1.2d, #0000000000000000
-	dup v2.4s, w8
+	cmp x21, #0
+	dup v1.4s, w8
 	mov w8, #5570
-	dup v3.4s, w10
+	dup v2.4s, w10
 	movk w8, #16968, lsl #16
 	mov w10, #14394
-	cmp x21, #0
-	dup v4.4s, w8
+	str w9, [sp, #12]
+	dup v3.4s, w8
 	mov w8, #10701
 	movk w10, #15807, lsl #16
 	movk w8, #16697, lsl #16
-	dup v6.4s, w10
+	dup v5.4s, w10
 	mov w10, #7182
-	dup v5.4s, w8
+	dup v4.4s, w8
 	mov w8, #15682
 	movk w10, #16947, lsl #16
 	movk w8, #48222, lsl #16
-	dup v17.4s, w10
+	dup v16.4s, w10
 	mov w10, #47186
-	dup v7.4s, w8
+	dup v6.4s, w8
 	mov w8, #15285
 	movk w10, #16718, lsl #16
 	movk w8, #16906, lsl #16
-	dup v20.4s, w10
+	dup v19.4s, w10
 	add x10, sp, #12
-	dup v16.4s, w8
+	dup v7.4s, w8
 	mov w8, #64401
 	add x1, x10, #4
 	movk w8, #16655, lsl #16
-	str w9, [sp, #12]
 	csel x9, xzr, x1, eq
-	dup v18.4s, w8
+	dup v17.4s, w8
 	mov w8, #55785
 	movk w8, #16006, lsl #16
-	dup v19.4s, w8
+	dup v18.4s, w8
 	add x8, x0, x22, lsl #6
 	b .LBB10_8
 .LBB10_6:
 	add x10, x0, #64
 .LBB10_7:
-	ldp q21, q22, [x0, #32]
-	mov v27.16b, v4.16b
-	mov v29.16b, v5.16b
-	mov v30.16b, v17.16b
-	mov v10.16b, v5.16b
+	ldp q20, q21, [x0, #32]
+	mov v26.16b, v3.16b
+	mov v28.16b, v4.16b
+	mov v29.16b, v16.16b
+	mov v31.16b, v3.16b
+	mov v9.16b, v4.16b
+	mov v10.16b, v16.16b
 	mov v11.16b, v17.16b
-	mov v12.16b, v18.16b
-	mov v13.16b, v7.16b
-	fmaxnm v23.4s, v21.4s, v1.4s
-	fmaxnm v8.4s, v22.4s, v1.4s
-	mov v14.16b, v19.16b
-	fcmge v21.4s, v21.4s, v0.4s
+	fcmgt v22.4s, v20.4s, #0.0
+	mov v12.16b, v6.16b
+	mov v13.16b, v18.16b
+	and v22.16b, v22.16b, v20.16b
+	fcmge v20.4s, v20.4s, v0.4s
+	fminnm v23.4s, v22.4s, v0.4s
+	ldr q22, [x0, #16]
+	fcmgt v24.4s, v22.4s, #0.0
+	fsqrt v25.4s, v23.4s
+	and v24.16b, v24.16b, v22.16b
 	fcmge v22.4s, v22.4s, v0.4s
-	fminnm v24.4s, v23.4s, v0.4s
-	ldr q23, [x0, #16]
-	fminnm v8.4s, v8.4s, v0.4s
-	fmaxnm v25.4s, v23.4s, v1.4s
-	fcmge v23.4s, v23.4s, v0.4s
-	fsqrt v26.4s, v24.4s
-	fminnm v25.4s, v25.4s, v0.4s
-	fsqrt v31.4s, v25.4s
-	fmla v27.4s, v3.4s, v26.4s
-	fadd v28.4s, v26.4s, v16.4s
-	fmla v29.4s, v26.4s, v27.4s
-	fmla v30.4s, v26.4s, v28.4s
-	mov v27.16b, v6.16b
-	mov v28.16b, v18.16b
-	fmla v27.4s, v26.4s, v29.4s
-	fmla v28.4s, v26.4s, v30.4s
-	mov v29.16b, v7.16b
-	mov v30.16b, v19.16b
-	fadd v9.4s, v31.4s, v16.4s
-	fmla v29.4s, v26.4s, v27.4s
-	fmla v30.4s, v26.4s, v28.4s
-	ldr q26, [x0]
-	fmla v11.4s, v31.4s, v9.4s
-	mov v9.16b, v6.16b
-	fmaxnm v28.4s, v26.4s, v1.4s
-	fcmge v26.4s, v26.4s, v0.4s
-	fdiv v27.4s, v29.4s, v30.4s
-	mov v30.16b, v4.16b
-	fmla v12.4s, v31.4s, v11.4s
-	fminnm v28.4s, v28.4s, v0.4s
-	fmla v30.4s, v3.4s, v31.4s
-	fmla v14.4s, v31.4s, v12.4s
-	mov v12.16b, v18.16b
-	fmla v10.4s, v31.4s, v30.4s
-	fsqrt v29.4s, v28.4s
-	fmla v9.4s, v31.4s, v10.4s
-	mov v10.16b, v4.16b
+	fminnm v24.4s, v24.4s, v0.4s
+	fsqrt v30.4s, v24.4s
+	fmla v26.4s, v2.4s, v25.4s
+	fadd v27.4s, v25.4s, v7.4s
+	fmla v28.4s, v25.4s, v26.4s
+	fmla v29.4s, v25.4s, v27.4s
+	mov v26.16b, v5.16b
+	mov v27.16b, v17.16b
+	fmla v26.4s, v25.4s, v28.4s
+	fmla v27.4s, v25.4s, v29.4s
+	mov v28.16b, v6.16b
+	mov v29.16b, v18.16b
+	fmla v31.4s, v2.4s, v30.4s
+	fadd v8.4s, v30.4s, v7.4s
+	fmla v28.4s, v25.4s, v26.4s
+	fmla v29.4s, v25.4s, v27.4s
+	ldr q25, [x0]
+	fmla v9.4s, v30.4s, v31.4s
+	fmla v10.4s, v30.4s, v8.4s
+	mov v8.16b, v5.16b
+	fcmgt v27.4s, v25.4s, #0.0
+	fdiv v26.4s, v28.4s, v29.4s
+	fcmgt v28.4s, v21.4s, #0.0
+	fmla v8.4s, v30.4s, v9.4s
+	fmla v11.4s, v30.4s, v10.4s
+	mov v9.16b, v3.16b
+	and v27.16b, v27.16b, v25.16b
+	fcmge v25.4s, v25.4s, v0.4s
+	and v28.16b, v28.16b, v21.16b
+	fcmge v21.4s, v21.4s, v0.4s
 	fminnm v27.4s, v27.4s, v0.4s
-	fmla v13.4s, v31.4s, v9.4s
-	mov v31.16b, v5.16b
-	mov v9.16b, v17.16b
-	fsqrt v30.4s, v8.4s
-	fmla v10.4s, v3.4s, v29.4s
-	fadd v11.4s, v29.4s, v16.4s
-	fmla v31.4s, v29.4s, v10.4s
-	fmla v9.4s, v29.4s, v11.4s
-	mov v11.16b, v6.16b
-	fdiv v10.4s, v13.4s, v14.4s
-	mov v13.16b, v7.16b
-	mov v14.16b, v19.16b
-	fmla v11.4s, v29.4s, v31.4s
-	fmla v12.4s, v29.4s, v9.4s
-	mov v31.16b, v4.16b
-	fadd v9.4s, v30.4s, v16.4s
-	fmla v31.4s, v3.4s, v30.4s
-	fmla v13.4s, v29.4s, v11.4s
-	fmla v14.4s, v29.4s, v12.4s
-	mov v29.16b, v5.16b
+	fmla v12.4s, v30.4s, v8.4s
+	fmla v13.4s, v30.4s, v11.4s
+	mov v30.16b, v4.16b
+	mov v8.16b, v16.16b
 	mov v11.16b, v17.16b
-	mov v12.16b, v18.16b
-	fmla v29.4s, v30.4s, v31.4s
-	fmla v11.4s, v30.4s, v9.4s
-	mov v9.16b, v6.16b
-	fdiv v31.4s, v13.4s, v14.4s
-	fmla v9.4s, v30.4s, v29.4s
-	mov v29.16b, v7.16b
-	fminnm v10.4s, v10.4s, v0.4s
-	fmla v12.4s, v30.4s, v11.4s
-	mov v11.16b, v19.16b
-	fmla v29.4s, v30.4s, v9.4s
-	fcmge v9.4s, v2.4s, v25.4s
-	fmul v25.4s, v25.4s, v20.4s
-	fmla v11.4s, v30.4s, v12.4s
-	fcmge v12.4s, v2.4s, v8.4s
-	fcmge v30.4s, v2.4s, v28.4s
-	fmul v28.4s, v28.4s, v20.4s
-	fmul v8.4s, v8.4s, v20.4s
-	bif v25.16b, v10.16b, v9.16b
-	fdiv v29.4s, v29.4s, v11.4s
-	fcmge v11.4s, v2.4s, v24.4s
-	fmul v24.4s, v24.4s, v20.4s
-	fminnm v31.4s, v31.4s, v0.4s
-	bsl v23.16b, v0.16b, v25.16b
-	bif v24.16b, v27.16b, v11.16b
-	mov v27.16b, v12.16b
-	bif v28.16b, v31.16b, v30.16b
-	bsl v21.16b, v0.16b, v24.16b
-	bsl v26.16b, v0.16b, v28.16b
+	fminnm v28.4s, v28.4s, v0.4s
+	fsqrt v29.4s, v27.4s
+	fminnm v26.4s, v26.4s, v0.4s
+	fsqrt v31.4s, v28.4s
+	fmla v9.4s, v2.4s, v29.4s
+	fadd v10.4s, v29.4s, v7.4s
+	fmla v30.4s, v29.4s, v9.4s
+	fmla v8.4s, v29.4s, v10.4s
+	mov v10.16b, v5.16b
+	fdiv v9.4s, v12.4s, v13.4s
+	mov v12.16b, v6.16b
+	mov v13.16b, v18.16b
+	fmla v10.4s, v29.4s, v30.4s
+	fmla v11.4s, v29.4s, v8.4s
+	mov v30.16b, v3.16b
+	fadd v8.4s, v31.4s, v7.4s
+	fmla v30.4s, v2.4s, v31.4s
+	fmla v12.4s, v29.4s, v10.4s
+	fmla v13.4s, v29.4s, v11.4s
+	mov v29.16b, v4.16b
+	mov v10.16b, v16.16b
+	mov v11.16b, v17.16b
+	fmla v29.4s, v31.4s, v30.4s
+	fmla v10.4s, v31.4s, v8.4s
+	mov v8.16b, v5.16b
+	fdiv v30.4s, v12.4s, v13.4s
+	fmla v8.4s, v31.4s, v29.4s
+	mov v29.16b, v6.16b
+	fminnm v9.4s, v9.4s, v0.4s
+	fmla v11.4s, v31.4s, v10.4s
+	mov v10.16b, v18.16b
+	fmla v29.4s, v31.4s, v8.4s
+	fcmge v8.4s, v1.4s, v24.4s
+	fmul v24.4s, v24.4s, v19.4s
+	fmla v10.4s, v31.4s, v11.4s
+	fcmge v11.4s, v1.4s, v28.4s
+	fcmge v31.4s, v1.4s, v27.4s
+	fmul v27.4s, v27.4s, v19.4s
+	fmul v28.4s, v28.4s, v19.4s
+	bif v24.16b, v9.16b, v8.16b
+	fdiv v29.4s, v29.4s, v10.4s
+	fcmge v10.4s, v1.4s, v23.4s
+	fmul v23.4s, v23.4s, v19.4s
+	fminnm v30.4s, v30.4s, v0.4s
+	bsl v22.16b, v0.16b, v24.16b
+	bif v23.16b, v26.16b, v10.16b
+	mov v26.16b, v11.16b
+	bif v27.16b, v30.16b, v31.16b
+	bsl v20.16b, v0.16b, v23.16b
+	bsl v25.16b, v0.16b, v27.16b
 	fminnm v29.4s, v29.4s, v0.4s
-	stp q26, q23, [x0]
-	bsl v27.16b, v8.16b, v29.16b
-	bsl v22.16b, v0.16b, v27.16b
-	stp q21, q22, [x0, #32]
+	stp q25, q22, [x0]
+	bsl v26.16b, v28.16b, v29.16b
+	bsl v21.16b, v0.16b, v26.16b
+	stp q20, q21, [x0, #32]
 	mov x0, x10
 .LBB10_8:
 	cmp x0, x8
@@ -236,13 +237,12 @@ stub_linear_to_srgb_slice:
 .LBB10_13:
 	.cfi_def_cfa wsp, 256
 	ldp x20, x19, [sp, #240]
-	ldr x23, [sp, #216]
+	ldr x23, [sp, #208]
 	ldp x22, x21, [sp, #224]
-	ldr d14, [sp, #144]
-	ldp x29, x30, [sp, #200]
-	ldp d9, d8, [sp, #184]
-	ldp d11, d10, [sp, #168]
-	ldp d13, d12, [sp, #152]
+	ldp x29, x30, [sp, #192]
+	ldp d9, d8, [sp, #176]
+	ldp d11, d10, [sp, #160]
+	ldp d13, d12, [sp, #144]
 	add sp, sp, #256
 	.cfi_def_cfa_offset 0
 	.cfi_restore w19
@@ -258,7 +258,6 @@ stub_linear_to_srgb_slice:
 	.cfi_restore b11
 	.cfi_restore b12
 	.cfi_restore b13
-	.cfi_restore b14
 	ret
 .LBB10_14:
 	.cfi_restore_state
@@ -272,13 +271,12 @@ stub_linear_to_srgb_slice:
 .LBB10_15:
 	.cfi_def_cfa wsp, 256
 	ldp x20, x19, [sp, #240]
-	ldr x23, [sp, #216]
+	ldr x23, [sp, #208]
 	ldp x22, x21, [sp, #224]
-	ldr d14, [sp, #144]
-	ldp x29, x30, [sp, #200]
-	ldp d9, d8, [sp, #184]
-	ldp d11, d10, [sp, #168]
-	ldp d13, d12, [sp, #152]
+	ldp x29, x30, [sp, #192]
+	ldp d9, d8, [sp, #176]
+	ldp d11, d10, [sp, #160]
+	ldp d13, d12, [sp, #144]
 	add sp, sp, #256
 	.cfi_def_cfa_offset 0
 	.cfi_restore w19
@@ -294,5 +292,4 @@ stub_linear_to_srgb_slice:
 	.cfi_restore b11
 	.cfi_restore b12
 	.cfi_restore b13
-	.cfi_restore b14
 	b linear_srgb::simd::linear_to_srgb_slice_tier_scalar_t

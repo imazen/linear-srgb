@@ -313,11 +313,17 @@ Against the crate's C0 f64 formula rounded to f32, a 5,242,880-point grid
 | `precise` s→l, platform powf | 6 |
 | `precise` l→s, platform powf | 3 |
 
-These are measured grid maxima, not all-input bounds. The earlier SIMD
-4/5-ULP summary does not describe the current implementation. Scalar and
-slice APIs use different evaluation precision; the existing monotonicity
-and round-trip regression tests remain in place. One ULP at 0.5 is 2^-24;
-even a small float error can change a quantized code at a rounding boundary.
+These are measured grid maxima against the C0 reference formula. An
+exhaustive native check against the f64-evaluated polynomial gives a
+different comparison. Across all 1,065,353,217 f32 inputs from positive
+zero through one, the single-value default functions have zero monotonicity
+reversals, and the f32 SIMD slices differ from them by at most 5 ULP in
+either direction. Across all 65,536 u16 codes, SIMD decoding has zero
+reversals and the slice decode→encode round trip is exact.
+
+Clamped sRGB maps NaN and nonpositive inputs to positive zero and maps
+inputs at or above one to one. Signed extended sRGB preserves signed
+zero and propagates NaNs. See the precision contracts for HDR curve rails.
 
 See [precision contracts](docs/precision.md) and
 [measured alternatives](benchmarks/u8_encode_2026-11-05.md) for LUT errors,

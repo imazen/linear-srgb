@@ -1,7 +1,8 @@
 //! PQ (SMPTE ST 2084) transfer function (scalar + generic SIMD).
 
 use super::polynomial;
-use crate::tf::polynomial::Mla;
+use super::polynomial::{Mla, mla_scalar};
+use magetypes::scalar::sqrt_f32;
 #[allow(unused_imports)]
 use num_traits::Float; // provides powf/sqrt via libm in no_std
 
@@ -13,29 +14,55 @@ use num_traits::Float; // provides powf/sqrt via libm in no_std
 /// toe and a two-segment rational approximation over the remainder of the range.
 #[inline]
 pub fn pq_to_linear(v: f32) -> f32 {
+    archmage::attuned!(pq_to_linear_scalar(v))
+}
+
+#[archmage::attune(_*_t, define(f32x4))]
+fn pq_to_linear_scalar(token: Token, v: f32) -> f32 {
+    pq_to_linear_with_token(token, v)
+}
+
+#[inline(always)]
+pub(crate) fn pq_to_linear_with_token<T: magetypes::scalar::F32ScalarBackend>(
+    token: T,
+    v: f32,
+) -> f32 {
     if v.is_nan() || v <= 0.0 || v >= 1.0 || v < EOTF_POLY_FLOOR {
         return pq_to_linear_precise(v);
     }
-    let x = v.mul_add(v, v);
+    let x = mla_scalar(token, v, v, v);
     if v < 0.25 {
-        polynomial::eval_rational_poly(x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL)
+        polynomial::eval_rational_poly(token, x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL)
     } else {
-        polynomial::eval_rational_poly(x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE)
+        polynomial::eval_rational_poly(token, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE)
     }
 }
 
 /// PQ inverse EOTF for normalized linear light. Uses the ST 2084 formula for
-/// values below 1e-4 and a rational approximation above that threshold.
+/// values below 1e-7 and a rational approximation above that threshold.
 #[inline]
 pub fn linear_to_pq(v: f32) -> f32 {
+    archmage::attuned!(linear_to_pq_scalar(v))
+}
+
+#[archmage::attune(_*_t, define(f32x4))]
+fn linear_to_pq_scalar(token: Token, v: f32) -> f32 {
+    linear_to_pq_with_token(token, v)
+}
+
+#[inline(always)]
+pub(crate) fn linear_to_pq_with_token<T: magetypes::scalar::F32ScalarBackend>(
+    token: T,
+    v: f32,
+) -> f32 {
     if v.is_nan() || v <= 0.0 || v >= 1.0 || v < OETF_POLY_FLOOR {
         return linear_to_pq_precise(v);
     }
-    let a = v.sqrt().sqrt();
+    let a = sqrt_f32(sqrt_f32(v));
     if a < 0.1 {
-        polynomial::eval_rational_poly(a, PQ_INV_P_SMALL, PQ_INV_Q_SMALL)
+        polynomial::eval_rational_poly(token, a, PQ_INV_P_SMALL, PQ_INV_Q_SMALL)
     } else {
-        polynomial::eval_rational_poly(a, PQ_INV_P_LARGE, PQ_INV_Q_LARGE)
+        polynomial::eval_rational_poly(token, a, PQ_INV_P_LARGE, PQ_INV_Q_LARGE)
     }
 }
 
@@ -46,7 +73,7 @@ const C2: f64 = 2413.0 / 128.0;
 const C3: f64 = 2392.0 / 128.0;
 
 const EOTF_POLY_FLOOR: f32 = 0.02;
-const OETF_POLY_FLOOR: f32 = 1e-4;
+const OETF_POLY_FLOOR: f32 = 1e-7;
 
 #[inline]
 fn pq_to_linear_precise(v: f32) -> f32 {

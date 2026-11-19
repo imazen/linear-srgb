@@ -35,6 +35,7 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 - Guard PQ SIMD dark intervals before the rational fits, use the reference toe for encoding and decoding, and propagate NaNs.
 - Align clamped sRGB endpoints, preserve signed zero in extended sRGB, and fall back to the analytic curve outside the fitted range.
 - Share Magemath profiles between transfer and pure-gamma kernels, including scalar tails.
+- Align scalar and slice transfer rails and HDR FMA policy, use the fitted PQ encode toe from 1e-7, and keep float RGBA sRGB transforms in vector registers.
 
 
 - Default WASM scalar HDR entry points and u16 slice tails use the same relaxed evaluation as vector blocks, preserving dispatch and row-split parity. Native and `precise-portable` evaluation are unchanged (`e24d12ee`).

@@ -174,31 +174,43 @@ pub mod tf {
     }
     pub(crate) mod polynomial {
         //! Rational polynomial evaluation and transfer-kernel rounding policy.
-        use magetypes::simd::{backends::*, generic::*};
-        #[allow(unused_imports)]
-        use num_traits::Float;
+        use magetypes::{scalar::F32ScalarBackend, simd::{backends::*, generic::*}};
         /// Evaluate a rational polynomial P(x)/Q(x) using Horner's method.
         ///
         /// Coefficients are stored lowest-degree-first: `p[0] + p[1]*x + p[2]*x^2 + ...`
         #[inline(always)]
-        pub(crate) fn eval_rational_poly<const P: usize, const Q: usize>(
-            x: f32,
-            p: [f32; P],
-            q: [f32; Q],
-        ) -> f32 {
+        pub(crate) fn eval_rational_poly<
+            T: F32ScalarBackend,
+            const P: usize,
+            const Q: usize,
+        >(token: T, x: f32, p: [f32; P], q: [f32; Q]) -> f32 {
             let mut yp = p[P - 1];
             for i in (0..P - 1).rev() {
-                yp = yp.mul_add(x, p[i]);
+                yp = mla_scalar(token, yp, x, p[i]);
             }
             let mut yq = q[Q - 1];
             for i in (0..Q - 1).rev() {
-                yq = yq.mul_add(x, q[i]);
+                yq = mla_scalar(token, yq, x, q[i]);
             }
             yp / yq
         }
         /// Existing arithmetic contract: fused on native, opt-in guaranteed fusion on WASM.
         /// Magetypes owns the hardware/engine probe and software fallback behind `_fused`.
         pub(crate) const USE_FUSED_MATH: bool = !true;
+        #[inline(always)]
+        pub(crate) fn mla_scalar<T: F32ScalarBackend>(
+            token: T,
+            a: f32,
+            b: f32,
+            c: f32,
+        ) -> f32 {
+            if USE_FUSED_MATH {
+                crate::mlaf::fmla_f32_with_token(token, a, b, c)
+            } else {
+                token.mul_add_relaxed_f32(a, b, c)
+            }
+        }
+        pub(crate) use floor_zero;
         /// Multiply-add in the kernels. Fused wherever that costs nothing or the scalar tier needs it, so
         /// every native tier gives the same bits. On WASM, `mul_add_fused` is software unless the engine
         /// fuses, so it stays relaxed there unless the `precise-portable` feature asks for the same bits.

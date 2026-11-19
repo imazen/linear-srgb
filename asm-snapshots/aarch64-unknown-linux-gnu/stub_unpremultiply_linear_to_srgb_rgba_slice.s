@@ -4,17 +4,17 @@
 .type	stub_unpremultiply_linear_to_srgb_rgba_slice,@function
 stub_unpremultiply_linear_to_srgb_rgba_slice:
 	.cfi_startproc
-	sub sp, sp, #464
-	.cfi_def_cfa_offset 464
-	stp d15, d14, [sp, #336]
-	stp d13, d12, [sp, #352]
-	stp d11, d10, [sp, #368]
-	stp d9, d8, [sp, #384]
-	stp x29, x30, [sp, #400]
-	stp x28, x23, [sp, #416]
-	stp x22, x21, [sp, #432]
-	stp x20, x19, [sp, #448]
-	add x29, sp, #400
+	sub sp, sp, #448
+	.cfi_def_cfa_offset 448
+	stp d15, d14, [sp, #320]
+	stp d13, d12, [sp, #336]
+	stp d11, d10, [sp, #352]
+	stp d9, d8, [sp, #368]
+	stp x29, x30, [sp, #384]
+	stp x28, x23, [sp, #400]
+	stp x22, x21, [sp, #416]
+	stp x20, x19, [sp, #432]
+	add x29, sp, #384
 	.cfi_def_cfa w29, 64
 	.cfi_offset w19, -8
 	.cfi_offset w20, -16
@@ -61,215 +61,199 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	ldp q0, q1, [x29, #-128]
 	mov x0, x23
 	mov w9, #1
-	stp q0, q1, [x29, #-192]
+	stp q0, q1, [sp, #192]
 	ldp q0, q2, [x29, #-96]
-	stp q0, q2, [x29, #-160]
+	stp q0, q2, [sp, #224]
 	b .LBB16_5
 .LBB16_4:
 	mov w9, wzr
 .LBB16_5:
-	mov w8, #47186
-	mov w10, #25800
-	fmov v17.4s, #1.00000000
-	movk w8, #16718, lsl #16
-	movk w10, #16863, lsl #16
+	mov w10, #47186
+	mov w8, #981467136
+	fmov v0.4s, #1.00000000
+	movk w10, #16718, lsl #16
+	dup v2.4s, w8
+	mov w8, #25800
+	dup v1.4s, w10
+	movk w8, #16863, lsl #16
+	mov w10, #14394
+	movk w10, #15807, lsl #16
 	cmp x21, #0
-	dup v1.4s, w8
-	dup v0.4s, w10
+	str w9, [sp, #188]
+	stp q1, q2, [sp, #144]
+	dup v2.4s, w8
 	mov w8, #5570
 	movk w8, #16968, lsl #16
-	mov w10, #15682
-	stur w9, [x29, #-196]
-	movk w10, #48222, lsl #16
-	stp q0, q1, [sp, #160]
 	dup v1.4s, w8
 	mov w8, #10701
 	movk w8, #16697, lsl #16
-	ldr q3, [sp, #160]
-	dup v0.4s, w8
-	mov w8, #14394
-	movk w8, #15807, lsl #16
-	stp q0, q1, [sp, #128]
-	dup v1.4s, w8
-	dup v0.4s, w10
-	mov w10, #15285
-	add x8, x0, x22, lsl #6
-	movk w10, #16906, lsl #16
-	stp q0, q1, [sp, #96]
+	stp q1, q2, [sp, #112]
+	dup v2.4s, w8
 	dup v1.4s, w10
+	mov w8, #15682
 	mov w10, #7182
+	ldr q4, [sp, #128]
+	movk w8, #48222, lsl #16
 	movk w10, #16947, lsl #16
-	dup v0.4s, w10
-	mov w10, #64401
-	movk w10, #16655, lsl #16
-	stp q0, q1, [sp, #64]
-	dup v1.4s, w10
-	mov w10, #55785
-	movk w10, #16006, lsl #16
-	dup v0.4s, w10
+	stp q1, q2, [sp, #80]
+	dup v2.4s, w8
+	mov w8, #15285
+	movk w8, #16906, lsl #16
+	dup v1.4s, w8
+	mov w8, #64401
+	movk w8, #16655, lsl #16
+	stp q1, q2, [sp, #48]
+	dup v2.4s, w10
+	dup v1.4s, w8
+	mov w8, #55785
 	mov w10, #20545
+	ldr q17, [sp, #48]
+	movk w8, #16006, lsl #16
 	movk w10, #15175, lsl #16
-	stp q0, q1, [sp, #32]
-	dup v0.4s, w10
-	sub x10, x29, #196
+	stp q1, q2, [sp, #16]
+	dup v3.4s, w8
+	dup v1.4s, w10
+	add x10, sp, #188
+	add x8, x0, x22, lsl #6
 	add x1, x10, #4
-	mov w10, #981467136
 	csel x9, xzr, x1, eq
-	str w10, [sp, #12]
-	str q0, [sp, #16]
+	str q1, [sp]
 	b .LBB16_8
 .LBB16_6:
 	add x10, x0, #64
 .LBB16_7:
-	fmov s0, #1.00000000
-	ldr s24, [x0, #12]
-	ldr s1, [sp, #12]
-	movi d5, #0000000000000000
-	fmov v27.4s, #1.00000000
-	ldr q29, [x0]
-	fcmp s24, s1
-	movi v7.2d, #0000000000000000
-	fmov v9.4s, #1.00000000
-	fdiv s25, s0, s24
-	ldp q6, q4, [sp, #128]
-	ldp q23, q2, [sp, #32]
-	mov v11.16b, v4.16b
-	mov v14.16b, v6.16b
-	mov v18.16b, v2.16b
-	mov v20.16b, v23.16b
-	fcsel s26, s25, s5, gt
-	ldr s25, [x0, #28]
-	fdiv s28, s0, s25
-	fcmp s25, s1
-	mov v27.s[0], v26.s[0]
-	mov v27.s[1], v26.s[0]
-	mov v27.s[2], v26.s[0]
-	ldr s26, [x0, #44]
-	fdiv s31, s0, s26
-	fmul v27.4s, v29.4s, v27.4s
-	fcsel s28, s28, s5, gt
-	fcmp s26, s1
-	mov v9.s[0], v28.s[0]
-	fmaxnm v29.4s, v27.4s, v7.4s
-	mov v9.s[1], v28.s[0]
-	fminnm v30.4s, v29.4s, v17.4s
-	ldr q29, [x0, #16]
-	mov v9.s[2], v28.s[0]
-	ldr s28, [x0, #60]
-	fcsel s12, s31, s5, gt
-	fsqrt v8.4s, v30.4s
-	fcmp s28, s1
-	ldp q22, q1, [sp, #96]
-	fmul v29.4s, v29.4s, v9.4s
-	fmov v9.4s, #1.00000000
-	mov v9.s[0], v12.s[0]
-	fmaxnm v31.4s, v29.4s, v7.4s
-	fdiv s10, s0, s28
-	ldp q21, q0, [sp, #64]
-	mov v9.s[1], v12.s[0]
-	fminnm v31.4s, v31.4s, v17.4s
-	fmla v11.4s, v3.4s, v8.4s
-	fadd v13.4s, v8.4s, v0.4s
-	mov v15.16b, v21.16b
-	mov v16.16b, v21.16b
-	mov v9.s[2], v12.s[0]
-	mov v12.16b, v22.16b
-	fmla v14.4s, v8.4s, v11.4s
-	fmla v15.4s, v8.4s, v13.4s
-	fmov v11.4s, #1.00000000
+	ldp q21, q22, [x0]
+	mov v19.16b, v3.16b
+	ldr q7, [sp, #160]
+	ldp q6, q5, [sp, #96]
+	ldp q20, q1, [sp, #16]
+	dup v23.4s, v21.s[3]
+	dup v26.4s, v22.s[3]
+	mov v10.16b, v5.16b
+	mov v12.16b, v6.16b
 	mov v13.16b, v1.16b
-	fsqrt v19.4s, v31.4s
-	fmla v13.4s, v8.4s, v14.4s
-	fmla v18.4s, v8.4s, v15.4s
-	mov v14.16b, v23.16b
-	ldr q15, [x0, #32]
-	fcsel s10, s10, s5, gt
-	mov v5.16b, v22.16b
-	fmla v12.4s, v8.4s, v13.4s
-	fmla v14.4s, v8.4s, v18.4s
-	fmul v8.4s, v15.4s, v9.4s
-	mov v11.s[0], v10.s[0]
-	mov v13.16b, v4.16b
-	mov v15.16b, v6.16b
-	fmaxnm v9.4s, v8.4s, v7.4s
-	fdiv v18.4s, v12.4s, v14.4s
-	ldr q12, [x0, #48]
-	mov v11.s[1], v10.s[0]
-	fmla v13.4s, v3.4s, v19.4s
-	fadd v14.4s, v19.4s, v0.4s
-	mov v11.s[2], v10.s[0]
-	fminnm v10.4s, v9.4s, v17.4s
-	fmla v15.4s, v19.4s, v13.4s
-	fmla v16.4s, v19.4s, v14.4s
-	mov v14.16b, v1.16b
-	fmul v9.4s, v12.4s, v11.4s
-	fsqrt v11.4s, v10.4s
-	fmla v14.4s, v19.4s, v15.4s
-	fmaxnm v12.4s, v9.4s, v7.4s
-	mov v7.16b, v2.16b
-	fminnm v18.4s, v18.4s, v17.4s
-	fmla v5.4s, v19.4s, v14.4s
-	mov v14.16b, v22.16b
-	fmla v7.4s, v19.4s, v16.4s
-	mov v16.16b, v4.16b
-	fminnm v12.4s, v12.4s, v17.4s
-	fmla v20.4s, v19.4s, v7.4s
-	mov v19.16b, v21.16b
-	mov v7.16b, v6.16b
-	fsqrt v13.4s, v12.4s
-	fadd v15.4s, v11.4s, v0.4s
-	fmla v16.4s, v3.4s, v11.4s
-	fmla v19.4s, v11.4s, v15.4s
-	fmla v7.4s, v11.4s, v16.4s
-	mov v16.16b, v1.16b
-	mov v15.16b, v23.16b
-	fdiv v5.4s, v5.4s, v20.4s
-	mov v20.16b, v2.16b
-	fmla v16.4s, v11.4s, v7.4s
-	fmla v20.4s, v11.4s, v19.4s
-	fmla v4.4s, v3.4s, v13.4s
-	fadd v19.4s, v13.4s, v0.4s
-	fmla v14.4s, v11.4s, v16.4s
-	ldr q0, [sp, #16]
-	fmla v6.4s, v13.4s, v4.4s
-	fmla v21.4s, v13.4s, v19.4s
-	fmla v15.4s, v11.4s, v20.4s
-	fcmge v20.4s, v0.4s, v30.4s
-	fmla v1.4s, v13.4s, v6.4s
-	fmla v2.4s, v13.4s, v21.4s
-	fdiv v7.4s, v14.4s, v15.4s
-	fminnm v5.4s, v5.4s, v17.4s
-	fmla v22.4s, v13.4s, v1.4s
-	fmla v23.4s, v13.4s, v2.4s
-	ldr q13, [sp, #176]
-	fmul v19.4s, v30.4s, v13.4s
-	fmul v30.4s, v31.4s, v13.4s
-	fcmge v31.4s, v0.4s, v31.4s
-	fmul v11.4s, v10.4s, v13.4s
-	fcmge v10.4s, v0.4s, v10.4s
-	fmul v13.4s, v12.4s, v13.4s
-	fcmge v12.4s, v0.4s, v12.4s
-	bit v18.16b, v19.16b, v20.16b
-	fcmge v19.4s, v27.4s, v17.4s
-	bit v5.16b, v30.16b, v31.16b
-	fdiv v16.4s, v22.4s, v23.4s
-	fcmge v20.4s, v29.4s, v17.4s
-	fcmge v27.4s, v8.4s, v17.4s
-	fcmge v29.4s, v9.4s, v17.4s
-	fminnm v7.4s, v7.4s, v17.4s
-	bit v18.16b, v17.16b, v19.16b
-	bit v5.16b, v17.16b, v20.16b
-	bit v7.16b, v11.16b, v10.16b
-	stp q18, q5, [x0]
-	str s24, [x0, #12]
-	str s25, [x0, #28]
-	bit v7.16b, v17.16b, v27.16b
-	fminnm v16.4s, v16.4s, v17.4s
-	bit v16.16b, v13.16b, v12.16b
-	bit v16.16b, v17.16b, v29.16b
-	stp q7, q16, [x0, #32]
-	str s26, [x0, #44]
-	str s28, [x0, #60]
+	ldp q16, q2, [sp, #64]
+	fdiv v24.4s, v0.4s, v23.4s
+	fcmgt v23.4s, v23.4s, v7.4s
+	mov v14.16b, v20.16b
+	mov v15.16b, v1.16b
+	mov v18.16b, v20.16b
+	fdiv v28.4s, v0.4s, v26.4s
+	fcmgt v26.4s, v26.4s, v7.4s
+	and v23.16b, v23.16b, v24.16b
+	fmul v25.4s, v21.4s, v23.4s
+	ldp q24, q23, [x0, #32]
+	dup v31.4s, v24.s[3]
+	dup v9.4s, v23.s[3]
+	fcmgt v27.4s, v25.4s, #0.0
+	fdiv v29.4s, v0.4s, v31.4s
+	fcmgt v31.4s, v31.4s, v7.4s
+	and v26.16b, v26.16b, v28.16b
+	and v27.16b, v27.16b, v25.16b
+	fcmge v25.4s, v25.4s, v0.4s
+	fmul v26.4s, v22.4s, v26.4s
+	fminnm v27.4s, v27.4s, v0.4s
+	fcmgt v28.4s, v26.4s, #0.0
+	fsqrt v8.4s, v27.4s
+	and v28.16b, v28.16b, v26.16b
+	fcmge v26.4s, v26.4s, v0.4s
+	and v29.16b, v31.16b, v29.16b
+	mov v31.16b, v16.16b
+	fminnm v28.4s, v28.4s, v0.4s
+	fmul v29.4s, v24.4s, v29.4s
+	fdiv v30.4s, v0.4s, v9.4s
+	fmla v10.4s, v4.4s, v8.4s
+	fadd v11.4s, v8.4s, v17.4s
+	fmla v12.4s, v8.4s, v10.4s
+	fmla v13.4s, v8.4s, v11.4s
+	mov v11.16b, v2.16b
+	fsqrt v10.4s, v28.4s
+	fmla v11.4s, v8.4s, v12.4s
+	fmla v14.4s, v8.4s, v13.4s
+	mov v12.16b, v3.16b
+	fmla v31.4s, v8.4s, v11.4s
+	fmla v12.4s, v8.4s, v14.4s
+	fcmgt v8.4s, v9.4s, v7.4s
+	fcmgt v9.4s, v29.4s, #0.0
+	mov v14.16b, v6.16b
+	mov v7.16b, v16.16b
+	and v30.16b, v8.16b, v30.16b
+	fdiv v11.4s, v31.4s, v12.4s
+	mov v12.16b, v5.16b
+	and v31.16b, v9.16b, v29.16b
+	fmul v30.4s, v23.4s, v30.4s
+	fmla v12.4s, v4.4s, v10.4s
+	fadd v13.4s, v10.4s, v17.4s
+	fminnm v31.4s, v31.4s, v0.4s
+	fcmgt v8.4s, v30.4s, #0.0
+	fmla v14.4s, v10.4s, v12.4s
+	fmla v15.4s, v10.4s, v13.4s
+	mov v13.16b, v2.16b
+	fsqrt v9.4s, v31.4s
+	and v8.16b, v8.16b, v30.16b
+	fmla v13.4s, v10.4s, v14.4s
+	fmla v18.4s, v10.4s, v15.4s
+	mov v14.16b, v5.16b
+	fminnm v8.4s, v8.4s, v0.4s
+	fmla v7.4s, v10.4s, v13.4s
+	fmla v19.4s, v10.4s, v18.4s
+	mov v10.16b, v1.16b
+	mov v13.16b, v20.16b
+	mov v18.16b, v6.16b
+	fsqrt v12.4s, v8.4s
+	fadd v15.4s, v9.4s, v17.4s
+	fmla v14.4s, v4.4s, v9.4s
+	fmla v10.4s, v9.4s, v15.4s
+	fmla v18.4s, v9.4s, v14.4s
+	mov v14.16b, v16.16b
+	mov v15.16b, v3.16b
+	fdiv v7.4s, v7.4s, v19.4s
+	mov v19.16b, v2.16b
+	fmla v13.4s, v9.4s, v10.4s
+	fmla v5.4s, v4.4s, v12.4s
+	fadd v10.4s, v12.4s, v17.4s
+	fmla v19.4s, v9.4s, v18.4s
+	fmla v15.4s, v9.4s, v13.4s
+	ldr q13, [sp, #144]
+	fmla v6.4s, v12.4s, v5.4s
+	fmla v1.4s, v12.4s, v10.4s
+	fminnm v10.4s, v11.4s, v0.4s
+	fmla v14.4s, v9.4s, v19.4s
+	mov v9.16b, v3.16b
+	fmul v11.4s, v28.4s, v13.4s
+	fmla v2.4s, v12.4s, v6.4s
+	fmla v20.4s, v12.4s, v1.4s
+	ldr q1, [sp]
+	fdiv v18.4s, v14.4s, v15.4s
+	fminnm v7.4s, v7.4s, v0.4s
+	fcmge v28.4s, v1.4s, v28.4s
+	fmla v16.4s, v12.4s, v2.4s
+	fmla v9.4s, v12.4s, v20.4s
+	fmul v12.4s, v31.4s, v13.4s
+	fcmge v31.4s, v1.4s, v31.4s
+	bit v7.16b, v11.16b, v28.16b
+	fcmge v28.4s, v29.4s, v0.4s
+	fcmge v29.4s, v30.4s, v0.4s
+	bit v7.16b, v0.16b, v26.16b
+	fdiv v19.4s, v16.4s, v9.4s
+	fmul v9.4s, v27.4s, v13.4s
+	fcmge v27.4s, v1.4s, v27.4s
+	fmul v13.4s, v8.4s, v13.4s
+	fcmge v8.4s, v1.4s, v8.4s
+	fminnm v18.4s, v18.4s, v0.4s
+	mov v7.s[3], v22.s[3]
+	bsl v27.16b, v9.16b, v10.16b
+	bit v18.16b, v12.16b, v31.16b
+	bsl v25.16b, v0.16b, v27.16b
+	bit v18.16b, v0.16b, v28.16b
+	mov v25.s[3], v21.s[3]
+	fminnm v19.4s, v19.4s, v0.4s
+	mov v18.s[3], v24.s[3]
+	stp q25, q7, [x0]
+	bit v19.16b, v13.16b, v8.16b
+	bit v19.16b, v0.16b, v29.16b
+	mov v19.s[3], v23.s[3]
+	stp q18, q19, [x0, #32]
 	mov x0, x10
 .LBB16_8:
 	cmp x0, x8
@@ -281,22 +265,22 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	mov x9, xzr
 	b .LBB16_7
 .LBB16_11:
-	ldur w8, [x29, #-196]
+	ldr w8, [sp, #188]
 	cbz w8, .LBB16_13
 	mov x0, x19
 	mov x2, x20
 	bl memcpy
 .LBB16_13:
-	.cfi_def_cfa wsp, 464
-	ldp x20, x19, [sp, #448]
-	ldp x22, x21, [sp, #432]
-	ldp x28, x23, [sp, #416]
-	ldp x29, x30, [sp, #400]
-	ldp d9, d8, [sp, #384]
-	ldp d11, d10, [sp, #368]
-	ldp d13, d12, [sp, #352]
-	ldp d15, d14, [sp, #336]
-	add sp, sp, #464
+	.cfi_def_cfa wsp, 448
+	ldp x20, x19, [sp, #432]
+	ldp x22, x21, [sp, #416]
+	ldp x28, x23, [sp, #400]
+	ldp x29, x30, [sp, #384]
+	ldp d9, d8, [sp, #368]
+	ldp d11, d10, [sp, #352]
+	ldp d13, d12, [sp, #336]
+	ldp d15, d14, [sp, #320]
+	add sp, sp, #448
 	.cfi_def_cfa_offset 0
 	.cfi_restore w19
 	.cfi_restore w20
@@ -325,16 +309,16 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	mov x0, x19
 	cbnz w8, .LBB16_2
 .LBB16_15:
-	.cfi_def_cfa wsp, 464
-	ldp x20, x19, [sp, #448]
-	ldp x22, x21, [sp, #432]
-	ldp x28, x23, [sp, #416]
-	ldp x29, x30, [sp, #400]
-	ldp d9, d8, [sp, #384]
-	ldp d11, d10, [sp, #368]
-	ldp d13, d12, [sp, #352]
-	ldp d15, d14, [sp, #336]
-	add sp, sp, #464
+	.cfi_def_cfa wsp, 448
+	ldp x20, x19, [sp, #432]
+	ldp x22, x21, [sp, #416]
+	ldp x28, x23, [sp, #400]
+	ldp x29, x30, [sp, #384]
+	ldp d9, d8, [sp, #368]
+	ldp d11, d10, [sp, #352]
+	ldp d13, d12, [sp, #336]
+	ldp d15, d14, [sp, #320]
+	add sp, sp, #448
 	.cfi_def_cfa_offset 0
 	.cfi_restore w19
 	.cfi_restore w20

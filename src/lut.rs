@@ -130,7 +130,7 @@ pub fn lut_interp_linear_float(x: f32, table: &[f32]) -> f32 {
     // Interpolate from the lower endpoint: the old weighted-sum form
     // subtracted nearly equal values when the lower endpoint was zero.
     // Always fuse, including on targets without compile-time hardware FMA.
-    (tu - tl).mul_add(value - lower as f32, tl)
+    crate::mlaf::fmla_f32(tu - tl, value - lower as f32, tl)
 }
 
 /// Linear interpolation in a u16 LUT using fixed-point arithmetic.

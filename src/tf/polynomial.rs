@@ -1,25 +1,27 @@
 //! Rational polynomial evaluation and transfer-kernel rounding policy.
 
-use magetypes::simd::{backends::*, generic::*};
-#[allow(unused_imports)]
-use num_traits::Float;
+use magetypes::{
+    scalar::F32ScalarBackend,
+    simd::{backends::*, generic::*},
+};
 
 /// Evaluate a rational polynomial P(x)/Q(x) using Horner's method.
 ///
 /// Coefficients are stored lowest-degree-first: `p[0] + p[1]*x + p[2]*x^2 + ...`
 #[inline(always)]
-pub(crate) fn eval_rational_poly<const P: usize, const Q: usize>(
+pub(crate) fn eval_rational_poly<T: F32ScalarBackend, const P: usize, const Q: usize>(
+    token: T,
     x: f32,
     p: [f32; P],
     q: [f32; Q],
 ) -> f32 {
     let mut yp = p[P - 1];
     for i in (0..P - 1).rev() {
-        yp = yp.mul_add(x, p[i]);
+        yp = mla_scalar(token, yp, x, p[i]);
     }
     let mut yq = q[Q - 1];
     for i in (0..Q - 1).rev() {
-        yq = yq.mul_add(x, q[i]);
+        yq = mla_scalar(token, yq, x, q[i]);
     }
     yp / yq
 }
@@ -30,6 +32,30 @@ pub(crate) const USE_FUSED_MATH: bool = !cfg!(all(
     target_arch = "wasm32",
     not(feature = "precise-portable")
 ));
+
+#[inline(always)]
+pub(crate) fn mla_scalar<T: F32ScalarBackend>(token: T, a: f32, b: f32, c: f32) -> f32 {
+    if USE_FUSED_MATH {
+        crate::mlaf::fmla_f32_with_token(token, a, b, c)
+    } else {
+        token.mul_add_relaxed_f32(a, b, c)
+    }
+}
+
+// x86 and WASM can select the non-NaN right operand directly. NEON's
+// numeric max can return a NaN for a signalling input, so use an ordered
+// mask there to guarantee positive zero for every NaN.
+macro_rules! floor_zero {
+    ($value:ident, $zero:ident) => {
+        if cfg!(target_arch = "aarch64") {
+            $value & $value.simd_gt($zero)
+        } else {
+            const NON_NAN_RHS: u32 = magetypes::ExtremaOptions::new().non_nan_rhs().bits();
+            $value.max_with::<NON_NAN_RHS>($zero)
+        }
+    };
+}
+pub(crate) use floor_zero;
 
 /// Multiply-add in the kernels. Fused wherever that costs nothing or the scalar tier needs it, so
 /// every native tier gives the same bits. On WASM, `mul_add_fused` is software unless the engine
