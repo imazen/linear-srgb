@@ -1,12 +1,17 @@
 //! Private 4-lane kernels used by the canonical CPU-feature entry points.
 
+#[cfg(any(
+    all(target_arch = "x86_64", target_feature = "sse2"),
+    target_arch = "aarch64",
+    target_arch = "wasm32"
+))]
 use super::float::x4::{
     gamma_to_linear as gamma_to_linear_core, linear_to_gamma as linear_to_gamma_core,
     linear_to_srgb as linear_to_srgb_core, srgb_to_linear as srgb_to_linear_core,
 };
 use archmage::attune;
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 use archmage::X64V3Token;
 
 #[cfg(target_arch = "aarch64")]
@@ -15,7 +20,14 @@ use archmage::NeonToken;
 #[cfg(target_arch = "wasm32")]
 use archmage::Wasm128Token;
 
-#[cfg(feature = "transfer")]
+#[cfg(all(
+    feature = "transfer",
+    any(
+        all(target_arch = "x86_64", target_feature = "sse2"),
+        target_arch = "aarch64",
+        target_arch = "wasm32"
+    )
+))]
 use magetypes::simd::generic::f32x4 as gen_f32x4;
 
 // sRGB transfer function constants (C0-continuous moxcms, matching rational polynomial)
@@ -31,7 +43,7 @@ use magetypes::simd::generic::f32x4 as gen_f32x4;
 /// The `X64V3Token` parameter proves AVX2+FMA support at compile time.
 /// Uses 128-bit SSE registers (VEX-encoded) within the AVX2+FMA context.
 /// Call from inside an `#[arcane]` function for zero-overhead inlining.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune(inline(hint))]
 pub(crate) fn srgb_to_linear_v3(token: X64V3Token, srgb: [f32; 4]) -> [f32; 4] {
     srgb_to_linear_core(token, srgb)
@@ -40,7 +52,7 @@ pub(crate) fn srgb_to_linear_v3(token: X64V3Token, srgb: [f32; 4]) -> [f32; 4] {
 /// Convert 4 linear values to sRGB. Input clamped to \[0, 1\].
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune(inline(hint))]
 pub(crate) fn linear_to_srgb_v3(token: X64V3Token, linear: [f32; 4]) -> [f32; 4] {
     linear_to_srgb_core(token, linear)
@@ -65,7 +77,7 @@ pub(crate) fn linear_to_srgb_extended(token: Token, linear: [f32; 4]) -> [f32; 4
 /// Convert 4 gamma-encoded values to linear. Input clamped to \[0, 1\].
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune(inline(hint))]
 pub(crate) fn gamma_to_linear_v3(token: X64V3Token, encoded: [f32; 4], gamma: f32) -> [f32; 4] {
     gamma_to_linear_core(token, encoded, gamma)
@@ -74,7 +86,7 @@ pub(crate) fn gamma_to_linear_v3(token: X64V3Token, encoded: [f32; 4], gamma: f3
 /// Convert 4 linear values to gamma-encoded. Input clamped to \[0, 1\].
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune(inline(hint))]
 pub(crate) fn linear_to_gamma_v3(token: X64V3Token, linear: [f32; 4], gamma: f32) -> [f32; 4] {
     linear_to_gamma_core(token, linear, gamma)
@@ -83,7 +95,7 @@ pub(crate) fn linear_to_gamma_v3(token: X64V3Token, linear: [f32; 4], gamma: f32
 /// Convert sRGB f32 values to linear in-place using 4-wide SSE SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune(inline(hint))]
 pub(crate) fn srgb_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
@@ -101,7 +113,7 @@ pub(crate) fn srgb_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
 /// Convert linear f32 values to sRGB in-place using 4-wide SSE SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune(inline(hint))]
 pub(crate) fn linear_to_srgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
@@ -119,7 +131,7 @@ pub(crate) fn linear_to_srgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
 /// Convert gamma-encoded f32 values to linear in-place using 4-wide SSE SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune(inline(hint))]
 pub(crate) fn gamma_to_linear_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
@@ -137,7 +149,7 @@ pub(crate) fn gamma_to_linear_slice_v3(token: X64V3Token, values: &mut [f32], ga
 /// Convert linear f32 values to gamma-encoded in-place using 4-wide SSE SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune(inline(hint))]
 pub(crate) fn linear_to_gamma_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f32) {
     let (chunks, remainder) = values.as_chunks_mut::<4>();
@@ -397,7 +409,10 @@ macro_rules! x86_tf_rite {
         /// # Safety
         ///
         /// Call from an `#[arcane]` context with a valid `X64V3Token`.
-        #[cfg(all(feature = "transfer", target_arch = "x86_64"))]
+        #[cfg(all(
+            feature = "transfer",
+            all(target_arch = "x86_64", target_feature = "sse2")
+        ))]
         #[attune(inline(hint))]
         pub(crate) fn $name(token: X64V3Token, v: [f32; 4]) -> [f32; 4] {
             $inner(token, gen_f32x4::from_array_t(token, v)).to_array()
@@ -421,7 +436,10 @@ macro_rules! x86_tf_slice_rite {
         /// # Safety
         ///
         /// Call from an `#[arcane]` context with a valid `X64V3Token`.
-        #[cfg(all(feature = "transfer", target_arch = "x86_64"))]
+        #[cfg(all(
+            feature = "transfer",
+            all(target_arch = "x86_64", target_feature = "sse2")
+        ))]
         #[attune(inline(hint))]
         pub(crate) fn $name(token: X64V3Token, values: &mut [f32]) {
             let (chunks, remainder) = values.as_chunks_mut::<4>();
@@ -666,7 +684,7 @@ wasm_tf_slice_rite!(
 // ============================================================================
 
 #[cfg(test)]
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 mod tests_x86 {
     use super::*;
     use archmage::SimdToken;

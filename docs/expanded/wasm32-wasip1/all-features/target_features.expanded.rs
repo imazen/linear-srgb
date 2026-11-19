@@ -3,7 +3,7 @@
 // Target: wasm32-wasip1; preset: all-features; module: target_features
 // Library features: alt, avx512, default, iec, precise-portable, std, transfer, unsafe_simd
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 4257569ea0044dd13895dc842db4d8764a9fb56b48894a42a91221be07851e5e
+// Resolution lock SHA-256: 58c849e1a9492fba0a0baed3e16f8fafb2d55970b69ddbf2553cdfe6e967e0f1
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 pub mod target_features {
@@ -28,7 +28,7 @@ pub mod target_features {
     //! Functions ending in `_scalar` need no feature context on any target.
     //!
     //! ```
-    //! # #[cfg(target_arch = "x86_64")]
+    //! # #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     //! # {
     //! use archmage::{arcane, SimdToken, X64V3Token};
     //! use linear_srgb::target_features::x8;

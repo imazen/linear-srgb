@@ -1,69 +1,69 @@
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     fn srgb_to_linear_v3(values: [f32; 4]) -> [f32; 4]);
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     fn srgb_to_linear_slice_v3(values: &mut [f32]));
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     fn linear_to_srgb_v3(values: [f32; 4]) -> [f32; 4]);
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     fn linear_to_srgb_slice_v3(values: &mut [f32]));
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     fn srgb_to_linear_extended_v3(values: [f32; 4]) -> [f32; 4]);
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     fn linear_to_srgb_extended_v3(values: [f32; 4]) -> [f32; 4]);
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     fn gamma_to_linear_v3(values: [f32; 4], gamma: f32) -> [f32; 4]);
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     fn gamma_to_linear_slice_v3(values: &mut [f32], gamma: f32));
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     fn linear_to_gamma_v3(values: [f32; 4], gamma: f32) -> [f32; 4]);
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     fn linear_to_gamma_slice_v3(values: &mut [f32], gamma: f32));
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[cfg(feature = "transfer")]
     fn tf_srgb_to_linear_v3(values: [f32; 4]) -> [f32; 4]);
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[cfg(feature = "transfer")]
     fn tf_srgb_to_linear_slice_v3(values: &mut [f32]));
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[cfg(feature = "transfer")]
     fn tf_linear_to_srgb_v3(values: [f32; 4]) -> [f32; 4]);
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[cfg(feature = "transfer")]
     fn tf_linear_to_srgb_slice_v3(values: &mut [f32]));
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[cfg(feature = "transfer")]
     fn bt709_to_linear_v3(values: [f32; 4]) -> [f32; 4]);
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[cfg(feature = "transfer")]
     fn bt709_to_linear_slice_v3(values: &mut [f32]));
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[cfg(feature = "transfer")]
     fn linear_to_bt709_v3(values: [f32; 4]) -> [f32; 4]);
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[cfg(feature = "transfer")]
     fn linear_to_bt709_slice_v3(values: &mut [f32]));
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[cfg(feature = "transfer")]
     fn pq_to_linear_v3(values: [f32; 4]) -> [f32; 4]);
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[cfg(feature = "transfer")]
     fn pq_to_linear_slice_v3(values: &mut [f32]));
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[cfg(feature = "transfer")]
     fn linear_to_pq_v3(values: [f32; 4]) -> [f32; 4]);
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[cfg(feature = "transfer")]
     fn linear_to_pq_slice_v3(values: &mut [f32]));
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[cfg(feature = "transfer")]
     fn hlg_to_linear_v3(values: [f32; 4]) -> [f32; 4]);
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[cfg(feature = "transfer")]
     fn hlg_to_linear_slice_v3(values: &mut [f32]));
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[cfg(feature = "transfer")]
     fn linear_to_hlg_v3(values: [f32; 4]) -> [f32; 4]);
-entry!(x4, v3, archmage::X64V3Token; #[cfg(target_arch = "x86_64")]
+entry!(x4, v3, archmage::X64V3Token; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[cfg(feature = "transfer")]
     fn linear_to_hlg_slice_v3(values: &mut [f32]));
 entry!(x4, neon, archmage::NeonToken; #[cfg(target_arch = "aarch64")]

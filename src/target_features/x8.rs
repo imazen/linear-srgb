@@ -82,8 +82,8 @@ entry!(x8, v3, archmage::X64V3Token;
 entry!(x8, v3, archmage::X64V3Token;
 #[cfg(feature = "transfer")]
     fn linear_to_hlg_slice_v3(values: &mut [f32]));
-entry!(x8, scalar, archmage::ScalarToken; #[cfg(target_arch = "x86_64")] fn srgb_u16_to_linear_scalar(values: [u16; 8]) -> [f32; 8]);
-entry!(x8, scalar, archmage::ScalarToken; #[cfg(target_arch = "x86_64")] fn linear_to_srgb_u16_scalar(values: [f32; 8]) -> [u16; 8]);
+entry!(x8, scalar, archmage::ScalarToken; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))] fn srgb_u16_to_linear_scalar(values: [u16; 8]) -> [f32; 8]);
+entry!(x8, scalar, archmage::ScalarToken; #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))] fn linear_to_srgb_u16_scalar(values: [f32; 8]) -> [u16; 8]);
 
 // Portable tier completion
 #[cfg(test)]

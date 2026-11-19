@@ -1,9 +1,9 @@
 //! Private numerical kernels shared by target-feature entry points and runtime dispatch.
 pub(crate) mod float;
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2", feature = "avx512"))]
 pub(crate) mod x16;
 pub(crate) mod x4;
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 pub(crate) mod x8;
 
 /// A slice tail padded to one vector block, or `None` for an empty tail.

@@ -89,7 +89,7 @@ fn capture_tier_scalar(_token: archmage::ScalarToken) {
     capture!(x16, 16, scalar_transfer; [tf_srgb_to_linear_scalar, tf_linear_to_srgb_scalar, bt709_to_linear_scalar, linear_to_bt709_scalar, pq_to_linear_scalar, linear_to_pq_scalar, hlg_to_linear_scalar, linear_to_hlg_scalar]; gamma_to_linear_scalar, linear_to_gamma_scalar, srgb_to_linear_slice_scalar, linear_to_srgb_slice_scalar);
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[arcane]
 fn capture_tier_v3(_token: archmage::X64V3Token) {
     capture!(x4, 4, v3; [srgb_to_linear_v3, linear_to_srgb_v3, srgb_to_linear_extended_v3, linear_to_srgb_extended_v3]; gamma_to_linear_v3, linear_to_gamma_v3, srgb_to_linear_slice_v3, linear_to_srgb_slice_v3);
@@ -103,7 +103,7 @@ fn capture_tier_v3(_token: archmage::X64V3Token) {
     capture!(x16, 16, v3_transfer; [tf_srgb_to_linear_v3, tf_linear_to_srgb_v3, bt709_to_linear_v3, linear_to_bt709_v3, pq_to_linear_v3, linear_to_pq_v3, hlg_to_linear_v3, linear_to_hlg_v3]; gamma_to_linear_v3, linear_to_gamma_v3, srgb_to_linear_slice_v3, linear_to_srgb_slice_v3);
 }
 
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2", feature = "avx512"))]
 #[arcane]
 fn capture_tier_v4(_token: archmage::X64V4Token) {
     capture!(x4, 4, v4; [srgb_to_linear_v4, linear_to_srgb_v4, srgb_to_linear_extended_v4, linear_to_srgb_extended_v4]; gamma_to_linear_v4, linear_to_gamma_v4, srgb_to_linear_slice_v4, linear_to_srgb_slice_v4);
@@ -148,7 +148,7 @@ fn capture_tier_wasm128(_token: archmage::Wasm128Token) {
 fn entry_point_fingerprint() {
     println!();
     capture_tier_scalar(archmage::ScalarToken);
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     {
         let token = archmage::X64V3Token::summon();
         let required = std::env::var("LINEAR_SRGB_REQUIRE_TIERS").unwrap_or_default();

@@ -88,6 +88,27 @@ jobs:
         run: cargo check --no-default-features
         if: matrix.features == ''
 
+  soft-float-x86:
+    name: x86_64-unknown-none (${{ matrix.features || 'no features' }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        features: ["", "transfer", "transfer,avx512,precise-portable"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-none
+      - uses: Swatinem/rust-cache@v2
+      - name: Build scalar fallback
+        env:
+          RUSTFLAGS: -Dwarnings
+        run: |
+          set -o pipefail
+          cargo build --color never --target x86_64-unknown-none --no-default-features --features "${{ matrix.features }}" 2>&1 | tee "$RUNNER_TEMP/soft-float-build.log"
+          ! grep -E '(^warning:|future version of Rust)' "$RUNNER_TEMP/soft-float-build.log"
+
   wasm:
     name: WASM SIMD128
     runs-on: ubuntu-latest

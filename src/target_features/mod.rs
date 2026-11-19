@@ -19,7 +19,7 @@
 //! Functions ending in `_scalar` need no feature context on any target.
 //!
 //! ```
-//! # #[cfg(target_arch = "x86_64")]
+//! # #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 //! # {
 //! use archmage::{arcane, SimdToken, X64V3Token};
 //! use linear_srgb::target_features::x8;
@@ -126,9 +126,9 @@ pub mod x4;
 ///     linear_srgb::target_features::x8::srgb_to_linear_v3(values)
 /// }
 /// ```
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 pub mod x8;
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(not(all(target_arch = "x86_64", target_feature = "sse2")))]
 pub(crate) mod x8;
 
 /// Internal wide dispatch and compatibility entry points.

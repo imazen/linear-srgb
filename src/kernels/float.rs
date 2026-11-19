@@ -6,10 +6,11 @@ use crate::tf::polynomial::Mla;
 use magetypes::simd::{backends::*, generic::*};
 
 macro_rules! width {
-    ($(#[$attr:meta])* $module:ident, $float:ident, $backend:ident, $convert:ident, $width:literal, $pow:ident) => {
+    ($(#[$attr:meta])* $module:ident, $float:ident, $backend:ident, $convert:ident, $width:literal, $pow:ident; $(#[$array_only:meta])*) => {
         $(#[$attr])*
         pub(crate) mod $module {
             use super::*;
+            $(#[$array_only])*
             #[inline(always)]
             pub(crate) fn srgb_to_linear<T: $backend>(
                 token: T,
@@ -42,6 +43,7 @@ macro_rules! width {
                 let ge_one = v.simd_ge(one);
                 $float::<T>::blend(ge_one, one, result)
             }
+            $(#[$array_only])*
             #[inline(always)]
             pub(crate) fn linear_to_srgb<T: $backend>(
                 token: T,
@@ -74,6 +76,7 @@ macro_rules! width {
                 let ge_one = v.simd_ge(one);
                 $float::<T>::blend(ge_one, one, result)
             }
+            $(#[$array_only])*
             #[inline(always)]
             pub(crate) fn gamma_to_linear<T: $convert>(
                 token: T,
@@ -83,6 +86,7 @@ macro_rules! width {
                 let v = $float::<T>::from_array_t(token, encoded);
                 crate::tf::math::$pow(token, v, gamma).to_array()
             }
+            $(#[$array_only])*
             #[inline(always)]
             pub(crate) fn linear_to_gamma<T: $convert>(
                 token: T,
@@ -92,6 +96,7 @@ macro_rules! width {
                 let v = $float::<T>::from_array_t(token, linear);
                 crate::tf::math::$pow(token, v, 1.0 / gamma).to_array()
             }
+            $(#[$array_only])*
             #[inline(always)]
             pub(crate) fn srgb_to_linear_extended<T: $convert>(
                 token: T,
@@ -140,6 +145,7 @@ macro_rules! width {
                     result
                 }
             }
+            $(#[$array_only])*
             #[inline(always)]
             pub(crate) fn linear_to_srgb_extended<T: $convert>(
                 token: T,
@@ -191,14 +197,18 @@ macro_rules! width {
         }
     };
 }
-width!(x4, f32x4, F32x4Backend, F32x4Convert, 4, gamma_x4);
+width!(x4, f32x4, F32x4Backend, F32x4Convert, 4, gamma_x4;);
 width!(
-    #[cfg_attr(not(any(target_arch = "x86_64", test)), allow(dead_code))]
+    #[cfg_attr(not(any(all(target_arch = "x86_64", target_feature = "sse2"), test)), allow(dead_code))]
     x8,
     f32x8,
     F32x8Backend,
     F32x8Convert,
     8,
-    gamma_x8
+    gamma_x8;
 );
-width!(x16, f32x16, F32x16Backend, F32x16Convert, 16, gamma_x16);
+// The x16 array adapters are used only by native entry points on x86_64.
+width!(
+    x16, f32x16, F32x16Backend, F32x16Convert, 16, gamma_x16;
+    #[cfg(not(all(target_arch = "x86_64", not(target_feature = "sse2"))))]
+);

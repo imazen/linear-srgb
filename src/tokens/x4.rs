@@ -3,7 +3,7 @@
 
 use archmage::attune;
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 pub use archmage::X64V3Token;
 
 #[cfg(target_arch = "aarch64")]
@@ -25,7 +25,7 @@ pub use archmage::Wasm128Token;
 /// The `X64V3Token` parameter proves AVX2+FMA support at compile time.
 /// Uses 128-bit SSE registers (VEX-encoded) within the AVX2+FMA context.
 /// Call from inside an `#[arcane]` function for zero-overhead inlining.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune]
 pub fn srgb_to_linear_v3(_token: X64V3Token, srgb: [f32; 4]) -> [f32; 4] {
     crate::target_features::x4::srgb_to_linear_v3(srgb)
@@ -34,7 +34,7 @@ pub fn srgb_to_linear_v3(_token: X64V3Token, srgb: [f32; 4]) -> [f32; 4] {
 /// Convert 4 linear values to sRGB. Input clamped to \[0, 1\].
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune]
 pub fn linear_to_srgb_v3(_token: X64V3Token, linear: [f32; 4]) -> [f32; 4] {
     crate::target_features::x4::linear_to_srgb_v3(linear)
@@ -59,7 +59,7 @@ pub fn linear_to_srgb_extended(_token: Token, linear: [f32; 4]) -> [f32; 4] {
 /// Convert 4 gamma-encoded values to linear. Input clamped to \[0, 1\].
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune]
 pub fn gamma_to_linear_v3(_token: X64V3Token, encoded: [f32; 4], gamma: f32) -> [f32; 4] {
     crate::target_features::x4::gamma_to_linear_v3(encoded, gamma)
@@ -68,7 +68,7 @@ pub fn gamma_to_linear_v3(_token: X64V3Token, encoded: [f32; 4], gamma: f32) -> 
 /// Convert 4 linear values to gamma-encoded. Input clamped to \[0, 1\].
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune]
 pub fn linear_to_gamma_v3(_token: X64V3Token, linear: [f32; 4], gamma: f32) -> [f32; 4] {
     crate::target_features::x4::linear_to_gamma_v3(linear, gamma)
@@ -77,7 +77,7 @@ pub fn linear_to_gamma_v3(_token: X64V3Token, linear: [f32; 4], gamma: f32) -> [
 /// Convert sRGB f32 values to linear in-place using 4-wide SSE SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune]
 pub fn srgb_to_linear_slice_v3(_token: X64V3Token, values: &mut [f32]) {
     crate::target_features::x4::srgb_to_linear_slice_v3(values)
@@ -86,7 +86,7 @@ pub fn srgb_to_linear_slice_v3(_token: X64V3Token, values: &mut [f32]) {
 /// Convert linear f32 values to sRGB in-place using 4-wide SSE SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune]
 pub fn linear_to_srgb_slice_v3(_token: X64V3Token, values: &mut [f32]) {
     crate::target_features::x4::linear_to_srgb_slice_v3(values)
@@ -95,7 +95,7 @@ pub fn linear_to_srgb_slice_v3(_token: X64V3Token, values: &mut [f32]) {
 /// Convert gamma-encoded f32 values to linear in-place using 4-wide SSE SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune]
 pub fn gamma_to_linear_slice_v3(_token: X64V3Token, values: &mut [f32], gamma: f32) {
     crate::target_features::x4::gamma_to_linear_slice_v3(values, gamma)
@@ -104,7 +104,7 @@ pub fn gamma_to_linear_slice_v3(_token: X64V3Token, values: &mut [f32], gamma: f
 /// Convert linear f32 values to gamma-encoded in-place using 4-wide SSE SIMD.
 ///
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune]
 pub fn linear_to_gamma_slice_v3(_token: X64V3Token, values: &mut [f32], gamma: f32) {
     crate::target_features::x4::linear_to_gamma_slice_v3(values, gamma)
@@ -275,7 +275,10 @@ macro_rules! x86_tf_rite {
         /// # Safety
         ///
         /// Call from an `#[arcane]` context with a valid `X64V3Token`.
-        #[cfg(all(feature = "transfer", target_arch = "x86_64"))]
+        #[cfg(all(
+            feature = "transfer",
+            all(target_arch = "x86_64", target_feature = "sse2")
+        ))]
         #[attune]
         pub fn $name(_token: X64V3Token, v: [f32; 4]) -> [f32; 4] {
             crate::target_features::x4::$name(v)
@@ -299,7 +302,10 @@ macro_rules! x86_tf_slice_rite {
         /// # Safety
         ///
         /// Call from an `#[arcane]` context with a valid `X64V3Token`.
-        #[cfg(all(feature = "transfer", target_arch = "x86_64"))]
+        #[cfg(all(
+            feature = "transfer",
+            all(target_arch = "x86_64", target_feature = "sse2")
+        ))]
         #[attune]
         pub fn $name(_token: X64V3Token, values: &mut [f32]) {
             crate::target_features::x4::$name(values)

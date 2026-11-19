@@ -377,7 +377,7 @@ mod tests {
 
     // --- x8 SIMD tests (AVX2) ---
 
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     mod x8_tests {
         use super::*;
         use archmage::SimdToken;

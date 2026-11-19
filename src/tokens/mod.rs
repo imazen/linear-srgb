@@ -51,10 +51,10 @@
 
 pub mod x4;
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 pub mod x8;
 
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2", feature = "avx512"))]
 #[deprecated(
     note = "the x16 token API is deprecated without a direct replacement; use crate::default for ordinary slice conversion"
 )]
@@ -65,7 +65,7 @@ pub mod x16;
 pub use archmage::NeonToken;
 #[cfg(target_arch = "wasm32")]
 pub use archmage::Wasm128Token;
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 pub use archmage::X64V3Token;
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2", feature = "avx512"))]
 pub use archmage::X64V4Token;

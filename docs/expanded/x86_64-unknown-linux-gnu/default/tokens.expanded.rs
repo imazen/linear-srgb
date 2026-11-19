@@ -3,7 +3,7 @@
 // Target: x86_64-unknown-linux-gnu; preset: default; module: tokens
 // Library features: avx512, default, std
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: c80cf2dbf03fab2ecc8153531de93332c3b317254afcd27693551053f8983957
+// Resolution lock SHA-256: 60d0c4d24264ca47cd11bc6820f21ba9aa26a2caf45c45940aa14cba31bc5cad
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 /// Deprecated token-taking compatibility API. Use [`crate::target_features`]

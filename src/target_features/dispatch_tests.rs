@@ -35,7 +35,7 @@ fn complete_dispatch_and_scalar_fallbacks() {
             scalar.map(f32::to_bits),
             x16::srgb_to_linear_scalar(values).map(f32::to_bits)
         );
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
         assert_eq!(
             incant!(convert16(values), [v3, scalar]).map(f32::to_bits),
             scalar.map(f32::to_bits)

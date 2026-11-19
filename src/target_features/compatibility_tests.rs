@@ -3,7 +3,7 @@
 #![allow(deprecated)] // Check retained adapters; frozen pre-refactor output is captured separately.
 
 use archmage::{SimdToken, arcane};
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 use std::vec;
 use std::vec::Vec;
 
@@ -97,7 +97,7 @@ macro_rules! gamma {
         }
     };
 }
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 macro_rules! integers {
     ($token:ident, $n:literal; $decode:ident, $encode:ident, $decode_slice:ident, $encode_slice:ident) => {
         for offset in 0..256 {
@@ -128,7 +128,7 @@ macro_rules! integers {
         }
     };
 }
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 macro_rules! u16_arrays {
     ($token:ident; $decode:ident, $encode:ident) => {
         for offset in (0..=u16::MAX).step_by(8) {
@@ -166,7 +166,7 @@ macro_rules! check {
     };
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 check!(x4_v3, X64V3Token, x4, 4, token;
     arrays!(token, 4; srgb_to_linear_v3, linear_to_srgb_v3, srgb_to_linear_extended_v3, linear_to_srgb_extended_v3);
     slices!(token; srgb_to_linear_slice_v3, linear_to_srgb_slice_v3);
@@ -206,7 +206,7 @@ check!(x4_scalar, ScalarToken, x4, 4, token;
     arrays!(token, 4; srgb_to_linear_extended_scalar, linear_to_srgb_extended_scalar);
 );
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 check!(x8_v3, X64V3Token, x8, 8, token;
     arrays!(token, 8; srgb_to_linear_v3, linear_to_srgb_v3, srgb_to_linear_extended_v3, linear_to_srgb_extended_v3);
     slices!(token; srgb_to_linear_slice_v3, linear_to_srgb_slice_v3, srgb_to_linear_extended_slice_v3, linear_to_srgb_extended_slice_v3);
@@ -220,12 +220,12 @@ check!(x8_v3, X64V3Token, x8, 8, token;
     u16_arrays!(token; srgb_u16_to_linear_v3, linear_to_srgb_u16_v3);
 );
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 check!(x8_scalar, ScalarToken, x8, 8, token;
     u16_arrays!(token; srgb_u16_to_linear_scalar, linear_to_srgb_u16_scalar);
 );
 
-#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2", feature = "avx512"))]
 check!(x16_v4, X64V4Token, x16, 16, token;
     arrays!(token, 16; srgb_to_linear_v4, linear_to_srgb_v4);
     slices!(token; srgb_to_linear_slice_v4, linear_to_srgb_slice_v4);
