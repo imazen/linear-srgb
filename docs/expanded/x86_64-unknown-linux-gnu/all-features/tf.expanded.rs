@@ -3,7 +3,7 @@
 // Target: x86_64-unknown-linux-gnu; preset: all-features; module: tf
 // Library features: alt, avx512, default, iec, precise-portable, std, transfer, unsafe_simd
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 28b394595cbab5036bb0de58aae94159fe72486a4ca2a76ebd9f68a4e5646763
+// Resolution lock SHA-256: ef68f276ec2d4603773cbb3fb3e290a50df14aeeac7e1dbfc12a187153909976
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 /// Transfer functions: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).
@@ -361,20 +361,17 @@ pub mod tf {
         //! Transfer profiles and their exceptional-lane fallbacks.
         use archmage::ScalarToken;
         use magemath::SimdMath;
-        use magemath::powf::{Powf, PowfOptions};
+        use magemath::powf::{Powf, PowfDomain, PowfOptions};
         use magetypes::simd::{backends::*, generic::*};
-        const GAMMA: u128 = PowfOptions::new().unit_gamma_domain().caller().bits();
+        const GAMMA_OPTIONS: PowfOptions = PowfOptions::new()
+            .domain(PowfDomain::Unit)
+            .exponent_range(0.0, 4.0)
+            .clamp_finite()
+            .caller();
+        const GAMMA: u128 = GAMMA_OPTIONS.bits();
         const FULL_POW: u128 = PowfOptions::new().full_domain().highp().caller().bits();
-        const SRGB_DECODE_POWER: u128 = PowfOptions::new()
-            .unit_gamma_domain()
-            .const_exponent(2.4)
-            .caller()
-            .bits();
-        const SRGB_ENCODE_POWER: u128 = PowfOptions::new()
-            .unit_gamma_domain()
-            .const_exponent(1.0 / 2.4)
-            .caller()
-            .bits();
+        const SRGB_DECODE_POWER: u128 = GAMMA_OPTIONS.const_exponent(2.4).bits();
+        const SRGB_ENCODE_POWER: u128 = GAMMA_OPTIONS.const_exponent(1.0 / 2.4).bits();
         pub(crate) const BT709_DECODE_POWER: u128 = PowfOptions::new()
             .positive_gamma()
             .const_exponent(1.0 / 0.45)
@@ -424,64 +421,70 @@ pub mod tf {
             if x >= 1.0 {
                 return 1.0;
             }
-            let fast = if n == 2.4 {
-                Powf::<SRGB_DECODE_POWER>::scalar_const_with_token(ScalarToken, x)
+            if x.is_nan() {
+                return x;
+            }
+            if n == 2.4 {
+                Powf::<SRGB_DECODE_POWER>::scalar_const_infallible(x)
             } else if n == 1.0 / 2.4 {
-                Powf::<SRGB_ENCODE_POWER>::scalar_const_with_token(ScalarToken, x)
+                Powf::<SRGB_ENCODE_POWER>::scalar_const_infallible(x)
+            } else if (0.0..=4.0).contains(&n) {
+                Powf::<GAMMA>::scalar_infallible(x, n)
             } else {
-                Powf::<GAMMA>::scalar_with_token(ScalarToken, x, n)
-            };
-            fast.unwrap_or_else(|_| full_pow(x, n))
+                full_pow(x, n)
+            }
+        }
+        #[cold]
+        #[inline(never)]
+        fn gamma_outside_fit<const N: usize>(
+            values: [f32; N],
+            exponent: f32,
+        ) -> [f32; N] {
+            values.map(|x| gamma(x, exponent))
         }
         #[inline(always)]
         pub(crate) fn gamma_x4<T: F32x4Convert>(t: T, v: f32x4<T>, n: f32) -> f32x4<T> {
+            if !(0.0..=4.0).contains(&n) {
+                return f32x4::from_array_t(t, gamma_outside_fit(v.to_array(), n));
+            }
             let zero = f32x4::zero_t(t);
-            let one = f32x4::splat_t(t, 1.0);
-            let positive = v.simd_gt(zero);
-            let white = v.simd_ge(one);
-            let nan = v.simd_ne(v);
-            let inside = positive & v.simd_lt(one);
-            let bases = f32x4::blend(inside, v, one);
-            let fast = if n == 2.4 {
-                bases.try_powf_const::<SRGB_DECODE_POWER>()
+            let result = if n == 2.4 {
+                v.powf_const::<SRGB_DECODE_POWER>()
             } else if n == 1.0 / 2.4 {
-                bases.try_powf_const::<SRGB_ENCODE_POWER>()
+                v.powf_const::<SRGB_ENCODE_POWER>()
+            } else if n == 0.0 {
+                v.simd_gt(zero) & f32x4::splat_t(t, 1.0)
             } else {
-                bases.try_powf_with::<GAMMA>(n)
+                v.powf::<GAMMA>(n)
             };
-            let values = fast
-                .unwrap_or_else(|_| f32x4::from_array_t(
-                    t,
-                    bases.to_array().map(|x| gamma(x, n)),
-                ));
-            let values = f32x4::blend(positive, values, zero);
-            let values = f32x4::blend(white, one, values);
-            f32x4::blend(nan, v, values)
+            let nan = v.simd_ne(v);
+            if nan.bitcast_to_i32().any_true() {
+                f32x4::blend(nan, v, result)
+            } else {
+                result
+            }
         }
         #[inline(always)]
         pub(crate) fn gamma_x8<T: F32x8Convert>(t: T, v: f32x8<T>, n: f32) -> f32x8<T> {
+            if !(0.0..=4.0).contains(&n) {
+                return f32x8::from_array_t(t, gamma_outside_fit(v.to_array(), n));
+            }
             let zero = f32x8::zero_t(t);
-            let one = f32x8::splat_t(t, 1.0);
-            let positive = v.simd_gt(zero);
-            let white = v.simd_ge(one);
-            let nan = v.simd_ne(v);
-            let inside = positive & v.simd_lt(one);
-            let bases = f32x8::blend(inside, v, one);
-            let fast = if n == 2.4 {
-                bases.try_powf_const::<SRGB_DECODE_POWER>()
+            let result = if n == 2.4 {
+                v.powf_const::<SRGB_DECODE_POWER>()
             } else if n == 1.0 / 2.4 {
-                bases.try_powf_const::<SRGB_ENCODE_POWER>()
+                v.powf_const::<SRGB_ENCODE_POWER>()
+            } else if n == 0.0 {
+                v.simd_gt(zero) & f32x8::splat_t(t, 1.0)
             } else {
-                bases.try_powf_with::<GAMMA>(n)
+                v.powf::<GAMMA>(n)
             };
-            let values = fast
-                .unwrap_or_else(|_| f32x8::from_array_t(
-                    t,
-                    bases.to_array().map(|x| gamma(x, n)),
-                ));
-            let values = f32x8::blend(positive, values, zero);
-            let values = f32x8::blend(white, one, values);
-            f32x8::blend(nan, v, values)
+            let nan = v.simd_ne(v);
+            if nan.bitcast_to_i32().any_true() {
+                f32x8::blend(nan, v, result)
+            } else {
+                result
+            }
         }
         #[inline(always)]
         pub(crate) fn gamma_x16<T: F32x16Convert>(
@@ -489,28 +492,25 @@ pub mod tf {
             v: f32x16<T>,
             n: f32,
         ) -> f32x16<T> {
+            if !(0.0..=4.0).contains(&n) {
+                return f32x16::from_array_t(t, gamma_outside_fit(v.to_array(), n));
+            }
             let zero = f32x16::zero_t(t);
-            let one = f32x16::splat_t(t, 1.0);
-            let positive = v.simd_gt(zero);
-            let white = v.simd_ge(one);
-            let nan = v.simd_ne(v);
-            let inside = positive & v.simd_lt(one);
-            let bases = f32x16::blend(inside, v, one);
-            let fast = if n == 2.4 {
-                bases.try_powf_const::<SRGB_DECODE_POWER>()
+            let result = if n == 2.4 {
+                v.powf_const::<SRGB_DECODE_POWER>()
             } else if n == 1.0 / 2.4 {
-                bases.try_powf_const::<SRGB_ENCODE_POWER>()
+                v.powf_const::<SRGB_ENCODE_POWER>()
+            } else if n == 0.0 {
+                v.simd_gt(zero) & f32x16::splat_t(t, 1.0)
             } else {
-                bases.try_powf_with::<GAMMA>(n)
+                v.powf::<GAMMA>(n)
             };
-            let values = fast
-                .unwrap_or_else(|_| f32x16::from_array_t(
-                    t,
-                    bases.to_array().map(|x| gamma(x, n)),
-                ));
-            let values = f32x16::blend(positive, values, zero);
-            let values = f32x16::blend(white, one, values);
-            f32x16::blend(nan, v, values)
+            let nan = v.simd_ne(v);
+            if nan.bitcast_to_i32().any_true() {
+                f32x16::blend(nan, v, result)
+            } else {
+                result
+            }
         }
     }
     pub(crate) mod polynomial {
@@ -577,67 +577,46 @@ pub mod tf {
             }
         }
         #[inline(always)]
-        pub(crate) fn eval_rational_poly_x4<
-            T: F32x4Backend,
-            const P: usize,
-            const Q: usize,
-        >(t: T, x: f32x4<T>, p: [f32; P], q: [f32; Q]) -> f32x4<T> {
-            let evaluate = |coefficients: &[f32]| {
-                let (&last, rest) = coefficients
-                    .split_last()
-                    .expect("nonempty polynomial");
-                rest.iter()
-                    .rev()
-                    .fold(
-                        f32x4::splat_t(t, last),
-                        |acc, &coefficient| {
-                            acc.mla(x, f32x4::splat_t(t, coefficient))
-                        },
-                    )
-            };
-            evaluate(&p) / evaluate(&q)
+        pub(crate) fn eval_poly_x4<T: F32x4Backend, const N: usize>(
+            t: T,
+            x: f32x4<T>,
+            coefficients: [f32; N],
+        ) -> f32x4<T> {
+            let (&last, rest) = coefficients.split_last().expect("nonempty polynomial");
+            rest.iter()
+                .rev()
+                .fold(
+                    f32x4::splat_t(t, last),
+                    |acc, &coefficient| { acc.mla(x, f32x4::splat_t(t, coefficient)) },
+                )
         }
         #[inline(always)]
-        pub(crate) fn eval_rational_poly_x8<
-            T: F32x8Backend,
-            const P: usize,
-            const Q: usize,
-        >(t: T, x: f32x8<T>, p: [f32; P], q: [f32; Q]) -> f32x8<T> {
-            let evaluate = |coefficients: &[f32]| {
-                let (&last, rest) = coefficients
-                    .split_last()
-                    .expect("nonempty polynomial");
-                rest.iter()
-                    .rev()
-                    .fold(
-                        f32x8::splat_t(t, last),
-                        |acc, &coefficient| {
-                            acc.mla(x, f32x8::splat_t(t, coefficient))
-                        },
-                    )
-            };
-            evaluate(&p) / evaluate(&q)
+        pub(crate) fn eval_poly_x8<T: F32x8Backend, const N: usize>(
+            t: T,
+            x: f32x8<T>,
+            coefficients: [f32; N],
+        ) -> f32x8<T> {
+            let (&last, rest) = coefficients.split_last().expect("nonempty polynomial");
+            rest.iter()
+                .rev()
+                .fold(
+                    f32x8::splat_t(t, last),
+                    |acc, &coefficient| { acc.mla(x, f32x8::splat_t(t, coefficient)) },
+                )
         }
         #[inline(always)]
-        pub(crate) fn eval_rational_poly_x16<
-            T: F32x16Backend,
-            const P: usize,
-            const Q: usize,
-        >(t: T, x: f32x16<T>, p: [f32; P], q: [f32; Q]) -> f32x16<T> {
-            let evaluate = |coefficients: &[f32]| {
-                let (&last, rest) = coefficients
-                    .split_last()
-                    .expect("nonempty polynomial");
-                rest.iter()
-                    .rev()
-                    .fold(
-                        f32x16::splat_t(t, last),
-                        |acc, &coefficient| {
-                            acc.mla(x, f32x16::splat_t(t, coefficient))
-                        },
-                    )
-            };
-            evaluate(&p) / evaluate(&q)
+        pub(crate) fn eval_poly_x16<T: F32x16Backend, const N: usize>(
+            t: T,
+            x: f32x16<T>,
+            coefficients: [f32; N],
+        ) -> f32x16<T> {
+            let (&last, rest) = coefficients.split_last().expect("nonempty polynomial");
+            rest.iter()
+                .rev()
+                .fold(
+                    f32x16::splat_t(t, last),
+                    |acc, &coefficient| { acc.mla(x, f32x16::splat_t(t, coefficient)) },
+                )
         }
     }
     pub(crate) mod pq {
@@ -788,24 +767,25 @@ pub mod tf {
             let one = f32x4::splat_t(t, 1.0);
             let a = v.max(floor).min(one);
             let x = a.mla(a, a);
-            let large = polynomial::eval_rational_poly_x4(
-                t,
-                x,
-                PQ_EOTF_P_LARGE,
-                PQ_EOTF_Q_LARGE,
+            let small = a.simd_lt(f32x4::splat_t(t, 0.25));
+            let p = f32x4::blend(
+                small,
+                polynomial::eval_poly_x4(t, x, PQ_EOTF_P_SMALL),
+                polynomial::eval_poly_x4(t, x, PQ_EOTF_P_LARGE),
             );
-            let small = polynomial::eval_rational_poly_x4(
-                t,
-                x,
-                PQ_EOTF_P_SMALL,
-                PQ_EOTF_Q_SMALL,
+            let q = f32x4::blend(
+                small,
+                polynomial::eval_poly_x4(t, x, PQ_EOTF_Q_SMALL),
+                polynomial::eval_poly_x4(t, x, PQ_EOTF_Q_LARGE),
             );
-            let result = f32x4::blend(a.simd_lt(f32x4::splat_t(t, 0.25)), small, large);
-            let fallback = v.simd_lt(floor) | v.simd_ge(one) | v.simd_ne(v);
+            let zero = f32x4::zero_t(t);
+            let positive = v.simd_gt(zero);
+            let result = f32x4::blend(v.simd_ge(one), one, (p / q) & positive);
+            let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
             if fallback.bitcast_to_i32().any_true() {
                 let mut result = result.to_array();
                 for (source, output) in v.to_array().into_iter().zip(&mut result) {
-                    if source.is_nan() || !(EOTF_POLY_FLOOR..1.0).contains(&source) {
+                    if source.is_nan() || (0.0 < source && source < EOTF_POLY_FLOOR) {
                         *output = pq_to_linear_precise(source);
                     }
                 }
@@ -820,24 +800,25 @@ pub mod tf {
             let one = f32x4::splat_t(t, 1.0);
             let a = v.max(floor).min(one);
             let a4 = a.sqrt().sqrt();
-            let large = polynomial::eval_rational_poly_x4(
-                t,
-                a4,
-                PQ_INV_P_LARGE,
-                PQ_INV_Q_LARGE,
+            let small = a4.simd_lt(f32x4::splat_t(t, 0.1));
+            let p = f32x4::blend(
+                small,
+                polynomial::eval_poly_x4(t, a4, PQ_INV_P_SMALL),
+                polynomial::eval_poly_x4(t, a4, PQ_INV_P_LARGE),
             );
-            let small = polynomial::eval_rational_poly_x4(
-                t,
-                a4,
-                PQ_INV_P_SMALL,
-                PQ_INV_Q_SMALL,
+            let q = f32x4::blend(
+                small,
+                polynomial::eval_poly_x4(t, a4, PQ_INV_Q_SMALL),
+                polynomial::eval_poly_x4(t, a4, PQ_INV_Q_LARGE),
             );
-            let result = f32x4::blend(a4.simd_lt(f32x4::splat_t(t, 0.1)), small, large);
-            let fallback = v.simd_lt(floor) | v.simd_ge(one) | v.simd_ne(v);
+            let zero = f32x4::zero_t(t);
+            let positive = v.simd_gt(zero);
+            let result = f32x4::blend(v.simd_ge(one), one, (p / q) & positive);
+            let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
             if fallback.bitcast_to_i32().any_true() {
                 let mut result = result.to_array();
                 for (source, output) in v.to_array().into_iter().zip(&mut result) {
-                    if source.is_nan() || !(OETF_POLY_FLOOR..1.0).contains(&source) {
+                    if source.is_nan() || (0.0 < source && source < OETF_POLY_FLOOR) {
                         *output = linear_to_pq_precise(source);
                     }
                 }
@@ -852,24 +833,25 @@ pub mod tf {
             let one = f32x8::splat_t(t, 1.0);
             let a = v.max(floor).min(one);
             let x = a.mla(a, a);
-            let large = polynomial::eval_rational_poly_x8(
-                t,
-                x,
-                PQ_EOTF_P_LARGE,
-                PQ_EOTF_Q_LARGE,
+            let small = a.simd_lt(f32x8::splat_t(t, 0.25));
+            let p = f32x8::blend(
+                small,
+                polynomial::eval_poly_x8(t, x, PQ_EOTF_P_SMALL),
+                polynomial::eval_poly_x8(t, x, PQ_EOTF_P_LARGE),
             );
-            let small = polynomial::eval_rational_poly_x8(
-                t,
-                x,
-                PQ_EOTF_P_SMALL,
-                PQ_EOTF_Q_SMALL,
+            let q = f32x8::blend(
+                small,
+                polynomial::eval_poly_x8(t, x, PQ_EOTF_Q_SMALL),
+                polynomial::eval_poly_x8(t, x, PQ_EOTF_Q_LARGE),
             );
-            let result = f32x8::blend(a.simd_lt(f32x8::splat_t(t, 0.25)), small, large);
-            let fallback = v.simd_lt(floor) | v.simd_ge(one) | v.simd_ne(v);
+            let zero = f32x8::zero_t(t);
+            let positive = v.simd_gt(zero);
+            let result = f32x8::blend(v.simd_ge(one), one, (p / q) & positive);
+            let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
             if fallback.bitcast_to_i32().any_true() {
                 let mut result = result.to_array();
                 for (source, output) in v.to_array().into_iter().zip(&mut result) {
-                    if source.is_nan() || !(EOTF_POLY_FLOOR..1.0).contains(&source) {
+                    if source.is_nan() || (0.0 < source && source < EOTF_POLY_FLOOR) {
                         *output = pq_to_linear_precise(source);
                     }
                 }
@@ -884,24 +866,25 @@ pub mod tf {
             let one = f32x8::splat_t(t, 1.0);
             let a = v.max(floor).min(one);
             let a4 = a.sqrt().sqrt();
-            let large = polynomial::eval_rational_poly_x8(
-                t,
-                a4,
-                PQ_INV_P_LARGE,
-                PQ_INV_Q_LARGE,
+            let small = a4.simd_lt(f32x8::splat_t(t, 0.1));
+            let p = f32x8::blend(
+                small,
+                polynomial::eval_poly_x8(t, a4, PQ_INV_P_SMALL),
+                polynomial::eval_poly_x8(t, a4, PQ_INV_P_LARGE),
             );
-            let small = polynomial::eval_rational_poly_x8(
-                t,
-                a4,
-                PQ_INV_P_SMALL,
-                PQ_INV_Q_SMALL,
+            let q = f32x8::blend(
+                small,
+                polynomial::eval_poly_x8(t, a4, PQ_INV_Q_SMALL),
+                polynomial::eval_poly_x8(t, a4, PQ_INV_Q_LARGE),
             );
-            let result = f32x8::blend(a4.simd_lt(f32x8::splat_t(t, 0.1)), small, large);
-            let fallback = v.simd_lt(floor) | v.simd_ge(one) | v.simd_ne(v);
+            let zero = f32x8::zero_t(t);
+            let positive = v.simd_gt(zero);
+            let result = f32x8::blend(v.simd_ge(one), one, (p / q) & positive);
+            let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
             if fallback.bitcast_to_i32().any_true() {
                 let mut result = result.to_array();
                 for (source, output) in v.to_array().into_iter().zip(&mut result) {
-                    if source.is_nan() || !(OETF_POLY_FLOOR..1.0).contains(&source) {
+                    if source.is_nan() || (0.0 < source && source < OETF_POLY_FLOOR) {
                         *output = linear_to_pq_precise(source);
                     }
                 }
@@ -919,28 +902,25 @@ pub mod tf {
             let one = f32x16::splat_t(t, 1.0);
             let a = v.max(floor).min(one);
             let x = a.mla(a, a);
-            let large = polynomial::eval_rational_poly_x16(
-                t,
-                x,
-                PQ_EOTF_P_LARGE,
-                PQ_EOTF_Q_LARGE,
-            );
-            let small = polynomial::eval_rational_poly_x16(
-                t,
-                x,
-                PQ_EOTF_P_SMALL,
-                PQ_EOTF_Q_SMALL,
-            );
-            let result = f32x16::blend(
-                a.simd_lt(f32x16::splat_t(t, 0.25)),
+            let small = a.simd_lt(f32x16::splat_t(t, 0.25));
+            let p = f32x16::blend(
                 small,
-                large,
+                polynomial::eval_poly_x16(t, x, PQ_EOTF_P_SMALL),
+                polynomial::eval_poly_x16(t, x, PQ_EOTF_P_LARGE),
             );
-            let fallback = v.simd_lt(floor) | v.simd_ge(one) | v.simd_ne(v);
+            let q = f32x16::blend(
+                small,
+                polynomial::eval_poly_x16(t, x, PQ_EOTF_Q_SMALL),
+                polynomial::eval_poly_x16(t, x, PQ_EOTF_Q_LARGE),
+            );
+            let zero = f32x16::zero_t(t);
+            let positive = v.simd_gt(zero);
+            let result = f32x16::blend(v.simd_ge(one), one, (p / q) & positive);
+            let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
             if fallback.bitcast_to_i32().any_true() {
                 let mut result = result.to_array();
                 for (source, output) in v.to_array().into_iter().zip(&mut result) {
-                    if source.is_nan() || !(EOTF_POLY_FLOOR..1.0).contains(&source) {
+                    if source.is_nan() || (0.0 < source && source < EOTF_POLY_FLOOR) {
                         *output = pq_to_linear_precise(source);
                     }
                 }
@@ -958,28 +938,25 @@ pub mod tf {
             let one = f32x16::splat_t(t, 1.0);
             let a = v.max(floor).min(one);
             let a4 = a.sqrt().sqrt();
-            let large = polynomial::eval_rational_poly_x16(
-                t,
-                a4,
-                PQ_INV_P_LARGE,
-                PQ_INV_Q_LARGE,
-            );
-            let small = polynomial::eval_rational_poly_x16(
-                t,
-                a4,
-                PQ_INV_P_SMALL,
-                PQ_INV_Q_SMALL,
-            );
-            let result = f32x16::blend(
-                a4.simd_lt(f32x16::splat_t(t, 0.1)),
+            let small = a4.simd_lt(f32x16::splat_t(t, 0.1));
+            let p = f32x16::blend(
                 small,
-                large,
+                polynomial::eval_poly_x16(t, a4, PQ_INV_P_SMALL),
+                polynomial::eval_poly_x16(t, a4, PQ_INV_P_LARGE),
             );
-            let fallback = v.simd_lt(floor) | v.simd_ge(one) | v.simd_ne(v);
+            let q = f32x16::blend(
+                small,
+                polynomial::eval_poly_x16(t, a4, PQ_INV_Q_SMALL),
+                polynomial::eval_poly_x16(t, a4, PQ_INV_Q_LARGE),
+            );
+            let zero = f32x16::zero_t(t);
+            let positive = v.simd_gt(zero);
+            let result = f32x16::blend(v.simd_ge(one), one, (p / q) & positive);
+            let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
             if fallback.bitcast_to_i32().any_true() {
                 let mut result = result.to_array();
                 for (source, output) in v.to_array().into_iter().zip(&mut result) {
-                    if source.is_nan() || !(OETF_POLY_FLOOR..1.0).contains(&source) {
+                    if source.is_nan() || (0.0 < source && source < OETF_POLY_FLOOR) {
                         *output = linear_to_pq_precise(source);
                     }
                 }

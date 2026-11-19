@@ -35,16 +35,16 @@ stub_linear_to_srgb_rgba_slice:
 	ldr x8, [x8, :got_lo12:archmage::tokens::generated::arm::NEON_CACHE]
 	ldrb w8, [x8]
 	cmp w8, #1
-	b.eq .LBB14_15
+	b.eq .LBB9_15
 	cmp w8, #2
-	b.ne .LBB14_14
-.LBB14_2:
+	b.ne .LBB9_14
+.LBB9_2:
 	and x8, x1, #0x1ffffffffffffff0
 	ands x21, x1, #0xc
 	lsr x22, x1, #4
 	add x19, x0, x8, lsl #2
 	lsl x20, x21, #2
-	b.eq .LBB14_4
+	b.eq .LBB9_4
 	mov w8, #64
 	mov x23, x0
 	mov w1, wzr
@@ -62,10 +62,10 @@ stub_linear_to_srgb_rgba_slice:
 	stp q0, q1, [sp, #16]
 	ldp q0, q2, [sp, #112]
 	stp q0, q2, [sp, #48]
-	b .LBB14_5
-.LBB14_4:
+	b .LBB9_5
+.LBB9_4:
 	mov w9, wzr
-.LBB14_5:
+.LBB9_5:
 	mov w8, #47186
 	mov w10, #25800
 	movi v0.2d, #0000000000000000
@@ -107,11 +107,11 @@ stub_linear_to_srgb_rgba_slice:
 	movk w8, #16006, lsl #16
 	dup v19.4s, w8
 	add x8, x0, x22, lsl #6
-	b .LBB14_8
-.LBB14_6:
+	b .LBB9_8
+.LBB9_6:
 	add x10, x0, #64
-.LBB14_7:
-	ldp q22, q21, [x0]
+.LBB9_7:
+	ldp q21, q22, [x0]
 	mov v26.16b, v4.16b
 	mov v28.16b, v5.16b
 	mov v29.16b, v17.16b
@@ -119,35 +119,35 @@ stub_linear_to_srgb_rgba_slice:
 	mov v10.16b, v5.16b
 	mov v11.16b, v17.16b
 	mov v12.16b, v18.16b
-	fmaxnm v23.4s, v22.4s, v0.4s
-	fmaxnm v24.4s, v21.4s, v0.4s
+	fmaxnm v23.4s, v21.4s, v0.4s
+	fmaxnm v25.4s, v22.4s, v0.4s
 	mov v13.16b, v7.16b
 	mov v14.16b, v19.16b
 	fminnm v23.4s, v23.4s, v1.4s
-	fminnm v24.4s, v24.4s, v1.4s
-	fsqrt v25.4s, v23.4s
-	fsqrt v30.4s, v24.4s
-	fmla v26.4s, v3.4s, v25.4s
-	fadd v27.4s, v25.4s, v16.4s
-	fmla v28.4s, v25.4s, v26.4s
-	fmla v29.4s, v25.4s, v27.4s
+	fminnm v25.4s, v25.4s, v1.4s
+	fsqrt v24.4s, v23.4s
+	fsqrt v30.4s, v25.4s
+	fmla v26.4s, v3.4s, v24.4s
+	fadd v27.4s, v24.4s, v16.4s
+	fmla v28.4s, v24.4s, v26.4s
+	fmla v29.4s, v24.4s, v27.4s
 	mov v26.16b, v6.16b
 	mov v27.16b, v18.16b
-	fmla v26.4s, v25.4s, v28.4s
-	fmla v27.4s, v25.4s, v29.4s
+	fmla v26.4s, v24.4s, v28.4s
+	fmla v27.4s, v24.4s, v29.4s
 	mov v28.16b, v7.16b
 	mov v29.16b, v19.16b
 	fmla v31.4s, v3.4s, v30.4s
 	fadd v9.4s, v30.4s, v16.4s
-	fmla v28.4s, v25.4s, v26.4s
-	fmla v29.4s, v25.4s, v27.4s
-	ldp q26, q25, [x0, #32]
+	fmla v28.4s, v24.4s, v26.4s
+	fmla v29.4s, v24.4s, v27.4s
+	ldp q26, q24, [x0, #32]
 	fmla v10.4s, v30.4s, v31.4s
 	fmla v11.4s, v30.4s, v9.4s
 	mov v9.16b, v6.16b
 	fdiv v27.4s, v28.4s, v29.4s
 	fmaxnm v28.4s, v26.4s, v0.4s
-	fmaxnm v8.4s, v25.4s, v0.4s
+	fmaxnm v8.4s, v24.4s, v0.4s
 	fmla v9.4s, v30.4s, v10.4s
 	mov v10.16b, v4.16b
 	fmla v12.4s, v30.4s, v11.4s
@@ -189,55 +189,55 @@ stub_linear_to_srgb_rgba_slice:
 	fmla v12.4s, v31.4s, v11.4s
 	mov v11.16b, v19.16b
 	fmla v29.4s, v31.4s, v9.4s
-	fmul v9.4s, v24.4s, v2.4s
-	fcmge v24.4s, v20.4s, v24.4s
+	fmul v9.4s, v25.4s, v2.4s
+	fcmge v25.4s, v20.4s, v25.4s
 	fmla v11.4s, v31.4s, v12.4s
 	fmul v31.4s, v23.4s, v2.4s
 	fcmge v23.4s, v20.4s, v23.4s
 	fmul v12.4s, v8.4s, v2.4s
 	fcmge v8.4s, v20.4s, v8.4s
-	bsl v24.16b, v9.16b, v10.16b
+	bsl v25.16b, v9.16b, v10.16b
 	fdiv v29.4s, v29.4s, v11.4s
 	fmul v11.4s, v28.4s, v2.4s
 	fcmge v28.4s, v20.4s, v28.4s
 	fminnm v30.4s, v30.4s, v1.4s
 	bsl v23.16b, v31.16b, v27.16b
-	fcmge v27.4s, v22.4s, v1.4s
-	fcmge v31.4s, v21.4s, v1.4s
+	fcmge v27.4s, v21.4s, v1.4s
+	fcmge v31.4s, v22.4s, v1.4s
 	bsl v28.16b, v11.16b, v30.16b
 	fcmge v30.4s, v26.4s, v1.4s
 	bit v23.16b, v1.16b, v27.16b
-	bit v24.16b, v1.16b, v31.16b
+	bit v25.16b, v1.16b, v31.16b
 	mov v27.16b, v30.16b
-	mov v23.s[3], v22.s[3]
-	mov v24.s[3], v21.s[3]
+	mov v23.s[3], v21.s[3]
+	mov v25.s[3], v22.s[3]
 	bsl v27.16b, v1.16b, v28.16b
 	fminnm v29.4s, v29.4s, v1.4s
-	stp q23, q24, [x0]
+	stp q23, q25, [x0]
 	mov v27.s[3], v26.s[3]
 	bit v29.16b, v12.16b, v8.16b
-	fcmge v8.4s, v25.4s, v1.4s
+	fcmge v8.4s, v24.4s, v1.4s
 	mov v28.16b, v8.16b
 	bsl v28.16b, v1.16b, v29.16b
-	mov v28.s[3], v25.s[3]
+	mov v28.s[3], v24.s[3]
 	stp q27, q28, [x0, #32]
 	mov x0, x10
-.LBB14_8:
+.LBB9_8:
 	cmp x0, x8
 	ccmp x0, #0, #4, ne
-	b.ne .LBB14_6
-	cbz x9, .LBB14_11
+	b.ne .LBB9_6
+	cbz x9, .LBB9_11
 	mov x10, xzr
 	mov x0, x9
 	mov x9, xzr
-	b .LBB14_7
-.LBB14_11:
+	b .LBB9_7
+.LBB9_11:
 	ldr w8, [sp, #12]
-	cbz w8, .LBB14_13
+	cbz w8, .LBB9_13
 	mov x0, x19
 	mov x2, x20
 	bl memcpy
-.LBB14_13:
+.LBB9_13:
 	.cfi_def_cfa wsp, 256
 	ldp x20, x19, [sp, #240]
 	ldr x23, [sp, #216]
@@ -264,7 +264,7 @@ stub_linear_to_srgb_rgba_slice:
 	.cfi_restore b13
 	.cfi_restore b14
 	ret
-.LBB14_14:
+.LBB9_14:
 	.cfi_restore_state
 	mov x19, x0
 	mov x20, x1
@@ -272,8 +272,8 @@ stub_linear_to_srgb_rgba_slice:
 	mov x1, x20
 	mov w8, w0
 	mov x0, x19
-	cbnz w8, .LBB14_2
-.LBB14_15:
+	cbnz w8, .LBB9_2
+.LBB9_15:
 	.cfi_def_cfa wsp, 256
 	ldp x20, x19, [sp, #240]
 	ldr x23, [sp, #216]

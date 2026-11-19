@@ -32,16 +32,16 @@ stub_srgb_to_linear_slice:
 	ldr x8, [x8, :got_lo12:archmage::tokens::generated::arm::NEON_CACHE]
 	ldrb w8, [x8]
 	cmp w8, #1
-	b.eq .LBB19_15
+	b.eq .LBB14_15
 	cmp w8, #2
-	b.ne .LBB19_14
-.LBB19_2:
+	b.ne .LBB14_14
+.LBB14_2:
 	and x8, x1, #0x1ffffffffffffff0
 	ands x21, x1, #0xf
 	lsr x22, x1, #4
 	add x19, x0, x8, lsl #2
 	lsl x20, x21, #2
-	b.eq .LBB19_4
+	b.eq .LBB14_4
 	mov w8, #64
 	mov x23, x0
 	mov w1, wzr
@@ -59,10 +59,10 @@ stub_srgb_to_linear_slice:
 	stp q0, q1, [sp, #16]
 	ldp q0, q2, [sp, #112]
 	stp q0, q2, [sp, #48]
-	b .LBB19_5
-.LBB19_4:
+	b .LBB14_5
+.LBB14_4:
 	mov w9, wzr
-.LBB19_5:
+.LBB14_5:
 	mov w8, #61974
 	mov w10, #32277
 	fmov v0.4s, #1.00000000
@@ -104,10 +104,10 @@ stub_srgb_to_linear_slice:
 	movk w8, #16800, lsl #16
 	dup v19.4s, w8
 	add x8, x0, x22, lsl #6
-	b .LBB19_8
-.LBB19_6:
+	b .LBB14_8
+.LBB14_6:
 	add x10, x0, #64
-.LBB19_7:
+.LBB14_7:
 	ldp q22, q21, [x0, #32]
 	mov v25.16b, v4.16b
 	mov v28.16b, v5.16b
@@ -210,22 +210,22 @@ stub_srgb_to_linear_slice:
 	bsl v21.16b, v0.16b, v27.16b
 	stp q22, q21, [x0, #32]
 	mov x0, x10
-.LBB19_8:
+.LBB14_8:
 	cmp x0, x8
 	ccmp x0, #0, #4, ne
-	b.ne .LBB19_6
-	cbz x9, .LBB19_11
+	b.ne .LBB14_6
+	cbz x9, .LBB14_11
 	mov x10, xzr
 	mov x0, x9
 	mov x9, xzr
-	b .LBB19_7
-.LBB19_11:
+	b .LBB14_7
+.LBB14_11:
 	ldr w8, [sp, #12]
-	cbz w8, .LBB19_13
+	cbz w8, .LBB14_13
 	mov x0, x19
 	mov x2, x20
 	bl memcpy
-.LBB19_13:
+.LBB14_13:
 	.cfi_def_cfa wsp, 240
 	ldp x20, x19, [sp, #224]
 	ldr x23, [sp, #200]
@@ -249,7 +249,7 @@ stub_srgb_to_linear_slice:
 	.cfi_restore b11
 	.cfi_restore b12
 	ret
-.LBB19_14:
+.LBB14_14:
 	.cfi_restore_state
 	mov x19, x0
 	mov x20, x1
@@ -257,8 +257,8 @@ stub_srgb_to_linear_slice:
 	mov x1, x20
 	mov w8, w0
 	mov x0, x19
-	cbnz w8, .LBB19_2
-.LBB19_15:
+	cbnz w8, .LBB14_2
+.LBB14_15:
 	.cfi_def_cfa wsp, 240
 	ldp x20, x19, [sp, #224]
 	ldr x23, [sp, #200]

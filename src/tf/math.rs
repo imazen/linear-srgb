@@ -1,21 +1,18 @@
 //! Transfer profiles and their exceptional-lane fallbacks.
 use archmage::ScalarToken;
 use magemath::SimdMath;
-use magemath::powf::{Powf, PowfOptions};
+use magemath::powf::{Powf, PowfDomain, PowfOptions};
 use magetypes::simd::{backends::*, generic::*};
 
-const GAMMA: u128 = PowfOptions::new().unit_gamma_domain().caller().bits();
+const GAMMA_OPTIONS: PowfOptions = PowfOptions::new()
+    .domain(PowfDomain::Unit)
+    .exponent_range(0.0, 4.0)
+    .clamp_finite()
+    .caller();
+const GAMMA: u128 = GAMMA_OPTIONS.bits();
 const FULL_POW: u128 = PowfOptions::new().full_domain().highp().caller().bits();
-const SRGB_DECODE_POWER: u128 = PowfOptions::new()
-    .unit_gamma_domain()
-    .const_exponent(2.4)
-    .caller()
-    .bits();
-const SRGB_ENCODE_POWER: u128 = PowfOptions::new()
-    .unit_gamma_domain()
-    .const_exponent(1.0 / 2.4)
-    .caller()
-    .bits();
+const SRGB_DECODE_POWER: u128 = GAMMA_OPTIONS.const_exponent(2.4).bits();
+const SRGB_ENCODE_POWER: u128 = GAMMA_OPTIONS.const_exponent(1.0 / 2.4).bits();
 
 #[cfg(feature = "transfer")]
 pub(crate) const BT709_DECODE_POWER: u128 = PowfOptions::new()
@@ -77,40 +74,49 @@ pub(crate) fn gamma(x: f32, n: f32) -> f32 {
     if x >= 1.0 {
         return 1.0;
     }
-    let fast = if n == 2.4 {
-        Powf::<SRGB_DECODE_POWER>::scalar_const_with_token(ScalarToken, x)
+    if x.is_nan() {
+        return x;
+    }
+    if n == 2.4 {
+        Powf::<SRGB_DECODE_POWER>::scalar_const_infallible(x)
     } else if n == 1.0 / 2.4 {
-        Powf::<SRGB_ENCODE_POWER>::scalar_const_with_token(ScalarToken, x)
+        Powf::<SRGB_ENCODE_POWER>::scalar_const_infallible(x)
+    } else if (0.0..=4.0).contains(&n) {
+        Powf::<GAMMA>::scalar_infallible(x, n)
     } else {
-        Powf::<GAMMA>::scalar_with_token(ScalarToken, x, n)
-    };
-    fast.unwrap_or_else(|_| full_pow(x, n))
+        full_pow(x, n)
+    }
+}
+
+#[cold]
+#[inline(never)]
+fn gamma_outside_fit<const N: usize>(values: [f32; N], exponent: f32) -> [f32; N] {
+    values.map(|x| gamma(x, exponent))
 }
 
 macro_rules! gamma_for {
     ($name:ident, $float:ident, $backend:ident) => {
         #[inline(always)]
         pub(crate) fn $name<T: $backend>(t: T, v: $float<T>, n: f32) -> $float<T> {
+            if !(0.0..=4.0).contains(&n) {
+                return $float::from_array_t(t, gamma_outside_fit(v.to_array(), n));
+            }
             let zero = $float::zero_t(t);
-            let one = $float::splat_t(t, 1.0);
-            let positive = v.simd_gt(zero);
-            let white = v.simd_ge(one);
-            let nan = v.simd_ne(v);
-            let inside = positive & v.simd_lt(one);
-            // Evaluate endpoint lanes at 1, so invalid 0^n never enters the profile.
-            let bases = $float::blend(inside, v, one);
-            let fast = if n == 2.4 {
-                bases.try_powf_const::<SRGB_DECODE_POWER>()
+            let result = if n == 2.4 {
+                v.powf_const::<SRGB_DECODE_POWER>()
             } else if n == 1.0 / 2.4 {
-                bases.try_powf_const::<SRGB_ENCODE_POWER>()
+                v.powf_const::<SRGB_ENCODE_POWER>()
+            } else if n == 0.0 {
+                v.simd_gt(zero) & $float::splat_t(t, 1.0)
             } else {
-                bases.try_powf_with::<GAMMA>(n)
+                v.powf::<GAMMA>(n)
             };
-            let values = fast
-                .unwrap_or_else(|_| $float::from_array_t(t, bases.to_array().map(|x| gamma(x, n))));
-            let values = $float::blend(positive, values, zero);
-            let values = $float::blend(white, one, values);
-            $float::blend(nan, v, values)
+            let nan = v.simd_ne(v);
+            if nan.bitcast_to_i32().any_true() {
+                $float::blend(nan, v, result)
+            } else {
+                result
+            }
         }
     };
 }

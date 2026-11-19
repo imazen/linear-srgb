@@ -37,16 +37,16 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	ldr x8, [x8, :got_lo12:archmage::tokens::generated::arm::NEON_CACHE]
 	ldrb w8, [x8]
 	cmp w8, #1
-	b.eq .LBB21_15
+	b.eq .LBB16_15
 	cmp w8, #2
-	b.ne .LBB21_14
-.LBB21_2:
+	b.ne .LBB16_14
+.LBB16_2:
 	and x8, x1, #0x1ffffffffffffff0
 	ands x21, x1, #0xc
 	lsr x22, x1, #4
 	add x19, x0, x8, lsl #2
 	lsl x20, x21, #2
-	b.eq .LBB21_4
+	b.eq .LBB16_4
 	mov w8, #64
 	mov x23, x0
 	mov w1, wzr
@@ -64,10 +64,10 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	stp q0, q1, [x29, #-192]
 	ldp q0, q2, [x29, #-96]
 	stp q0, q2, [x29, #-160]
-	b .LBB21_5
-.LBB21_4:
+	b .LBB16_5
+.LBB16_4:
 	mov w9, wzr
-.LBB21_5:
+.LBB16_5:
 	mov w8, #47186
 	mov w10, #25800
 	fmov v17.4s, #1.00000000
@@ -117,10 +117,10 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	csel x9, xzr, x1, eq
 	str w10, [sp, #12]
 	str q0, [sp, #16]
-	b .LBB21_8
-.LBB21_6:
+	b .LBB16_8
+.LBB16_6:
 	add x10, x0, #64
-.LBB21_7:
+.LBB16_7:
 	fmov s0, #1.00000000
 	ldr s24, [x0, #12]
 	ldr s1, [sp, #12]
@@ -271,22 +271,22 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	str s26, [x0, #44]
 	str s28, [x0, #60]
 	mov x0, x10
-.LBB21_8:
+.LBB16_8:
 	cmp x0, x8
 	ccmp x0, #0, #4, ne
-	b.ne .LBB21_6
-	cbz x9, .LBB21_11
+	b.ne .LBB16_6
+	cbz x9, .LBB16_11
 	mov x10, xzr
 	mov x0, x9
 	mov x9, xzr
-	b .LBB21_7
-.LBB21_11:
+	b .LBB16_7
+.LBB16_11:
 	ldur w8, [x29, #-196]
-	cbz w8, .LBB21_13
+	cbz w8, .LBB16_13
 	mov x0, x19
 	mov x2, x20
 	bl memcpy
-.LBB21_13:
+.LBB16_13:
 	.cfi_def_cfa wsp, 464
 	ldp x20, x19, [sp, #448]
 	ldp x22, x21, [sp, #432]
@@ -315,7 +315,7 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	.cfi_restore b14
 	.cfi_restore b15
 	ret
-.LBB21_14:
+.LBB16_14:
 	.cfi_restore_state
 	mov x19, x0
 	mov x20, x1
@@ -323,8 +323,8 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	mov x1, x20
 	mov w8, w0
 	mov x0, x19
-	cbnz w8, .LBB21_2
-.LBB21_15:
+	cbnz w8, .LBB16_2
+.LBB16_15:
 	.cfi_def_cfa wsp, 464
 	ldp x20, x19, [sp, #448]
 	ldp x22, x21, [sp, #432]

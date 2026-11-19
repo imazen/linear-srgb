@@ -149,7 +149,7 @@ pub(crate) const PQ_INV_Q_SMALL: [f32; 5] =
 use magetypes::simd::{backends::*, generic::*};
 
 macro_rules! pq_for {
-    ($decode:ident, $encode:ident, $float:ident, $backend:ident, $rational:ident) => {
+    ($decode:ident, $encode:ident, $float:ident, $backend:ident, $poly:ident) => {
         #[inline(always)]
         pub(crate) fn $decode<T: $backend>(t: T, v: $float<T>) -> $float<T> {
             let floor = $float::splat_t(t, EOTF_POLY_FLOOR);
@@ -157,14 +157,25 @@ macro_rules! pq_for {
             // Keep the small fit above its pole even on lanes replaced below.
             let a = v.max(floor).min(one);
             let x = a.mla(a, a);
-            let large = polynomial::$rational(t, x, PQ_EOTF_P_LARGE, PQ_EOTF_Q_LARGE);
-            let small = polynomial::$rational(t, x, PQ_EOTF_P_SMALL, PQ_EOTF_Q_SMALL);
-            let result = $float::blend(a.simd_lt($float::splat_t(t, 0.25)), small, large);
-            let fallback = v.simd_lt(floor) | v.simd_ge(one) | v.simd_ne(v);
+            let small = a.simd_lt($float::splat_t(t, 0.25));
+            let p = $float::blend(
+                small,
+                polynomial::$poly(t, x, PQ_EOTF_P_SMALL),
+                polynomial::$poly(t, x, PQ_EOTF_P_LARGE),
+            );
+            let q = $float::blend(
+                small,
+                polynomial::$poly(t, x, PQ_EOTF_Q_SMALL),
+                polynomial::$poly(t, x, PQ_EOTF_Q_LARGE),
+            );
+            let zero = $float::zero_t(t);
+            let positive = v.simd_gt(zero);
+            let result = $float::blend(v.simd_ge(one), one, (p / q) & positive);
+            let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
             if fallback.bitcast_to_i32().any_true() {
                 let mut result = result.to_array();
                 for (source, output) in v.to_array().into_iter().zip(&mut result) {
-                    if source.is_nan() || !(EOTF_POLY_FLOOR..1.0).contains(&source) {
+                    if source.is_nan() || (0.0 < source && source < EOTF_POLY_FLOOR) {
                         *output = pq_to_linear_precise(source);
                     }
                 }
@@ -180,14 +191,25 @@ macro_rules! pq_for {
             let one = $float::splat_t(t, 1.0);
             let a = v.max(floor).min(one);
             let a4 = a.sqrt().sqrt();
-            let large = polynomial::$rational(t, a4, PQ_INV_P_LARGE, PQ_INV_Q_LARGE);
-            let small = polynomial::$rational(t, a4, PQ_INV_P_SMALL, PQ_INV_Q_SMALL);
-            let result = $float::blend(a4.simd_lt($float::splat_t(t, 0.1)), small, large);
-            let fallback = v.simd_lt(floor) | v.simd_ge(one) | v.simd_ne(v);
+            let small = a4.simd_lt($float::splat_t(t, 0.1));
+            let p = $float::blend(
+                small,
+                polynomial::$poly(t, a4, PQ_INV_P_SMALL),
+                polynomial::$poly(t, a4, PQ_INV_P_LARGE),
+            );
+            let q = $float::blend(
+                small,
+                polynomial::$poly(t, a4, PQ_INV_Q_SMALL),
+                polynomial::$poly(t, a4, PQ_INV_Q_LARGE),
+            );
+            let zero = $float::zero_t(t);
+            let positive = v.simd_gt(zero);
+            let result = $float::blend(v.simd_ge(one), one, (p / q) & positive);
+            let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
             if fallback.bitcast_to_i32().any_true() {
                 let mut result = result.to_array();
                 for (source, output) in v.to_array().into_iter().zip(&mut result) {
-                    if source.is_nan() || !(OETF_POLY_FLOOR..1.0).contains(&source) {
+                    if source.is_nan() || (0.0 < source && source < OETF_POLY_FLOOR) {
                         *output = linear_to_pq_precise(source);
                     }
                 }
@@ -204,19 +226,19 @@ pq_for!(
     linear_to_pq_x4,
     f32x4,
     F32x4Convert,
-    eval_rational_poly_x4
+    eval_poly_x4
 );
 pq_for!(
     pq_to_linear_x8,
     linear_to_pq_x8,
     f32x8,
     F32x8Convert,
-    eval_rational_poly_x8
+    eval_poly_x8
 );
 pq_for!(
     pq_to_linear_x16,
     linear_to_pq_x16,
     f32x16,
     F32x16Convert,
-    eval_rational_poly_x16
+    eval_poly_x16
 );

@@ -37,16 +37,16 @@ stub_srgb_to_linear_premultiply_rgba_slice:
 	ldr x8, [x8, :got_lo12:archmage::tokens::generated::arm::NEON_CACHE]
 	ldrb w8, [x8]
 	cmp w8, #1
-	b.eq .LBB17_15
+	b.eq .LBB12_15
 	cmp w8, #2
-	b.ne .LBB17_14
-.LBB17_2:
+	b.ne .LBB12_14
+.LBB12_2:
 	and x8, x1, #0x1ffffffffffffff0
 	ands x21, x1, #0xc
 	lsr x22, x1, #4
 	add x19, x0, x8, lsl #2
 	lsl x20, x21, #2
-	b.eq .LBB17_4
+	b.eq .LBB12_4
 	mov w8, #64
 	mov x23, x0
 	mov w1, wzr
@@ -64,10 +64,10 @@ stub_srgb_to_linear_premultiply_rgba_slice:
 	stp q0, q1, [sp, #80]
 	ldp q0, q2, [x29, #-96]
 	stp q0, q2, [sp, #112]
-	b .LBB17_5
-.LBB17_4:
+	b .LBB12_5
+.LBB12_4:
 	mov w9, wzr
-.LBB17_5:
+.LBB12_5:
 	mov w8, #33681
 	mov w10, #32277
 	fmov v1.4s, #1.00000000
@@ -110,10 +110,10 @@ stub_srgb_to_linear_premultiply_rgba_slice:
 	movk w8, #16800, lsl #16
 	dup v19.4s, w8
 	add x8, x0, x22, lsl #6
-	b .LBB17_8
-.LBB17_6:
+	b .LBB12_8
+.LBB12_6:
 	add x10, x0, #64
-.LBB17_7:
+.LBB12_7:
 	movi v0.2d, #0000000000000000
 	ldr q21, [x0]
 	ldr q4, [sp]
@@ -249,22 +249,22 @@ stub_srgb_to_linear_premultiply_rgba_slice:
 	str s15, [x0, #44]
 	str s0, [x0, #60]
 	mov x0, x10
-.LBB17_8:
+.LBB12_8:
 	cmp x0, x8
 	ccmp x0, #0, #4, ne
-	b.ne .LBB17_6
-	cbz x9, .LBB17_11
+	b.ne .LBB12_6
+	cbz x9, .LBB12_11
 	mov x10, xzr
 	mov x0, x9
 	mov x9, xzr
-	b .LBB17_7
-.LBB17_11:
+	b .LBB12_7
+.LBB12_11:
 	ldr w8, [sp, #76]
-	cbz w8, .LBB17_13
+	cbz w8, .LBB12_13
 	mov x0, x19
 	mov x2, x20
 	bl memcpy
-.LBB17_13:
+.LBB12_13:
 	.cfi_def_cfa wsp, 336
 	ldp x20, x19, [sp, #320]
 	ldp x22, x21, [sp, #304]
@@ -293,7 +293,7 @@ stub_srgb_to_linear_premultiply_rgba_slice:
 	.cfi_restore b14
 	.cfi_restore b15
 	ret
-.LBB17_14:
+.LBB12_14:
 	.cfi_restore_state
 	mov x19, x0
 	mov x20, x1
@@ -301,8 +301,8 @@ stub_srgb_to_linear_premultiply_rgba_slice:
 	mov x1, x20
 	mov w8, w0
 	mov x0, x19
-	cbnz w8, .LBB17_2
-.LBB17_15:
+	cbnz w8, .LBB12_2
+.LBB12_15:
 	.cfi_def_cfa wsp, 336
 	ldp x20, x19, [sp, #320]
 	ldp x22, x21, [sp, #304]

@@ -56,28 +56,24 @@ mla_for!(f32x4, F32x4Backend);
 mla_for!(f32x8, F32x8Backend);
 mla_for!(f32x16, F32x16Backend);
 
-macro_rules! rational_for {
+macro_rules! polynomial_for {
     ($name:ident, $float:ident, $backend:ident) => {
         #[inline(always)]
-        pub(crate) fn $name<T: $backend, const P: usize, const Q: usize>(
+        pub(crate) fn $name<T: $backend, const N: usize>(
             t: T,
             x: $float<T>,
-            p: [f32; P],
-            q: [f32; Q],
+            coefficients: [f32; N],
         ) -> $float<T> {
-            let evaluate = |coefficients: &[f32]| {
-                let (&last, rest) = coefficients.split_last().expect("nonempty polynomial");
-                rest.iter()
-                    .rev()
-                    .fold($float::splat_t(t, last), |acc, &coefficient| {
-                        acc.mla(x, $float::splat_t(t, coefficient))
-                    })
-            };
-            evaluate(&p) / evaluate(&q)
+            let (&last, rest) = coefficients.split_last().expect("nonempty polynomial");
+            rest.iter()
+                .rev()
+                .fold($float::splat_t(t, last), |acc, &coefficient| {
+                    acc.mla(x, $float::splat_t(t, coefficient))
+                })
         }
     };
 }
 
-rational_for!(eval_rational_poly_x4, f32x4, F32x4Backend);
-rational_for!(eval_rational_poly_x8, f32x8, F32x8Backend);
-rational_for!(eval_rational_poly_x16, f32x16, F32x16Backend);
+polynomial_for!(eval_poly_x4, f32x4, F32x4Backend);
+polynomial_for!(eval_poly_x8, f32x8, F32x8Backend);
+polynomial_for!(eval_poly_x16, f32x16, F32x16Backend);

@@ -3,7 +3,7 @@
 .type	stub_srgb_to_linear_extended_slice,@function
 stub_srgb_to_linear_extended_slice:
 	.functype	stub_srgb_to_linear_extended_slice (i32, i32) -> ()
-	.local  	i32, i32, i32, i32, i32, i32, i32, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, f32, f32
+	.local  	i32, i32, i32, i32, i32, i32, i32, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, v128, f32, f32
 	global.get __stack_pointer
 	i32.const 144
 	i32.sub
@@ -103,6 +103,8 @@ stub_srgb_to_linear_extended_slice:
 	block
 	block
 	block
+	block
+	block
 	local.get 0
 	i32.eqz
 	br_if 0
@@ -133,224 +135,311 @@ stub_srgb_to_linear_extended_slice:
 	local.get 1
 	v128.load 48:p2align=2
 	local.tee 9
-	f32x4.abs
+	v128.const -9223372034707292160, -9223372034707292160
 	local.tee 10
-	local.get 10
-	v128.const -0x1.fcb852p5, -0x1.fcb852p5, -0x1.fcb852p5, -0x1.fcb852p5
+	v128.and
+	local.get 9
+	f32x4.abs
 	local.tee 11
-	f32x4.add
-	f32x4.mul
-	v128.const 0x1.1793fcp12, 0x1.1793fcp12, 0x1.1793fcp12, 0x1.1793fcp12
+	v128.const 0x1.3d0722p-4, 0x1.3d0722p-4, 0x1.3d0722p-4, 0x1.3d0722p-4
 	local.tee 12
-	f32x4.add
-	local.set 13
-	local.get 10
-	local.get 10
+	f32x4.mul
+	local.get 11
+	local.get 11
+	local.get 11
+	local.get 11
+	local.get 11
+	local.get 11
 	v128.const 0x1.0aa4c6p14, 0x1.0aa4c6p14, 0x1.0aa4c6p14, 0x1.0aa4c6p14
-	local.tee 14
+	local.tee 13
 	f32x4.mul
 	v128.const 0x1.056176p17, 0x1.056176p17, 0x1.056176p17, 0x1.056176p17
-	local.tee 15
+	local.tee 14
 	f32x4.add
 	f32x4.mul
 	v128.const 0x1.adac9p17, 0x1.adac9p17, 0x1.adac9p17, 0x1.adac9p17
-	local.tee 16
-	f32x4.add
-	local.set 17
-	local.get 1
-	v128.load 32:p2align=2
-	local.tee 18
-	f32x4.abs
-	local.tee 19
-	local.get 19
-	local.get 19
-	local.get 19
-	local.get 11
-	f32x4.add
-	f32x4.mul
-	local.get 12
-	f32x4.add
-	f32x4.mul
-	v128.const 0x1.41da1cp16, 0x1.41da1cp16, 0x1.41da1cp16, 0x1.41da1cp16
-	local.tee 20
-	f32x4.add
-	f32x4.mul
-	v128.const 0x1.c1dcf4p17, 0x1.c1dcf4p17, 0x1.c1dcf4p17, 0x1.c1dcf4p17
-	local.tee 21
-	f32x4.add
-	local.set 22
-	local.get 19
-	local.get 19
-	local.get 19
-	local.get 19
-	local.get 14
-	f32x4.mul
-	local.get 15
-	f32x4.add
-	f32x4.mul
-	local.get 16
+	local.tee 15
 	f32x4.add
 	f32x4.mul
 	v128.const 0x1.8eafd2p16, 0x1.8eafd2p16, 0x1.8eafd2p16, 0x1.8eafd2p16
-	local.tee 23
+	local.tee 16
 	f32x4.add
 	f32x4.mul
 	v128.const 0x1.ead02cp13, 0x1.ead02cp13, 0x1.ead02cp13, 0x1.ead02cp13
-	local.tee 24
-	f32x4.add
-	local.set 25
-	local.get 1
-	v128.load 16:p2align=2
-	local.tee 26
-	f32x4.abs
-	local.tee 27
-	local.get 27
-	local.get 27
-	local.get 27
-	local.get 27
-	local.get 27
-	local.get 11
-	f32x4.add
-	f32x4.mul
-	local.get 12
-	f32x4.add
-	f32x4.mul
-	local.get 20
-	f32x4.add
-	f32x4.mul
-	local.get 21
-	f32x4.add
-	f32x4.mul
-	v128.const 0x1.26a3c2p17, 0x1.26a3c2p17, 0x1.26a3c2p17, 0x1.26a3c2p17
-	local.tee 28
-	f32x4.add
-	f32x4.mul
-	v128.const 0x1.516812p14, 0x1.516812p14, 0x1.516812p14, 0x1.516812p14
-	local.tee 29
-	f32x4.add
-	local.set 30
-	local.get 27
-	local.get 27
-	local.get 27
-	local.get 27
-	local.get 27
-	local.get 27
-	local.get 14
-	f32x4.mul
-	local.get 15
-	f32x4.add
-	f32x4.mul
-	local.get 16
-	f32x4.add
-	f32x4.mul
-	local.get 23
-	f32x4.add
-	f32x4.mul
-	local.get 24
+	local.tee 17
 	f32x4.add
 	f32x4.mul
 	v128.const 0x1.c78544p9, 0x1.c78544p9, 0x1.c78544p9, 0x1.c78544p9
-	local.tee 31
+	local.tee 18
 	f32x4.add
 	f32x4.mul
 	v128.const 0x1.205782p4, 0x1.205782p4, 0x1.205782p4, 0x1.205782p4
-	local.tee 32
+	local.tee 19
 	f32x4.add
-	local.set 33
-	local.get 1
-	v128.load 0:p2align=2
-	local.tee 34
-	v128.const -9223372034707292160, -9223372034707292160
-	local.tee 35
-	v128.and
-	local.get 34
-	f32x4.abs
-	local.tee 36
-	v128.const 0x1.3d0722p-4, 0x1.3d0722p-4, 0x1.3d0722p-4, 0x1.3d0722p-4
-	local.tee 37
-	f32x4.mul
-	local.get 36
-	local.get 36
-	local.get 36
-	local.get 36
-	local.get 36
-	local.get 36
-	local.get 14
-	f32x4.mul
-	local.get 15
-	f32x4.add
-	f32x4.mul
-	local.get 16
-	f32x4.add
-	f32x4.mul
-	local.get 23
-	f32x4.add
-	f32x4.mul
-	local.get 24
-	f32x4.add
-	f32x4.mul
-	local.get 31
-	f32x4.add
-	f32x4.mul
-	local.get 32
-	f32x4.add
-	local.get 36
-	local.get 36
-	local.get 36
-	local.get 36
-	local.get 36
-	local.get 36
 	local.get 11
+	local.get 11
+	local.get 11
+	local.get 11
+	local.get 11
+	local.get 11
+	v128.const -0x1.fcb852p5, -0x1.fcb852p5, -0x1.fcb852p5, -0x1.fcb852p5
+	local.tee 20
 	f32x4.add
 	f32x4.mul
-	local.get 12
+	v128.const 0x1.1793fcp12, 0x1.1793fcp12, 0x1.1793fcp12, 0x1.1793fcp12
+	local.tee 21
 	f32x4.add
 	f32x4.mul
-	local.get 20
+	v128.const 0x1.41da1cp16, 0x1.41da1cp16, 0x1.41da1cp16, 0x1.41da1cp16
+	local.tee 22
 	f32x4.add
 	f32x4.mul
-	local.get 21
+	v128.const 0x1.c1dcf4p17, 0x1.c1dcf4p17, 0x1.c1dcf4p17, 0x1.c1dcf4p17
+	local.tee 23
 	f32x4.add
 	f32x4.mul
-	local.get 28
+	v128.const 0x1.26a3c2p17, 0x1.26a3c2p17, 0x1.26a3c2p17, 0x1.26a3c2p17
+	local.tee 24
 	f32x4.add
 	f32x4.mul
-	local.get 29
+	v128.const 0x1.516812p14, 0x1.516812p14, 0x1.516812p14, 0x1.516812p14
+	local.tee 25
 	f32x4.add
 	f32x4.div
-	local.get 36
+	local.get 11
 	v128.const 0x1.41e42cp-5, 0x1.41e42cp-5, 0x1.41e42cp-5, 0x1.41e42cp-5
-	local.tee 11
+	local.tee 26
 	f32x4.lt
 	v128.bitselect
 	f32x4.abs
 	v128.or
-	local.set 36
+	local.set 27
+	local.get 1
+	v128.load 32:p2align=2
+	local.tee 28
+	local.get 10
+	v128.and
+	local.get 28
+	f32x4.abs
+	local.tee 29
+	local.get 12
+	f32x4.mul
+	local.get 29
+	local.get 29
+	local.get 29
+	local.get 29
+	local.get 29
+	local.get 29
+	local.get 13
+	f32x4.mul
+	local.get 14
+	f32x4.add
+	f32x4.mul
+	local.get 15
+	f32x4.add
+	f32x4.mul
+	local.get 16
+	f32x4.add
+	f32x4.mul
+	local.get 17
+	f32x4.add
+	f32x4.mul
+	local.get 18
+	f32x4.add
+	f32x4.mul
+	local.get 19
+	f32x4.add
+	local.get 29
+	local.get 29
+	local.get 29
+	local.get 29
+	local.get 29
+	local.get 29
+	local.get 20
+	f32x4.add
+	f32x4.mul
+	local.get 21
+	f32x4.add
+	f32x4.mul
+	local.get 22
+	f32x4.add
+	f32x4.mul
+	local.get 23
+	f32x4.add
+	f32x4.mul
+	local.get 24
+	f32x4.add
+	f32x4.mul
+	local.get 25
+	f32x4.add
+	f32x4.div
+	local.get 29
+	local.get 26
+	f32x4.lt
+	v128.bitselect
+	f32x4.abs
+	v128.or
+	local.set 30
+	local.get 1
+	v128.load 16:p2align=2
+	local.tee 31
+	local.get 10
+	v128.and
+	local.get 31
+	f32x4.abs
+	local.tee 32
+	local.get 12
+	f32x4.mul
+	local.get 32
+	local.get 32
+	local.get 32
+	local.get 32
+	local.get 32
+	local.get 32
+	local.get 13
+	f32x4.mul
+	local.get 14
+	f32x4.add
+	f32x4.mul
+	local.get 15
+	f32x4.add
+	f32x4.mul
+	local.get 16
+	f32x4.add
+	f32x4.mul
+	local.get 17
+	f32x4.add
+	f32x4.mul
+	local.get 18
+	f32x4.add
+	f32x4.mul
+	local.get 19
+	f32x4.add
+	local.get 32
+	local.get 32
+	local.get 32
+	local.get 32
+	local.get 32
+	local.get 32
+	local.get 20
+	f32x4.add
+	f32x4.mul
+	local.get 21
+	f32x4.add
+	f32x4.mul
+	local.get 22
+	f32x4.add
+	f32x4.mul
+	local.get 23
+	f32x4.add
+	f32x4.mul
+	local.get 24
+	f32x4.add
+	f32x4.mul
+	local.get 25
+	f32x4.add
+	f32x4.div
+	local.get 32
+	local.get 26
+	f32x4.lt
+	v128.bitselect
+	f32x4.abs
+	v128.or
+	local.set 33
+	local.get 1
+	v128.load 0:p2align=2
+	local.tee 34
+	local.get 10
+	v128.and
+	local.get 34
+	f32x4.abs
+	local.tee 10
+	local.get 12
+	f32x4.mul
+	local.get 10
+	local.get 10
+	local.get 10
+	local.get 10
+	local.get 10
+	local.get 10
+	local.get 13
+	f32x4.mul
+	local.get 14
+	f32x4.add
+	f32x4.mul
+	local.get 15
+	f32x4.add
+	f32x4.mul
+	local.get 16
+	f32x4.add
+	f32x4.mul
+	local.get 17
+	f32x4.add
+	f32x4.mul
+	local.get 18
+	f32x4.add
+	f32x4.mul
+	local.get 19
+	f32x4.add
+	local.get 10
+	local.get 10
+	local.get 10
+	local.get 10
+	local.get 10
+	local.get 10
+	local.get 20
+	f32x4.add
+	f32x4.mul
+	local.get 21
+	f32x4.add
+	f32x4.mul
+	local.get 22
+	f32x4.add
+	f32x4.mul
+	local.get 23
+	f32x4.add
+	f32x4.mul
+	local.get 24
+	f32x4.add
+	f32x4.mul
+	local.get 25
+	f32x4.add
+	f32x4.div
+	local.get 10
+	local.get 26
+	f32x4.lt
+	v128.bitselect
+	f32x4.abs
+	v128.or
+	local.set 12
+	local.get 10
+	v128.const 0x1p3, 0x1p3, 0x1p3, 0x1p3
+	local.tee 13
+	f32x4.gt
+	local.get 32
+	local.get 13
+	f32x4.gt
+	v128.or
+	local.get 29
+	local.get 13
+	f32x4.gt
+	local.get 11
+	local.get 13
+	f32x4.gt
+	v128.or
+	v128.or
+	i32x4.bitmask
+	i32.eqz
+	br_if 3
 	local.get 34
 	f32x4.extract_lane 0
-	local.tee 38
+	local.tee 35
 	f32.abs
-	local.tee 39
+	local.tee 36
 	f32.const 0x1p3
 	f32.gt
-	i32.eqz
 	br_if 1
-	local.get 36
-	f32.const 0x1p0
-	local.get 38
-	f32.copysign
-	local.get 39
-	f32.const 0x1.c2a5d6p-5
-	f32.add
-	f32.const 0x1.0e152ep0
-	f32.div
-	f32.const 0x1.333334p1
-	call powf
-	f32.mul
-	i32.reinterpret_f32
-	i32x4.replace_lane 0
-	local.set 36
-	br 1
+	br 2
 	end_block
 	block
 	local.get 2
@@ -375,49 +464,219 @@ stub_srgb_to_linear_extended_slice:
 	global.set __stack_pointer
 	return
 	end_block
-	local.get 10
-	local.get 13
-	f32x4.mul
+	local.get 12
+	f32.const 0x1p0
+	local.get 35
+	f32.copysign
+	local.get 36
+	f32.const 0x1.c2a5d6p-5
+	f32.add
+	f32.const 0x1.0e152ep0
+	f32.div
+	f32.const 0x1.333334p1
+	call powf
+	f32.mul
+	i32.reinterpret_f32
+	i32x4.replace_lane 0
 	local.set 12
-	local.get 10
-	local.get 17
-	f32x4.mul
-	local.set 14
-	local.get 19
-	local.get 22
-	f32x4.mul
-	local.set 15
-	local.get 19
-	local.get 25
-	f32x4.mul
-	local.set 16
+	end_block
+	block
+	local.get 34
+	f32x4.extract_lane 1
+	local.tee 35
+	f32.abs
+	local.tee 36
+	f32.const 0x1p3
+	f32.gt
+	i32.eqz
+	br_if 0
+	local.get 12
+	f32.const 0x1p0
+	local.get 35
+	f32.copysign
+	local.get 36
+	f32.const 0x1.c2a5d6p-5
+	f32.add
+	f32.const 0x1.0e152ep0
+	f32.div
+	f32.const 0x1.333334p1
+	call powf
+	f32.mul
+	i32.reinterpret_f32
+	i32x4.replace_lane 1
+	local.set 12
+	end_block
+	block
+	local.get 34
+	f32x4.extract_lane 2
+	local.tee 35
+	f32.abs
+	local.tee 36
+	f32.const 0x1p3
+	f32.gt
+	i32.eqz
+	br_if 0
+	local.get 12
+	f32.const 0x1p0
+	local.get 35
+	f32.copysign
+	local.get 36
+	f32.const 0x1.c2a5d6p-5
+	f32.add
+	f32.const 0x1.0e152ep0
+	f32.div
+	f32.const 0x1.333334p1
+	call powf
+	f32.mul
+	i32.reinterpret_f32
+	i32x4.replace_lane 2
+	local.set 12
+	end_block
+	block
+	local.get 34
+	f32x4.extract_lane 3
+	local.tee 35
+	f32.abs
+	local.tee 36
+	f32.const 0x1p3
+	f32.gt
+	i32.eqz
+	br_if 0
+	local.get 12
+	f32.const 0x1p0
+	local.get 35
+	f32.copysign
+	local.get 36
+	f32.const 0x1.c2a5d6p-5
+	f32.add
+	f32.const 0x1.0e152ep0
+	f32.div
+	f32.const 0x1.333334p1
+	call powf
+	f32.mul
+	i32.reinterpret_f32
+	i32x4.replace_lane 3
+	local.set 12
+	end_block
+	block
+	local.get 31
+	f32x4.extract_lane 0
+	local.tee 35
+	f32.abs
+	local.tee 36
+	f32.const 0x1p3
+	f32.gt
+	i32.eqz
+	br_if 0
 	local.get 33
+	f32.const 0x1p0
+	local.get 35
+	f32.copysign
+	local.get 36
+	f32.const 0x1.c2a5d6p-5
+	f32.add
+	f32.const 0x1.0e152ep0
+	f32.div
+	f32.const 0x1.333334p1
+	call powf
+	f32.mul
+	i32.reinterpret_f32
+	i32x4.replace_lane 0
+	local.set 33
+	end_block
+	block
+	local.get 31
+	f32x4.extract_lane 1
+	local.tee 35
+	f32.abs
+	local.tee 36
+	f32.const 0x1p3
+	f32.gt
+	i32.eqz
+	br_if 0
+	local.get 33
+	f32.const 0x1p0
+	local.get 35
+	f32.copysign
+	local.get 36
+	f32.const 0x1.c2a5d6p-5
+	f32.add
+	f32.const 0x1.0e152ep0
+	f32.div
+	f32.const 0x1.333334p1
+	call powf
+	f32.mul
+	i32.reinterpret_f32
+	i32x4.replace_lane 1
+	local.set 33
+	end_block
+	block
+	local.get 31
+	f32x4.extract_lane 2
+	local.tee 35
+	f32.abs
+	local.tee 36
+	f32.const 0x1p3
+	f32.gt
+	i32.eqz
+	br_if 0
+	local.get 33
+	f32.const 0x1p0
+	local.get 35
+	f32.copysign
+	local.get 36
+	f32.const 0x1.c2a5d6p-5
+	f32.add
+	f32.const 0x1.0e152ep0
+	f32.div
+	f32.const 0x1.333334p1
+	call powf
+	f32.mul
+	i32.reinterpret_f32
+	i32x4.replace_lane 2
+	local.set 33
+	end_block
+	block
+	local.get 31
+	f32x4.extract_lane 3
+	local.tee 35
+	f32.abs
+	local.tee 36
+	f32.const 0x1p3
+	f32.gt
+	i32.eqz
+	br_if 0
+	local.get 33
+	f32.const 0x1p0
+	local.get 35
+	f32.copysign
+	local.get 36
+	f32.const 0x1.c2a5d6p-5
+	f32.add
+	f32.const 0x1.0e152ep0
+	f32.div
+	f32.const 0x1.333334p1
+	call powf
+	f32.mul
+	i32.reinterpret_f32
+	i32x4.replace_lane 3
+	local.set 33
+	end_block
+	block
+	local.get 28
+	f32x4.extract_lane 0
+	local.tee 35
+	f32.abs
+	local.tee 36
+	f32.const 0x1p3
+	f32.gt
+	i32.eqz
+	br_if 0
 	local.get 30
-	f32x4.div
-	local.set 13
-	local.get 27
-	local.get 11
-	f32x4.lt
-	local.set 17
-	local.get 27
-	local.get 37
-	f32x4.mul
-	local.set 27
-	block
-	local.get 34
-	f32x4.extract_lane 1
-	local.tee 38
-	f32.abs
-	local.tee 39
-	f32.const 0x1p3
-	f32.gt
-	i32.eqz
-	br_if 0
-	local.get 36
 	f32.const 0x1p0
-	local.get 38
+	local.get 35
 	f32.copysign
-	local.get 39
+	local.get 36
 	f32.const 0x1.c2a5d6p-5
 	f32.add
 	f32.const 0x1.0e152ep0
@@ -426,186 +685,24 @@ stub_srgb_to_linear_extended_slice:
 	call powf
 	f32.mul
 	i32.reinterpret_f32
-	i32x4.replace_lane 1
-	local.set 36
+	i32x4.replace_lane 0
+	local.set 30
 	end_block
-	local.get 12
-	local.get 20
-	f32x4.add
-	local.set 12
-	local.get 14
-	local.get 23
-	f32x4.add
-	local.set 14
-	local.get 15
+	block
 	local.get 28
-	f32x4.add
-	local.set 15
-	local.get 16
-	local.get 31
-	f32x4.add
-	local.set 16
-	local.get 27
-	local.get 13
-	local.get 17
-	v128.bitselect
-	local.set 27
-	block
-	local.get 34
-	f32x4.extract_lane 2
-	local.tee 38
-	f32.abs
-	local.tee 39
-	f32.const 0x1p3
-	f32.gt
-	i32.eqz
-	br_if 0
-	local.get 36
-	f32.const 0x1p0
-	local.get 38
-	f32.copysign
-	local.get 39
-	f32.const 0x1.c2a5d6p-5
-	f32.add
-	f32.const 0x1.0e152ep0
-	f32.div
-	f32.const 0x1.333334p1
-	call powf
-	f32.mul
-	i32.reinterpret_f32
-	i32x4.replace_lane 2
-	local.set 36
-	end_block
-	local.get 10
-	local.get 12
-	f32x4.mul
-	local.set 12
-	local.get 10
-	local.get 14
-	f32x4.mul
-	local.set 14
-	local.get 19
-	local.get 15
-	f32x4.mul
-	local.set 15
-	local.get 19
-	local.get 16
-	f32x4.mul
-	local.set 16
-	local.get 27
-	f32x4.abs
-	local.set 27
-	local.get 26
-	local.get 35
-	v128.and
-	local.set 20
-	block
-	local.get 34
-	f32x4.extract_lane 3
-	local.tee 38
-	f32.abs
-	local.tee 39
-	f32.const 0x1p3
-	f32.gt
-	i32.eqz
-	br_if 0
-	local.get 36
-	f32.const 0x1p0
-	local.get 38
-	f32.copysign
-	local.get 39
-	f32.const 0x1.c2a5d6p-5
-	f32.add
-	f32.const 0x1.0e152ep0
-	f32.div
-	f32.const 0x1.333334p1
-	call powf
-	f32.mul
-	i32.reinterpret_f32
-	i32x4.replace_lane 3
-	local.set 36
-	end_block
-	local.get 12
-	local.get 21
-	f32x4.add
-	local.set 34
-	local.get 14
-	local.get 24
-	f32x4.add
-	local.set 12
-	local.get 15
-	local.get 29
-	f32x4.add
-	local.set 14
-	local.get 16
-	local.get 32
-	f32x4.add
-	local.set 15
-	local.get 20
-	local.get 27
-	v128.or
-	local.set 27
-	block
-	local.get 26
-	f32x4.extract_lane 0
-	local.tee 38
-	f32.abs
-	local.tee 39
-	f32.const 0x1p3
-	f32.gt
-	i32.eqz
-	br_if 0
-	local.get 27
-	f32.const 0x1p0
-	local.get 38
-	f32.copysign
-	local.get 39
-	f32.const 0x1.c2a5d6p-5
-	f32.add
-	f32.const 0x1.0e152ep0
-	f32.div
-	f32.const 0x1.333334p1
-	call powf
-	f32.mul
-	i32.reinterpret_f32
-	i32x4.replace_lane 0
-	local.set 27
-	end_block
-	local.get 10
-	local.get 34
-	f32x4.mul
-	local.set 34
-	local.get 10
-	local.get 12
-	f32x4.mul
-	local.set 12
-	local.get 15
-	local.get 14
-	f32x4.div
-	local.set 14
-	local.get 19
-	local.get 11
-	f32x4.lt
-	local.set 15
-	local.get 19
-	local.get 37
-	f32x4.mul
-	local.set 19
-	block
-	local.get 26
 	f32x4.extract_lane 1
-	local.tee 38
+	local.tee 35
 	f32.abs
-	local.tee 39
+	local.tee 36
 	f32.const 0x1p3
 	f32.gt
 	i32.eqz
 	br_if 0
-	local.get 27
+	local.get 30
 	f32.const 0x1p0
-	local.get 38
+	local.get 35
 	f32.copysign
-	local.get 39
+	local.get 36
 	f32.const 0x1.c2a5d6p-5
 	f32.add
 	f32.const 0x1.0e152ep0
@@ -615,36 +712,127 @@ stub_srgb_to_linear_extended_slice:
 	f32.mul
 	i32.reinterpret_f32
 	i32x4.replace_lane 1
-	local.set 27
+	local.set 30
 	end_block
-	local.get 34
+	block
 	local.get 28
-	f32x4.add
-	local.set 34
-	local.get 12
-	local.get 31
-	f32x4.add
-	local.set 12
-	local.get 19
-	local.get 14
-	local.get 15
-	v128.bitselect
-	local.set 19
-	block
-	local.get 26
 	f32x4.extract_lane 2
-	local.tee 38
+	local.tee 35
 	f32.abs
-	local.tee 39
+	local.tee 36
+	f32.const 0x1p3
+	f32.gt
+	i32.eqz
+	br_if 0
+	local.get 30
+	f32.const 0x1p0
+	local.get 35
+	f32.copysign
+	local.get 36
+	f32.const 0x1.c2a5d6p-5
+	f32.add
+	f32.const 0x1.0e152ep0
+	f32.div
+	f32.const 0x1.333334p1
+	call powf
+	f32.mul
+	i32.reinterpret_f32
+	i32x4.replace_lane 2
+	local.set 30
+	end_block
+	block
+	local.get 28
+	f32x4.extract_lane 3
+	local.tee 35
+	f32.abs
+	local.tee 36
+	f32.const 0x1p3
+	f32.gt
+	i32.eqz
+	br_if 0
+	local.get 30
+	f32.const 0x1p0
+	local.get 35
+	f32.copysign
+	local.get 36
+	f32.const 0x1.c2a5d6p-5
+	f32.add
+	f32.const 0x1.0e152ep0
+	f32.div
+	f32.const 0x1.333334p1
+	call powf
+	f32.mul
+	i32.reinterpret_f32
+	i32x4.replace_lane 3
+	local.set 30
+	end_block
+	block
+	local.get 9
+	f32x4.extract_lane 0
+	local.tee 35
+	f32.abs
+	local.tee 36
 	f32.const 0x1p3
 	f32.gt
 	i32.eqz
 	br_if 0
 	local.get 27
 	f32.const 0x1p0
-	local.get 38
+	local.get 35
 	f32.copysign
-	local.get 39
+	local.get 36
+	f32.const 0x1.c2a5d6p-5
+	f32.add
+	f32.const 0x1.0e152ep0
+	f32.div
+	f32.const 0x1.333334p1
+	call powf
+	f32.mul
+	i32.reinterpret_f32
+	i32x4.replace_lane 0
+	local.set 27
+	end_block
+	block
+	local.get 9
+	f32x4.extract_lane 1
+	local.tee 35
+	f32.abs
+	local.tee 36
+	f32.const 0x1p3
+	f32.gt
+	i32.eqz
+	br_if 0
+	local.get 27
+	f32.const 0x1p0
+	local.get 35
+	f32.copysign
+	local.get 36
+	f32.const 0x1.c2a5d6p-5
+	f32.add
+	f32.const 0x1.0e152ep0
+	f32.div
+	f32.const 0x1.333334p1
+	call powf
+	f32.mul
+	i32.reinterpret_f32
+	i32x4.replace_lane 1
+	local.set 27
+	end_block
+	block
+	local.get 9
+	f32x4.extract_lane 2
+	local.tee 35
+	f32.abs
+	local.tee 36
+	f32.const 0x1p3
+	f32.gt
+	i32.eqz
+	br_if 0
+	local.get 27
+	f32.const 0x1p0
+	local.get 35
+	f32.copysign
+	local.get 36
 	f32.const 0x1.c2a5d6p-5
 	f32.add
 	f32.const 0x1.0e152ep0
@@ -656,36 +844,20 @@ stub_srgb_to_linear_extended_slice:
 	i32x4.replace_lane 2
 	local.set 27
 	end_block
-	local.get 10
-	local.get 34
-	f32x4.mul
-	local.set 34
-	local.get 10
-	local.get 12
-	f32x4.mul
-	local.set 12
-	local.get 19
-	f32x4.abs
-	local.set 19
-	local.get 18
-	local.get 35
-	v128.and
-	local.set 14
-	block
-	local.get 26
+	local.get 9
 	f32x4.extract_lane 3
-	local.tee 38
+	local.tee 35
 	f32.abs
-	local.tee 39
+	local.tee 36
 	f32.const 0x1p3
 	f32.gt
 	i32.eqz
 	br_if 0
 	local.get 27
 	f32.const 0x1p0
-	local.get 38
+	local.get 35
 	f32.copysign
-	local.get 39
+	local.get 36
 	f32.const 0x1.c2a5d6p-5
 	f32.add
 	f32.const 0x1.0e152ep0
@@ -696,266 +868,18 @@ stub_srgb_to_linear_extended_slice:
 	i32.reinterpret_f32
 	i32x4.replace_lane 3
 	local.set 27
-	end_block
-	local.get 34
-	local.get 29
-	f32x4.add
-	local.set 26
-	local.get 12
-	local.get 32
-	f32x4.add
-	local.set 34
-	local.get 14
-	local.get 19
-	v128.or
-	local.set 19
-	block
-	local.get 18
-	f32x4.extract_lane 0
-	local.tee 38
-	f32.abs
-	local.tee 39
-	f32.const 0x1p3
-	f32.gt
-	i32.eqz
-	br_if 0
-	local.get 19
-	f32.const 0x1p0
-	local.get 38
-	f32.copysign
-	local.get 39
-	f32.const 0x1.c2a5d6p-5
-	f32.add
-	f32.const 0x1.0e152ep0
-	f32.div
-	f32.const 0x1.333334p1
-	call powf
-	f32.mul
-	i32.reinterpret_f32
-	i32x4.replace_lane 0
-	local.set 19
-	end_block
-	local.get 34
-	local.get 26
-	f32x4.div
-	local.set 26
-	local.get 10
-	local.get 11
-	f32x4.lt
-	local.set 34
-	local.get 10
-	local.get 37
-	f32x4.mul
-	local.set 10
-	block
-	local.get 18
-	f32x4.extract_lane 1
-	local.tee 38
-	f32.abs
-	local.tee 39
-	f32.const 0x1p3
-	f32.gt
-	i32.eqz
-	br_if 0
-	local.get 19
-	f32.const 0x1p0
-	local.get 38
-	f32.copysign
-	local.get 39
-	f32.const 0x1.c2a5d6p-5
-	f32.add
-	f32.const 0x1.0e152ep0
-	f32.div
-	f32.const 0x1.333334p1
-	call powf
-	f32.mul
-	i32.reinterpret_f32
-	i32x4.replace_lane 1
-	local.set 19
-	end_block
-	local.get 10
-	local.get 26
-	local.get 34
-	v128.bitselect
-	local.set 10
-	block
-	local.get 18
-	f32x4.extract_lane 2
-	local.tee 38
-	f32.abs
-	local.tee 39
-	f32.const 0x1p3
-	f32.gt
-	i32.eqz
-	br_if 0
-	local.get 19
-	f32.const 0x1p0
-	local.get 38
-	f32.copysign
-	local.get 39
-	f32.const 0x1.c2a5d6p-5
-	f32.add
-	f32.const 0x1.0e152ep0
-	f32.div
-	f32.const 0x1.333334p1
-	call powf
-	f32.mul
-	i32.reinterpret_f32
-	i32x4.replace_lane 2
-	local.set 19
-	end_block
-	local.get 10
-	f32x4.abs
-	local.set 10
-	local.get 9
-	local.get 35
-	v128.and
-	local.set 26
-	block
-	local.get 18
-	f32x4.extract_lane 3
-	local.tee 38
-	f32.abs
-	local.tee 39
-	f32.const 0x1p3
-	f32.gt
-	i32.eqz
-	br_if 0
-	local.get 19
-	f32.const 0x1p0
-	local.get 38
-	f32.copysign
-	local.get 39
-	f32.const 0x1.c2a5d6p-5
-	f32.add
-	f32.const 0x1.0e152ep0
-	f32.div
-	f32.const 0x1.333334p1
-	call powf
-	f32.mul
-	i32.reinterpret_f32
-	i32x4.replace_lane 3
-	local.set 19
-	end_block
-	local.get 26
-	local.get 10
-	v128.or
-	local.set 10
-	block
-	local.get 9
-	f32x4.extract_lane 0
-	local.tee 38
-	f32.abs
-	local.tee 39
-	f32.const 0x1p3
-	f32.gt
-	i32.eqz
-	br_if 0
-	local.get 10
-	f32.const 0x1p0
-	local.get 38
-	f32.copysign
-	local.get 39
-	f32.const 0x1.c2a5d6p-5
-	f32.add
-	f32.const 0x1.0e152ep0
-	f32.div
-	f32.const 0x1.333334p1
-	call powf
-	f32.mul
-	i32.reinterpret_f32
-	i32x4.replace_lane 0
-	local.set 10
-	end_block
-	block
-	local.get 9
-	f32x4.extract_lane 1
-	local.tee 38
-	f32.abs
-	local.tee 39
-	f32.const 0x1p3
-	f32.gt
-	i32.eqz
-	br_if 0
-	local.get 10
-	f32.const 0x1p0
-	local.get 38
-	f32.copysign
-	local.get 39
-	f32.const 0x1.c2a5d6p-5
-	f32.add
-	f32.const 0x1.0e152ep0
-	f32.div
-	f32.const 0x1.333334p1
-	call powf
-	f32.mul
-	i32.reinterpret_f32
-	i32x4.replace_lane 1
-	local.set 10
-	end_block
-	block
-	local.get 9
-	f32x4.extract_lane 2
-	local.tee 38
-	f32.abs
-	local.tee 39
-	f32.const 0x1p3
-	f32.gt
-	i32.eqz
-	br_if 0
-	local.get 10
-	f32.const 0x1p0
-	local.get 38
-	f32.copysign
-	local.get 39
-	f32.const 0x1.c2a5d6p-5
-	f32.add
-	f32.const 0x1.0e152ep0
-	f32.div
-	f32.const 0x1.333334p1
-	call powf
-	f32.mul
-	i32.reinterpret_f32
-	i32x4.replace_lane 2
-	local.set 10
-	end_block
-	block
-	local.get 9
-	f32x4.extract_lane 3
-	local.tee 38
-	f32.abs
-	local.tee 39
-	f32.const 0x1p3
-	f32.gt
-	i32.eqz
-	br_if 0
-	local.get 10
-	f32.const 0x1p0
-	local.get 38
-	f32.copysign
-	local.get 39
-	f32.const 0x1.c2a5d6p-5
-	f32.add
-	f32.const 0x1.0e152ep0
-	f32.div
-	f32.const 0x1.333334p1
-	call powf
-	f32.mul
-	i32.reinterpret_f32
-	i32x4.replace_lane 3
-	local.set 10
 	end_block
 	local.get 1
-	local.get 10
+	local.get 27
 	v128.store 48:p2align=2
 	local.get 1
-	local.get 19
+	local.get 30
 	v128.store 32:p2align=2
 	local.get 1
-	local.get 27
+	local.get 33
 	v128.store 16:p2align=2
 	local.get 1
-	local.get 36
+	local.get 12
 	v128.store 0:p2align=2
 	local.get 3
 	local.set 5

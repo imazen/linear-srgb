@@ -3,7 +3,7 @@
 // Target: x86_64-unknown-linux-gnu; preset: default; module: tf
 // Library features: avx512, default, std
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 32b94422ac5d017b841b4107976d0df074cc54bcb1c10333e99bb56687bd10a3
+// Resolution lock SHA-256: 8e8a453cd4aa95369f2982e341e2a8dd5629244e46774c59456ee5bd6055a90d
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 /// Transfer functions: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).
@@ -56,20 +56,17 @@ pub mod tf {
         //! Transfer profiles and their exceptional-lane fallbacks.
         use archmage::ScalarToken;
         use magemath::SimdMath;
-        use magemath::powf::{Powf, PowfOptions};
+        use magemath::powf::{Powf, PowfDomain, PowfOptions};
         use magetypes::simd::{backends::*, generic::*};
-        const GAMMA: u128 = PowfOptions::new().unit_gamma_domain().caller().bits();
+        const GAMMA_OPTIONS: PowfOptions = PowfOptions::new()
+            .domain(PowfDomain::Unit)
+            .exponent_range(0.0, 4.0)
+            .clamp_finite()
+            .caller();
+        const GAMMA: u128 = GAMMA_OPTIONS.bits();
         const FULL_POW: u128 = PowfOptions::new().full_domain().highp().caller().bits();
-        const SRGB_DECODE_POWER: u128 = PowfOptions::new()
-            .unit_gamma_domain()
-            .const_exponent(2.4)
-            .caller()
-            .bits();
-        const SRGB_ENCODE_POWER: u128 = PowfOptions::new()
-            .unit_gamma_domain()
-            .const_exponent(1.0 / 2.4)
-            .caller()
-            .bits();
+        const SRGB_DECODE_POWER: u128 = GAMMA_OPTIONS.const_exponent(2.4).bits();
+        const SRGB_ENCODE_POWER: u128 = GAMMA_OPTIONS.const_exponent(1.0 / 2.4).bits();
         #[inline(always)]
         fn full_pow(base: f32, n: f32) -> f32 {
             Powf::<FULL_POW>::scalar_with_token(ScalarToken, base, n)
@@ -83,64 +80,70 @@ pub mod tf {
             if x >= 1.0 {
                 return 1.0;
             }
-            let fast = if n == 2.4 {
-                Powf::<SRGB_DECODE_POWER>::scalar_const_with_token(ScalarToken, x)
+            if x.is_nan() {
+                return x;
+            }
+            if n == 2.4 {
+                Powf::<SRGB_DECODE_POWER>::scalar_const_infallible(x)
             } else if n == 1.0 / 2.4 {
-                Powf::<SRGB_ENCODE_POWER>::scalar_const_with_token(ScalarToken, x)
+                Powf::<SRGB_ENCODE_POWER>::scalar_const_infallible(x)
+            } else if (0.0..=4.0).contains(&n) {
+                Powf::<GAMMA>::scalar_infallible(x, n)
             } else {
-                Powf::<GAMMA>::scalar_with_token(ScalarToken, x, n)
-            };
-            fast.unwrap_or_else(|_| full_pow(x, n))
+                full_pow(x, n)
+            }
+        }
+        #[cold]
+        #[inline(never)]
+        fn gamma_outside_fit<const N: usize>(
+            values: [f32; N],
+            exponent: f32,
+        ) -> [f32; N] {
+            values.map(|x| gamma(x, exponent))
         }
         #[inline(always)]
         pub(crate) fn gamma_x4<T: F32x4Convert>(t: T, v: f32x4<T>, n: f32) -> f32x4<T> {
+            if !(0.0..=4.0).contains(&n) {
+                return f32x4::from_array_t(t, gamma_outside_fit(v.to_array(), n));
+            }
             let zero = f32x4::zero_t(t);
-            let one = f32x4::splat_t(t, 1.0);
-            let positive = v.simd_gt(zero);
-            let white = v.simd_ge(one);
-            let nan = v.simd_ne(v);
-            let inside = positive & v.simd_lt(one);
-            let bases = f32x4::blend(inside, v, one);
-            let fast = if n == 2.4 {
-                bases.try_powf_const::<SRGB_DECODE_POWER>()
+            let result = if n == 2.4 {
+                v.powf_const::<SRGB_DECODE_POWER>()
             } else if n == 1.0 / 2.4 {
-                bases.try_powf_const::<SRGB_ENCODE_POWER>()
+                v.powf_const::<SRGB_ENCODE_POWER>()
+            } else if n == 0.0 {
+                v.simd_gt(zero) & f32x4::splat_t(t, 1.0)
             } else {
-                bases.try_powf_with::<GAMMA>(n)
+                v.powf::<GAMMA>(n)
             };
-            let values = fast
-                .unwrap_or_else(|_| f32x4::from_array_t(
-                    t,
-                    bases.to_array().map(|x| gamma(x, n)),
-                ));
-            let values = f32x4::blend(positive, values, zero);
-            let values = f32x4::blend(white, one, values);
-            f32x4::blend(nan, v, values)
+            let nan = v.simd_ne(v);
+            if nan.bitcast_to_i32().any_true() {
+                f32x4::blend(nan, v, result)
+            } else {
+                result
+            }
         }
         #[inline(always)]
         pub(crate) fn gamma_x8<T: F32x8Convert>(t: T, v: f32x8<T>, n: f32) -> f32x8<T> {
+            if !(0.0..=4.0).contains(&n) {
+                return f32x8::from_array_t(t, gamma_outside_fit(v.to_array(), n));
+            }
             let zero = f32x8::zero_t(t);
-            let one = f32x8::splat_t(t, 1.0);
-            let positive = v.simd_gt(zero);
-            let white = v.simd_ge(one);
-            let nan = v.simd_ne(v);
-            let inside = positive & v.simd_lt(one);
-            let bases = f32x8::blend(inside, v, one);
-            let fast = if n == 2.4 {
-                bases.try_powf_const::<SRGB_DECODE_POWER>()
+            let result = if n == 2.4 {
+                v.powf_const::<SRGB_DECODE_POWER>()
             } else if n == 1.0 / 2.4 {
-                bases.try_powf_const::<SRGB_ENCODE_POWER>()
+                v.powf_const::<SRGB_ENCODE_POWER>()
+            } else if n == 0.0 {
+                v.simd_gt(zero) & f32x8::splat_t(t, 1.0)
             } else {
-                bases.try_powf_with::<GAMMA>(n)
+                v.powf::<GAMMA>(n)
             };
-            let values = fast
-                .unwrap_or_else(|_| f32x8::from_array_t(
-                    t,
-                    bases.to_array().map(|x| gamma(x, n)),
-                ));
-            let values = f32x8::blend(positive, values, zero);
-            let values = f32x8::blend(white, one, values);
-            f32x8::blend(nan, v, values)
+            let nan = v.simd_ne(v);
+            if nan.bitcast_to_i32().any_true() {
+                f32x8::blend(nan, v, result)
+            } else {
+                result
+            }
         }
         #[inline(always)]
         pub(crate) fn gamma_x16<T: F32x16Convert>(
@@ -148,28 +151,25 @@ pub mod tf {
             v: f32x16<T>,
             n: f32,
         ) -> f32x16<T> {
+            if !(0.0..=4.0).contains(&n) {
+                return f32x16::from_array_t(t, gamma_outside_fit(v.to_array(), n));
+            }
             let zero = f32x16::zero_t(t);
-            let one = f32x16::splat_t(t, 1.0);
-            let positive = v.simd_gt(zero);
-            let white = v.simd_ge(one);
-            let nan = v.simd_ne(v);
-            let inside = positive & v.simd_lt(one);
-            let bases = f32x16::blend(inside, v, one);
-            let fast = if n == 2.4 {
-                bases.try_powf_const::<SRGB_DECODE_POWER>()
+            let result = if n == 2.4 {
+                v.powf_const::<SRGB_DECODE_POWER>()
             } else if n == 1.0 / 2.4 {
-                bases.try_powf_const::<SRGB_ENCODE_POWER>()
+                v.powf_const::<SRGB_ENCODE_POWER>()
+            } else if n == 0.0 {
+                v.simd_gt(zero) & f32x16::splat_t(t, 1.0)
             } else {
-                bases.try_powf_with::<GAMMA>(n)
+                v.powf::<GAMMA>(n)
             };
-            let values = fast
-                .unwrap_or_else(|_| f32x16::from_array_t(
-                    t,
-                    bases.to_array().map(|x| gamma(x, n)),
-                ));
-            let values = f32x16::blend(positive, values, zero);
-            let values = f32x16::blend(white, one, values);
-            f32x16::blend(nan, v, values)
+            let nan = v.simd_ne(v);
+            if nan.bitcast_to_i32().any_true() {
+                f32x16::blend(nan, v, result)
+            } else {
+                result
+            }
         }
     }
     pub(crate) mod polynomial {
@@ -236,67 +236,46 @@ pub mod tf {
             }
         }
         #[inline(always)]
-        pub(crate) fn eval_rational_poly_x4<
-            T: F32x4Backend,
-            const P: usize,
-            const Q: usize,
-        >(t: T, x: f32x4<T>, p: [f32; P], q: [f32; Q]) -> f32x4<T> {
-            let evaluate = |coefficients: &[f32]| {
-                let (&last, rest) = coefficients
-                    .split_last()
-                    .expect("nonempty polynomial");
-                rest.iter()
-                    .rev()
-                    .fold(
-                        f32x4::splat_t(t, last),
-                        |acc, &coefficient| {
-                            acc.mla(x, f32x4::splat_t(t, coefficient))
-                        },
-                    )
-            };
-            evaluate(&p) / evaluate(&q)
+        pub(crate) fn eval_poly_x4<T: F32x4Backend, const N: usize>(
+            t: T,
+            x: f32x4<T>,
+            coefficients: [f32; N],
+        ) -> f32x4<T> {
+            let (&last, rest) = coefficients.split_last().expect("nonempty polynomial");
+            rest.iter()
+                .rev()
+                .fold(
+                    f32x4::splat_t(t, last),
+                    |acc, &coefficient| { acc.mla(x, f32x4::splat_t(t, coefficient)) },
+                )
         }
         #[inline(always)]
-        pub(crate) fn eval_rational_poly_x8<
-            T: F32x8Backend,
-            const P: usize,
-            const Q: usize,
-        >(t: T, x: f32x8<T>, p: [f32; P], q: [f32; Q]) -> f32x8<T> {
-            let evaluate = |coefficients: &[f32]| {
-                let (&last, rest) = coefficients
-                    .split_last()
-                    .expect("nonempty polynomial");
-                rest.iter()
-                    .rev()
-                    .fold(
-                        f32x8::splat_t(t, last),
-                        |acc, &coefficient| {
-                            acc.mla(x, f32x8::splat_t(t, coefficient))
-                        },
-                    )
-            };
-            evaluate(&p) / evaluate(&q)
+        pub(crate) fn eval_poly_x8<T: F32x8Backend, const N: usize>(
+            t: T,
+            x: f32x8<T>,
+            coefficients: [f32; N],
+        ) -> f32x8<T> {
+            let (&last, rest) = coefficients.split_last().expect("nonempty polynomial");
+            rest.iter()
+                .rev()
+                .fold(
+                    f32x8::splat_t(t, last),
+                    |acc, &coefficient| { acc.mla(x, f32x8::splat_t(t, coefficient)) },
+                )
         }
         #[inline(always)]
-        pub(crate) fn eval_rational_poly_x16<
-            T: F32x16Backend,
-            const P: usize,
-            const Q: usize,
-        >(t: T, x: f32x16<T>, p: [f32; P], q: [f32; Q]) -> f32x16<T> {
-            let evaluate = |coefficients: &[f32]| {
-                let (&last, rest) = coefficients
-                    .split_last()
-                    .expect("nonempty polynomial");
-                rest.iter()
-                    .rev()
-                    .fold(
-                        f32x16::splat_t(t, last),
-                        |acc, &coefficient| {
-                            acc.mla(x, f32x16::splat_t(t, coefficient))
-                        },
-                    )
-            };
-            evaluate(&p) / evaluate(&q)
+        pub(crate) fn eval_poly_x16<T: F32x16Backend, const N: usize>(
+            t: T,
+            x: f32x16<T>,
+            coefficients: [f32; N],
+        ) -> f32x16<T> {
+            let (&last, rest) = coefficients.split_last().expect("nonempty polynomial");
+            rest.iter()
+                .rev()
+                .fold(
+                    f32x16::splat_t(t, last),
+                    |acc, &coefficient| { acc.mla(x, f32x16::splat_t(t, coefficient)) },
+                )
         }
     }
     pub(crate) mod srgb {

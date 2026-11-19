@@ -29,7 +29,6 @@ use archmage::{attune, attuned};
 
 // Shared private kernels preserve evaluation across public entry points.
 use crate::kernels::float::x16::{
-    gamma_to_linear as mt_gamma_to_linear, linear_to_gamma as mt_linear_to_gamma,
     linear_to_srgb as mt_linear_to_srgb, srgb_to_linear as mt_srgb_to_linear,
 };
 
@@ -57,11 +56,10 @@ fn srgb_to_linear_rgba_slice_tier(_token: Token, values: &mut [f32]) {
     let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
     let mut tail = tail_block::<16>(remainder);
     for chunk in chunks.iter_mut().chain(tail.as_mut()) {
-        let original = f32x16::from_array_t(_token, *chunk);
-        *chunk = mt_srgb_to_linear(_token, *chunk);
-        *chunk = f32x16::from_array_t(_token, *chunk)
+        let original = f32x16::load_t(_token, chunk);
+        crate::kernels::float::x16::srgb_to_linear_vector(_token, original)
             .with_rgba_alpha(original)
-            .to_array();
+            .store(chunk);
     }
     store_tail(remainder, tail.as_ref());
 }
@@ -125,11 +123,10 @@ fn linear_to_srgb_rgba_slice_tier(_token: Token, values: &mut [f32]) {
     let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
     let mut tail = tail_block::<16>(remainder);
     for chunk in chunks.iter_mut().chain(tail.as_mut()) {
-        let original = f32x16::from_array_t(_token, *chunk);
-        *chunk = mt_linear_to_srgb(_token, *chunk);
-        *chunk = f32x16::from_array_t(_token, *chunk)
+        let original = f32x16::load_t(_token, chunk);
+        crate::kernels::float::x16::linear_to_srgb_vector(_token, original)
             .with_rgba_alpha(original)
-            .to_array();
+            .store(chunk);
     }
     store_tail(remainder, tail.as_ref());
 }
@@ -310,12 +307,10 @@ fn srgb_to_linear_extended_rgba_slice_tier(token: Token, values: &mut [f32]) {
     let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
     let mut tail = tail_block::<16>(remainder);
     for chunk in chunks.iter_mut().chain(tail.as_mut()) {
-        let original = f32x16::from_array_t(token, *chunk);
-        let v = f32x16::from_array_t(token, *chunk);
-        *chunk = crate::kernels::float::x16::srgb_to_linear_extended(token, v.to_array());
-        *chunk = f32x16::from_array_t(token, *chunk)
+        let original = f32x16::load_t(token, chunk);
+        crate::kernels::float::x16::srgb_to_linear_extended_vector(token, original)
             .with_rgba_alpha(original)
-            .to_array();
+            .store(chunk);
     }
     store_tail(remainder, tail.as_ref());
 }
@@ -358,12 +353,10 @@ fn linear_to_srgb_extended_rgba_slice_tier(token: Token, values: &mut [f32]) {
     let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
     let mut tail = tail_block::<16>(remainder);
     for chunk in chunks.iter_mut().chain(tail.as_mut()) {
-        let original = f32x16::from_array_t(token, *chunk);
-        let v = f32x16::from_array_t(token, *chunk);
-        *chunk = crate::kernels::float::x16::linear_to_srgb_extended(token, v.to_array());
-        *chunk = f32x16::from_array_t(token, *chunk)
+        let original = f32x16::load_t(token, chunk);
+        crate::kernels::float::x16::linear_to_srgb_extended_vector(token, original)
             .with_rgba_alpha(original)
-            .to_array();
+            .store(chunk);
     }
     store_tail(remainder, tail.as_ref());
 }
@@ -655,12 +648,7 @@ fn srgb_u16_to_linear_slice_tier(token: Token, input: &[u16], output: &mut [f32]
     let (in_chunks, in_rem) = input.as_chunks::<16>();
     let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
     let convert = |inp: &[u16; 16]| -> [f32; 16] {
-        // u16 → f32, normalized to [0, 1]. Scalar widening auto-vectorizes.
-        let mut f = [0.0f32; 16];
-        for i in 0..16 {
-            f[i] = inp[i] as f32;
-        }
-        let v = f32x16::from_array_t(token, f) * f32x16::splat_t(token, 1.0 / 65535.0);
+        let v = f32x16::from_u16_t(token, inp) * f32x16::splat_t(token, 1.0 / 65535.0);
         let one = f32x16::splat_t(token, 1.0);
 
         let linear_result = v * f32x16::splat_t(token, LINEAR_SCALE);
@@ -742,7 +730,7 @@ fn linear_to_srgb_u16_slice_tier(token: Token, input: &[f32], output: &mut [u16]
         let linear = f32x16::from_array_t(token, *inp);
         let zero = f32x16::zero_t(token);
         let one = f32x16::splat_t(token, 1.0);
-        let clamped = linear.max(zero).min(one);
+        let clamped = (linear & linear.simd_gt(zero)).min_fast(one);
         let linear_result = clamped * f32x16::splat_t(token, 12.92);
         let x = clamped.sqrt();
         let yp = f32x16::splat_t(token, L2S_P[4]).mla(x, f32x16::splat_t(token, L2S_P[3]));
@@ -760,8 +748,10 @@ fn linear_to_srgb_u16_slice_tier(token: Token, input: &[f32], output: &mut [u16]
         let srgb = f32x16::blend(ge_one, one, srgb);
 
         let scaled = srgb.mla(f32x16::splat_t(token, 65535.0), f32x16::splat_t(token, 0.5));
-        let idx_i = scaled.to_i32().to_array();
-        idx_i.map(|value| value as u16)
+        const TRUNC: u32 = magetypes::IntConvert::new().trunc().in_range().bits();
+        scaled
+            .min_fast(f32x16::splat_t(token, 65535.0))
+            .to_u16_with::<TRUNC>()
     };
     for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
         *out = convert(inp);
@@ -1067,63 +1057,63 @@ pub fn srgb_u8_to_linear_premultiply_rgba_slice(input: &[u8], output: &mut [f32]
 //      `(a * 255 + 0.5) as u8` direct cast; its SIMD LUT index is
 //      discarded.
 
-#[inline(always)]
-fn inv_alpha_or_zero(a: f32) -> f32 {
-    if a > crate::UNPREMUL_ALPHA_THRESHOLD {
-        1.0 / a
-    } else {
-        0.0
-    }
-}
-
-#[allow(clippy::needless_range_loop)]
 #[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
 fn unpremultiply_linear_to_srgb_u8_rgba_slice_tier(token: Token, input: &[f32], output: &mut [u8]) {
+    const APPROX: u32 = magetypes::RecipOptions::new().approx().bits();
+    const TRUNC: u32 = magetypes::IntConvert::new().trunc().in_range().bits();
     let lut = crate::const_luts::linear_to_srgb_u8();
+    let zero = f32x16::zero_t(token);
+    let one = f32x16::splat_t(token, 1.0);
+    let scale = f32x16::splat_t(token, 4095.0);
+    let bias = f32x16::splat_t(token, 0.5);
+    let threshold = f32x16::splat_t(token, crate::UNPREMUL_ALPHA_THRESHOLD);
+    let huge = f32x16::splat_t(token, 1.0 / f32::MIN_POSITIVE);
+
+    let convert = |inp: &[f32; 16], out: &mut [u8]| {
+        let v = f32x16::load_t(token, inp);
+        let alpha = v.broadcast_rgba_alpha();
+        let visible = alpha.simd_gt(threshold);
+        let lookup_input = |inv: f32x16| {
+            let straight = v * (inv & visible);
+            (straight & straight.simd_gt(zero)).min_fast(one) * scale + bias
+        };
+
+        // One Newton step shrinks the worst native reciprocal estimate error
+        // below 1/128 of a LUT bin. Evaluate with division near an integer bin
+        // edge, and on alphas whose reciprocal can be subnormal.
+        let seed = alpha.recip_with::<APPROX>();
+        let residual = alpha.mul_neg_add_relaxed(seed, one);
+        let inv = seed.mul_add_relaxed(residual, seed);
+        let scaled = lookup_input(inv);
+        let near_edge = (scaled - scaled.round())
+            .abs()
+            .simd_le(f32x16::splat_t(token, 1.0 / 128.0))
+            .with_rgba_alpha(zero);
+        let fallback = near_edge | alpha.simd_ge(huge);
+        let scaled = if fallback.bitcast_to_i32().any_true() {
+            lookup_input(one / alpha)
+        } else {
+            scaled
+        };
+        let indices = scaled.to_i32_with::<TRUNC>().to_array();
+        for (pixel, rgb) in out.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+            let i = 4 * pixel;
+            let a = inp[i + 3];
+            rgb[0] = lut[indices[i] as usize];
+            rgb[1] = lut[indices[i + 1] as usize];
+            rgb[2] = lut[indices[i + 2] as usize];
+            rgb[3] = (f64::from(a).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+        }
+    };
+
     let (in_chunks, in_rem) = input.as_chunks::<16>();
     let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
-    for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
-        let a = [inp[3], inp[7], inp[11], inp[15]];
-        let inv_a = [
-            inv_alpha_or_zero(a[0]),
-            inv_alpha_or_zero(a[1]),
-            inv_alpha_or_zero(a[2]),
-            inv_alpha_or_zero(a[3]),
-        ];
-        let mul_arr = [
-            inv_a[0], inv_a[0], inv_a[0], 1.0, inv_a[1], inv_a[1], inv_a[1], 1.0, inv_a[2],
-            inv_a[2], inv_a[2], 1.0, inv_a[3], inv_a[3], inv_a[3], 1.0,
-        ];
-        let mul_vec = f32x16::from_array_t(token, mul_arr);
-        let v = f32x16::from_array_t(token, *inp);
-        let unpremul = v * mul_vec;
-        let clamped = unpremul
-            .max(f32x16::zero_t(token))
-            .min(f32x16::splat_t(token, 1.0));
-        let idx_f = clamped.mla(f32x16::splat_t(token, 4095.0), f32x16::splat_t(token, 0.5));
-        let idx_i = idx_f.to_i32().to_array();
-        for px in 0..4 {
-            let base = px * 4;
-            out[base] = lut[(idx_i[base] as usize) & 0xFFF];
-            out[base + 1] = lut[(idx_i[base + 1] as usize) & 0xFFF];
-            out[base + 2] = lut[(idx_i[base + 2] as usize) & 0xFFF];
-            out[base + 3] = (f64::from(a[px]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
-        }
+    for (inp, out) in in_chunks.iter().zip(out_chunks) {
+        convert(inp, out);
     }
-    for (inp, out) in in_rem
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(out_rem.as_chunks_mut::<4>().0.iter_mut())
-    {
-        let a = inp[3];
-        let inv_a = inv_alpha_or_zero(a);
-        for i in 0..3 {
-            let clamped = (inp[i] * inv_a).clamp(0.0, 1.0);
-            let idx = (clamped * 4095.0 + 0.5) as usize & 0xFFF;
-            out[i] = lut[idx];
-        }
-        out[3] = (f64::from(a).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+    let remainder = in_rem.as_chunks::<4>().0.as_flattened();
+    if let Some(tail) = tail_block::<16>(remainder) {
+        convert(&tail, &mut out_rem[..remainder.len()]);
     }
 }
 
@@ -1394,12 +1384,10 @@ fn gamma_to_linear_rgba_slice_tier(token: Token, values: &mut [f32], gamma: f32)
     let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
     let mut tail = tail_block::<16>(remainder);
     for chunk in chunks.iter_mut().chain(tail.as_mut()) {
-        let original = f32x16::from_array_t(token, *chunk);
-        let v = f32x16::from_array_t(token, *chunk);
-        *chunk = crate::tf::math::gamma_x16(token, v, gamma).to_array();
-        *chunk = f32x16::from_array_t(token, *chunk)
+        let original = f32x16::load_t(token, chunk);
+        crate::tf::math::gamma_x16(token, original, gamma)
             .with_rgba_alpha(original)
-            .to_array();
+            .store(chunk);
     }
     store_tail(remainder, tail.as_ref());
 }
@@ -1441,12 +1429,10 @@ fn linear_to_gamma_rgba_slice_tier(token: Token, values: &mut [f32], gamma: f32)
     let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
     let mut tail = tail_block::<16>(remainder);
     for chunk in chunks.iter_mut().chain(tail.as_mut()) {
-        let original = f32x16::from_array_t(token, *chunk);
-        let v = f32x16::from_array_t(token, *chunk);
-        *chunk = crate::tf::math::gamma_x16(token, v, 1.0 / gamma).to_array();
-        *chunk = f32x16::from_array_t(token, *chunk)
+        let original = f32x16::load_t(token, chunk);
+        crate::tf::math::gamma_x16(token, original, 1.0 / gamma)
             .with_rgba_alpha(original)
-            .to_array();
+            .store(chunk);
     }
     store_tail(remainder, tail.as_ref());
 }
@@ -1492,18 +1478,11 @@ fn gamma_to_linear_premultiply_rgba_slice_tier(token: Token, values: &mut [f32],
     let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
     let mut tail = tail_block::<16>(remainder);
     for chunk in chunks.iter_mut().chain(tail.as_mut()) {
-        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
-        *chunk = mt_gamma_to_linear(token, *chunk, gamma);
-        let v = f32x16::from_array_t(token, *chunk);
-        let alpha = f32x16::from_array_t(
-            token,
-            [
-                a[0], a[0], a[0], 1.0, a[1], a[1], a[1], 1.0, a[2], a[2], a[2], 1.0, a[3], a[3],
-                a[3], 1.0,
-            ],
-        );
-        *chunk = (v * alpha).to_array();
-        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
+        let original = f32x16::load_t(token, chunk);
+        let linear = crate::tf::math::gamma_x16(token, original, gamma);
+        (linear * original.broadcast_rgba_alpha())
+            .with_rgba_alpha(original)
+            .store(chunk);
     }
     store_tail(remainder, tail.as_ref());
 }
@@ -1552,41 +1531,16 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier(token: Token, values: &mut [f32
     let (chunks, remainder) = values.as_chunks_mut::<16>();
     let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
     let mut tail = tail_block::<16>(remainder);
+    let exponent = 1.0 / gamma;
+    let one = f32x16::splat_t(token, 1.0);
+    let threshold = f32x16::splat_t(token, crate::UNPREMUL_ALPHA_THRESHOLD);
     for chunk in chunks.iter_mut().chain(tail.as_mut()) {
-        let a = [chunk[3], chunk[7], chunk[11], chunk[15]];
-        let inv = [
-            if a[0] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[0]
-            } else {
-                0.0
-            },
-            if a[1] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[1]
-            } else {
-                0.0
-            },
-            if a[2] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[2]
-            } else {
-                0.0
-            },
-            if a[3] > crate::UNPREMUL_ALPHA_THRESHOLD {
-                1.0 / a[3]
-            } else {
-                0.0
-            },
-        ];
-        let v = f32x16::from_array_t(token, *chunk);
-        let inv_alpha = f32x16::from_array_t(
-            token,
-            [
-                inv[0], inv[0], inv[0], 1.0, inv[1], inv[1], inv[1], 1.0, inv[2], inv[2], inv[2],
-                1.0, inv[3], inv[3], inv[3], 1.0,
-            ],
-        );
-        let unpremul = (v * inv_alpha).to_array();
-        *chunk = mt_linear_to_gamma(token, unpremul, gamma);
-        [chunk[3], chunk[7], chunk[11], chunk[15]] = a;
+        let original = f32x16::load_t(token, chunk);
+        let alpha = original.broadcast_rgba_alpha();
+        let inv_alpha = (one / alpha) & alpha.simd_gt(threshold);
+        crate::tf::math::gamma_x16(token, original * inv_alpha, exponent)
+            .with_rgba_alpha(original)
+            .store(chunk);
     }
     store_tail(remainder, tail.as_ref());
 }

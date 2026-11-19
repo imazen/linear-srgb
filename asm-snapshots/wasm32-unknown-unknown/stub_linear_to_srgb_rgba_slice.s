@@ -133,7 +133,7 @@ stub_linear_to_srgb_rgba_slice:
 	v128.const 0, 0, 128, 63, 0, 0, 128, 63, 0, 0, 128, 63, 0, 0, 128, 63
 	local.tee 9
 	local.get 1
-	v128.load 48:p2align=2
+	v128.load 48:p2align=0
 	local.tee 10
 	v128.const 0x0p0, 0x0p0, 0x0p0, 0x0p0
 	local.tee 11
@@ -214,11 +214,11 @@ stub_linear_to_srgb_rgba_slice:
 	v128.bitselect
 	local.get 10
 	i8x16.shuffle 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 28, 29, 30, 31
-	v128.store 48:p2align=2
+	v128.store 48:p2align=0
 	local.get 1
 	local.get 9
 	local.get 1
-	v128.load 32:p2align=2
+	v128.load 32:p2align=0
 	local.tee 10
 	local.get 11
 	local.get 10
@@ -285,11 +285,11 @@ stub_linear_to_srgb_rgba_slice:
 	v128.bitselect
 	local.get 10
 	i8x16.shuffle 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 28, 29, 30, 31
-	v128.store 32:p2align=2
+	v128.store 32:p2align=0
 	local.get 1
 	local.get 9
 	local.get 1
-	v128.load 16:p2align=2
+	v128.load 16:p2align=0
 	local.tee 10
 	local.get 11
 	local.get 10
@@ -356,11 +356,11 @@ stub_linear_to_srgb_rgba_slice:
 	v128.bitselect
 	local.get 10
 	i8x16.shuffle 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 28, 29, 30, 31
-	v128.store 16:p2align=2
+	v128.store 16:p2align=0
 	local.get 1
 	local.get 9
 	local.get 1
-	v128.load 0:p2align=2
+	v128.load 0:p2align=0
 	local.tee 10
 	local.get 11
 	local.get 10
@@ -427,7 +427,7 @@ stub_linear_to_srgb_rgba_slice:
 	v128.bitselect
 	local.get 10
 	i8x16.shuffle 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 28, 29, 30, 31
-	v128.store 0:p2align=2
+	v128.store 0:p2align=0
 	local.get 3
 	local.set 5
 	br 0
