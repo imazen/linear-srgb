@@ -38,7 +38,7 @@ pub(crate) fn mla_scalar<T: F32ScalarBackend>(token: T, a: f32, b: f32, c: f32) 
     if USE_FUSED_MATH {
         crate::mlaf::fmla_f32_with_token(token, a, b, c)
     } else {
-        token.mul_add_relaxed_f32(a, b, c)
+        magetypes::scalar::mul_add_relaxed_f32(token, a, b, c)
     }
 }
 

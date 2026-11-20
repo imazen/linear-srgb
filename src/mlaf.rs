@@ -10,6 +10,6 @@ pub(crate) fn fmla_f32_with_token<T: F32ScalarBackend>(token: T, a: f32, b: f32,
     if cfg!(target_arch = "wasm32") || token.as_scalar().is_some() {
         fmla_f32(a, b, c)
     } else {
-        token.mul_add_relaxed_f32(a, b, c)
+        magetypes::scalar::mul_add_relaxed_f32(token, a, b, c)
     }
 }

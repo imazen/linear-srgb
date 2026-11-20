@@ -3,7 +3,7 @@
 // Target: x86_64-unknown-linux-gnu; preset: default; module: tf
 // Library features: avx512, default, std
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 67434759b9de5ad2919713ffec7247af2cb626565d07b783212e2a8fe53ad1af
+// Resolution lock SHA-256: 590624d9f90d10a7c1d22e23e9236c25a0e45250e022c09540c40d5c60338c9a
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 /// Transfer functions: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).
@@ -207,7 +207,7 @@ pub mod tf {
             if USE_FUSED_MATH {
                 crate::mlaf::fmla_f32_with_token(token, a, b, c)
             } else {
-                token.mul_add_relaxed_f32(a, b, c)
+                magetypes::scalar::mul_add_relaxed_f32(token, a, b, c)
             }
         }
         pub(crate) use floor_zero;
