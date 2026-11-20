@@ -3,7 +3,7 @@
 // Target: wasm32-wasip1; preset: default; module: target_features
 // Library features: avx512, default, std
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 60d0c4d24264ca47cd11bc6820f21ba9aa26a2caf45c45940aa14cba31bc5cad
+// Resolution lock SHA-256: 67434759b9de5ad2919713ffec7247af2cb626565d07b783212e2a8fe53ad1af
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 pub mod target_features {
