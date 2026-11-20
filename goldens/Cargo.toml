@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 linear-srgb = { path = "..", default-features = false, features = ["std", "transfer"] }
-archmage = { version = "0.9.31", default-features = false, features = ["macros", "std"] }
+archmage = { version = "0.9.32", default-features = false, features = ["macros", "std"] }
 
 [features]
 default = ["avx512"]
