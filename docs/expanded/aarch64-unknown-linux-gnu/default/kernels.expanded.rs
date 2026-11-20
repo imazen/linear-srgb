@@ -3,7 +3,7 @@
 // Target: aarch64-unknown-linux-gnu; preset: default; module: kernels
 // Library features: avx512, default, std
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 1dbbc772603ae83d428f9bc7922067790d4f0c292ee4352dd693731ac3b47f38
+// Resolution lock SHA-256: 9dea5b5ff2774f0ae7840f75be3ba32865733ef665274d35485915b1b58ad89c
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 mod kernels {

@@ -3,7 +3,7 @@
 // Target: x86_64-unknown-linux-gnu; preset: all-features; module: tf
 // Library features: alt, avx512, default, iec, precise-portable, std, transfer, unsafe_simd
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: ff09aef5df0bf774d6c57d62745abf4e835b1dda61642df59507bea4bd71dcf0
+// Resolution lock SHA-256: d3047ca5a90e2731ffbe23b859ce8a4411c737fd1102c9424729672ff50ec8c5
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 /// Transfer functions: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).
