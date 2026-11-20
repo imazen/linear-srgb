@@ -5,19 +5,9 @@ version = 4
 [[package]]
 name = "archmage"
 version = "0.9.32"
-source = "git+https://github.com/imazen/archmage?rev=423998254fcb3f6e268841918e4280d05741914e#423998254fcb3f6e268841918e4280d05741914e"
+source = "git+https://github.com/imazen/archmage?rev=294ebd260ed665e1b4b0a0a03940bc493d12c666#294ebd260ed665e1b4b0a0a03940bc493d12c666"
 dependencies = [
- "archmage-macros 0.9.32 (git+https://github.com/imazen/archmage?rev=423998254fcb3f6e268841918e4280d05741914e)",
- "safe_unaligned_simd",
- "winarm-cpufeatures",
-]
-
-[[package]]
-name = "archmage"
-version = "0.9.32"
-source = "git+https://github.com/imazen/archmage?rev=35eb67f60a014a4706c40fbd1ad1306d138296f3#35eb67f60a014a4706c40fbd1ad1306d138296f3"
-dependencies = [
- "archmage-macros 0.9.32 (git+https://github.com/imazen/archmage?rev=35eb67f60a014a4706c40fbd1ad1306d138296f3)",
+ "archmage-macros",
  "safe_unaligned_simd",
  "winarm-cpufeatures",
 ]
@@ -25,17 +15,7 @@ dependencies = [
 [[package]]
 name = "archmage-macros"
 version = "0.9.32"
-source = "git+https://github.com/imazen/archmage?rev=423998254fcb3f6e268841918e4280d05741914e#423998254fcb3f6e268841918e4280d05741914e"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "archmage-macros"
-version = "0.9.32"
-source = "git+https://github.com/imazen/archmage?rev=35eb67f60a014a4706c40fbd1ad1306d138296f3#35eb67f60a014a4706c40fbd1ad1306d138296f3"
+source = "git+https://github.com/imazen/archmage?rev=294ebd260ed665e1b4b0a0a03940bc493d12c666#294ebd260ed665e1b4b0a0a03940bc493d12c666"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -64,10 +44,10 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 name = "linear-srgb"
 version = "0.6.13"
 dependencies = [
- "archmage 0.9.32 (git+https://github.com/imazen/archmage?rev=35eb67f60a014a4706c40fbd1ad1306d138296f3)",
+ "archmage",
  "bytemuck",
  "magemath",
- "magetypes 0.9.32 (git+https://github.com/imazen/archmage?rev=35eb67f60a014a4706c40fbd1ad1306d138296f3)",
+ "magetypes",
  "num-traits",
 ]
 
@@ -75,35 +55,26 @@ dependencies = [
 name = "linear-srgb-expand-all"
 version = "0.0.0"
 dependencies = [
- "archmage 0.9.32 (git+https://github.com/imazen/archmage?rev=423998254fcb3f6e268841918e4280d05741914e)",
+ "archmage",
  "linear-srgb",
- "magetypes 0.9.32 (git+https://github.com/imazen/archmage?rev=423998254fcb3f6e268841918e4280d05741914e)",
+ "magetypes",
 ]
 
 [[package]]
 name = "magemath"
 version = "0.1.0"
-source = "git+https://github.com/imazen/archmage?rev=35eb67f60a014a4706c40fbd1ad1306d138296f3#35eb67f60a014a4706c40fbd1ad1306d138296f3"
+source = "git+https://github.com/imazen/archmage?rev=294ebd260ed665e1b4b0a0a03940bc493d12c666#294ebd260ed665e1b4b0a0a03940bc493d12c666"
 dependencies = [
- "archmage 0.9.32 (git+https://github.com/imazen/archmage?rev=35eb67f60a014a4706c40fbd1ad1306d138296f3)",
- "magetypes 0.9.32 (git+https://github.com/imazen/archmage?rev=35eb67f60a014a4706c40fbd1ad1306d138296f3)",
+ "archmage",
+ "magetypes",
 ]
 
 [[package]]
 name = "magetypes"
 version = "0.9.32"
-source = "git+https://github.com/imazen/archmage?rev=423998254fcb3f6e268841918e4280d05741914e#423998254fcb3f6e268841918e4280d05741914e"
+source = "git+https://github.com/imazen/archmage?rev=294ebd260ed665e1b4b0a0a03940bc493d12c666#294ebd260ed665e1b4b0a0a03940bc493d12c666"
 dependencies = [
- "archmage 0.9.32 (git+https://github.com/imazen/archmage?rev=423998254fcb3f6e268841918e4280d05741914e)",
- "rustversion",
-]
-
-[[package]]
-name = "magetypes"
-version = "0.9.32"
-source = "git+https://github.com/imazen/archmage?rev=35eb67f60a014a4706c40fbd1ad1306d138296f3#35eb67f60a014a4706c40fbd1ad1306d138296f3"
-dependencies = [
- "archmage 0.9.32 (git+https://github.com/imazen/archmage?rev=35eb67f60a014a4706c40fbd1ad1306d138296f3)",
+ "archmage",
  "rustversion",
 ]
 

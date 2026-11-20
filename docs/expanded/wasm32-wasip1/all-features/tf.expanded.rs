@@ -3,7 +3,7 @@
 // Target: wasm32-wasip1; preset: all-features; module: tf
 // Library features: alt, avx512, default, iec, precise-portable, std, transfer, unsafe_simd
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 381e7b12965480cf1a800b1344c8688434a4efbf50321708c86edc5e53905ef7
+// Resolution lock SHA-256: 7d828ea8bcde8254c052ad6cfc2172808199bd8ea9ab9acf22b810dc848731a0
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 /// Transfer functions: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).

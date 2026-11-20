@@ -3,7 +3,7 @@
 // Target: aarch64-unknown-linux-gnu; preset: default; module: tf
 // Library features: avx512, default, std
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 590624d9f90d10a7c1d22e23e9236c25a0e45250e022c09540c40d5c60338c9a
+// Resolution lock SHA-256: 73c6c7f2fc10771a1cae2e60cb86bc089d3326b436a4c081c36cf3a6b0df4846
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 /// Transfer functions: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).
