@@ -14,5 +14,5 @@ path = "../src/lib.rs"
 
 [dependencies]
 linear-srgb = { path = "../..", features = ["std", "avx512", "alt", "iec", "precise-portable", "transfer", "unsafe_simd"] }
-archmage = { version = "=0.9.32", git = "https://github.com/imazen/archmage", rev = "294ebd260ed665e1b4b0a0a03940bc493d12c666", default-features = false, features = ["macros"] }
-magetypes = { version = "=0.9.32", git = "https://github.com/imazen/archmage", rev = "294ebd260ed665e1b4b0a0a03940bc493d12c666", default-features = false, features = ["w512"] }
+archmage = { version = "=0.9.32", git = "https://github.com/imazen/archmage", rev = "0917ffc7eca4f77ff5475761ce3aa608ec2274e4", default-features = false, features = ["macros"] }
+magetypes = { version = "=0.9.32", git = "https://github.com/imazen/archmage", rev = "0917ffc7eca4f77ff5475761ce3aa608ec2274e4", default-features = false, features = ["w512"] }

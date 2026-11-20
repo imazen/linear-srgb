@@ -3,7 +3,7 @@
 // Target: aarch64-unknown-linux-gnu; preset: all-features; module: kernels
 // Library features: alt, avx512, default, iec, precise-portable, std, transfer, unsafe_simd
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 7d828ea8bcde8254c052ad6cfc2172808199bd8ea9ab9acf22b810dc848731a0
+// Resolution lock SHA-256: ff09aef5df0bf774d6c57d62745abf4e835b1dda61642df59507bea4bd71dcf0
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 mod kernels {

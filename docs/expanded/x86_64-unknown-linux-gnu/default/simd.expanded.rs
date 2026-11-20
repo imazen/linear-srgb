@@ -3,7 +3,7 @@
 // Target: x86_64-unknown-linux-gnu; preset: default; module: simd
 // Library features: avx512, default, std
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 73c6c7f2fc10771a1cae2e60cb86bc089d3326b436a4c081c36cf3a6b0df4846
+// Resolution lock SHA-256: 1dbbc772603ae83d428f9bc7922067790d4f0c292ee4352dd693731ac3b47f38
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 pub(crate) mod simd {
