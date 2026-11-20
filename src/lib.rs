@@ -9,9 +9,9 @@
 //! - [`default`] — **Start here.** Rational polynomial for f32, LUT for integers, SIMD for slices.
 //! - [`precise`] — Platform `powf()` with C0-continuous constants. f32/f64, extended range. Slower.
 //! - [`target_features`] — Array/slice conversions inside matching CPU-feature functions.
-//! - [`tokens`] — Deprecated token-taking compatibility API.
+//! - [`tokens`] — Deprecated token-taking compatibility API (queued for removal in 0.7.0).
 //! - [`lut`] — Lookup tables for custom bit depths (10-bit, 12-bit, 16-bit).
-//! - **`tf`** — Transfer functions beyond sRGB: BT.709, PQ, HLG. Requires `transfer` feature.
+//! - **`tf`** — Deprecated transfer-function compatibility module (use [`default`] or [`precise`]; queued for removal in 0.7.0).
 //! - **`iec`** — IEC 61966-2-1 textbook constants (legacy interop). Requires `iec` feature.
 //!
 //! # Quick Start
@@ -173,10 +173,10 @@
 //!
 //! - **`std`** (default) — Enable runtime SIMD dispatch. Required for slice functions.
 //! - **`avx512`** (default) — Enable AVX-512 code paths and `tokens::x16` module.
-//! - **`transfer`** — BT.709, PQ, and HLG transfer functions in `tf` and [`tokens`].
+//! - **`transfer`** — BT.709, PQ, and HLG transfer functions in [`default`], [`precise`], and [`target_features`].
 //! - **`iec`** — IEC 61966-2-1 textbook sRGB functions for legacy interop.
-//! - **`alt`** — Alternative implementations for benchmarking (not stable API).
-//! - **`unsafe_simd`** — No-op (kept for backward compatibility, will be removed in 0.7).
+//! - **`alt`** — Deprecated benchmarking-only implementations (queued for removal in 0.7.0).
+//! - **`unsafe_simd`** — Deprecated no-op (kept for backward compatibility; queued for removal in 0.7.0).
 //!
 //! # `no_std` Support
 //!
@@ -190,9 +190,50 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]
+#![cfg_attr(
+    all(feature = "unsafe_simd", not(feature = "alt")),
+    deprecated(
+        since = "0.6.13",
+        note = "linear-srgb Cargo feature `unsafe_simd` is a no-op since 0.6.2 and will be removed in 0.7.0; remove `unsafe_simd` from Cargo features"
+    )
+)]
+#![cfg_attr(
+    all(feature = "alt", not(feature = "unsafe_simd")),
+    deprecated(
+        since = "0.6.13",
+        note = "linear-srgb Cargo feature `alt` is deprecated and will be removed in 0.7.0; remove `alt` from Cargo features"
+    )
+)]
+#![cfg_attr(
+    all(feature = "unsafe_simd", feature = "alt"),
+    deprecated(
+        since = "0.6.13",
+        note = "linear-srgb Cargo features `unsafe_simd` and `alt` are deprecated and will be removed in 0.7.0; remove them from Cargo features"
+    )
+)]
 // Rust's unit-test harness refers to constants inside the deprecated module.
 #![cfg_attr(test, allow(deprecated))]
 #![warn(missing_docs)]
+
+#[cfg(all(feature = "unsafe_simd", not(test)))]
+mod _deprecated_feature_unsafe_simd {
+    #[deprecated(
+        since = "0.6.13",
+        note = "linear-srgb Cargo feature `unsafe_simd` is a no-op since 0.6.2 and will be removed in 0.7.0; remove `unsafe_simd` from Cargo features"
+    )]
+    const UNSAFE_SIMD_FEATURE_ENABLED: () = ();
+    const _: () = UNSAFE_SIMD_FEATURE_ENABLED;
+}
+
+#[cfg(all(feature = "alt", not(test)))]
+mod _deprecated_feature_alt {
+    #[deprecated(
+        since = "0.6.13",
+        note = "linear-srgb Cargo feature `alt` is deprecated and will be removed in 0.7.0; remove `alt` from Cargo features"
+    )]
+    const ALT_FEATURE_ENABLED: () = ();
+    const _: () = ALT_FEATURE_ENABLED;
+}
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
@@ -225,31 +266,31 @@ pub mod precise;
 ///
 /// Provides both build-time const tables ([`SrgbConverter`](lut::SrgbConverter))
 /// and runtime-generated tables for custom bit depths (10-bit, 12-bit, 16-bit).
+#[allow(deprecated)]
 pub mod lut;
 
+#[allow(deprecated)]
 pub mod target_features;
 
 /// Deprecated token-taking compatibility API. Use [`crate::target_features`]
 /// for x4/x8 inside a matching CPU-feature function and omit the token argument.
 /// The x16 compatibility API is deprecated without a direct replacement.
 #[deprecated(
-    note = "use target_features::{x4, x8} inside a matching CPU-feature function; x16 is deprecated without a direct replacement"
+    since = "0.6.13",
+    note = "use target_features::{x4, x8} inside a matching CPU-feature function; x16 is deprecated without a direct replacement (tokens will be removed in 0.7.0)"
 )]
 #[allow(deprecated)] // Compatibility kernels and their tests call each other.
 pub mod tokens;
 
-/// Transfer functions: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).
+/// Deprecated transfer-function compatibility module: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).
 ///
-/// **Prefer [`default`]** — every scalar in this module is already
-/// re-exported there with the same name (gated on `transfer` for the HDR
-/// curves). `tf` exists primarily for internal organization of the
-/// per-curve implementations consumed by [`tokens`]; it is `pub` for
-/// backward compatibility with 0.6.x callers that imported through this
-/// path. New code should use `linear_srgb::default::*`.
+/// **Use [`default`] or [`precise`] instead** — every scalar and slice helper in
+/// this module is re-exported under [`default`] (and the f64-intermediate PQ
+/// reference slices are also re-exported under [`precise`]). Every function in
+/// `linear_srgb::tf` is deprecated in 0.6.13 and the module will be removed in 0.7.0.
 ///
-/// BT.709 / PQ / HLG scalars require the `transfer` feature. sRGB-only
-/// helpers compile unconditionally so the extended-range slice functions
-/// (not gated on `transfer`) can link.
+/// BT.709 / PQ / HLG functions require the `transfer` feature.
+#[allow(deprecated)]
 pub mod tf;
 
 /// IEC 61966-2-1:1999 textbook sRGB transfer functions.
@@ -284,9 +325,13 @@ pub const UNPREMUL_ALPHA_THRESHOLD: f32 = 1.0 / 1024.0;
 // Internal modules
 // ============================================================================
 
+#[allow(deprecated)]
 mod kernels;
+#[allow(deprecated)]
 mod lanes;
+#[allow(deprecated)]
 pub(crate) mod scalar;
+#[allow(deprecated)]
 pub(crate) mod simd;
 
 mod mlaf;
@@ -300,11 +345,21 @@ mod const_luts;
 // Lazily-initialized u16 sRGB LUTs (OnceLock, allocated on first use)
 #[cfg(feature = "std")]
 #[doc(hidden)]
+#[deprecated(
+    since = "0.6.13",
+    note = "internal module; use linear_srgb::default u16 functions instead (u16_lut will become private in 0.7.0)"
+)]
+#[allow(deprecated)]
 pub mod u16_lut;
 
 // Alternative/experimental implementations (for benchmarking, not stable API)
 #[cfg(feature = "alt")]
 #[doc(hidden)]
+#[deprecated(
+    since = "0.6.13",
+    note = "benchmarking-only module; Cargo feature `alt` and linear_srgb::alt will be removed in 0.7.0"
+)]
+#[allow(deprecated)]
 pub mod alt;
 
 // ============================================================================

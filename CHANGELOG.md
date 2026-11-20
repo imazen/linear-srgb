@@ -6,11 +6,14 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 
 ### QUEUED BREAKING CHANGES
 
-- Next version: remove public token reexports and the deprecated token-taking operation surfaces. Keep the current additive release compatible; fixed arrays/slices and CPU-feature contexts are the replacement (`ce451a6b`).
+- **0.7.0:** Remove `pub mod tokens` (including `tokens::{x4, x8, x16}` and public `archmage::*Token` re-exports). Migrate `tokens::{x4, x8}` to `target_features::{x4, x8}` inside matching CPU-feature functions (`ce451a6b`).
+- **0.7.0:** Remove `pub mod tf`; import transfer functions and slice operations from `linear_srgb::default` or `linear_srgb::precise`.
+- **0.7.0:** Remove Cargo features `unsafe_simd` (no-op since 0.6.2) and `alt` (along with `#[doc(hidden)] pub mod alt`), and make `#[doc(hidden)] pub mod u16_lut` crate-private.
+- **0.7.0:** Remove `gamma_to_linear_premultiply_rgba_slice` and `unpremultiply_linear_to_gamma_rgba_slice` (deprecated since 0.6.4).
 
 ### Added
 
-- Full-range ST 2084 encode and decode slice functions with f64 intermediates and exact black and white anchors.
+- Full-range ST 2084 encode and decode slice functions (`pq_to_linear_precise_slice` and `linear_to_pq_precise_slice`) with f64 intermediates and exact black and white anchors, exported under `linear_srgb::precise` and `linear_srgb::default` (behind `transfer`).
 
 
 - Versioned cargo-expand captures of SIMD entry points, compatibility adapters, dispatch, kernels and transfer math for x86-64, ARM64 and WASM, with default/all-feature checks and pinned tooling (`03420de5`).
@@ -21,14 +24,18 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 
 ### Changed
 
+- Depend on published crates.io `archmage` 0.9.32, `magetypes` 0.9.32, and `magemath` 0.1.0 (forwarding `std` to `magemath/std`), and tighten HLG SIMD `exp2`/`log2` `const` profiles (`HLG_EXP` / `HLG_LOG`) to elide dead subnormal pre-scaling and output clamping on normal lanes while preserving exact rail fallbacks.
+
 - Use `attune` for direct feature contexts and ordinary inlined functions for scalar helpers. Centralize the existing fusion choice across vector arithmetic, scalar evaluation and u16 tails without changing its numerical policy (`0a90c800`, `2bd394bd`).
 
 - Make CPU-feature entry points canonical, retain token APIs as compatibility adapters, and share private width-generic kernels and slice-tail handling. Preserve public signatures and numerical policies; refresh the eight assembly snapshot pairs approved for this refactor (`d79656ce`).
 
 ### Deprecated
 
-- `tokens::x4` and `tokens::x8`: use the same function in `target_features`, omitting its token argument inside a matching CPU-feature function. Existing signatures remain available (`9b2df432`).
-- `tokens::x16` is deprecated without a direct public replacement; its existing functions remain callable. Additional target-feature widths and fallbacks are crate-private (`0c5c8bde`, `320dcd6b`).
+- Cargo features `unsafe_simd` and `alt` now emit deprecation warnings when enabled (even if no items are referenced) and are queued for removal in 0.7.0, along with `#[doc(hidden)] pub mod alt` and `#[doc(hidden)] pub mod u16_lut`.
+- `pub mod tf`: use `linear_srgb::default` or `linear_srgb::precise` instead (queued for removal in 0.7.0).
+- `pub mod tokens`, `tokens::x4`, `tokens::x8`, and `archmage::*Token` re-exports (`since = "0.6.13"`): use the same function in `target_features`, omitting its token argument inside a matching CPU-feature function, and import tokens directly from `archmage`. Existing signatures remain available (`9b2df432`).
+- `tokens::x16` (`since = "0.6.13"`) is deprecated without a direct public replacement; its existing functions remain callable. Additional target-feature widths and fallbacks are crate-private (`0c5c8bde`, `320dcd6b`).
 
 ### Fixed
 

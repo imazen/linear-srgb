@@ -3,14 +3,15 @@
 // Target: x86_64-unknown-linux-gnu; preset: default; module: tokens
 // Library features: avx512, default, std
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 8b99ff5d3a7c166f335c9842583dfcca87dfb386ccb6b5e4eea543c02779111f
+// Resolution lock SHA-256: 14673aa21189a9e47385a75230c76b50f305b6e20ec5ce875382a964e2578dbd
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 /// Deprecated token-taking compatibility API. Use [`crate::target_features`]
 /// for x4/x8 inside a matching CPU-feature function and omit the token argument.
 /// The x16 compatibility API is deprecated without a direct replacement.
 #[deprecated(
-    note = "use target_features::{x4, x8} inside a matching CPU-feature function; x16 is deprecated without a direct replacement"
+    since = "0.6.13",
+    note = "use target_features::{x4, x8} inside a matching CPU-feature function; x16 is deprecated without a direct replacement (tokens will be removed in 0.7.0)"
 )]
 #[allow(deprecated)]
 pub mod tokens {
@@ -64,10 +65,18 @@ pub mod tokens {
     //!     x8::srgb_to_linear_slice_v3(token, data);
     //! }
     //! ```
+    #[deprecated(
+        since = "0.6.13",
+        note = "use linear_srgb::target_features::x4 inside a matching CPU-feature function; tokens will be removed in 0.7.0"
+    )]
     pub mod x4 {
         //! Compatibility adapters for the deprecated 4-lane token API.
         //! Numerical implementation lives behind `crate::target_features::x4`.
         use archmage::attune;
+        #[deprecated(
+            since = "0.6.13",
+            note = "import X64V3Token directly from archmage; linear_srgb::tokens will be removed in 0.7.0"
+        )]
         pub use archmage::X64V3Token;
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe"
@@ -258,10 +267,18 @@ pub mod tokens {
             crate::target_features::x4::linear_to_gamma_slice_v3(values, gamma)
         }
     }
+    #[deprecated(
+        since = "0.6.13",
+        note = "use linear_srgb::target_features::x8 inside a matching CPU-feature function; tokens will be removed in 0.7.0"
+    )]
     pub mod x8 {
         //! Compatibility adapters for the deprecated 8-lane token API.
         //! Numerical implementation lives behind `crate::target_features::x8`.
         use archmage::attune;
+        #[deprecated(
+            since = "0.6.13",
+            note = "import X64V3Token directly from archmage; linear_srgb::tokens will be removed in 0.7.0"
+        )]
         pub use archmage::X64V3Token;
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe"
@@ -623,13 +640,18 @@ pub mod tokens {
         }
     }
     #[deprecated(
-        note = "the x16 token API is deprecated without a direct replacement; use crate::default for ordinary slice conversion"
+        since = "0.6.13",
+        note = "the x16 token API is deprecated without a direct replacement; use crate::default for ordinary slice conversion (tokens will be removed in 0.7.0)"
     )]
     pub mod x16 {
         //! Deprecated 16-lane token API, retained without a direct public replacement.
         //! Use `crate::default` for ordinary dispatched slice conversion.
         //! Numerical implementation lives behind `crate::target_features::x16`.
         use archmage::attune;
+        #[deprecated(
+            since = "0.6.13",
+            note = "import X64V4Token directly from archmage; linear_srgb::tokens will be removed in 0.7.0"
+        )]
         pub use archmage::X64V4Token;
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe,pclmulqdq,aes,avx512f,avx512bw,avx512cd,avx512dq,avx512vl"
@@ -788,6 +810,14 @@ pub mod tokens {
             crate::target_features::x16::linear_to_srgb_u8_slice_v4(input, output)
         }
     }
+    #[deprecated(
+        since = "0.6.13",
+        note = "import X64V3Token directly from archmage; linear_srgb::tokens will be removed in 0.7.0"
+    )]
     pub use archmage::X64V3Token;
+    #[deprecated(
+        since = "0.6.13",
+        note = "import X64V4Token directly from archmage; linear_srgb::tokens will be removed in 0.7.0"
+    )]
     pub use archmage::X64V4Token;
 }

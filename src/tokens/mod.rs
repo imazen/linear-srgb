@@ -49,23 +49,48 @@
 //! }
 //! ```
 
+#[deprecated(
+    since = "0.6.13",
+    note = "use linear_srgb::target_features::x4 inside a matching CPU-feature function; tokens will be removed in 0.7.0"
+)]
 pub mod x4;
 
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+#[deprecated(
+    since = "0.6.13",
+    note = "use linear_srgb::target_features::x8 inside a matching CPU-feature function; tokens will be removed in 0.7.0"
+)]
 pub mod x8;
 
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2", feature = "avx512"))]
 #[deprecated(
-    note = "the x16 token API is deprecated without a direct replacement; use crate::default for ordinary slice conversion"
+    since = "0.6.13",
+    note = "the x16 token API is deprecated without a direct replacement; use crate::default for ordinary slice conversion (tokens will be removed in 0.7.0)"
 )]
 pub mod x16;
 
 // Re-export token types so users can `use linear_srgb::tokens::X64V3Token` etc.
 #[cfg(target_arch = "aarch64")]
+#[deprecated(
+    since = "0.6.13",
+    note = "import NeonToken directly from archmage; linear_srgb::tokens will be removed in 0.7.0"
+)]
 pub use archmage::NeonToken;
 #[cfg(target_arch = "wasm32")]
+#[deprecated(
+    since = "0.6.13",
+    note = "import Wasm128Token directly from archmage; linear_srgb::tokens will be removed in 0.7.0"
+)]
 pub use archmage::Wasm128Token;
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+#[deprecated(
+    since = "0.6.13",
+    note = "import X64V3Token directly from archmage; linear_srgb::tokens will be removed in 0.7.0"
+)]
 pub use archmage::X64V3Token;
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2", feature = "avx512"))]
+#[deprecated(
+    since = "0.6.13",
+    note = "import X64V4Token directly from archmage; linear_srgb::tokens will be removed in 0.7.0"
+)]
 pub use archmage::X64V4Token;

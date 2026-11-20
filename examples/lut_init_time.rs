@@ -1,3 +1,4 @@
+#![allow(deprecated)] // Benchmarks internal u16_lut generators directly.
 //! Measure u16 LUT initialization time breakdown.
 //!
 //! Run with: cargo run --example lut_init_time --release --all-features

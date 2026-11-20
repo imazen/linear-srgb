@@ -33,8 +33,18 @@ pub(crate) const EXP: u128 = magemath::expf::ExpfOptions::new()
     .caller()
     .bits();
 #[cfg(feature = "transfer")]
+pub(crate) const HLG_EXP: u128 = magemath::expf::ExpfOptions::new()
+    .unclamped_exp2_range()
+    .caller()
+    .bits();
+#[cfg(feature = "transfer")]
 pub(crate) const LOG: u128 = magemath::logf::LogfOptions::new()
     .full_domain()
+    .caller()
+    .bits();
+#[cfg(feature = "transfer")]
+pub(crate) const HLG_LOG: u128 = magemath::logf::LogfOptions::new()
+    .reject_subnormals()
     .caller()
     .bits();
 

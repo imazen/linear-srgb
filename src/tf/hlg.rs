@@ -88,11 +88,13 @@ pub(crate) fn hlg_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let a = floor_zero!(v, zero);
     let low = (a * a) * third;
 
-    let exp_arg = (a - hlg_c) * hlg_inv_a_log2e;
-    let exp_val = exp_arg.exp2::<{ math::EXP }>();
+    let mask = a.simd_le(half);
+    let exp_arg = f32x4::blend(mask, zero, (a - hlg_c) * hlg_inv_a_log2e);
+    let Ok(exp_val) = exp_arg.try_exp2_with::<{ math::HLG_EXP }>() else {
+        return f32x4::from_array_t(t, v.to_array().map(|x| hlg_to_linear_with_token(t, x)));
+    };
     let high = (exp_val + hlg_b) * inv_12;
 
-    let mask = a.simd_le(half);
     f32x4::blend(mask, low, high)
 }
 
@@ -108,17 +110,19 @@ pub(crate) fn linear_to_hlg_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
     let hlg_c = f32x4::splat_t(t, HLG_C);
 
     // nonpositive and unordered inputs become +0 ⇒ low = sqrt(0) = 0; the
-    // a<=1/12 mask then selects `low` (=0) for those lanes. The `high` path
-    // is always discarded when a<=1/12, so no log-argument clamp is needed
-    // (garbage from fast_log2f on a small or non-positive arg is masked out).
+    // a<=1/12 mask then selects `low` (=0) for those lanes. Blending masked
+    // lanes to 1.0 keeps the log2 input strictly positive normal (>= 0.715331)
+    // for all finite non-overflowing lanes, eliding subnormal normalization.
     let a = floor_zero!(v, zero);
     let low = (three * a).sqrt();
 
-    let arg = twelve * a - hlg_b;
-    let log2_val = arg.log2::<{ math::LOG }>();
+    let mask = a.simd_le(threshold);
+    let arg = f32x4::blend(mask, f32x4::splat_t(t, 1.0), twelve * a - hlg_b);
+    let Ok(log2_val) = arg.try_log2_with::<{ math::HLG_LOG }>() else {
+        return f32x4::from_array_t(t, v.to_array().map(|x| linear_to_hlg_with_token(t, x)));
+    };
     let high = hlg_a_ln2.mla(log2_val, hlg_c).max(f32x4::splat_t(t, 0.5));
 
-    let mask = a.simd_le(threshold);
     f32x4::blend(mask, low, high)
 }
 
@@ -130,7 +134,7 @@ use magetypes::simd::backends::F32x8Convert;
 use magetypes::simd::generic::f32x8;
 
 #[inline(always)]
-pub(crate) fn hlg_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
+pub(crate) fn hlg_to_linear_x8<T: F32x8Convert + F32x4Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let zero = f32x8::zero_t(t);
     let half = f32x8::splat_t(t, 0.5);
     let third = f32x8::splat_t(t, 1.0 / 3.0);
@@ -143,16 +147,18 @@ pub(crate) fn hlg_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let a = floor_zero!(v, zero);
     let low = (a * a) * third;
 
-    let exp_arg = (a - hlg_c) * hlg_inv_a_log2e;
-    let exp_val = exp_arg.exp2::<{ math::EXP }>();
+    let mask = a.simd_le(half);
+    let exp_arg = f32x8::blend(mask, zero, (a - hlg_c) * hlg_inv_a_log2e);
+    let Ok(exp_val) = exp_arg.try_exp2_with::<{ math::HLG_EXP }>() else {
+        return f32x8::from_array_t(t, v.to_array().map(|x| hlg_to_linear_with_token(t, x)));
+    };
     let high = (exp_val + hlg_b) * inv_12;
 
-    let mask = a.simd_le(half);
     f32x8::blend(mask, low, high)
 }
 
 #[inline(always)]
-pub(crate) fn linear_to_hlg_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
+pub(crate) fn linear_to_hlg_x8<T: F32x8Convert + F32x4Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let zero = f32x8::zero_t(t);
     let threshold = f32x8::splat_t(t, 1.0 / 12.0);
     let three = f32x8::splat_t(t, 3.0);
@@ -165,11 +171,13 @@ pub(crate) fn linear_to_hlg_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
     let a = floor_zero!(v, zero);
     let low = (three * a).sqrt();
 
-    let arg = twelve * a - hlg_b;
-    let log2_val = arg.log2::<{ math::LOG }>();
+    let mask = a.simd_le(threshold);
+    let arg = f32x8::blend(mask, f32x8::splat_t(t, 1.0), twelve * a - hlg_b);
+    let Ok(log2_val) = arg.try_log2_with::<{ math::HLG_LOG }>() else {
+        return f32x8::from_array_t(t, v.to_array().map(|x| linear_to_hlg_with_token(t, x)));
+    };
     let high = hlg_a_ln2.mla(log2_val, hlg_c).max(f32x8::splat_t(t, 0.5));
 
-    let mask = a.simd_le(threshold);
     f32x8::blend(mask, low, high)
 }
 
@@ -181,7 +189,7 @@ use magetypes::simd::backends::F32x16Convert;
 use magetypes::simd::generic::f32x16;
 
 #[inline(always)]
-pub(crate) fn hlg_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
+pub(crate) fn hlg_to_linear_x16<T: F32x16Convert + F32x4Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
     let zero = f32x16::zero_t(t);
     let half = f32x16::splat_t(t, 0.5);
     let third = f32x16::splat_t(t, 1.0 / 3.0);
@@ -194,16 +202,18 @@ pub(crate) fn hlg_to_linear_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<
     let a = floor_zero!(v, zero);
     let low = (a * a) * third;
 
-    let exp_arg = (a - hlg_c) * hlg_inv_a_log2e;
-    let exp_val = exp_arg.exp2::<{ math::EXP }>();
+    let mask = a.simd_le(half);
+    let exp_arg = f32x16::blend(mask, zero, (a - hlg_c) * hlg_inv_a_log2e);
+    let Ok(exp_val) = exp_arg.try_exp2_with::<{ math::HLG_EXP }>() else {
+        return f32x16::from_array_t(t, v.to_array().map(|x| hlg_to_linear_with_token(t, x)));
+    };
     let high = (exp_val + hlg_b) * inv_12;
 
-    let mask = a.simd_le(half);
     f32x16::blend(mask, low, high)
 }
 
 #[inline(always)]
-pub(crate) fn linear_to_hlg_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
+pub(crate) fn linear_to_hlg_x16<T: F32x16Convert + F32x4Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
     let zero = f32x16::zero_t(t);
     let threshold = f32x16::splat_t(t, 1.0 / 12.0);
     let three = f32x16::splat_t(t, 3.0);
@@ -215,10 +225,12 @@ pub(crate) fn linear_to_hlg_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<
     let a = floor_zero!(v, zero);
     let low = (three * a).sqrt();
 
-    let arg = twelve * a - hlg_b;
-    let log2_val = arg.log2::<{ math::LOG }>();
+    let mask = a.simd_le(threshold);
+    let arg = f32x16::blend(mask, f32x16::splat_t(t, 1.0), twelve * a - hlg_b);
+    let Ok(log2_val) = arg.try_log2_with::<{ math::HLG_LOG }>() else {
+        return f32x16::from_array_t(t, v.to_array().map(|x| linear_to_hlg_with_token(t, x)));
+    };
     let high = hlg_a_ln2.mla(log2_val, hlg_c).max(f32x16::splat_t(t, 0.5));
 
-    let mask = a.simd_le(threshold);
     f32x16::blend(mask, low, high)
 }

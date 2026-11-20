@@ -10,12 +10,13 @@
 ## summary
 #
 #   pub modules                                 1
-#   free functions                             30
+#   free functions                             34
 #
 # per-module pub lines:
 #   (root)                            1
-#   default                          18
+#   default                          20
 #   iec                               4
+#   precise                           2
 #   tf                                8
 
 ## items (25 lines)
@@ -42,9 +43,9 @@ pub fn tf::hlg_to_linear(f32) -> f32 [also: default]
 pub fn tf::linear_to_bt709(f32) -> f32 [also: default]
 pub fn tf::linear_to_hlg(f32) -> f32 [also: default]
 pub fn tf::linear_to_pq(f32) -> f32 [also: default]
-pub fn tf::linear_to_pq_precise_slice(&mut [f32])
+pub fn tf::linear_to_pq_precise_slice(&mut [f32]) [also: default, precise]
 pub fn tf::pq_to_linear(f32) -> f32 [also: default]
-pub fn tf::pq_to_linear_precise_slice(&mut [f32])
+pub fn tf::pq_to_linear_precise_slice(&mut [f32]) [also: default, precise]
 ## arch shapes (32 shapes: 32 on every recorded arch, 0 arch-unique)
 
 [aarch64] pub fn target_features::<lanes>::bt709_to_linear_<tier>([f32; 4]) -> [f32; 4]

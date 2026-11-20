@@ -1,3 +1,4 @@
+#![allow(deprecated)] // Benchmarks internal u16_lut generators directly.
 //! Benchmark encode LUT strategies: uniform vs sqrt vs two-range vs polynomial.
 //!
 //! cargo run --example encode_perf --release --all-features

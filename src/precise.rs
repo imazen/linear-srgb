@@ -38,3 +38,7 @@ pub use crate::scalar::{linear_to_srgb_f64, srgb_to_linear_f64};
 
 // Custom gamma f64
 pub use crate::scalar::{gamma_to_linear_f64, linear_to_gamma_f64};
+
+// Full-range ST 2084 (PQ) reference f64-intermediate slice conversions (behind `transfer` feature)
+#[cfg(feature = "transfer")]
+pub use crate::tf::pq::{linear_to_pq_precise_slice, pq_to_linear_precise_slice};

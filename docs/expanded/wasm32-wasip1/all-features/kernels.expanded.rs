@@ -3,9 +3,10 @@
 // Target: wasm32-wasip1; preset: all-features; module: kernels
 // Library features: alt, avx512, default, iec, precise-portable, std, transfer, unsafe_simd
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 307cfa1d8ab572510661780ce290e0677e5b9af5bba77758644e04f5e87c814d
+// Resolution lock SHA-256: 6b2ca29ec7052c8f1c4129de53205c4b3a2a98408b74f3a4a8265635621851a7
 // Baseline target features; RUSTFLAGS overrides cleared.
 
+#[allow(deprecated)]
 mod kernels {
     //! Private numerical kernels shared by target-feature entry points and runtime dispatch.
     pub(crate) mod float {

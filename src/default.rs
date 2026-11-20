@@ -109,8 +109,12 @@ pub use crate::scalar::{gamma_to_linear, linear_to_gamma};
 // ============================================================================
 
 #[cfg(feature = "transfer")]
-pub use crate::tf::{
-    bt709_to_linear, hlg_to_linear, linear_to_bt709, linear_to_hlg, linear_to_pq, pq_to_linear,
+pub use crate::tf::bt709::{bt709_to_linear, linear_to_bt709};
+#[cfg(feature = "transfer")]
+pub use crate::tf::hlg::{hlg_to_linear, linear_to_hlg};
+#[cfg(feature = "transfer")]
+pub use crate::tf::pq::{
+    linear_to_pq, linear_to_pq_precise_slice, pq_to_linear, pq_to_linear_precise_slice,
 };
 
 // ============================================================================

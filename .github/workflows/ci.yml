@@ -122,7 +122,7 @@ jobs:
           targets: wasm32-unknown-unknown,wasm32-wasip1
 
       - name: Install wasmtime
-        run: curl https://wasmtime.dev/install.sh -sSf | bash && echo "$HOME/.wasmtime/bin" >> "$GITHUB_PATH"
+        uses: taiki-e/install-action@wasmtime
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -192,8 +192,11 @@ jobs:
       - name: Check formatting
         run: cargo fmt --check
 
-      - name: Clippy (all features)
-        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Clippy (active features)
+        run: cargo clippy --all-targets --features transfer,iec,precise-portable -- -D warnings
+
+      - name: Clippy (all features including deprecated)
+        run: cargo clippy --all-targets --all-features -- -D warnings -A deprecated
 
   bench:
     name: Benchmarks

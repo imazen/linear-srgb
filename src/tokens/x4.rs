@@ -4,12 +4,24 @@
 use archmage::attune;
 
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+#[deprecated(
+    since = "0.6.13",
+    note = "import X64V3Token directly from archmage; linear_srgb::tokens will be removed in 0.7.0"
+)]
 pub use archmage::X64V3Token;
 
 #[cfg(target_arch = "aarch64")]
+#[deprecated(
+    since = "0.6.13",
+    note = "import NeonToken directly from archmage; linear_srgb::tokens will be removed in 0.7.0"
+)]
 pub use archmage::NeonToken;
 
 #[cfg(target_arch = "wasm32")]
+#[deprecated(
+    since = "0.6.13",
+    note = "import Wasm128Token directly from archmage; linear_srgb::tokens will be removed in 0.7.0"
+)]
 pub use archmage::Wasm128Token;
 
 // sRGB transfer function constants (C0-continuous moxcms, matching rational polynomial)

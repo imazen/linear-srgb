@@ -256,7 +256,7 @@ fn signed_extended_srgb_rails() {
 #[cfg(feature = "transfer")]
 #[test]
 fn hdr_scalar_and_slice_match_all_positions() {
-    use linear_srgb::tf;
+    use linear_srgb::default as tf;
     let rails = [
         f32::NAN,
         f32::from_bits(0xff80_0001),
@@ -339,12 +339,12 @@ fn pq_batches_handle_dark_toes_and_nan_at_every_position() {
     for (fast, precise, samples) in [
         (
             pq_to_linear_slice as fn(&mut [f32]),
-            linear_srgb::tf::pq_to_linear_precise_slice as fn(&mut [f32]),
+            linear_srgb::precise::pq_to_linear_precise_slice as fn(&mut [f32]),
             [0.0, 0.005, 0.0052051, 0.0199, 1.0, f32::INFINITY, nan],
         ),
         (
             linear_to_pq_slice as fn(&mut [f32]),
-            linear_srgb::tf::linear_to_pq_precise_slice as fn(&mut [f32]),
+            linear_srgb::precise::linear_to_pq_precise_slice as fn(&mut [f32]),
             [
                 0.0,
                 1e-20,
@@ -395,7 +395,13 @@ fn pq_oetf_uses_the_small_fit_within_one_code() {
         1e-4,
     ];
     let mut reference = inputs;
-    linear_srgb::tf::linear_to_pq_precise_slice(&mut reference);
+    linear_srgb::default::linear_to_pq_precise_slice(&mut reference);
+    let mut reference_precise = inputs;
+    linear_srgb::precise::linear_to_pq_precise_slice(&mut reference_precise);
+    assert_eq!(
+        reference.map(f32::to_bits),
+        reference_precise.map(f32::to_bits)
+    );
     let mut actual = inputs.repeat(5);
     linear_to_pq_slice(&mut actual);
     let code = |x: f32| (f64::from(x) * 65535.0 + 0.5) as i32;
@@ -419,7 +425,7 @@ fn pq_oetf_uses_the_small_fit_within_one_code() {
         );
         assert_eq!(
             actual.to_bits(),
-            linear_srgb::tf::linear_to_pq(inputs[lane]).to_bits()
+            linear_srgb::default::linear_to_pq(inputs[lane]).to_bits()
         );
     }
 }

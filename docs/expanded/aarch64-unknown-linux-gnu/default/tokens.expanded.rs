@@ -3,14 +3,15 @@
 // Target: aarch64-unknown-linux-gnu; preset: default; module: tokens
 // Library features: avx512, default, std
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 8b99ff5d3a7c166f335c9842583dfcca87dfb386ccb6b5e4eea543c02779111f
+// Resolution lock SHA-256: 14673aa21189a9e47385a75230c76b50f305b6e20ec5ce875382a964e2578dbd
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 /// Deprecated token-taking compatibility API. Use [`crate::target_features`]
 /// for x4/x8 inside a matching CPU-feature function and omit the token argument.
 /// The x16 compatibility API is deprecated without a direct replacement.
 #[deprecated(
-    note = "use target_features::{x4, x8} inside a matching CPU-feature function; x16 is deprecated without a direct replacement"
+    since = "0.6.13",
+    note = "use target_features::{x4, x8} inside a matching CPU-feature function; x16 is deprecated without a direct replacement (tokens will be removed in 0.7.0)"
 )]
 #[allow(deprecated)]
 pub mod tokens {
@@ -64,10 +65,18 @@ pub mod tokens {
     //!     x8::srgb_to_linear_slice_v3(token, data);
     //! }
     //! ```
+    #[deprecated(
+        since = "0.6.13",
+        note = "use linear_srgb::target_features::x4 inside a matching CPU-feature function; tokens will be removed in 0.7.0"
+    )]
     pub mod x4 {
         //! Compatibility adapters for the deprecated 4-lane token API.
         //! Numerical implementation lives behind `crate::target_features::x4`.
         use archmage::attune;
+        #[deprecated(
+            since = "0.6.13",
+            note = "import NeonToken directly from archmage; linear_srgb::tokens will be removed in 0.7.0"
+        )]
         pub use archmage::NeonToken;
         #[target_feature(enable = "neon")]
         #[inline]
@@ -237,5 +246,9 @@ pub mod tokens {
             crate::target_features::x4::linear_to_gamma_slice_neon(values, gamma)
         }
     }
+    #[deprecated(
+        since = "0.6.13",
+        note = "import NeonToken directly from archmage; linear_srgb::tokens will be removed in 0.7.0"
+    )]
     pub use archmage::NeonToken;
 }

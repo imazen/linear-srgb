@@ -4,6 +4,10 @@
 use archmage::attune;
 
 // 8-wide is AVX2/V3-only; NEON and Wasm128 are 4-wide and live in `tokens::x4`.
+#[deprecated(
+    since = "0.6.13",
+    note = "import X64V3Token directly from archmage; linear_srgb::tokens will be removed in 0.7.0"
+)]
 pub use archmage::X64V3Token;
 
 // sRGB transfer function constants (C0-continuous moxcms, matching rational polynomial)

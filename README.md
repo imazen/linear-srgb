@@ -335,7 +335,9 @@ curve policy, row/tier portability and exact-rounding prototype costs.
 - **`avx512`** (default): AVX-512 code paths (16-wide f32)
 - **`transfer`**: BT.709, PQ, HLG transfer functions (scalar + SIMD)
 - **`iec`**: IEC 61966-2-1 textbook sRGB functions for legacy interop
-- **`alt`**: Alternative/experimental implementations for benchmarking
+- **`precise-portable`**: Single-rounding software FMA on non-fusing WASM engines
+- **`alt`** *(deprecated, removed in 0.7.0)*: Benchmarking-only comparison implementations
+- **`unsafe_simd`** *(deprecated, removed in 0.7.0)*: Legacy no-op feature
 
 ```toml
 # no_std (requires alloc for LUT generation)
@@ -345,17 +347,14 @@ linear-srgb = { version = "0.6.13", default-features = false }
 ## Module Organization
 
 - **`default`** — Recommended API. Rational polynomial for f32, LUT for integers, SIMD for slices.
-- **`precise`** — `powf()`-based conversions with C0-continuous constants (not IEC textbook). f32/f64, extended range.
+- **`precise`** — `powf()`-based conversions with C0-continuous constants (not IEC textbook). f32/f64, extended range, and reference f64-intermediate PQ slices.
 - **`lut`** — Lookup tables for custom bit depths (10-bit, 12-bit, 16-bit).
-- **`tf`** — Transfer functions: BT.709, PQ, HLG. Requires `transfer` feature.
 - **`iec`** — IEC 61966-2-1 textbook constants for legacy interop. Requires `iec` feature.
 - **`target_features`** — Array/slice conversions inside matching CPU-feature functions (see below).
-- **`tokens`** — Deprecated token-taking compatibility API.
+- **`tokens`** *(deprecated, removed in 0.7.0)* — Legacy token-taking compatibility API.
+- **`tf`** *(deprecated, removed in 0.7.0)* — Legacy transfer-function module; use `default` or `precise`.
 
 ## Composing inside CPU-feature functions (`target_features`)
-
-Source transition: [PR #30](https://github.com/imazen/linear-srgb/pull/30); this API is not in crates.io 0.6.12.
-See the [migration and outstanding-work inventory](https://github.com/imazen/linear-srgb/blob/api/target-features/docs/SIMD_TRANSITION.md).
 
 For ordinary calls, use `linear_srgb::default`: it selects CPU features at runtime.
 Use `target_features` when your loop already runs inside a matching

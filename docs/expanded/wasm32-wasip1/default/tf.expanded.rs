@@ -3,21 +3,18 @@
 // Target: wasm32-wasip1; preset: default; module: tf
 // Library features: avx512, default, std
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 8b99ff5d3a7c166f335c9842583dfcca87dfb386ccb6b5e4eea543c02779111f
+// Resolution lock SHA-256: 14673aa21189a9e47385a75230c76b50f305b6e20ec5ce875382a964e2578dbd
 // Baseline target features; RUSTFLAGS overrides cleared.
 
-/// Transfer functions: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).
+/// Deprecated transfer-function compatibility module: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).
 ///
-/// **Prefer [`default`]** — every scalar in this module is already
-/// re-exported there with the same name (gated on `transfer` for the HDR
-/// curves). `tf` exists primarily for internal organization of the
-/// per-curve implementations consumed by [`tokens`]; it is `pub` for
-/// backward compatibility with 0.6.x callers that imported through this
-/// path. New code should use `linear_srgb::default::*`.
+/// **Use [`default`] or [`precise`] instead** — every scalar and slice helper in
+/// this module is re-exported under [`default`] (and the f64-intermediate PQ
+/// reference slices are also re-exported under [`precise`]). Every function in
+/// `linear_srgb::tf` is deprecated in 0.6.13 and the module will be removed in 0.7.0.
 ///
-/// BT.709 / PQ / HLG scalars require the `transfer` feature. sRGB-only
-/// helpers compile unconditionally so the extended-range slice functions
-/// (not gated on `transfer`) can link.
+/// BT.709 / PQ / HLG functions require the `transfer` feature.
+#[allow(deprecated)]
 pub mod tf {
     #![allow(dead_code)]
     #![allow(clippy::excessive_precision)]
@@ -334,6 +331,10 @@ pub mod tf {
     ///
     /// Uses rational polynomial fitted to C0-continuous sRGB — no `powf()` calls.
     /// Equivalent to `crate::rational_poly::srgb_to_linear_fast`.
+    #[deprecated(
+        since = "0.6.13",
+        note = "use linear_srgb::default::srgb_to_linear instead; linear_srgb::tf will be removed in 0.7.0"
+    )]
     #[inline(always)]
     pub fn srgb_to_linear(v: f32) -> f32 {
         crate::rational_poly::srgb_to_linear_fast(v)
@@ -342,6 +343,10 @@ pub mod tf {
     ///
     /// Uses sqrt + libjxl rational polynomial — no `powf()` calls.
     /// Equivalent to `crate::rational_poly::linear_to_srgb_fast`.
+    #[deprecated(
+        since = "0.6.13",
+        note = "use linear_srgb::default::linear_to_srgb instead; linear_srgb::tf will be removed in 0.7.0"
+    )]
     #[inline(always)]
     pub fn linear_to_srgb(v: f32) -> f32 {
         crate::rational_poly::linear_to_srgb_fast(v)

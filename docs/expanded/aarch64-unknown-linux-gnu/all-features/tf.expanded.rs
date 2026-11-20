@@ -3,21 +3,18 @@
 // Target: aarch64-unknown-linux-gnu; preset: all-features; module: tf
 // Library features: alt, avx512, default, iec, precise-portable, std, transfer, unsafe_simd
 // Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 307cfa1d8ab572510661780ce290e0677e5b9af5bba77758644e04f5e87c814d
+// Resolution lock SHA-256: 6b2ca29ec7052c8f1c4129de53205c4b3a2a98408b74f3a4a8265635621851a7
 // Baseline target features; RUSTFLAGS overrides cleared.
 
-/// Transfer functions: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).
+/// Deprecated transfer-function compatibility module: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).
 ///
-/// **Prefer [`default`]** — every scalar in this module is already
-/// re-exported there with the same name (gated on `transfer` for the HDR
-/// curves). `tf` exists primarily for internal organization of the
-/// per-curve implementations consumed by [`tokens`]; it is `pub` for
-/// backward compatibility with 0.6.x callers that imported through this
-/// path. New code should use `linear_srgb::default::*`.
+/// **Use [`default`] or [`precise`] instead** — every scalar and slice helper in
+/// this module is re-exported under [`default`] (and the f64-intermediate PQ
+/// reference slices are also re-exported under [`precise`]). Every function in
+/// `linear_srgb::tf` is deprecated in 0.6.13 and the module will be removed in 0.7.0.
 ///
-/// BT.709 / PQ / HLG scalars require the `transfer` feature. sRGB-only
-/// helpers compile unconditionally so the extended-range slice functions
-/// (not gated on `transfer`) can link.
+/// BT.709 / PQ / HLG functions require the `transfer` feature.
+#[allow(deprecated)]
 pub mod tf {
     #![allow(dead_code)]
     #![allow(clippy::excessive_precision)]
@@ -487,10 +484,15 @@ pub mod tf {
                 v.max_with::<NON_NAN_RHS>(zero)
             };
             let low = (a * a) * third;
-            let exp_arg = (a - hlg_c) * hlg_inv_a_log2e;
-            let exp_val = exp_arg.exp2::<{ math::EXP }>();
-            let high = (exp_val + hlg_b) * inv_12;
             let mask = a.simd_le(half);
+            let exp_arg = f32x4::blend(mask, zero, (a - hlg_c) * hlg_inv_a_log2e);
+            let Ok(exp_val) = exp_arg.try_exp2_with::<{ math::HLG_EXP }>() else {
+                return f32x4::from_array_t(
+                    t,
+                    v.to_array().map(|x| hlg_to_linear_with_token(t, x)),
+                );
+            };
+            let high = (exp_val + hlg_b) * inv_12;
             f32x4::blend(mask, low, high)
         }
         #[allow(dead_code)]
@@ -512,16 +514,24 @@ pub mod tf {
                 v.max_with::<NON_NAN_RHS>(zero)
             };
             let low = (three * a).sqrt();
-            let arg = twelve * a - hlg_b;
-            let log2_val = arg.log2::<{ math::LOG }>();
-            let high = hlg_a_ln2.mla(log2_val, hlg_c).max(f32x4::splat_t(t, 0.5));
             let mask = a.simd_le(threshold);
+            let arg = f32x4::blend(mask, f32x4::splat_t(t, 1.0), twelve * a - hlg_b);
+            let Ok(log2_val) = arg.try_log2_with::<{ math::HLG_LOG }>() else {
+                return f32x4::from_array_t(
+                    t,
+                    v.to_array().map(|x| linear_to_hlg_with_token(t, x)),
+                );
+            };
+            let high = hlg_a_ln2.mla(log2_val, hlg_c).max(f32x4::splat_t(t, 0.5));
             f32x4::blend(mask, low, high)
         }
         use magetypes::simd::backends::F32x8Convert;
         use magetypes::simd::generic::f32x8;
         #[inline(always)]
-        pub(crate) fn hlg_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
+        pub(crate) fn hlg_to_linear_x8<T: F32x8Convert + F32x4Convert>(
+            t: T,
+            v: f32x8<T>,
+        ) -> f32x8<T> {
             let zero = f32x8::zero_t(t);
             let half = f32x8::splat_t(t, 0.5);
             let third = f32x8::splat_t(t, 1.0 / 3.0);
@@ -538,14 +548,22 @@ pub mod tf {
                 v.max_with::<NON_NAN_RHS>(zero)
             };
             let low = (a * a) * third;
-            let exp_arg = (a - hlg_c) * hlg_inv_a_log2e;
-            let exp_val = exp_arg.exp2::<{ math::EXP }>();
-            let high = (exp_val + hlg_b) * inv_12;
             let mask = a.simd_le(half);
+            let exp_arg = f32x8::blend(mask, zero, (a - hlg_c) * hlg_inv_a_log2e);
+            let Ok(exp_val) = exp_arg.try_exp2_with::<{ math::HLG_EXP }>() else {
+                return f32x8::from_array_t(
+                    t,
+                    v.to_array().map(|x| hlg_to_linear_with_token(t, x)),
+                );
+            };
+            let high = (exp_val + hlg_b) * inv_12;
             f32x8::blend(mask, low, high)
         }
         #[inline(always)]
-        pub(crate) fn linear_to_hlg_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
+        pub(crate) fn linear_to_hlg_x8<T: F32x8Convert + F32x4Convert>(
+            t: T,
+            v: f32x8<T>,
+        ) -> f32x8<T> {
             let zero = f32x8::zero_t(t);
             let threshold = f32x8::splat_t(t, 1.0 / 12.0);
             let three = f32x8::splat_t(t, 3.0);
@@ -562,16 +580,21 @@ pub mod tf {
                 v.max_with::<NON_NAN_RHS>(zero)
             };
             let low = (three * a).sqrt();
-            let arg = twelve * a - hlg_b;
-            let log2_val = arg.log2::<{ math::LOG }>();
-            let high = hlg_a_ln2.mla(log2_val, hlg_c).max(f32x8::splat_t(t, 0.5));
             let mask = a.simd_le(threshold);
+            let arg = f32x8::blend(mask, f32x8::splat_t(t, 1.0), twelve * a - hlg_b);
+            let Ok(log2_val) = arg.try_log2_with::<{ math::HLG_LOG }>() else {
+                return f32x8::from_array_t(
+                    t,
+                    v.to_array().map(|x| linear_to_hlg_with_token(t, x)),
+                );
+            };
+            let high = hlg_a_ln2.mla(log2_val, hlg_c).max(f32x8::splat_t(t, 0.5));
             f32x8::blend(mask, low, high)
         }
         use magetypes::simd::backends::F32x16Convert;
         use magetypes::simd::generic::f32x16;
         #[inline(always)]
-        pub(crate) fn hlg_to_linear_x16<T: F32x16Convert>(
+        pub(crate) fn hlg_to_linear_x16<T: F32x16Convert + F32x4Convert>(
             t: T,
             v: f32x16<T>,
         ) -> f32x16<T> {
@@ -591,14 +614,19 @@ pub mod tf {
                 v.max_with::<NON_NAN_RHS>(zero)
             };
             let low = (a * a) * third;
-            let exp_arg = (a - hlg_c) * hlg_inv_a_log2e;
-            let exp_val = exp_arg.exp2::<{ math::EXP }>();
-            let high = (exp_val + hlg_b) * inv_12;
             let mask = a.simd_le(half);
+            let exp_arg = f32x16::blend(mask, zero, (a - hlg_c) * hlg_inv_a_log2e);
+            let Ok(exp_val) = exp_arg.try_exp2_with::<{ math::HLG_EXP }>() else {
+                return f32x16::from_array_t(
+                    t,
+                    v.to_array().map(|x| hlg_to_linear_with_token(t, x)),
+                );
+            };
+            let high = (exp_val + hlg_b) * inv_12;
             f32x16::blend(mask, low, high)
         }
         #[inline(always)]
-        pub(crate) fn linear_to_hlg_x16<T: F32x16Convert>(
+        pub(crate) fn linear_to_hlg_x16<T: F32x16Convert + F32x4Convert>(
             t: T,
             v: f32x16<T>,
         ) -> f32x16<T> {
@@ -618,10 +646,15 @@ pub mod tf {
                 v.max_with::<NON_NAN_RHS>(zero)
             };
             let low = (three * a).sqrt();
-            let arg = twelve * a - hlg_b;
-            let log2_val = arg.log2::<{ math::LOG }>();
-            let high = hlg_a_ln2.mla(log2_val, hlg_c).max(f32x16::splat_t(t, 0.5));
             let mask = a.simd_le(threshold);
+            let arg = f32x16::blend(mask, f32x16::splat_t(t, 1.0), twelve * a - hlg_b);
+            let Ok(log2_val) = arg.try_log2_with::<{ math::HLG_LOG }>() else {
+                return f32x16::from_array_t(
+                    t,
+                    v.to_array().map(|x| linear_to_hlg_with_token(t, x)),
+                );
+            };
+            let high = hlg_a_ln2.mla(log2_val, hlg_c).max(f32x16::splat_t(t, 0.5));
             f32x16::blend(mask, low, high)
         }
     }
@@ -654,8 +687,16 @@ pub mod tf {
             .full_domain()
             .caller()
             .bits();
+        pub(crate) const HLG_EXP: u128 = magemath::expf::ExpfOptions::new()
+            .unclamped_exp2_range()
+            .caller()
+            .bits();
         pub(crate) const LOG: u128 = magemath::logf::LogfOptions::new()
             .full_domain()
+            .caller()
+            .bits();
+        pub(crate) const HLG_LOG: u128 = magemath::logf::LogfOptions::new()
+            .reject_subnormals()
             .caller()
             .bits();
         #[inline(always)]
@@ -1404,6 +1445,10 @@ pub mod tf {
     ///
     /// Uses rational polynomial fitted to C0-continuous sRGB — no `powf()` calls.
     /// Equivalent to `crate::rational_poly::srgb_to_linear_fast`.
+    #[deprecated(
+        since = "0.6.13",
+        note = "use linear_srgb::default::srgb_to_linear instead; linear_srgb::tf will be removed in 0.7.0"
+    )]
     #[inline(always)]
     pub fn srgb_to_linear(v: f32) -> f32 {
         crate::rational_poly::srgb_to_linear_fast(v)
@@ -1412,14 +1457,86 @@ pub mod tf {
     ///
     /// Uses sqrt + libjxl rational polynomial — no `powf()` calls.
     /// Equivalent to `crate::rational_poly::linear_to_srgb_fast`.
+    #[deprecated(
+        since = "0.6.13",
+        note = "use linear_srgb::default::linear_to_srgb instead; linear_srgb::tf will be removed in 0.7.0"
+    )]
     #[inline(always)]
     pub fn linear_to_srgb(v: f32) -> f32 {
         crate::rational_poly::linear_to_srgb_fast(v)
     }
-    pub use bt709::{bt709_to_linear, linear_to_bt709};
-    pub use hlg::{hlg_to_linear, linear_to_hlg};
-    pub use pq::{
-        linear_to_pq, linear_to_pq_precise_slice, pq_to_linear,
-        pq_to_linear_precise_slice,
-    };
+    /// BT.709 EOTF: encoded → linear. Deprecated compatibility alias for [`crate::default::bt709_to_linear`].
+    #[deprecated(
+        since = "0.6.13",
+        note = "use linear_srgb::default::bt709_to_linear instead; linear_srgb::tf will be removed in 0.7.0"
+    )]
+    #[inline(always)]
+    pub fn bt709_to_linear(v: f32) -> f32 {
+        bt709::bt709_to_linear(v)
+    }
+    /// BT.709 inverse EOTF: linear → encoded. Deprecated compatibility alias for [`crate::default::linear_to_bt709`].
+    #[deprecated(
+        since = "0.6.13",
+        note = "use linear_srgb::default::linear_to_bt709 instead; linear_srgb::tf will be removed in 0.7.0"
+    )]
+    #[inline(always)]
+    pub fn linear_to_bt709(v: f32) -> f32 {
+        bt709::linear_to_bt709(v)
+    }
+    /// HLG inverse OETF: signal → scene linear. Deprecated compatibility alias for [`crate::default::hlg_to_linear`].
+    #[deprecated(
+        since = "0.6.13",
+        note = "use linear_srgb::default::hlg_to_linear instead; linear_srgb::tf will be removed in 0.7.0"
+    )]
+    #[inline(always)]
+    pub fn hlg_to_linear(v: f32) -> f32 {
+        hlg::hlg_to_linear(v)
+    }
+    /// HLG OETF: scene linear → signal. Deprecated compatibility alias for [`crate::default::linear_to_hlg`].
+    #[deprecated(
+        since = "0.6.13",
+        note = "use linear_srgb::default::linear_to_hlg instead; linear_srgb::tf will be removed in 0.7.0"
+    )]
+    #[inline(always)]
+    pub fn linear_to_hlg(v: f32) -> f32 {
+        hlg::linear_to_hlg(v)
+    }
+    /// PQ EOTF for normalized signal values. Deprecated compatibility alias for [`crate::default::pq_to_linear`].
+    #[deprecated(
+        since = "0.6.13",
+        note = "use linear_srgb::default::pq_to_linear instead; linear_srgb::tf will be removed in 0.7.0"
+    )]
+    #[inline(always)]
+    pub fn pq_to_linear(v: f32) -> f32 {
+        pq::pq_to_linear(v)
+    }
+    /// PQ inverse EOTF for normalized linear light. Deprecated compatibility alias for [`crate::default::linear_to_pq`].
+    #[deprecated(
+        since = "0.6.13",
+        note = "use linear_srgb::default::linear_to_pq instead; linear_srgb::tf will be removed in 0.7.0"
+    )]
+    #[inline(always)]
+    pub fn linear_to_pq(v: f32) -> f32 {
+        pq::linear_to_pq(v)
+    }
+    /// Convert normalized ST 2084 signals to linear light using f64 intermediates.
+    /// Deprecated compatibility alias for [`crate::precise::pq_to_linear_precise_slice`].
+    #[deprecated(
+        since = "0.6.13",
+        note = "use linear_srgb::precise::pq_to_linear_precise_slice or linear_srgb::default::pq_to_linear_precise_slice instead; linear_srgb::tf will be removed in 0.7.0"
+    )]
+    #[inline]
+    pub fn pq_to_linear_precise_slice(values: &mut [f32]) {
+        pq::pq_to_linear_precise_slice(values);
+    }
+    /// Convert normalized linear light to ST 2084 signals using f64 intermediates.
+    /// Deprecated compatibility alias for [`crate::precise::linear_to_pq_precise_slice`].
+    #[deprecated(
+        since = "0.6.13",
+        note = "use linear_srgb::precise::linear_to_pq_precise_slice or linear_srgb::default::linear_to_pq_precise_slice instead; linear_srgb::tf will be removed in 0.7.0"
+    )]
+    #[inline]
+    pub fn linear_to_pq_precise_slice(values: &mut [f32]) {
+        pq::linear_to_pq_precise_slice(values);
+    }
 }

@@ -56,6 +56,10 @@ pub(crate) mod srgb;
 ///
 /// Uses rational polynomial fitted to C0-continuous sRGB — no `powf()` calls.
 /// Equivalent to `crate::rational_poly::srgb_to_linear_fast`.
+#[deprecated(
+    since = "0.6.13",
+    note = "use linear_srgb::default::srgb_to_linear instead; linear_srgb::tf will be removed in 0.7.0"
+)]
 #[inline(always)]
 pub fn srgb_to_linear(v: f32) -> f32 {
     crate::rational_poly::srgb_to_linear_fast(v)
@@ -65,17 +69,104 @@ pub fn srgb_to_linear(v: f32) -> f32 {
 ///
 /// Uses sqrt + libjxl rational polynomial — no `powf()` calls.
 /// Equivalent to `crate::rational_poly::linear_to_srgb_fast`.
+#[deprecated(
+    since = "0.6.13",
+    note = "use linear_srgb::default::linear_to_srgb instead; linear_srgb::tf will be removed in 0.7.0"
+)]
 #[inline(always)]
 pub fn linear_to_srgb(v: f32) -> f32 {
     crate::rational_poly::linear_to_srgb_fast(v)
 }
 
+/// BT.709 EOTF: encoded → linear. Deprecated compatibility alias for [`crate::default::bt709_to_linear`].
 #[cfg(feature = "transfer")]
-pub use bt709::{bt709_to_linear, linear_to_bt709};
+#[deprecated(
+    since = "0.6.13",
+    note = "use linear_srgb::default::bt709_to_linear instead; linear_srgb::tf will be removed in 0.7.0"
+)]
+#[inline(always)]
+pub fn bt709_to_linear(v: f32) -> f32 {
+    bt709::bt709_to_linear(v)
+}
+
+/// BT.709 inverse EOTF: linear → encoded. Deprecated compatibility alias for [`crate::default::linear_to_bt709`].
 #[cfg(feature = "transfer")]
-pub use hlg::{hlg_to_linear, linear_to_hlg};
+#[deprecated(
+    since = "0.6.13",
+    note = "use linear_srgb::default::linear_to_bt709 instead; linear_srgb::tf will be removed in 0.7.0"
+)]
+#[inline(always)]
+pub fn linear_to_bt709(v: f32) -> f32 {
+    bt709::linear_to_bt709(v)
+}
+
+/// HLG inverse OETF: signal → scene linear. Deprecated compatibility alias for [`crate::default::hlg_to_linear`].
 #[cfg(feature = "transfer")]
-pub use pq::{linear_to_pq, linear_to_pq_precise_slice, pq_to_linear, pq_to_linear_precise_slice};
+#[deprecated(
+    since = "0.6.13",
+    note = "use linear_srgb::default::hlg_to_linear instead; linear_srgb::tf will be removed in 0.7.0"
+)]
+#[inline(always)]
+pub fn hlg_to_linear(v: f32) -> f32 {
+    hlg::hlg_to_linear(v)
+}
+
+/// HLG OETF: scene linear → signal. Deprecated compatibility alias for [`crate::default::linear_to_hlg`].
+#[cfg(feature = "transfer")]
+#[deprecated(
+    since = "0.6.13",
+    note = "use linear_srgb::default::linear_to_hlg instead; linear_srgb::tf will be removed in 0.7.0"
+)]
+#[inline(always)]
+pub fn linear_to_hlg(v: f32) -> f32 {
+    hlg::linear_to_hlg(v)
+}
+
+/// PQ EOTF for normalized signal values. Deprecated compatibility alias for [`crate::default::pq_to_linear`].
+#[cfg(feature = "transfer")]
+#[deprecated(
+    since = "0.6.13",
+    note = "use linear_srgb::default::pq_to_linear instead; linear_srgb::tf will be removed in 0.7.0"
+)]
+#[inline(always)]
+pub fn pq_to_linear(v: f32) -> f32 {
+    pq::pq_to_linear(v)
+}
+
+/// PQ inverse EOTF for normalized linear light. Deprecated compatibility alias for [`crate::default::linear_to_pq`].
+#[cfg(feature = "transfer")]
+#[deprecated(
+    since = "0.6.13",
+    note = "use linear_srgb::default::linear_to_pq instead; linear_srgb::tf will be removed in 0.7.0"
+)]
+#[inline(always)]
+pub fn linear_to_pq(v: f32) -> f32 {
+    pq::linear_to_pq(v)
+}
+
+/// Convert normalized ST 2084 signals to linear light using f64 intermediates.
+/// Deprecated compatibility alias for [`crate::precise::pq_to_linear_precise_slice`].
+#[cfg(feature = "transfer")]
+#[deprecated(
+    since = "0.6.13",
+    note = "use linear_srgb::precise::pq_to_linear_precise_slice or linear_srgb::default::pq_to_linear_precise_slice instead; linear_srgb::tf will be removed in 0.7.0"
+)]
+#[inline]
+pub fn pq_to_linear_precise_slice(values: &mut [f32]) {
+    pq::pq_to_linear_precise_slice(values);
+}
+
+/// Convert normalized linear light to ST 2084 signals using f64 intermediates.
+/// Deprecated compatibility alias for [`crate::precise::linear_to_pq_precise_slice`].
+#[cfg(feature = "transfer")]
+#[deprecated(
+    since = "0.6.13",
+    note = "use linear_srgb::precise::linear_to_pq_precise_slice or linear_srgb::default::linear_to_pq_precise_slice instead; linear_srgb::tf will be removed in 0.7.0"
+)]
+#[inline]
+pub fn linear_to_pq_precise_slice(values: &mut [f32]) {
+    pq::linear_to_pq_precise_slice(values);
+}
 
 // =============================================================================
 // Tests

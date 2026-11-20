@@ -43,7 +43,8 @@ beta-library-check:
 verify-target-features:
     python3 scripts/check_target_feature_ownership.py
     cargo fmt --check
-    cargo clippy --all-targets --all-features -- -D warnings
+    cargo clippy --all-targets --features transfer,iec,precise-portable -- -D warnings
+    cargo clippy --all-targets --all-features -- -D warnings -A deprecated
     cargo test --all-features --release
     cargo test --doc --all-features
     cargo test --no-default-features --features std,transfer --test target_features

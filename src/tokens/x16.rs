@@ -4,6 +4,10 @@
 
 use archmage::attune;
 
+#[deprecated(
+    since = "0.6.13",
+    note = "import X64V4Token directly from archmage; linear_srgb::tokens will be removed in 0.7.0"
+)]
 pub use archmage::X64V4Token;
 
 // sRGB transfer function constants (C0-continuous moxcms, matching rational polynomial)
