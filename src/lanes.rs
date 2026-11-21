@@ -6,13 +6,13 @@
 //! the private vector copies; `tests/tier_parity.rs` holds them together.
 
 use archmage::ScalarToken;
-use magetypes::scalar::{F32ScalarBackend, sqrt_f32};
+use magetypes::scalar::F32ScalarBackend;
 
 use crate::rational_poly::{
     EXT_L2S_P, EXT_L2S_Q, EXT_S2L_P, EXT_S2L_Q, LINEAR_SCALE, S2L_P, S2L_Q, SRGB_THRESHOLD,
 };
 use crate::rational_poly::{L2S_P, L2S_Q, LINEAR_THRESHOLD, TWELVE_92};
-use crate::tf::polynomial::{eval_rational_poly, mla_scalar};
+use crate::tf::polynomial::{eval_rational_poly, fast_sqrt_f32, mla_scalar};
 
 #[inline(always)]
 fn unit(v: f32) -> f32 {
@@ -32,8 +32,9 @@ pub(crate) fn srgb_to_linear_with_token<T: F32ScalarBackend>(token: T, v: f32) -
     if clamped <= SRGB_THRESHOLD {
         return clamped * LINEAR_SCALE;
     }
-    let power = eval_rational_poly(token, clamped, S2L_P, S2L_Q);
-    if power < 1.0 { power } else { 1.0 }
+    // Exhaustively verified over all 2^32 f32 values (FMA & non-FMA):
+    // max S2L_P(x)/S2L_Q(x) on (SRGB_THRESHOLD, 1.0] is 0.99999964 (0x3f7ffffa < 1.0).
+    eval_rational_poly(token, clamped, S2L_P, S2L_Q)
 }
 
 pub(crate) fn linear_to_srgb(v: f32) -> f32 {
@@ -49,8 +50,9 @@ fn linear_to_srgb_with_token<T: F32ScalarBackend>(token: T, v: f32) -> f32 {
     if clamped <= LINEAR_THRESHOLD {
         return clamped * TWELVE_92;
     }
-    let power = eval_rational_poly(token, sqrt_f32(clamped), L2S_P, L2S_Q);
-    if power < 1.0 { power } else { 1.0 }
+    // Exhaustively verified over all 2^32 f32 values (FMA & non-FMA):
+    // max L2S_P(sqrt(v))/L2S_Q(sqrt(v)) on (LINEAR_THRESHOLD, 1.0] is 0.99999958 (0x3f7ffff9 < 1.0).
+    eval_rational_poly(token, fast_sqrt_f32(clamped), L2S_P, L2S_Q)
 }
 
 #[inline(always)]
@@ -79,7 +81,7 @@ pub(crate) fn linear_to_srgb_extended(v: f32) -> f32 {
     let result = if magnitude < LINEAR_THRESHOLD {
         magnitude * TWELVE_92
     } else {
-        eval_rational_poly(ScalarToken, sqrt_f32(magnitude), EXT_L2S_P, EXT_L2S_Q)
+        eval_rational_poly(ScalarToken, fast_sqrt_f32(magnitude), EXT_L2S_P, EXT_L2S_Q)
     };
     result.copysign(v)
 }

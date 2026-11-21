@@ -13,6 +13,7 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 
 ### Added
 
+- Versioned `examples/downstream_codegen.rs`, `benches/downstream_exercised.rs`, `benchmarks/codegen_and_ablation_2026-11-21.md`, and `just asm-{v3,v4,neon,wasm128,wasm128-relaxed,all}` recipes to audit 5-tier SIMD assembly, static latency, and L1/L2/DRAM throughput across all downstream-exercised entry points.
 - Full-range ST 2084 encode and decode slice functions (`pq_to_linear_precise_slice` and `linear_to_pq_precise_slice`) with f64 intermediates and exact black and white anchors, exported under `linear_srgb::precise` and `linear_srgb::default` (behind `transfer`).
 
 
@@ -24,6 +25,7 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 
 ### Changed
 
+- Specialize sRGB rational-polynomial vector kernels via const-generic rail bitflags (`src/kernels/float.rs::cfg`: `CLAMP_LO`, `CLAMP_HI`, `SNAP_ONE`, `POST_DIV_MIN_ONE`), ablating the proven-dead post-division `.min(1.0)` across all `2^32` `f32` values (`0` bit differences) and specializing `u16` decode on `SRGB_UNIT_NONNEG`; blend PQ coefficients per Horner step (`8` FMAs vs `16`, `0` bit differences); collapse 3× duplicated custom-gamma `Powf` graphs; outline cold scalar rail fallbacks out of hot SIMD loops (`map_slice_try_inline!`); use hardware `sqrt` in `std` scalar paths; and dispatch AVX-512 slice entry points on `X64V4Token` (`v4`) instead of `X64V4xToken` (`v4x`).
 - Depend on published crates.io `archmage` 0.9.32, `magetypes` 0.9.32, and `magemath` 0.1.0 (forwarding `std` to `magemath/std`), and tighten HLG SIMD `exp2`/`log2` `const` profiles (`HLG_EXP` / `HLG_LOG`) to elide dead subnormal pre-scaling and output clamping on normal lanes while preserving exact rail fallbacks.
 
 - Use `attune` for direct feature contexts and ordinary inlined functions for scalar helpers. Centralize the existing fusion choice across vector arithmetic, scalar evaluation and u16 tails without changing its numerical policy (`0a90c800`, `2bd394bd`).

@@ -11,8 +11,6 @@ const GAMMA_OPTIONS: PowfOptions = PowfOptions::new()
     .caller();
 const GAMMA: u128 = GAMMA_OPTIONS.bits();
 const FULL_POW: u128 = PowfOptions::new().full_domain().highp().caller().bits();
-const SRGB_DECODE_POWER: u128 = GAMMA_OPTIONS.const_exponent(2.4).bits();
-const SRGB_ENCODE_POWER: u128 = GAMMA_OPTIONS.const_exponent(1.0 / 2.4).bits();
 
 #[cfg(feature = "transfer")]
 pub(crate) const BT709_DECODE_POWER: u128 = PowfOptions::new()
@@ -99,11 +97,7 @@ pub(crate) fn gamma(x: f32, n: f32) -> f32 {
     if x.is_nan() {
         return x;
     }
-    if n == 2.4 {
-        Powf::<SRGB_DECODE_POWER>::scalar_const_infallible(x)
-    } else if n == 1.0 / 2.4 {
-        Powf::<SRGB_ENCODE_POWER>::scalar_const_infallible(x)
-    } else if (0.0..=4.0).contains(&n) {
+    if (0.0..=4.0).contains(&n) {
         Powf::<GAMMA>::scalar_infallible(x, n)
     } else {
         full_pow(x, n)
@@ -112,37 +106,88 @@ pub(crate) fn gamma(x: f32, n: f32) -> f32 {
 
 #[cold]
 #[inline(never)]
-fn gamma_outside_fit<const N: usize>(values: [f32; N], exponent: f32) -> [f32; N] {
+pub(crate) fn gamma_outside_fit<const N: usize>(values: [f32; N], exponent: f32) -> [f32; N] {
     values.map(|x| gamma(x, exponent))
 }
 
+#[cold]
+#[inline(never)]
+pub(crate) fn gamma_outside_fit_slice(values: &mut [f32], exponent: f32) {
+    for x in values {
+        *x = gamma(*x, exponent);
+    }
+}
+
 macro_rules! gamma_for {
-    ($name:ident, $float:ident, $backend:ident) => {
+    ($name:ident, $in_range:ident, $zero_exp:ident, $slice:ident, $float:ident, $backend:ident, $width:literal) => {
+        #[inline(always)]
+        pub(crate) fn $zero_exp<T: $backend>(t: T, v: $float<T>) -> $float<T> {
+            let zero = $float::zero_t(t);
+            let result = v.simd_gt(zero) & $float::splat_t(t, 1.0);
+            $float::blend(v.simd_ne(v), v, result)
+        }
+
+        #[inline(always)]
+        pub(crate) fn $in_range<T: $backend>(t: T, v: $float<T>, n: f32) -> $float<T> {
+            let _ = t;
+            let result = v.powf::<GAMMA>(n);
+            $float::blend(v.simd_ne(v), v, result)
+        }
+
         #[inline(always)]
         pub(crate) fn $name<T: $backend>(t: T, v: $float<T>, n: f32) -> $float<T> {
             if !(0.0..=4.0).contains(&n) {
                 return $float::from_array_t(t, gamma_outside_fit(v.to_array(), n));
             }
-            let zero = $float::zero_t(t);
-            let result = if n == 2.4 {
-                v.powf_const::<SRGB_DECODE_POWER>()
-            } else if n == 1.0 / 2.4 {
-                v.powf_const::<SRGB_ENCODE_POWER>()
-            } else if n == 0.0 {
-                v.simd_gt(zero) & $float::splat_t(t, 1.0)
-            } else {
-                v.powf::<GAMMA>(n)
-            };
-            let nan = v.simd_ne(v);
-            if nan.bitcast_to_i32().any_true() {
-                $float::blend(nan, v, result)
-            } else {
-                result
+            if n == 0.0 {
+                return $zero_exp(t, v);
             }
+            $in_range(t, v, n)
+        }
+
+        #[inline(always)]
+        pub(crate) fn $slice<T: $backend>(t: T, values: &mut [f32], n: f32) {
+            if !(0.0..=4.0).contains(&n) {
+                gamma_outside_fit_slice(values, n);
+                return;
+            }
+            if n == 0.0 {
+                crate::kernels::map_slice_inline!(values, $width, |chunk| {
+                    $zero_exp(t, $float::from_array_t(t, chunk)).to_array()
+                });
+                return;
+            }
+            crate::kernels::map_slice_inline!(values, $width, |chunk| {
+                $in_range(t, $float::from_array_t(t, chunk), n).to_array()
+            });
         }
     };
 }
 
-gamma_for!(gamma_x4, f32x4, F32x4Convert);
-gamma_for!(gamma_x8, f32x8, F32x8Convert);
-gamma_for!(gamma_x16, f32x16, F32x16Convert);
+gamma_for!(
+    gamma_x4,
+    gamma_in_range_x4,
+    gamma_zero_x4,
+    gamma_slice_x4,
+    f32x4,
+    F32x4Convert,
+    4
+);
+gamma_for!(
+    gamma_x8,
+    gamma_in_range_x8,
+    gamma_zero_x8,
+    gamma_slice_x8,
+    f32x8,
+    F32x8Convert,
+    8
+);
+gamma_for!(
+    gamma_x16,
+    gamma_in_range_x16,
+    gamma_zero_x16,
+    gamma_slice_x16,
+    f32x16,
+    F32x16Convert,
+    16
+);

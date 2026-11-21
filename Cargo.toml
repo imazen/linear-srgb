@@ -98,6 +98,10 @@ required-features = ["std"]
 name = "asm-stub"
 required-features = ["std", "transfer"]
 
+[[example]]
+name = "downstream_codegen"
+required-features = ["std", "transfer"]
+
 [[test]]
 name = "tier_parity"
 required-features = ["transfer"]
@@ -112,6 +116,11 @@ harness = false
 
 [[bench]]
 name = "tf_bench"
+harness = false
+required-features = ["transfer"]
+
+[[bench]]
+name = "downstream_exercised"
 harness = false
 required-features = ["transfer"]
 

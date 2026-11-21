@@ -64,8 +64,15 @@ for width in [4, 8, 16]:
                     slice_body = f'crate::kernels::scalar_slice::<{width}>(values, {vector_call}, {scalar_call});'
                 elif tier == 'scalar':
                     slice_body = f'crate::kernels::map_slice::<{width}>(values, {name});'
+                elif op in ['gamma_to_linear', 'linear_to_gamma', 'srgb_to_linear_extended', 'linear_to_srgb_extended']:
+                    token = {'v3': 'X64V3Token', 'v4': 'X64V4Token', 'neon': 'NeonToken', 'wasm128': 'Wasm128Token'}[tier]
+                    slice_body = f'crate::kernels::float::x{width}::{op}_slice(archmage::{token}::from_context(), values{callarg});'
+                elif transfer and not op.startswith('tf_'):
+                    token = {'v3': 'X64V3Token', 'v4': 'X64V4Token', 'neon': 'NeonToken', 'wasm128': 'Wasm128Token'}[tier]
+                    module = 'bt709' if 'bt709' in op else ('pq' if 'pq' in op else 'hlg')
+                    slice_body = f'crate::tf::{module}::{op}_slice_x{width}(archmage::{token}::from_context(), values);'
                 else:
-                    slice_body = f'crate::kernels::map_slice::<{width}>(values, |chunk| {name}(chunk{callarg}));'
+                    slice_body = f'crate::kernels::map_slice_inline!(values, {width}, |chunk| {name}(chunk{callarg}));'
                 slice_attrs = '#[cfg(test)]\n' if tier == 'scalar' and width == 4 else ''
                 extra += [f'/// Convert all values, including a final partial array.\n{slice_attrs}{attrs}pub(crate) fn {slicename}(values: &mut [f32]{arg}) {{\n    {slice_body}\n}}\n']
     test_only = "#[cfg(test)]\n" if width == 8 else ""

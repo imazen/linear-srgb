@@ -63,152 +63,147 @@ pub(crate) fn linear_to_bt709_with_token<T: F32x4Convert>(token: T, v: f32) -> f
 }
 
 // =============================================================================
-// Generic SIMD — x4
+// Generic SIMD — x4 / x8 / x16
 // =============================================================================
 
-use magetypes::simd::backends::F32x4Convert;
-use magetypes::simd::generic::f32x4;
+use magetypes::simd::{backends::*, generic::*};
 
-#[allow(dead_code)]
-#[inline(always)]
-pub(crate) fn bt709_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
-    let threshold = f32x4::splat_t(t, 4.5 * BT709_BETA);
-    let inv_4_5 = f32x4::splat_t(t, 1.0 / 4.5);
-    let alpha = f32x4::splat_t(t, BT709_ALPHA);
-    let one_plus_alpha = f32x4::splat_t(t, 1.0 + BT709_ALPHA);
-
-    let linear = v * inv_4_5;
-
-    let normalized = (v + alpha) / one_plus_alpha;
-    let mask = v.simd_lt(threshold);
-    let input = f32x4::blend(mask, f32x4::splat_t(t, 1.0), normalized);
-    let Ok(power) = input.try_powf_const::<{ math::BT709_DECODE_POWER }>() else {
-        return f32x4::from_array_t(t, v.to_array().map(|x| bt709_to_linear_with_token(t, x)));
-    };
-
-    // The curves meet only to within rounding: keep the power branch above the linear one.
-    let power = power.max(f32x4::splat_t(t, BT709_DECODE_MIN));
-    f32x4::blend(mask, linear, power)
+#[cold]
+#[inline(never)]
+fn bt709_to_linear_fallback<T: F32x4Convert, const N: usize>(t: T, v: [f32; N]) -> [f32; N] {
+    v.map(|x| bt709_to_linear_with_token(t, x))
 }
 
-#[allow(dead_code)]
-#[inline(always)]
-pub(crate) fn linear_to_bt709_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
-    let threshold = f32x4::splat_t(t, BT709_BETA);
-    let scale_4_5 = f32x4::splat_t(t, 4.5);
-    let one_plus_alpha = f32x4::splat_t(t, 1.0 + BT709_ALPHA);
-    let alpha = f32x4::splat_t(t, BT709_ALPHA);
-
-    let linear = v * scale_4_5;
-
-    let mask = v.simd_lt(threshold);
-    let input = f32x4::blend(mask, f32x4::splat_t(t, 1.0), v);
-    let Ok(power) = input.try_powf_const::<{ math::BT709_ENCODE_POWER }>() else {
-        return f32x4::from_array_t(t, v.to_array().map(|x| linear_to_bt709_with_token(t, x)));
-    };
-    let power = one_plus_alpha.mla(power, -alpha);
-
-    f32x4::blend(mask, linear, power)
+#[cold]
+#[inline(never)]
+fn linear_to_bt709_fallback<T: F32x4Convert, const N: usize>(t: T, v: [f32; N]) -> [f32; N] {
+    v.map(|x| linear_to_bt709_with_token(t, x))
 }
 
-// =============================================================================
-// Generic SIMD — x8
-// =============================================================================
+macro_rules! bt709_for {
+    (
+        $try_decode:ident,
+        $decode:ident,
+        $decode_slice:ident,
+        $try_encode:ident,
+        $encode:ident,
+        $encode_slice:ident,
+        $float:ident,
+        $width:literal,
+        $($bound:tt)+
+    ) => {
+        #[inline(always)]
+        pub(crate) fn $try_decode<T: $($bound)+>(t: T, v: $float<T>) -> Option<$float<T>> {
+            let threshold = $float::splat_t(t, 4.5 * BT709_BETA);
+            let inv_4_5 = $float::splat_t(t, 1.0 / 4.5);
+            let alpha = $float::splat_t(t, BT709_ALPHA);
+            let one_plus_alpha = $float::splat_t(t, 1.0 + BT709_ALPHA);
 
-use magetypes::simd::backends::F32x8Convert;
-use magetypes::simd::generic::f32x8;
+            let linear = v * inv_4_5;
+            let normalized = (v + alpha) / one_plus_alpha;
+            let mask = v.simd_lt(threshold);
+            let input = $float::blend(mask, $float::splat_t(t, 1.0), normalized);
+            let Ok(power) = input.try_powf_const::<{ math::BT709_DECODE_POWER }>() else {
+                return None;
+            };
 
-#[inline(always)]
-pub(crate) fn bt709_to_linear_x8<T: F32x8Convert + F32x4Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
-    let threshold = f32x8::splat_t(t, 4.5 * BT709_BETA);
-    let inv_4_5 = f32x8::splat_t(t, 1.0 / 4.5);
-    let alpha = f32x8::splat_t(t, BT709_ALPHA);
-    let one_plus_alpha = f32x8::splat_t(t, 1.0 + BT709_ALPHA);
+            // The curves meet only to within rounding: keep the power branch above the linear one.
+            // Neither `power` nor `BT709_DECODE_MIN` can be NaN here (`try_powf_const` rejected NaN).
+            let power = power.max_fast($float::splat_t(t, BT709_DECODE_MIN));
+            Some($float::blend(mask, linear, power))
+        }
 
-    let linear = v * inv_4_5;
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn $decode<T: $($bound)+>(t: T, v: $float<T>) -> $float<T> {
+            match $try_decode(t, v) {
+                Some(out) => out,
+                None => $float::from_array_t(t, bt709_to_linear_fallback(t, v.to_array())),
+            }
+        }
 
-    let normalized = (v + alpha) / one_plus_alpha;
-    let mask = v.simd_lt(threshold);
-    let input = f32x8::blend(mask, f32x8::splat_t(t, 1.0), normalized);
-    let Ok(power) = input.try_powf_const::<{ math::BT709_DECODE_POWER }>() else {
-        return f32x8::from_array_t(t, v.to_array().map(|x| bt709_to_linear_with_token(t, x)));
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn $decode_slice<T: $($bound)+>(t: T, values: &mut [f32]) {
+            crate::kernels::map_slice_try_inline!(
+                values,
+                $width,
+                t,
+                |chunk| $try_decode(t, $float::from_array_t(t, chunk)).map(|r| r.to_array()),
+                bt709_to_linear_fallback::<T, $width>
+            );
+        }
+
+        #[inline(always)]
+        pub(crate) fn $try_encode<T: $($bound)+>(t: T, v: $float<T>) -> Option<$float<T>> {
+            let threshold = $float::splat_t(t, BT709_BETA);
+            let scale_4_5 = $float::splat_t(t, 4.5);
+            let one_plus_alpha = $float::splat_t(t, 1.0 + BT709_ALPHA);
+            let alpha = $float::splat_t(t, BT709_ALPHA);
+
+            let linear = v * scale_4_5;
+            let mask = v.simd_lt(threshold);
+            let input = $float::blend(mask, $float::splat_t(t, 1.0), v);
+            let Ok(power) = input.try_powf_const::<{ math::BT709_ENCODE_POWER }>() else {
+                return None;
+            };
+            let power = one_plus_alpha.mla(power, -alpha);
+            Some($float::blend(mask, linear, power))
+        }
+
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn $encode<T: $($bound)+>(t: T, v: $float<T>) -> $float<T> {
+            match $try_encode(t, v) {
+                Some(out) => out,
+                None => $float::from_array_t(t, linear_to_bt709_fallback(t, v.to_array())),
+            }
+        }
+
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn $encode_slice<T: $($bound)+>(t: T, values: &mut [f32]) {
+            crate::kernels::map_slice_try_inline!(
+                values,
+                $width,
+                t,
+                |chunk| $try_encode(t, $float::from_array_t(t, chunk)).map(|r| r.to_array()),
+                linear_to_bt709_fallback::<T, $width>
+            );
+        }
     };
-
-    // The curves meet only to within rounding: keep the power branch above the linear one.
-    let power = power.max(f32x8::splat_t(t, BT709_DECODE_MIN));
-    f32x8::blend(mask, linear, power)
 }
 
-#[inline(always)]
-pub(crate) fn linear_to_bt709_x8<T: F32x8Convert + F32x4Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
-    let threshold = f32x8::splat_t(t, BT709_BETA);
-    let scale_4_5 = f32x8::splat_t(t, 4.5);
-    let one_plus_alpha = f32x8::splat_t(t, 1.0 + BT709_ALPHA);
-    let alpha = f32x8::splat_t(t, BT709_ALPHA);
-
-    let linear = v * scale_4_5;
-
-    // See linear_to_bt709_x4: no MIN_POSITIVE clamp needed.
-    let mask = v.simd_lt(threshold);
-    let input = f32x8::blend(mask, f32x8::splat_t(t, 1.0), v);
-    let Ok(power) = input.try_powf_const::<{ math::BT709_ENCODE_POWER }>() else {
-        return f32x8::from_array_t(t, v.to_array().map(|x| linear_to_bt709_with_token(t, x)));
-    };
-    let power = one_plus_alpha.mla(power, -alpha);
-
-    f32x8::blend(mask, linear, power)
-}
-
-// =============================================================================
-// Generic SIMD — x16
-// =============================================================================
-
-use magetypes::simd::backends::F32x16Convert;
-use magetypes::simd::generic::f32x16;
-
-#[inline(always)]
-pub(crate) fn bt709_to_linear_x16<T: F32x16Convert + F32x4Convert>(
-    t: T,
-    v: f32x16<T>,
-) -> f32x16<T> {
-    let threshold = f32x16::splat_t(t, 4.5 * BT709_BETA);
-    let inv_4_5 = f32x16::splat_t(t, 1.0 / 4.5);
-    let alpha = f32x16::splat_t(t, BT709_ALPHA);
-    let one_plus_alpha = f32x16::splat_t(t, 1.0 + BT709_ALPHA);
-
-    let linear = v * inv_4_5;
-
-    let normalized = (v + alpha) / one_plus_alpha;
-    let mask = v.simd_lt(threshold);
-    let input = f32x16::blend(mask, f32x16::splat_t(t, 1.0), normalized);
-    let Ok(power) = input.try_powf_const::<{ math::BT709_DECODE_POWER }>() else {
-        return f32x16::from_array_t(t, v.to_array().map(|x| bt709_to_linear_with_token(t, x)));
-    };
-
-    // The curves meet only to within rounding: keep the power branch above the linear one.
-    let power = power.max(f32x16::splat_t(t, BT709_DECODE_MIN));
-    f32x16::blend(mask, linear, power)
-}
-
-#[inline(always)]
-pub(crate) fn linear_to_bt709_x16<T: F32x16Convert + F32x4Convert>(
-    t: T,
-    v: f32x16<T>,
-) -> f32x16<T> {
-    let threshold = f32x16::splat_t(t, BT709_BETA);
-    let scale_4_5 = f32x16::splat_t(t, 4.5);
-    let one_plus_alpha = f32x16::splat_t(t, 1.0 + BT709_ALPHA);
-    let alpha = f32x16::splat_t(t, BT709_ALPHA);
-
-    let linear = v * scale_4_5;
-
-    // See linear_to_bt709_x4: no MIN_POSITIVE clamp needed.
-    let mask = v.simd_lt(threshold);
-    let input = f32x16::blend(mask, f32x16::splat_t(t, 1.0), v);
-    let Ok(power) = input.try_powf_const::<{ math::BT709_ENCODE_POWER }>() else {
-        return f32x16::from_array_t(t, v.to_array().map(|x| linear_to_bt709_with_token(t, x)));
-    };
-    let power = one_plus_alpha.mla(power, -alpha);
-
-    f32x16::blend(mask, linear, power)
-}
+bt709_for!(
+    try_bt709_to_linear_x4,
+    bt709_to_linear_x4,
+    bt709_to_linear_slice_x4,
+    try_linear_to_bt709_x4,
+    linear_to_bt709_x4,
+    linear_to_bt709_slice_x4,
+    f32x4,
+    4,
+    F32x4Convert
+);
+bt709_for!(
+    try_bt709_to_linear_x8,
+    bt709_to_linear_x8,
+    bt709_to_linear_slice_x8,
+    try_linear_to_bt709_x8,
+    linear_to_bt709_x8,
+    linear_to_bt709_slice_x8,
+    f32x8,
+    8,
+    F32x8Convert + F32x4Convert
+);
+bt709_for!(
+    try_bt709_to_linear_x16,
+    bt709_to_linear_x16,
+    bt709_to_linear_slice_x16,
+    try_linear_to_bt709_x16,
+    linear_to_bt709_x16,
+    linear_to_bt709_slice_x16,
+    f32x16,
+    16,
+    F32x16Convert + F32x4Convert
+);

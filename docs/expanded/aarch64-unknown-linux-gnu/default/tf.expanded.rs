@@ -62,8 +62,6 @@ pub mod tf {
             .caller();
         const GAMMA: u128 = GAMMA_OPTIONS.bits();
         const FULL_POW: u128 = PowfOptions::new().full_domain().highp().caller().bits();
-        const SRGB_DECODE_POWER: u128 = GAMMA_OPTIONS.const_exponent(2.4).bits();
-        const SRGB_ENCODE_POWER: u128 = GAMMA_OPTIONS.const_exponent(1.0 / 2.4).bits();
         #[inline(always)]
         fn full_pow(base: f32, n: f32) -> f32 {
             Powf::<FULL_POW>::scalar_with_token(ScalarToken, base, n)
@@ -80,11 +78,7 @@ pub mod tf {
             if x.is_nan() {
                 return x;
             }
-            if n == 2.4 {
-                Powf::<SRGB_DECODE_POWER>::scalar_const_infallible(x)
-            } else if n == 1.0 / 2.4 {
-                Powf::<SRGB_ENCODE_POWER>::scalar_const_infallible(x)
-            } else if (0.0..=4.0).contains(&n) {
+            if (0.0..=4.0).contains(&n) {
                 Powf::<GAMMA>::scalar_infallible(x, n)
             } else {
                 full_pow(x, n)
@@ -92,55 +86,178 @@ pub mod tf {
         }
         #[cold]
         #[inline(never)]
-        fn gamma_outside_fit<const N: usize>(
+        pub(crate) fn gamma_outside_fit<const N: usize>(
             values: [f32; N],
             exponent: f32,
         ) -> [f32; N] {
             values.map(|x| gamma(x, exponent))
+        }
+        #[cold]
+        #[inline(never)]
+        pub(crate) fn gamma_outside_fit_slice(values: &mut [f32], exponent: f32) {
+            for x in values {
+                *x = gamma(*x, exponent);
+            }
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_zero_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
+            let zero = f32x4::zero_t(t);
+            let result = v.simd_gt(zero) & f32x4::splat_t(t, 1.0);
+            f32x4::blend(v.simd_ne(v), v, result)
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_in_range_x4<T: F32x4Convert>(
+            t: T,
+            v: f32x4<T>,
+            n: f32,
+        ) -> f32x4<T> {
+            let _ = t;
+            let result = v.powf::<GAMMA>(n);
+            f32x4::blend(v.simd_ne(v), v, result)
         }
         #[inline(always)]
         pub(crate) fn gamma_x4<T: F32x4Convert>(t: T, v: f32x4<T>, n: f32) -> f32x4<T> {
             if !(0.0..=4.0).contains(&n) {
                 return f32x4::from_array_t(t, gamma_outside_fit(v.to_array(), n));
             }
-            let zero = f32x4::zero_t(t);
-            let result = if n == 2.4 {
-                v.powf_const::<SRGB_DECODE_POWER>()
-            } else if n == 1.0 / 2.4 {
-                v.powf_const::<SRGB_ENCODE_POWER>()
-            } else if n == 0.0 {
-                v.simd_gt(zero) & f32x4::splat_t(t, 1.0)
-            } else {
-                v.powf::<GAMMA>(n)
-            };
-            let nan = v.simd_ne(v);
-            if nan.bitcast_to_i32().any_true() {
-                f32x4::blend(nan, v, result)
-            } else {
-                result
+            if n == 0.0 {
+                return gamma_zero_x4(t, v);
             }
+            gamma_in_range_x4(t, v, n)
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_slice_x4<T: F32x4Convert>(t: T, values: &mut [f32], n: f32) {
+            if !(0.0..=4.0).contains(&n) {
+                gamma_outside_fit_slice(values, n);
+                return;
+            }
+            if n == 0.0 {
+                {
+                    let (chunks, remainder) = (values).as_chunks_mut::<4>();
+                    for slot in chunks {
+                        let chunk: [f32; 4] = *slot;
+                        *slot = {
+                            gamma_zero_x4(t, f32x4::from_array_t(t, chunk)).to_array()
+                        };
+                    }
+                    if !remainder.is_empty() {
+                        let mut block = [0.0; 4];
+                        block[..remainder.len()].copy_from_slice(remainder);
+                        let chunk: [f32; 4] = block;
+                        let converted = {
+                            gamma_zero_x4(t, f32x4::from_array_t(t, chunk)).to_array()
+                        };
+                        remainder.copy_from_slice(&converted[..remainder.len()]);
+                    }
+                };
+                return;
+            }
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<4>();
+                for slot in chunks {
+                    let chunk: [f32; 4] = *slot;
+                    *slot = {
+                        gamma_in_range_x4(t, f32x4::from_array_t(t, chunk), n).to_array()
+                    };
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 4];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 4] = block;
+                    let converted = {
+                        gamma_in_range_x4(t, f32x4::from_array_t(t, chunk), n).to_array()
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_zero_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
+            let zero = f32x8::zero_t(t);
+            let result = v.simd_gt(zero) & f32x8::splat_t(t, 1.0);
+            f32x8::blend(v.simd_ne(v), v, result)
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_in_range_x8<T: F32x8Convert>(
+            t: T,
+            v: f32x8<T>,
+            n: f32,
+        ) -> f32x8<T> {
+            let _ = t;
+            let result = v.powf::<GAMMA>(n);
+            f32x8::blend(v.simd_ne(v), v, result)
         }
         #[inline(always)]
         pub(crate) fn gamma_x8<T: F32x8Convert>(t: T, v: f32x8<T>, n: f32) -> f32x8<T> {
             if !(0.0..=4.0).contains(&n) {
                 return f32x8::from_array_t(t, gamma_outside_fit(v.to_array(), n));
             }
-            let zero = f32x8::zero_t(t);
-            let result = if n == 2.4 {
-                v.powf_const::<SRGB_DECODE_POWER>()
-            } else if n == 1.0 / 2.4 {
-                v.powf_const::<SRGB_ENCODE_POWER>()
-            } else if n == 0.0 {
-                v.simd_gt(zero) & f32x8::splat_t(t, 1.0)
-            } else {
-                v.powf::<GAMMA>(n)
-            };
-            let nan = v.simd_ne(v);
-            if nan.bitcast_to_i32().any_true() {
-                f32x8::blend(nan, v, result)
-            } else {
-                result
+            if n == 0.0 {
+                return gamma_zero_x8(t, v);
             }
+            gamma_in_range_x8(t, v, n)
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_slice_x8<T: F32x8Convert>(t: T, values: &mut [f32], n: f32) {
+            if !(0.0..=4.0).contains(&n) {
+                gamma_outside_fit_slice(values, n);
+                return;
+            }
+            if n == 0.0 {
+                {
+                    let (chunks, remainder) = (values).as_chunks_mut::<8>();
+                    for slot in chunks {
+                        let chunk: [f32; 8] = *slot;
+                        *slot = {
+                            gamma_zero_x8(t, f32x8::from_array_t(t, chunk)).to_array()
+                        };
+                    }
+                    if !remainder.is_empty() {
+                        let mut block = [0.0; 8];
+                        block[..remainder.len()].copy_from_slice(remainder);
+                        let chunk: [f32; 8] = block;
+                        let converted = {
+                            gamma_zero_x8(t, f32x8::from_array_t(t, chunk)).to_array()
+                        };
+                        remainder.copy_from_slice(&converted[..remainder.len()]);
+                    }
+                };
+                return;
+            }
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<8>();
+                for slot in chunks {
+                    let chunk: [f32; 8] = *slot;
+                    *slot = {
+                        gamma_in_range_x8(t, f32x8::from_array_t(t, chunk), n).to_array()
+                    };
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 8];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 8] = block;
+                    let converted = {
+                        gamma_in_range_x8(t, f32x8::from_array_t(t, chunk), n).to_array()
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_zero_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
+            let zero = f32x16::zero_t(t);
+            let result = v.simd_gt(zero) & f32x16::splat_t(t, 1.0);
+            f32x16::blend(v.simd_ne(v), v, result)
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_in_range_x16<T: F32x16Convert>(
+            t: T,
+            v: f32x16<T>,
+            n: f32,
+        ) -> f32x16<T> {
+            let _ = t;
+            let result = v.powf::<GAMMA>(n);
+            f32x16::blend(v.simd_ne(v), v, result)
         }
         #[inline(always)]
         pub(crate) fn gamma_x16<T: F32x16Convert>(
@@ -151,22 +268,62 @@ pub mod tf {
             if !(0.0..=4.0).contains(&n) {
                 return f32x16::from_array_t(t, gamma_outside_fit(v.to_array(), n));
             }
-            let zero = f32x16::zero_t(t);
-            let result = if n == 2.4 {
-                v.powf_const::<SRGB_DECODE_POWER>()
-            } else if n == 1.0 / 2.4 {
-                v.powf_const::<SRGB_ENCODE_POWER>()
-            } else if n == 0.0 {
-                v.simd_gt(zero) & f32x16::splat_t(t, 1.0)
-            } else {
-                v.powf::<GAMMA>(n)
-            };
-            let nan = v.simd_ne(v);
-            if nan.bitcast_to_i32().any_true() {
-                f32x16::blend(nan, v, result)
-            } else {
-                result
+            if n == 0.0 {
+                return gamma_zero_x16(t, v);
             }
+            gamma_in_range_x16(t, v, n)
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_slice_x16<T: F32x16Convert>(
+            t: T,
+            values: &mut [f32],
+            n: f32,
+        ) {
+            if !(0.0..=4.0).contains(&n) {
+                gamma_outside_fit_slice(values, n);
+                return;
+            }
+            if n == 0.0 {
+                {
+                    let (chunks, remainder) = (values).as_chunks_mut::<16>();
+                    for slot in chunks {
+                        let chunk: [f32; 16] = *slot;
+                        *slot = {
+                            gamma_zero_x16(t, f32x16::from_array_t(t, chunk)).to_array()
+                        };
+                    }
+                    if !remainder.is_empty() {
+                        let mut block = [0.0; 16];
+                        block[..remainder.len()].copy_from_slice(remainder);
+                        let chunk: [f32; 16] = block;
+                        let converted = {
+                            gamma_zero_x16(t, f32x16::from_array_t(t, chunk)).to_array()
+                        };
+                        remainder.copy_from_slice(&converted[..remainder.len()]);
+                    }
+                };
+                return;
+            }
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<16>();
+                for slot in chunks {
+                    let chunk: [f32; 16] = *slot;
+                    *slot = {
+                        gamma_in_range_x16(t, f32x16::from_array_t(t, chunk), n)
+                            .to_array()
+                    };
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 16];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 16] = block;
+                    let converted = {
+                        gamma_in_range_x16(t, f32x16::from_array_t(t, chunk), n)
+                            .to_array()
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
         }
     }
     pub(crate) mod polynomial {
@@ -207,6 +364,13 @@ pub mod tf {
                 magetypes::scalar::mul_add_relaxed_f32(token, a, b, c)
             }
         }
+        /// IEEE-754 correctly-rounded `f32` square root: emits hardware `vsqrtss` /
+        /// `fsqrt` / `f32.sqrt` when `std` is enabled and falls back to Magetypes'
+        /// IEEE-754 software `sqrt_f32` in `#![no_std]` builds.
+        #[inline(always)]
+        pub(crate) fn fast_sqrt_f32(x: f32) -> f32 {
+            { x.sqrt() }
+        }
         pub(crate) use floor_zero;
         /// Multiply-add in the kernels. Fused wherever that costs nothing or the scalar tier needs it, so
         /// every native tier gives the same bits. On WASM, `mul_add_fused` is software unless the engine
@@ -244,6 +408,7 @@ pub mod tf {
                 }
             }
         }
+        #[allow(dead_code)]
         #[inline(always)]
         pub(crate) fn eval_poly_x4<T: F32x4Backend, const N: usize>(
             t: T,
@@ -258,6 +423,7 @@ pub mod tf {
                     |acc, &coefficient| { acc.mla(x, f32x4::splat_t(t, coefficient)) },
                 )
         }
+        #[allow(dead_code)]
         #[inline(always)]
         pub(crate) fn eval_poly_x8<T: F32x8Backend, const N: usize>(
             t: T,
@@ -272,6 +438,7 @@ pub mod tf {
                     |acc, &coefficient| { acc.mla(x, f32x8::splat_t(t, coefficient)) },
                 )
         }
+        #[allow(dead_code)]
         #[inline(always)]
         pub(crate) fn eval_poly_x16<T: F32x16Backend, const N: usize>(
             t: T,

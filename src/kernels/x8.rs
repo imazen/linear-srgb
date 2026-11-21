@@ -9,12 +9,6 @@ use archmage::X64V3Token;
 use magetypes::simd::f32x8 as mt_f32x8;
 use magetypes::simd::generic::f32x8 as gen_f32x8;
 
-// sRGB transfer function constants (C0-continuous moxcms, matching rational polynomial)
-const SRGB_LINEAR_THRESHOLD: f32 = 0.039_293_37;
-const LINEAR_THRESHOLD: f32 = 0.003_041_282_6;
-const LINEAR_SCALE: f32 = 1.0 / 12.92;
-const TWELVE_92: f32 = 12.92;
-
 // ============================================================================
 // x8 functions — operate on [f32; 8]
 // ============================================================================
@@ -146,40 +140,22 @@ pub(crate) fn srgb_u8_to_linear_slice_v3(_token: X64V3Token, input: &[u8], outpu
 /// `#[arcane]` function for zero-overhead inlining.
 #[attune(_v3, _neon, _wasm128, _scalar, inline(hint))]
 pub(crate) fn srgb_u16_to_linear(token: Token, srgb: [u16; 8]) -> [f32; 8] {
-    use crate::rational_poly::{S2L_P, S2L_Q};
     #[allow(non_camel_case_types)]
     type f32x8 = gen_f32x8<Token>;
 
     // u16 → f32 / 65535: auto-vectorizes to vpmovzxwd + vcvtdq2ps + vmulps
-    // (or the NEON / WASM equivalents).
+    // (or the NEON / WASM equivalents). Since `v` is already in `[0, 1]`,
+    // `SRGB_UNIT_NONNEG` ablates redundant pre-clamps and post-div `.min(1.0)`
+    // while keeping exact `1.0` at `65535`.
     let mut f = [0.0f32; 8];
     for i in 0..8 {
         f[i] = srgb[i] as f32;
     }
     let v = f32x8::from_array_t(token, f) * f32x8::splat_t(token, 1.0 / 65535.0);
-    let one = f32x8::splat_t(token, 1.0);
-
-    let linear_result = v * f32x8::splat_t(token, LINEAR_SCALE);
-
-    let yp = f32x8::splat_t(token, S2L_P[4]).mla(v, f32x8::splat_t(token, S2L_P[3]));
-    let yp = yp.mla(v, f32x8::splat_t(token, S2L_P[2]));
-    let yp = yp.mla(v, f32x8::splat_t(token, S2L_P[1]));
-    let yp = yp.mla(v, f32x8::splat_t(token, S2L_P[0]));
-
-    let yq = f32x8::splat_t(token, S2L_Q[4]).mla(v, f32x8::splat_t(token, S2L_Q[3]));
-    let yq = yq.mla(v, f32x8::splat_t(token, S2L_Q[2]));
-    let yq = yq.mla(v, f32x8::splat_t(token, S2L_Q[1]));
-    let yq = yq.mla(v, f32x8::splat_t(token, S2L_Q[0]));
-
-    let power_result = (yp / yq).min(one);
-
-    let mask = v.simd_le(f32x8::splat_t(token, SRGB_LINEAR_THRESHOLD));
-    let result = f32x8::blend(mask, linear_result, power_result);
-    // Match the scalar `srgb_to_linear_fast` early-exit so u16=65535 → 1.0
-    // bit-exact: the normalized v rounds to 1 + 2^-16 in f32 and the
-    // polynomial alone drifts a few ULP short of 1.0 at v=1.
-    let ge_one = v.simd_ge(one);
-    f32x8::blend(ge_one, one, result).to_array()
+    super::float::x8::srgb_to_linear_vector_cfg::<_, { super::float::cfg::SRGB_UNIT_NONNEG }>(
+        token, v,
+    )
+    .to_array()
 }
 
 /// Convert 8 linear f32 values to sRGB u8 via LUT. Input clamped to \[0, 1\].
@@ -192,21 +168,26 @@ pub(crate) fn srgb_u16_to_linear(token: Token, srgb: [u16; 8]) -> [f32; 8] {
 /// Call from inside an `#[arcane]` function for zero-overhead inlining.
 #[attune(inline(hint))]
 pub(crate) fn linear_to_srgb_u8_v3(token: X64V3Token, linear: [f32; 8]) -> [u8; 8] {
+    const TRUNC: u32 = magetypes::numerics::IntConvert::new()
+        .trunc()
+        .in_range()
+        .bits();
+    let v = mt_f32x8::from_array_t(token, linear);
     let zero = mt_f32x8::zero_t(token);
     let one = mt_f32x8::splat_t(token, 1.0);
-    let linear = mt_f32x8::from_array_t(token, linear).max(zero).min(one);
-    let scaled = linear * mt_f32x8::splat_t(token, 4095.0) + mt_f32x8::splat_t(token, 0.5);
-    let arr = scaled.to_array();
+    let clamped = crate::tf::polynomial::floor_zero!(v, zero).min_fast(one);
+    let scaled = clamped * mt_f32x8::splat_t(token, 4095.0) + mt_f32x8::splat_t(token, 0.5);
+    let idx = scaled.to_i32_with::<TRUNC>().to_array();
     let lut = crate::const_luts::linear_to_srgb_u8();
     [
-        lut[arr[0] as usize & 0xFFF],
-        lut[arr[1] as usize & 0xFFF],
-        lut[arr[2] as usize & 0xFFF],
-        lut[arr[3] as usize & 0xFFF],
-        lut[arr[4] as usize & 0xFFF],
-        lut[arr[5] as usize & 0xFFF],
-        lut[arr[6] as usize & 0xFFF],
-        lut[arr[7] as usize & 0xFFF],
+        lut[idx[0] as usize & 0xFFF],
+        lut[idx[1] as usize & 0xFFF],
+        lut[idx[2] as usize & 0xFFF],
+        lut[idx[3] as usize & 0xFFF],
+        lut[idx[4] as usize & 0xFFF],
+        lut[idx[5] as usize & 0xFFF],
+        lut[idx[6] as usize & 0xFFF],
+        lut[idx[7] as usize & 0xFFF],
     ]
 }
 
@@ -223,40 +204,17 @@ pub(crate) fn linear_to_srgb_u8_v3(token: X64V3Token, linear: [f32; 8]) -> [u8; 
 /// `#[arcane]` function for zero-overhead inlining.
 #[attune(_v3, _neon, _wasm128, _scalar, inline(hint))]
 pub(crate) fn linear_to_srgb_u16(token: Token, linear: [f32; 8]) -> [u16; 8] {
-    use crate::rational_poly::{L2S_P, L2S_Q};
+    const TRUNC: u32 = magetypes::numerics::IntConvert::new()
+        .trunc()
+        .in_range()
+        .bits();
     #[allow(non_camel_case_types)]
     type f32x8 = gen_f32x8<Token>;
 
     let v = f32x8::from_array_t(token, linear);
-    let zero = f32x8::zero_t(token);
-    let one = f32x8::splat_t(token, 1.0);
-    let clamped = v.max(zero).min(one);
-
-    let linear_result = clamped * f32x8::splat_t(token, TWELVE_92);
-
-    let x = clamped.sqrt();
-    let yp = f32x8::splat_t(token, L2S_P[4]).mla(x, f32x8::splat_t(token, L2S_P[3]));
-    let yp = yp.mla(x, f32x8::splat_t(token, L2S_P[2]));
-    let yp = yp.mla(x, f32x8::splat_t(token, L2S_P[1]));
-    let yp = yp.mla(x, f32x8::splat_t(token, L2S_P[0]));
-
-    let yq = f32x8::splat_t(token, L2S_Q[4]).mla(x, f32x8::splat_t(token, L2S_Q[3]));
-    let yq = yq.mla(x, f32x8::splat_t(token, L2S_Q[2]));
-    let yq = yq.mla(x, f32x8::splat_t(token, L2S_Q[1]));
-    let yq = yq.mla(x, f32x8::splat_t(token, L2S_Q[0]));
-
-    let power_result = (yp / yq).min(one);
-
-    let thresh_mask = clamped.simd_le(f32x8::splat_t(token, LINEAR_THRESHOLD));
-    let srgb = f32x8::blend(thresh_mask, linear_result, power_result);
-
-    // Force 1.0 for inputs >= 1.0 so the u16 endpoint lands exactly on 65535
-    // (mirrors the clamp in linear_to_srgb_u16_slice_tier).
-    let ge_one = v.simd_ge(one);
-    let srgb = f32x8::blend(ge_one, one, srgb);
-
+    let srgb = super::float::x8::linear_to_srgb_vector(token, v);
     let scaled = srgb.mla(f32x8::splat_t(token, 65535.0), f32x8::splat_t(token, 0.5));
-    let idx = scaled.to_i32().to_array();
+    let idx = scaled.to_i32_with::<TRUNC>().to_array();
     [
         idx[0] as u16,
         idx[1] as u16,
@@ -316,18 +274,7 @@ pub(crate) fn linear_to_srgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[attune(inline(hint))]
 pub(crate) fn srgb_to_linear_extended_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<8>();
-
-    for chunk in chunks {
-        *chunk = srgb_to_linear_extended_v3(token, *chunk);
-    }
-
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 8];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = srgb_to_linear_extended_v3(token, padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x8::srgb_to_linear_extended_slice(token, values);
 }
 
 /// Convert linear f32 values to sRGB in-place (extended range, no clamping).
@@ -335,18 +282,7 @@ pub(crate) fn srgb_to_linear_extended_slice_v3(token: X64V3Token, values: &mut [
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[attune(inline(hint))]
 pub(crate) fn linear_to_srgb_extended_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<8>();
-
-    for chunk in chunks {
-        *chunk = linear_to_srgb_extended_v3(token, *chunk);
-    }
-
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 8];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = linear_to_srgb_extended_v3(token, padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x8::linear_to_srgb_extended_slice(token, values);
 }
 
 /// Convert gamma-encoded f32 values to linear in-place using 8-wide SIMD.
@@ -354,18 +290,7 @@ pub(crate) fn linear_to_srgb_extended_slice_v3(token: X64V3Token, values: &mut [
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[attune(inline(hint))]
 pub(crate) fn gamma_to_linear_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<8>();
-
-    for chunk in chunks {
-        *chunk = gamma_to_linear_v3(token, *chunk, gamma);
-    }
-
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 8];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = gamma_to_linear_v3(token, padded, gamma);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x8::gamma_to_linear_slice(token, values, gamma);
 }
 
 /// Convert linear f32 values to gamma-encoded in-place using 8-wide SIMD.
@@ -373,18 +298,7 @@ pub(crate) fn gamma_to_linear_slice_v3(token: X64V3Token, values: &mut [f32], ga
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[attune(inline(hint))]
 pub(crate) fn linear_to_gamma_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<8>();
-
-    for chunk in chunks {
-        *chunk = linear_to_gamma_v3(token, *chunk, gamma);
-    }
-
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 8];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = linear_to_gamma_v3(token, padded, gamma);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x8::linear_to_gamma_slice(token, values, gamma);
 }
 
 /// Convert linear f32 values to sRGB u8 using 8-wide SIMD + LUT.
@@ -469,107 +383,56 @@ pub(crate) fn linear_to_hlg_v3(token: X64V3Token, v: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "transfer")]
 #[attune(inline(hint))]
 pub(crate) fn tf_srgb_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    tf_slice_x8(
-        values,
-        |v| tf_srgb_to_linear_v3(token, v),
-        crate::tf::srgb_to_linear,
-    );
+    crate::kernels::map_slice_inline!(values, 8, |v| tf_srgb_to_linear_v3(token, v));
 }
 
 /// Convert linear f32 values to sRGB in-place, 8-wide (TF module version).
 #[cfg(feature = "transfer")]
 #[attune(inline(hint))]
 pub(crate) fn tf_linear_to_srgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    tf_slice_x8(
-        values,
-        |v| tf_linear_to_srgb_v3(token, v),
-        crate::tf::linear_to_srgb,
-    );
+    crate::kernels::map_slice_inline!(values, 8, |v| tf_linear_to_srgb_v3(token, v));
 }
 
 /// Convert BT.709 f32 values to linear in-place, 8-wide.
 #[cfg(feature = "transfer")]
 #[attune(inline(hint))]
 pub(crate) fn bt709_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    tf_slice_x8(
-        values,
-        |v| bt709_to_linear_v3(token, v),
-        crate::tf::bt709_to_linear,
-    );
+    crate::tf::bt709::bt709_to_linear_slice_x8(token, values);
 }
 
 /// Convert linear f32 values to BT.709 in-place, 8-wide.
 #[cfg(feature = "transfer")]
 #[attune(inline(hint))]
 pub(crate) fn linear_to_bt709_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    tf_slice_x8(
-        values,
-        |v| linear_to_bt709_v3(token, v),
-        crate::tf::linear_to_bt709,
-    );
+    crate::tf::bt709::linear_to_bt709_slice_x8(token, values);
 }
 
 /// Convert PQ f32 values to linear in-place, 8-wide.
 #[cfg(feature = "transfer")]
 #[attune(inline(hint))]
 pub(crate) fn pq_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    tf_slice_x8(
-        values,
-        |v| pq_to_linear_v3(token, v),
-        crate::tf::pq_to_linear,
-    );
+    crate::tf::pq::pq_to_linear_slice_x8(token, values);
 }
 
 /// Convert linear f32 values to PQ in-place, 8-wide.
 #[cfg(feature = "transfer")]
 #[attune(inline(hint))]
 pub(crate) fn linear_to_pq_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    tf_slice_x8(
-        values,
-        |v| linear_to_pq_v3(token, v),
-        crate::tf::linear_to_pq,
-    );
+    crate::tf::pq::linear_to_pq_slice_x8(token, values);
 }
 
 /// Convert HLG f32 values to linear in-place, 8-wide.
 #[cfg(feature = "transfer")]
 #[attune(inline(hint))]
 pub(crate) fn hlg_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    tf_slice_x8(
-        values,
-        |v| hlg_to_linear_v3(token, v),
-        crate::tf::hlg_to_linear,
-    );
+    crate::tf::hlg::hlg_to_linear_slice_x8(token, values);
 }
 
 /// Convert linear f32 values to HLG in-place, 8-wide.
 #[cfg(feature = "transfer")]
 #[attune(inline(hint))]
 pub(crate) fn linear_to_hlg_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    tf_slice_x8(
-        values,
-        |v| linear_to_hlg_v3(token, v),
-        crate::tf::linear_to_hlg,
-    );
-}
-
-#[cfg(feature = "transfer")]
-#[inline(always)]
-fn tf_slice_x8(
-    values: &mut [f32],
-    tf_x8: impl Fn([f32; 8]) -> [f32; 8],
-    _tf_scalar: fn(f32) -> f32,
-) {
-    let (chunks, remainder) = values.as_chunks_mut::<8>();
-    for chunk in chunks {
-        *chunk = tf_x8(*chunk);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 8];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = tf_x8(padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    crate::tf::hlg::linear_to_hlg_slice_x8(token, values);
 }
 
 // ============================================================================

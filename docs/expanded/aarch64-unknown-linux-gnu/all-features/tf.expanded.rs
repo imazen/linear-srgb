@@ -190,14 +190,28 @@ pub mod tf {
                 )
             }
         }
-        use magetypes::simd::backends::F32x4Convert;
-        use magetypes::simd::generic::f32x4;
-        #[allow(dead_code)]
+        use magetypes::simd::{backends::*, generic::*};
+        #[cold]
+        #[inline(never)]
+        fn bt709_to_linear_fallback<T: F32x4Convert, const N: usize>(
+            t: T,
+            v: [f32; N],
+        ) -> [f32; N] {
+            v.map(|x| bt709_to_linear_with_token(t, x))
+        }
+        #[cold]
+        #[inline(never)]
+        fn linear_to_bt709_fallback<T: F32x4Convert, const N: usize>(
+            t: T,
+            v: [f32; N],
+        ) -> [f32; N] {
+            v.map(|x| linear_to_bt709_with_token(t, x))
+        }
         #[inline(always)]
-        pub(crate) fn bt709_to_linear_x4<T: F32x4Convert>(
+        pub(crate) fn try_bt709_to_linear_x4<T: F32x4Convert>(
             t: T,
             v: f32x4<T>,
-        ) -> f32x4<T> {
+        ) -> Option<f32x4<T>> {
             let threshold = f32x4::splat_t(t, 4.5 * BT709_BETA);
             let inv_4_5 = f32x4::splat_t(t, 1.0 / 4.5);
             let alpha = f32x4::splat_t(t, BT709_ALPHA);
@@ -207,20 +221,75 @@ pub mod tf {
             let mask = v.simd_lt(threshold);
             let input = f32x4::blend(mask, f32x4::splat_t(t, 1.0), normalized);
             let Ok(power) = input.try_powf_const::<{ math::BT709_DECODE_POWER }>() else {
-                return f32x4::from_array_t(
-                    t,
-                    v.to_array().map(|x| bt709_to_linear_with_token(t, x)),
-                );
+                return None;
             };
-            let power = power.max(f32x4::splat_t(t, BT709_DECODE_MIN));
-            f32x4::blend(mask, linear, power)
+            let power = power.max_fast(f32x4::splat_t(t, BT709_DECODE_MIN));
+            Some(f32x4::blend(mask, linear, power))
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_bt709_x4<T: F32x4Convert>(
+        pub(crate) fn bt709_to_linear_x4<T: F32x4Convert>(
             t: T,
             v: f32x4<T>,
         ) -> f32x4<T> {
+            match try_bt709_to_linear_x4(t, v) {
+                Some(out) => out,
+                None => f32x4::from_array_t(t, bt709_to_linear_fallback(t, v.to_array())),
+            }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn bt709_to_linear_slice_x4<T: F32x4Convert>(
+            t: T,
+            values: &mut [f32],
+        ) {
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<4>();
+                let mut idx = 0;
+                while idx < chunks.len() {
+                    let chunk: [f32; 4] = chunks[idx];
+                    let Some(converted) = (try_bt709_to_linear_x4(
+                            t,
+                            f32x4::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut chunks[idx..],
+                            remainder,
+                            t,
+                            bt709_to_linear_fallback::<T, 4>,
+                        );
+                        return;
+                    };
+                    chunks[idx] = converted;
+                    idx += 1;
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 4];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 4] = block;
+                    let Some(converted) = (try_bt709_to_linear_x4(
+                            t,
+                            f32x4::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut [],
+                            remainder,
+                            t,
+                            bt709_to_linear_fallback::<T, 4>,
+                        );
+                        return;
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        pub(crate) fn try_linear_to_bt709_x4<T: F32x4Convert>(
+            t: T,
+            v: f32x4<T>,
+        ) -> Option<f32x4<T>> {
             let threshold = f32x4::splat_t(t, BT709_BETA);
             let scale_4_5 = f32x4::splat_t(t, 4.5);
             let one_plus_alpha = f32x4::splat_t(t, 1.0 + BT709_ALPHA);
@@ -229,21 +298,75 @@ pub mod tf {
             let mask = v.simd_lt(threshold);
             let input = f32x4::blend(mask, f32x4::splat_t(t, 1.0), v);
             let Ok(power) = input.try_powf_const::<{ math::BT709_ENCODE_POWER }>() else {
-                return f32x4::from_array_t(
-                    t,
-                    v.to_array().map(|x| linear_to_bt709_with_token(t, x)),
-                );
+                return None;
             };
             let power = one_plus_alpha.mla(power, -alpha);
-            f32x4::blend(mask, linear, power)
+            Some(f32x4::blend(mask, linear, power))
         }
-        use magetypes::simd::backends::F32x8Convert;
-        use magetypes::simd::generic::f32x8;
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn bt709_to_linear_x8<T: F32x8Convert + F32x4Convert>(
+        pub(crate) fn linear_to_bt709_x4<T: F32x4Convert>(
+            t: T,
+            v: f32x4<T>,
+        ) -> f32x4<T> {
+            match try_linear_to_bt709_x4(t, v) {
+                Some(out) => out,
+                None => f32x4::from_array_t(t, linear_to_bt709_fallback(t, v.to_array())),
+            }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn linear_to_bt709_slice_x4<T: F32x4Convert>(
+            t: T,
+            values: &mut [f32],
+        ) {
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<4>();
+                let mut idx = 0;
+                while idx < chunks.len() {
+                    let chunk: [f32; 4] = chunks[idx];
+                    let Some(converted) = (try_linear_to_bt709_x4(
+                            t,
+                            f32x4::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut chunks[idx..],
+                            remainder,
+                            t,
+                            linear_to_bt709_fallback::<T, 4>,
+                        );
+                        return;
+                    };
+                    chunks[idx] = converted;
+                    idx += 1;
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 4];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 4] = block;
+                    let Some(converted) = (try_linear_to_bt709_x4(
+                            t,
+                            f32x4::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut [],
+                            remainder,
+                            t,
+                            linear_to_bt709_fallback::<T, 4>,
+                        );
+                        return;
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        pub(crate) fn try_bt709_to_linear_x8<T: F32x8Convert + F32x4Convert>(
             t: T,
             v: f32x8<T>,
-        ) -> f32x8<T> {
+        ) -> Option<f32x8<T>> {
             let threshold = f32x8::splat_t(t, 4.5 * BT709_BETA);
             let inv_4_5 = f32x8::splat_t(t, 1.0 / 4.5);
             let alpha = f32x8::splat_t(t, BT709_ALPHA);
@@ -253,19 +376,75 @@ pub mod tf {
             let mask = v.simd_lt(threshold);
             let input = f32x8::blend(mask, f32x8::splat_t(t, 1.0), normalized);
             let Ok(power) = input.try_powf_const::<{ math::BT709_DECODE_POWER }>() else {
-                return f32x8::from_array_t(
-                    t,
-                    v.to_array().map(|x| bt709_to_linear_with_token(t, x)),
-                );
+                return None;
             };
-            let power = power.max(f32x8::splat_t(t, BT709_DECODE_MIN));
-            f32x8::blend(mask, linear, power)
+            let power = power.max_fast(f32x8::splat_t(t, BT709_DECODE_MIN));
+            Some(f32x8::blend(mask, linear, power))
         }
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_bt709_x8<T: F32x8Convert + F32x4Convert>(
+        pub(crate) fn bt709_to_linear_x8<T: F32x8Convert + F32x4Convert>(
             t: T,
             v: f32x8<T>,
         ) -> f32x8<T> {
+            match try_bt709_to_linear_x8(t, v) {
+                Some(out) => out,
+                None => f32x8::from_array_t(t, bt709_to_linear_fallback(t, v.to_array())),
+            }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn bt709_to_linear_slice_x8<T: F32x8Convert + F32x4Convert>(
+            t: T,
+            values: &mut [f32],
+        ) {
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<8>();
+                let mut idx = 0;
+                while idx < chunks.len() {
+                    let chunk: [f32; 8] = chunks[idx];
+                    let Some(converted) = (try_bt709_to_linear_x8(
+                            t,
+                            f32x8::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut chunks[idx..],
+                            remainder,
+                            t,
+                            bt709_to_linear_fallback::<T, 8>,
+                        );
+                        return;
+                    };
+                    chunks[idx] = converted;
+                    idx += 1;
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 8];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 8] = block;
+                    let Some(converted) = (try_bt709_to_linear_x8(
+                            t,
+                            f32x8::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut [],
+                            remainder,
+                            t,
+                            bt709_to_linear_fallback::<T, 8>,
+                        );
+                        return;
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        pub(crate) fn try_linear_to_bt709_x8<T: F32x8Convert + F32x4Convert>(
+            t: T,
+            v: f32x8<T>,
+        ) -> Option<f32x8<T>> {
             let threshold = f32x8::splat_t(t, BT709_BETA);
             let scale_4_5 = f32x8::splat_t(t, 4.5);
             let one_plus_alpha = f32x8::splat_t(t, 1.0 + BT709_ALPHA);
@@ -274,21 +453,75 @@ pub mod tf {
             let mask = v.simd_lt(threshold);
             let input = f32x8::blend(mask, f32x8::splat_t(t, 1.0), v);
             let Ok(power) = input.try_powf_const::<{ math::BT709_ENCODE_POWER }>() else {
-                return f32x8::from_array_t(
-                    t,
-                    v.to_array().map(|x| linear_to_bt709_with_token(t, x)),
-                );
+                return None;
             };
             let power = one_plus_alpha.mla(power, -alpha);
-            f32x8::blend(mask, linear, power)
+            Some(f32x8::blend(mask, linear, power))
         }
-        use magetypes::simd::backends::F32x16Convert;
-        use magetypes::simd::generic::f32x16;
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn bt709_to_linear_x16<T: F32x16Convert + F32x4Convert>(
+        pub(crate) fn linear_to_bt709_x8<T: F32x8Convert + F32x4Convert>(
+            t: T,
+            v: f32x8<T>,
+        ) -> f32x8<T> {
+            match try_linear_to_bt709_x8(t, v) {
+                Some(out) => out,
+                None => f32x8::from_array_t(t, linear_to_bt709_fallback(t, v.to_array())),
+            }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn linear_to_bt709_slice_x8<T: F32x8Convert + F32x4Convert>(
+            t: T,
+            values: &mut [f32],
+        ) {
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<8>();
+                let mut idx = 0;
+                while idx < chunks.len() {
+                    let chunk: [f32; 8] = chunks[idx];
+                    let Some(converted) = (try_linear_to_bt709_x8(
+                            t,
+                            f32x8::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut chunks[idx..],
+                            remainder,
+                            t,
+                            linear_to_bt709_fallback::<T, 8>,
+                        );
+                        return;
+                    };
+                    chunks[idx] = converted;
+                    idx += 1;
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 8];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 8] = block;
+                    let Some(converted) = (try_linear_to_bt709_x8(
+                            t,
+                            f32x8::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut [],
+                            remainder,
+                            t,
+                            linear_to_bt709_fallback::<T, 8>,
+                        );
+                        return;
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        pub(crate) fn try_bt709_to_linear_x16<T: F32x16Convert + F32x4Convert>(
             t: T,
             v: f32x16<T>,
-        ) -> f32x16<T> {
+        ) -> Option<f32x16<T>> {
             let threshold = f32x16::splat_t(t, 4.5 * BT709_BETA);
             let inv_4_5 = f32x16::splat_t(t, 1.0 / 4.5);
             let alpha = f32x16::splat_t(t, BT709_ALPHA);
@@ -298,19 +531,77 @@ pub mod tf {
             let mask = v.simd_lt(threshold);
             let input = f32x16::blend(mask, f32x16::splat_t(t, 1.0), normalized);
             let Ok(power) = input.try_powf_const::<{ math::BT709_DECODE_POWER }>() else {
-                return f32x16::from_array_t(
-                    t,
-                    v.to_array().map(|x| bt709_to_linear_with_token(t, x)),
-                );
+                return None;
             };
-            let power = power.max(f32x16::splat_t(t, BT709_DECODE_MIN));
-            f32x16::blend(mask, linear, power)
+            let power = power.max_fast(f32x16::splat_t(t, BT709_DECODE_MIN));
+            Some(f32x16::blend(mask, linear, power))
         }
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_bt709_x16<T: F32x16Convert + F32x4Convert>(
+        pub(crate) fn bt709_to_linear_x16<T: F32x16Convert + F32x4Convert>(
             t: T,
             v: f32x16<T>,
         ) -> f32x16<T> {
+            match try_bt709_to_linear_x16(t, v) {
+                Some(out) => out,
+                None => {
+                    f32x16::from_array_t(t, bt709_to_linear_fallback(t, v.to_array()))
+                }
+            }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn bt709_to_linear_slice_x16<T: F32x16Convert + F32x4Convert>(
+            t: T,
+            values: &mut [f32],
+        ) {
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<16>();
+                let mut idx = 0;
+                while idx < chunks.len() {
+                    let chunk: [f32; 16] = chunks[idx];
+                    let Some(converted) = (try_bt709_to_linear_x16(
+                            t,
+                            f32x16::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut chunks[idx..],
+                            remainder,
+                            t,
+                            bt709_to_linear_fallback::<T, 16>,
+                        );
+                        return;
+                    };
+                    chunks[idx] = converted;
+                    idx += 1;
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 16];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 16] = block;
+                    let Some(converted) = (try_bt709_to_linear_x16(
+                            t,
+                            f32x16::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut [],
+                            remainder,
+                            t,
+                            bt709_to_linear_fallback::<T, 16>,
+                        );
+                        return;
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        pub(crate) fn try_linear_to_bt709_x16<T: F32x16Convert + F32x4Convert>(
+            t: T,
+            v: f32x16<T>,
+        ) -> Option<f32x16<T>> {
             let threshold = f32x16::splat_t(t, BT709_BETA);
             let scale_4_5 = f32x16::splat_t(t, 4.5);
             let one_plus_alpha = f32x16::splat_t(t, 1.0 + BT709_ALPHA);
@@ -319,13 +610,71 @@ pub mod tf {
             let mask = v.simd_lt(threshold);
             let input = f32x16::blend(mask, f32x16::splat_t(t, 1.0), v);
             let Ok(power) = input.try_powf_const::<{ math::BT709_ENCODE_POWER }>() else {
-                return f32x16::from_array_t(
-                    t,
-                    v.to_array().map(|x| linear_to_bt709_with_token(t, x)),
-                );
+                return None;
             };
             let power = one_plus_alpha.mla(power, -alpha);
-            f32x16::blend(mask, linear, power)
+            Some(f32x16::blend(mask, linear, power))
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn linear_to_bt709_x16<T: F32x16Convert + F32x4Convert>(
+            t: T,
+            v: f32x16<T>,
+        ) -> f32x16<T> {
+            match try_linear_to_bt709_x16(t, v) {
+                Some(out) => out,
+                None => {
+                    f32x16::from_array_t(t, linear_to_bt709_fallback(t, v.to_array()))
+                }
+            }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn linear_to_bt709_slice_x16<T: F32x16Convert + F32x4Convert>(
+            t: T,
+            values: &mut [f32],
+        ) {
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<16>();
+                let mut idx = 0;
+                while idx < chunks.len() {
+                    let chunk: [f32; 16] = chunks[idx];
+                    let Some(converted) = (try_linear_to_bt709_x16(
+                            t,
+                            f32x16::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut chunks[idx..],
+                            remainder,
+                            t,
+                            linear_to_bt709_fallback::<T, 16>,
+                        );
+                        return;
+                    };
+                    chunks[idx] = converted;
+                    idx += 1;
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 16];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 16] = block;
+                    let Some(converted) = (try_linear_to_bt709_x16(
+                            t,
+                            f32x16::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut [],
+                            remainder,
+                            t,
+                            linear_to_bt709_fallback::<T, 16>,
+                        );
+                        return;
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
         }
     }
     pub(crate) mod hlg {
@@ -452,7 +801,7 @@ pub mod tf {
             if v <= 0.0 || v.is_nan() {
                 0.0
             } else if v <= 1.0 / 12.0 {
-                magetypes::scalar::sqrt_f32(3.0 * v)
+                super::polynomial::fast_sqrt_f32(3.0 * v)
             } else {
                 mla_scalar(
                         token,
@@ -463,11 +812,28 @@ pub mod tf {
                     .max(0.5)
             }
         }
-        use magetypes::simd::backends::F32x4Convert;
-        use magetypes::simd::generic::f32x4;
-        #[allow(dead_code)]
+        use magetypes::simd::{backends::*, generic::*};
+        #[cold]
+        #[inline(never)]
+        fn hlg_to_linear_fallback<T: F32x4Convert, const N: usize>(
+            t: T,
+            v: [f32; N],
+        ) -> [f32; N] {
+            v.map(|x| hlg_to_linear_with_token(t, x))
+        }
+        #[cold]
+        #[inline(never)]
+        fn linear_to_hlg_fallback<T: F32x4Convert, const N: usize>(
+            t: T,
+            v: [f32; N],
+        ) -> [f32; N] {
+            v.map(|x| linear_to_hlg_with_token(t, x))
+        }
         #[inline(always)]
-        pub(crate) fn hlg_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
+        pub(crate) fn try_hlg_to_linear_x4<T: F32x4Convert>(
+            t: T,
+            v: f32x4<T>,
+        ) -> Option<f32x4<T>> {
             let zero = f32x4::zero_t(t);
             let half = f32x4::splat_t(t, 0.5);
             let third = f32x4::splat_t(t, 1.0 / 3.0);
@@ -487,17 +853,69 @@ pub mod tf {
             let mask = a.simd_le(half);
             let exp_arg = f32x4::blend(mask, zero, (a - hlg_c) * hlg_inv_a_log2e);
             let Ok(exp_val) = exp_arg.try_exp2_with::<{ math::HLG_EXP }>() else {
-                return f32x4::from_array_t(
-                    t,
-                    v.to_array().map(|x| hlg_to_linear_with_token(t, x)),
-                );
+                return None;
             };
             let high = (exp_val + hlg_b) * inv_12;
-            f32x4::blend(mask, low, high)
+            Some(f32x4::blend(mask, low, high))
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_hlg_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
+        pub(crate) fn hlg_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
+            match try_hlg_to_linear_x4(t, v) {
+                Some(out) => out,
+                None => f32x4::from_array_t(t, hlg_to_linear_fallback(t, v.to_array())),
+            }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn hlg_to_linear_slice_x4<T: F32x4Convert>(t: T, values: &mut [f32]) {
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<4>();
+                let mut idx = 0;
+                while idx < chunks.len() {
+                    let chunk: [f32; 4] = chunks[idx];
+                    let Some(converted) = (try_hlg_to_linear_x4(
+                            t,
+                            f32x4::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut chunks[idx..],
+                            remainder,
+                            t,
+                            hlg_to_linear_fallback::<T, 4>,
+                        );
+                        return;
+                    };
+                    chunks[idx] = converted;
+                    idx += 1;
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 4];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 4] = block;
+                    let Some(converted) = (try_hlg_to_linear_x4(
+                            t,
+                            f32x4::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut [],
+                            remainder,
+                            t,
+                            hlg_to_linear_fallback::<T, 4>,
+                        );
+                        return;
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        pub(crate) fn try_linear_to_hlg_x4<T: F32x4Convert>(
+            t: T,
+            v: f32x4<T>,
+        ) -> Option<f32x4<T>> {
             let zero = f32x4::zero_t(t);
             let threshold = f32x4::splat_t(t, 1.0 / 12.0);
             let three = f32x4::splat_t(t, 3.0);
@@ -517,21 +935,69 @@ pub mod tf {
             let mask = a.simd_le(threshold);
             let arg = f32x4::blend(mask, f32x4::splat_t(t, 1.0), twelve * a - hlg_b);
             let Ok(log2_val) = arg.try_log2_with::<{ math::HLG_LOG }>() else {
-                return f32x4::from_array_t(
-                    t,
-                    v.to_array().map(|x| linear_to_hlg_with_token(t, x)),
-                );
+                return None;
             };
-            let high = hlg_a_ln2.mla(log2_val, hlg_c).max(f32x4::splat_t(t, 0.5));
-            f32x4::blend(mask, low, high)
+            let high = hlg_a_ln2.mla(log2_val, hlg_c).max_fast(f32x4::splat_t(t, 0.5));
+            Some(f32x4::blend(mask, low, high))
         }
-        use magetypes::simd::backends::F32x8Convert;
-        use magetypes::simd::generic::f32x8;
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn hlg_to_linear_x8<T: F32x8Convert + F32x4Convert>(
+        pub(crate) fn linear_to_hlg_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
+            match try_linear_to_hlg_x4(t, v) {
+                Some(out) => out,
+                None => f32x4::from_array_t(t, linear_to_hlg_fallback(t, v.to_array())),
+            }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn linear_to_hlg_slice_x4<T: F32x4Convert>(t: T, values: &mut [f32]) {
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<4>();
+                let mut idx = 0;
+                while idx < chunks.len() {
+                    let chunk: [f32; 4] = chunks[idx];
+                    let Some(converted) = (try_linear_to_hlg_x4(
+                            t,
+                            f32x4::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut chunks[idx..],
+                            remainder,
+                            t,
+                            linear_to_hlg_fallback::<T, 4>,
+                        );
+                        return;
+                    };
+                    chunks[idx] = converted;
+                    idx += 1;
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 4];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 4] = block;
+                    let Some(converted) = (try_linear_to_hlg_x4(
+                            t,
+                            f32x4::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut [],
+                            remainder,
+                            t,
+                            linear_to_hlg_fallback::<T, 4>,
+                        );
+                        return;
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        pub(crate) fn try_hlg_to_linear_x8<T: F32x8Convert + F32x4Convert>(
             t: T,
             v: f32x8<T>,
-        ) -> f32x8<T> {
+        ) -> Option<f32x8<T>> {
             let zero = f32x8::zero_t(t);
             let half = f32x8::splat_t(t, 0.5);
             let third = f32x8::splat_t(t, 1.0 / 3.0);
@@ -551,19 +1017,75 @@ pub mod tf {
             let mask = a.simd_le(half);
             let exp_arg = f32x8::blend(mask, zero, (a - hlg_c) * hlg_inv_a_log2e);
             let Ok(exp_val) = exp_arg.try_exp2_with::<{ math::HLG_EXP }>() else {
-                return f32x8::from_array_t(
-                    t,
-                    v.to_array().map(|x| hlg_to_linear_with_token(t, x)),
-                );
+                return None;
             };
             let high = (exp_val + hlg_b) * inv_12;
-            f32x8::blend(mask, low, high)
+            Some(f32x8::blend(mask, low, high))
         }
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_hlg_x8<T: F32x8Convert + F32x4Convert>(
+        pub(crate) fn hlg_to_linear_x8<T: F32x8Convert + F32x4Convert>(
             t: T,
             v: f32x8<T>,
         ) -> f32x8<T> {
+            match try_hlg_to_linear_x8(t, v) {
+                Some(out) => out,
+                None => f32x8::from_array_t(t, hlg_to_linear_fallback(t, v.to_array())),
+            }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn hlg_to_linear_slice_x8<T: F32x8Convert + F32x4Convert>(
+            t: T,
+            values: &mut [f32],
+        ) {
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<8>();
+                let mut idx = 0;
+                while idx < chunks.len() {
+                    let chunk: [f32; 8] = chunks[idx];
+                    let Some(converted) = (try_hlg_to_linear_x8(
+                            t,
+                            f32x8::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut chunks[idx..],
+                            remainder,
+                            t,
+                            hlg_to_linear_fallback::<T, 8>,
+                        );
+                        return;
+                    };
+                    chunks[idx] = converted;
+                    idx += 1;
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 8];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 8] = block;
+                    let Some(converted) = (try_hlg_to_linear_x8(
+                            t,
+                            f32x8::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut [],
+                            remainder,
+                            t,
+                            hlg_to_linear_fallback::<T, 8>,
+                        );
+                        return;
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        pub(crate) fn try_linear_to_hlg_x8<T: F32x8Convert + F32x4Convert>(
+            t: T,
+            v: f32x8<T>,
+        ) -> Option<f32x8<T>> {
             let zero = f32x8::zero_t(t);
             let threshold = f32x8::splat_t(t, 1.0 / 12.0);
             let three = f32x8::splat_t(t, 3.0);
@@ -583,21 +1105,75 @@ pub mod tf {
             let mask = a.simd_le(threshold);
             let arg = f32x8::blend(mask, f32x8::splat_t(t, 1.0), twelve * a - hlg_b);
             let Ok(log2_val) = arg.try_log2_with::<{ math::HLG_LOG }>() else {
-                return f32x8::from_array_t(
-                    t,
-                    v.to_array().map(|x| linear_to_hlg_with_token(t, x)),
-                );
+                return None;
             };
-            let high = hlg_a_ln2.mla(log2_val, hlg_c).max(f32x8::splat_t(t, 0.5));
-            f32x8::blend(mask, low, high)
+            let high = hlg_a_ln2.mla(log2_val, hlg_c).max_fast(f32x8::splat_t(t, 0.5));
+            Some(f32x8::blend(mask, low, high))
         }
-        use magetypes::simd::backends::F32x16Convert;
-        use magetypes::simd::generic::f32x16;
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn hlg_to_linear_x16<T: F32x16Convert + F32x4Convert>(
+        pub(crate) fn linear_to_hlg_x8<T: F32x8Convert + F32x4Convert>(
+            t: T,
+            v: f32x8<T>,
+        ) -> f32x8<T> {
+            match try_linear_to_hlg_x8(t, v) {
+                Some(out) => out,
+                None => f32x8::from_array_t(t, linear_to_hlg_fallback(t, v.to_array())),
+            }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn linear_to_hlg_slice_x8<T: F32x8Convert + F32x4Convert>(
+            t: T,
+            values: &mut [f32],
+        ) {
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<8>();
+                let mut idx = 0;
+                while idx < chunks.len() {
+                    let chunk: [f32; 8] = chunks[idx];
+                    let Some(converted) = (try_linear_to_hlg_x8(
+                            t,
+                            f32x8::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut chunks[idx..],
+                            remainder,
+                            t,
+                            linear_to_hlg_fallback::<T, 8>,
+                        );
+                        return;
+                    };
+                    chunks[idx] = converted;
+                    idx += 1;
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 8];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 8] = block;
+                    let Some(converted) = (try_linear_to_hlg_x8(
+                            t,
+                            f32x8::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut [],
+                            remainder,
+                            t,
+                            linear_to_hlg_fallback::<T, 8>,
+                        );
+                        return;
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        pub(crate) fn try_hlg_to_linear_x16<T: F32x16Convert + F32x4Convert>(
             t: T,
             v: f32x16<T>,
-        ) -> f32x16<T> {
+        ) -> Option<f32x16<T>> {
             let zero = f32x16::zero_t(t);
             let half = f32x16::splat_t(t, 0.5);
             let third = f32x16::splat_t(t, 1.0 / 3.0);
@@ -617,19 +1193,75 @@ pub mod tf {
             let mask = a.simd_le(half);
             let exp_arg = f32x16::blend(mask, zero, (a - hlg_c) * hlg_inv_a_log2e);
             let Ok(exp_val) = exp_arg.try_exp2_with::<{ math::HLG_EXP }>() else {
-                return f32x16::from_array_t(
-                    t,
-                    v.to_array().map(|x| hlg_to_linear_with_token(t, x)),
-                );
+                return None;
             };
             let high = (exp_val + hlg_b) * inv_12;
-            f32x16::blend(mask, low, high)
+            Some(f32x16::blend(mask, low, high))
         }
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_hlg_x16<T: F32x16Convert + F32x4Convert>(
+        pub(crate) fn hlg_to_linear_x16<T: F32x16Convert + F32x4Convert>(
             t: T,
             v: f32x16<T>,
         ) -> f32x16<T> {
+            match try_hlg_to_linear_x16(t, v) {
+                Some(out) => out,
+                None => f32x16::from_array_t(t, hlg_to_linear_fallback(t, v.to_array())),
+            }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn hlg_to_linear_slice_x16<T: F32x16Convert + F32x4Convert>(
+            t: T,
+            values: &mut [f32],
+        ) {
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<16>();
+                let mut idx = 0;
+                while idx < chunks.len() {
+                    let chunk: [f32; 16] = chunks[idx];
+                    let Some(converted) = (try_hlg_to_linear_x16(
+                            t,
+                            f32x16::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut chunks[idx..],
+                            remainder,
+                            t,
+                            hlg_to_linear_fallback::<T, 16>,
+                        );
+                        return;
+                    };
+                    chunks[idx] = converted;
+                    idx += 1;
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 16];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 16] = block;
+                    let Some(converted) = (try_hlg_to_linear_x16(
+                            t,
+                            f32x16::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut [],
+                            remainder,
+                            t,
+                            hlg_to_linear_fallback::<T, 16>,
+                        );
+                        return;
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        pub(crate) fn try_linear_to_hlg_x16<T: F32x16Convert + F32x4Convert>(
+            t: T,
+            v: f32x16<T>,
+        ) -> Option<f32x16<T>> {
             let zero = f32x16::zero_t(t);
             let threshold = f32x16::splat_t(t, 1.0 / 12.0);
             let three = f32x16::splat_t(t, 3.0);
@@ -649,13 +1281,69 @@ pub mod tf {
             let mask = a.simd_le(threshold);
             let arg = f32x16::blend(mask, f32x16::splat_t(t, 1.0), twelve * a - hlg_b);
             let Ok(log2_val) = arg.try_log2_with::<{ math::HLG_LOG }>() else {
-                return f32x16::from_array_t(
-                    t,
-                    v.to_array().map(|x| linear_to_hlg_with_token(t, x)),
-                );
+                return None;
             };
-            let high = hlg_a_ln2.mla(log2_val, hlg_c).max(f32x16::splat_t(t, 0.5));
-            f32x16::blend(mask, low, high)
+            let high = hlg_a_ln2.mla(log2_val, hlg_c).max_fast(f32x16::splat_t(t, 0.5));
+            Some(f32x16::blend(mask, low, high))
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn linear_to_hlg_x16<T: F32x16Convert + F32x4Convert>(
+            t: T,
+            v: f32x16<T>,
+        ) -> f32x16<T> {
+            match try_linear_to_hlg_x16(t, v) {
+                Some(out) => out,
+                None => f32x16::from_array_t(t, linear_to_hlg_fallback(t, v.to_array())),
+            }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn linear_to_hlg_slice_x16<T: F32x16Convert + F32x4Convert>(
+            t: T,
+            values: &mut [f32],
+        ) {
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<16>();
+                let mut idx = 0;
+                while idx < chunks.len() {
+                    let chunk: [f32; 16] = chunks[idx];
+                    let Some(converted) = (try_linear_to_hlg_x16(
+                            t,
+                            f32x16::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut chunks[idx..],
+                            remainder,
+                            t,
+                            linear_to_hlg_fallback::<T, 16>,
+                        );
+                        return;
+                    };
+                    chunks[idx] = converted;
+                    idx += 1;
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 16];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 16] = block;
+                    let Some(converted) = (try_linear_to_hlg_x16(
+                            t,
+                            f32x16::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut [],
+                            remainder,
+                            t,
+                            linear_to_hlg_fallback::<T, 16>,
+                        );
+                        return;
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
         }
     }
     pub(crate) mod math {
@@ -671,8 +1359,6 @@ pub mod tf {
             .caller();
         const GAMMA: u128 = GAMMA_OPTIONS.bits();
         const FULL_POW: u128 = PowfOptions::new().full_domain().highp().caller().bits();
-        const SRGB_DECODE_POWER: u128 = GAMMA_OPTIONS.const_exponent(2.4).bits();
-        const SRGB_ENCODE_POWER: u128 = GAMMA_OPTIONS.const_exponent(1.0 / 2.4).bits();
         pub(crate) const BT709_DECODE_POWER: u128 = PowfOptions::new()
             .positive_gamma()
             .const_exponent(1.0 / 0.45)
@@ -740,11 +1426,7 @@ pub mod tf {
             if x.is_nan() {
                 return x;
             }
-            if n == 2.4 {
-                Powf::<SRGB_DECODE_POWER>::scalar_const_infallible(x)
-            } else if n == 1.0 / 2.4 {
-                Powf::<SRGB_ENCODE_POWER>::scalar_const_infallible(x)
-            } else if (0.0..=4.0).contains(&n) {
+            if (0.0..=4.0).contains(&n) {
                 Powf::<GAMMA>::scalar_infallible(x, n)
             } else {
                 full_pow(x, n)
@@ -752,55 +1434,178 @@ pub mod tf {
         }
         #[cold]
         #[inline(never)]
-        fn gamma_outside_fit<const N: usize>(
+        pub(crate) fn gamma_outside_fit<const N: usize>(
             values: [f32; N],
             exponent: f32,
         ) -> [f32; N] {
             values.map(|x| gamma(x, exponent))
+        }
+        #[cold]
+        #[inline(never)]
+        pub(crate) fn gamma_outside_fit_slice(values: &mut [f32], exponent: f32) {
+            for x in values {
+                *x = gamma(*x, exponent);
+            }
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_zero_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
+            let zero = f32x4::zero_t(t);
+            let result = v.simd_gt(zero) & f32x4::splat_t(t, 1.0);
+            f32x4::blend(v.simd_ne(v), v, result)
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_in_range_x4<T: F32x4Convert>(
+            t: T,
+            v: f32x4<T>,
+            n: f32,
+        ) -> f32x4<T> {
+            let _ = t;
+            let result = v.powf::<GAMMA>(n);
+            f32x4::blend(v.simd_ne(v), v, result)
         }
         #[inline(always)]
         pub(crate) fn gamma_x4<T: F32x4Convert>(t: T, v: f32x4<T>, n: f32) -> f32x4<T> {
             if !(0.0..=4.0).contains(&n) {
                 return f32x4::from_array_t(t, gamma_outside_fit(v.to_array(), n));
             }
-            let zero = f32x4::zero_t(t);
-            let result = if n == 2.4 {
-                v.powf_const::<SRGB_DECODE_POWER>()
-            } else if n == 1.0 / 2.4 {
-                v.powf_const::<SRGB_ENCODE_POWER>()
-            } else if n == 0.0 {
-                v.simd_gt(zero) & f32x4::splat_t(t, 1.0)
-            } else {
-                v.powf::<GAMMA>(n)
-            };
-            let nan = v.simd_ne(v);
-            if nan.bitcast_to_i32().any_true() {
-                f32x4::blend(nan, v, result)
-            } else {
-                result
+            if n == 0.0 {
+                return gamma_zero_x4(t, v);
             }
+            gamma_in_range_x4(t, v, n)
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_slice_x4<T: F32x4Convert>(t: T, values: &mut [f32], n: f32) {
+            if !(0.0..=4.0).contains(&n) {
+                gamma_outside_fit_slice(values, n);
+                return;
+            }
+            if n == 0.0 {
+                {
+                    let (chunks, remainder) = (values).as_chunks_mut::<4>();
+                    for slot in chunks {
+                        let chunk: [f32; 4] = *slot;
+                        *slot = {
+                            gamma_zero_x4(t, f32x4::from_array_t(t, chunk)).to_array()
+                        };
+                    }
+                    if !remainder.is_empty() {
+                        let mut block = [0.0; 4];
+                        block[..remainder.len()].copy_from_slice(remainder);
+                        let chunk: [f32; 4] = block;
+                        let converted = {
+                            gamma_zero_x4(t, f32x4::from_array_t(t, chunk)).to_array()
+                        };
+                        remainder.copy_from_slice(&converted[..remainder.len()]);
+                    }
+                };
+                return;
+            }
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<4>();
+                for slot in chunks {
+                    let chunk: [f32; 4] = *slot;
+                    *slot = {
+                        gamma_in_range_x4(t, f32x4::from_array_t(t, chunk), n).to_array()
+                    };
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 4];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 4] = block;
+                    let converted = {
+                        gamma_in_range_x4(t, f32x4::from_array_t(t, chunk), n).to_array()
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_zero_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
+            let zero = f32x8::zero_t(t);
+            let result = v.simd_gt(zero) & f32x8::splat_t(t, 1.0);
+            f32x8::blend(v.simd_ne(v), v, result)
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_in_range_x8<T: F32x8Convert>(
+            t: T,
+            v: f32x8<T>,
+            n: f32,
+        ) -> f32x8<T> {
+            let _ = t;
+            let result = v.powf::<GAMMA>(n);
+            f32x8::blend(v.simd_ne(v), v, result)
         }
         #[inline(always)]
         pub(crate) fn gamma_x8<T: F32x8Convert>(t: T, v: f32x8<T>, n: f32) -> f32x8<T> {
             if !(0.0..=4.0).contains(&n) {
                 return f32x8::from_array_t(t, gamma_outside_fit(v.to_array(), n));
             }
-            let zero = f32x8::zero_t(t);
-            let result = if n == 2.4 {
-                v.powf_const::<SRGB_DECODE_POWER>()
-            } else if n == 1.0 / 2.4 {
-                v.powf_const::<SRGB_ENCODE_POWER>()
-            } else if n == 0.0 {
-                v.simd_gt(zero) & f32x8::splat_t(t, 1.0)
-            } else {
-                v.powf::<GAMMA>(n)
-            };
-            let nan = v.simd_ne(v);
-            if nan.bitcast_to_i32().any_true() {
-                f32x8::blend(nan, v, result)
-            } else {
-                result
+            if n == 0.0 {
+                return gamma_zero_x8(t, v);
             }
+            gamma_in_range_x8(t, v, n)
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_slice_x8<T: F32x8Convert>(t: T, values: &mut [f32], n: f32) {
+            if !(0.0..=4.0).contains(&n) {
+                gamma_outside_fit_slice(values, n);
+                return;
+            }
+            if n == 0.0 {
+                {
+                    let (chunks, remainder) = (values).as_chunks_mut::<8>();
+                    for slot in chunks {
+                        let chunk: [f32; 8] = *slot;
+                        *slot = {
+                            gamma_zero_x8(t, f32x8::from_array_t(t, chunk)).to_array()
+                        };
+                    }
+                    if !remainder.is_empty() {
+                        let mut block = [0.0; 8];
+                        block[..remainder.len()].copy_from_slice(remainder);
+                        let chunk: [f32; 8] = block;
+                        let converted = {
+                            gamma_zero_x8(t, f32x8::from_array_t(t, chunk)).to_array()
+                        };
+                        remainder.copy_from_slice(&converted[..remainder.len()]);
+                    }
+                };
+                return;
+            }
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<8>();
+                for slot in chunks {
+                    let chunk: [f32; 8] = *slot;
+                    *slot = {
+                        gamma_in_range_x8(t, f32x8::from_array_t(t, chunk), n).to_array()
+                    };
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 8];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 8] = block;
+                    let converted = {
+                        gamma_in_range_x8(t, f32x8::from_array_t(t, chunk), n).to_array()
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_zero_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
+            let zero = f32x16::zero_t(t);
+            let result = v.simd_gt(zero) & f32x16::splat_t(t, 1.0);
+            f32x16::blend(v.simd_ne(v), v, result)
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_in_range_x16<T: F32x16Convert>(
+            t: T,
+            v: f32x16<T>,
+            n: f32,
+        ) -> f32x16<T> {
+            let _ = t;
+            let result = v.powf::<GAMMA>(n);
+            f32x16::blend(v.simd_ne(v), v, result)
         }
         #[inline(always)]
         pub(crate) fn gamma_x16<T: F32x16Convert>(
@@ -811,22 +1616,62 @@ pub mod tf {
             if !(0.0..=4.0).contains(&n) {
                 return f32x16::from_array_t(t, gamma_outside_fit(v.to_array(), n));
             }
-            let zero = f32x16::zero_t(t);
-            let result = if n == 2.4 {
-                v.powf_const::<SRGB_DECODE_POWER>()
-            } else if n == 1.0 / 2.4 {
-                v.powf_const::<SRGB_ENCODE_POWER>()
-            } else if n == 0.0 {
-                v.simd_gt(zero) & f32x16::splat_t(t, 1.0)
-            } else {
-                v.powf::<GAMMA>(n)
-            };
-            let nan = v.simd_ne(v);
-            if nan.bitcast_to_i32().any_true() {
-                f32x16::blend(nan, v, result)
-            } else {
-                result
+            if n == 0.0 {
+                return gamma_zero_x16(t, v);
             }
+            gamma_in_range_x16(t, v, n)
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_slice_x16<T: F32x16Convert>(
+            t: T,
+            values: &mut [f32],
+            n: f32,
+        ) {
+            if !(0.0..=4.0).contains(&n) {
+                gamma_outside_fit_slice(values, n);
+                return;
+            }
+            if n == 0.0 {
+                {
+                    let (chunks, remainder) = (values).as_chunks_mut::<16>();
+                    for slot in chunks {
+                        let chunk: [f32; 16] = *slot;
+                        *slot = {
+                            gamma_zero_x16(t, f32x16::from_array_t(t, chunk)).to_array()
+                        };
+                    }
+                    if !remainder.is_empty() {
+                        let mut block = [0.0; 16];
+                        block[..remainder.len()].copy_from_slice(remainder);
+                        let chunk: [f32; 16] = block;
+                        let converted = {
+                            gamma_zero_x16(t, f32x16::from_array_t(t, chunk)).to_array()
+                        };
+                        remainder.copy_from_slice(&converted[..remainder.len()]);
+                    }
+                };
+                return;
+            }
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<16>();
+                for slot in chunks {
+                    let chunk: [f32; 16] = *slot;
+                    *slot = {
+                        gamma_in_range_x16(t, f32x16::from_array_t(t, chunk), n)
+                            .to_array()
+                    };
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 16];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 16] = block;
+                    let converted = {
+                        gamma_in_range_x16(t, f32x16::from_array_t(t, chunk), n)
+                            .to_array()
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
         }
     }
     pub(crate) mod polynomial {
@@ -867,6 +1712,13 @@ pub mod tf {
                 magetypes::scalar::mul_add_relaxed_f32(token, a, b, c)
             }
         }
+        /// IEEE-754 correctly-rounded `f32` square root: emits hardware `vsqrtss` /
+        /// `fsqrt` / `f32.sqrt` when `std` is enabled and falls back to Magetypes'
+        /// IEEE-754 software `sqrt_f32` in `#![no_std]` builds.
+        #[inline(always)]
+        pub(crate) fn fast_sqrt_f32(x: f32) -> f32 {
+            { x.sqrt() }
+        }
         pub(crate) use floor_zero;
         /// Multiply-add in the kernels. Fused wherever that costs nothing or the scalar tier needs it, so
         /// every native tier gives the same bits. On WASM, `mul_add_fused` is software unless the engine
@@ -904,6 +1756,7 @@ pub mod tf {
                 }
             }
         }
+        #[allow(dead_code)]
         #[inline(always)]
         pub(crate) fn eval_poly_x4<T: F32x4Backend, const N: usize>(
             t: T,
@@ -918,6 +1771,7 @@ pub mod tf {
                     |acc, &coefficient| { acc.mla(x, f32x4::splat_t(t, coefficient)) },
                 )
         }
+        #[allow(dead_code)]
         #[inline(always)]
         pub(crate) fn eval_poly_x8<T: F32x8Backend, const N: usize>(
             t: T,
@@ -932,6 +1786,7 @@ pub mod tf {
                     |acc, &coefficient| { acc.mla(x, f32x8::splat_t(t, coefficient)) },
                 )
         }
+        #[allow(dead_code)]
         #[inline(always)]
         pub(crate) fn eval_poly_x16<T: F32x16Backend, const N: usize>(
             t: T,
@@ -946,12 +1801,102 @@ pub mod tf {
                     |acc, &coefficient| { acc.mla(x, f32x16::splat_t(t, coefficient)) },
                 )
         }
+        #[inline(always)]
+        pub(crate) fn eval_blended_poly_x4<T: F32x4Backend, const N: usize>(
+            t: T,
+            x: f32x4<T>,
+            mask: f32x4<T>,
+            when_true: [f32; N],
+            when_false: [f32; N],
+        ) -> f32x4<T> {
+            let last_t = when_true[N - 1];
+            let last_f = when_false[N - 1];
+            let mut acc = if last_t.to_bits() == last_f.to_bits() {
+                f32x4::splat_t(t, last_t)
+            } else {
+                f32x4::blend(mask, f32x4::splat_t(t, last_t), f32x4::splat_t(t, last_f))
+            };
+            let mut i = N - 1;
+            while i > 0 {
+                i -= 1;
+                let ct = when_true[i];
+                let cf = when_false[i];
+                let c = if ct.to_bits() == cf.to_bits() {
+                    f32x4::splat_t(t, ct)
+                } else {
+                    f32x4::blend(mask, f32x4::splat_t(t, ct), f32x4::splat_t(t, cf))
+                };
+                acc = acc.mla(x, c);
+            }
+            acc
+        }
+        #[inline(always)]
+        pub(crate) fn eval_blended_poly_x8<T: F32x8Backend, const N: usize>(
+            t: T,
+            x: f32x8<T>,
+            mask: f32x8<T>,
+            when_true: [f32; N],
+            when_false: [f32; N],
+        ) -> f32x8<T> {
+            let last_t = when_true[N - 1];
+            let last_f = when_false[N - 1];
+            let mut acc = if last_t.to_bits() == last_f.to_bits() {
+                f32x8::splat_t(t, last_t)
+            } else {
+                f32x8::blend(mask, f32x8::splat_t(t, last_t), f32x8::splat_t(t, last_f))
+            };
+            let mut i = N - 1;
+            while i > 0 {
+                i -= 1;
+                let ct = when_true[i];
+                let cf = when_false[i];
+                let c = if ct.to_bits() == cf.to_bits() {
+                    f32x8::splat_t(t, ct)
+                } else {
+                    f32x8::blend(mask, f32x8::splat_t(t, ct), f32x8::splat_t(t, cf))
+                };
+                acc = acc.mla(x, c);
+            }
+            acc
+        }
+        #[inline(always)]
+        pub(crate) fn eval_blended_poly_x16<T: F32x16Backend, const N: usize>(
+            t: T,
+            x: f32x16<T>,
+            mask: f32x16<T>,
+            when_true: [f32; N],
+            when_false: [f32; N],
+        ) -> f32x16<T> {
+            let last_t = when_true[N - 1];
+            let last_f = when_false[N - 1];
+            let mut acc = if last_t.to_bits() == last_f.to_bits() {
+                f32x16::splat_t(t, last_t)
+            } else {
+                f32x16::blend(
+                    mask,
+                    f32x16::splat_t(t, last_t),
+                    f32x16::splat_t(t, last_f),
+                )
+            };
+            let mut i = N - 1;
+            while i > 0 {
+                i -= 1;
+                let ct = when_true[i];
+                let cf = when_false[i];
+                let c = if ct.to_bits() == cf.to_bits() {
+                    f32x16::splat_t(t, ct)
+                } else {
+                    f32x16::blend(mask, f32x16::splat_t(t, ct), f32x16::splat_t(t, cf))
+                };
+                acc = acc.mla(x, c);
+            }
+            acc
+        }
     }
     pub(crate) mod pq {
         //! PQ (SMPTE ST 2084) transfer function (scalar + generic SIMD).
         use super::polynomial;
-        use super::polynomial::{Mla, mla_scalar};
-        use magetypes::scalar::sqrt_f32;
+        use super::polynomial::{Mla, fast_sqrt_f32, mla_scalar};
         #[allow(unused_imports)]
         use num_traits::Float;
         /// PQ EOTF for normalized signal values. Uses the ST 2084 formula in the dark
@@ -1081,7 +2026,7 @@ pub mod tf {
             if v.is_nan() || v <= 0.0 || v >= 1.0 || v < OETF_POLY_FLOOR {
                 return linear_to_pq_precise(v);
             }
-            let a = sqrt_f32(sqrt_f32(v));
+            let a = fast_sqrt_f32(fast_sqrt_f32(v));
             if a < 0.1 {
                 polynomial::eval_rational_poly(token, a, PQ_INV_P_SMALL, PQ_INV_Q_SMALL)
             } else {
@@ -1196,209 +2141,679 @@ pub mod tf {
             -2.072546e5,
         ];
         use magetypes::simd::{backends::*, generic::*};
+        #[cold]
+        #[inline(never)]
+        fn pq_to_linear_fallback<const N: usize>(
+            source: [f32; N],
+            mut result: [f32; N],
+        ) -> [f32; N] {
+            for (s, o) in source.into_iter().zip(&mut result) {
+                if s.is_nan() || (0.0 < s && s < EOTF_POLY_FLOOR) {
+                    *o = pq_to_linear_precise(s);
+                }
+            }
+            result
+        }
+        #[cold]
+        #[inline(never)]
+        fn linear_to_pq_fallback<const N: usize>(
+            source: [f32; N],
+            mut result: [f32; N],
+        ) -> [f32; N] {
+            for (s, o) in source.into_iter().zip(&mut result) {
+                if s.is_nan() || (0.0 < s && s < OETF_POLY_FLOOR) {
+                    *o = linear_to_pq_precise(s);
+                }
+            }
+            result
+        }
         #[inline(always)]
-        pub(crate) fn pq_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
+        fn pq_to_linear_poly_x4<T: F32x4Convert>(
+            t: T,
+            v: f32x4<T>,
+        ) -> (f32x4<T>, f32x4<T>) {
             let floor = f32x4::splat_t(t, EOTF_POLY_FLOOR);
             let one = f32x4::splat_t(t, 1.0);
-            let a = v.max(floor).min(one);
+            let a = if true {
+                f32x4::blend(v.simd_gt(floor), v, floor).min_fast(one)
+            } else {
+                const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                    .non_nan_rhs()
+                    .bits();
+                v.max_with::<NON_NAN_RHS>(floor).min_fast(one)
+            };
             let x = a.mla(a, a);
             let small = a.simd_lt(f32x4::splat_t(t, 0.25));
-            let p = f32x4::blend(
+            let p = polynomial::eval_blended_poly_x4(
+                t,
+                x,
                 small,
-                polynomial::eval_poly_x4(t, x, PQ_EOTF_P_SMALL),
-                polynomial::eval_poly_x4(t, x, PQ_EOTF_P_LARGE),
+                PQ_EOTF_P_SMALL,
+                PQ_EOTF_P_LARGE,
             );
-            let q = f32x4::blend(
+            let q = polynomial::eval_blended_poly_x4(
+                t,
+                x,
                 small,
-                polynomial::eval_poly_x4(t, x, PQ_EOTF_Q_SMALL),
-                polynomial::eval_poly_x4(t, x, PQ_EOTF_Q_LARGE),
+                PQ_EOTF_Q_SMALL,
+                PQ_EOTF_Q_LARGE,
             );
             let zero = f32x4::zero_t(t);
             let positive = v.simd_gt(zero);
             let result = f32x4::blend(v.simd_ge(one), one, (p / q) & positive);
             let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
+            (fallback, result)
+        }
+        #[inline(always)]
+        pub(crate) fn try_pq_to_linear_x4<T: F32x4Convert>(
+            t: T,
+            v: f32x4<T>,
+        ) -> Option<f32x4<T>> {
+            let (fallback, result) = pq_to_linear_poly_x4(t, v);
+            if fallback.bitcast_to_i32().any_true() { None } else { Some(result) }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn pq_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
+            let (fallback, result) = pq_to_linear_poly_x4(t, v);
             if fallback.bitcast_to_i32().any_true() {
-                let mut result = result.to_array();
-                for (source, output) in v.to_array().into_iter().zip(&mut result) {
-                    if source.is_nan() || (0.0 < source && source < EOTF_POLY_FLOOR) {
-                        *output = pq_to_linear_precise(source);
-                    }
-                }
-                f32x4::from_array_t(t, result)
+                f32x4::from_array_t(
+                    t,
+                    pq_to_linear_fallback(v.to_array(), result.to_array()),
+                )
             } else {
                 result
             }
         }
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_pq_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
+        pub(crate) fn pq_to_linear_slice_x4<T: F32x4Convert>(t: T, values: &mut [f32]) {
+            fn slow<T: F32x4Convert>(t: T, chunk: [f32; 4]) -> [f32; 4] {
+                pq_to_linear_x4(t, f32x4::from_array_t(t, chunk)).to_array()
+            }
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<4>();
+                let mut idx = 0;
+                while idx < chunks.len() {
+                    let chunk: [f32; 4] = chunks[idx];
+                    let Some(converted) = (try_pq_to_linear_x4(
+                            t,
+                            f32x4::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut chunks[idx..],
+                            remainder,
+                            t,
+                            slow::<T>,
+                        );
+                        return;
+                    };
+                    chunks[idx] = converted;
+                    idx += 1;
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 4];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 4] = block;
+                    let Some(converted) = (try_pq_to_linear_x4(
+                            t,
+                            f32x4::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut [],
+                            remainder,
+                            t,
+                            slow::<T>,
+                        );
+                        return;
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        fn linear_to_pq_poly_x4<T: F32x4Convert>(
+            t: T,
+            v: f32x4<T>,
+        ) -> (f32x4<T>, f32x4<T>) {
             let floor = f32x4::splat_t(t, OETF_POLY_FLOOR);
             let one = f32x4::splat_t(t, 1.0);
-            let a = v.max(floor).min(one);
+            let a = if true {
+                f32x4::blend(v.simd_gt(floor), v, floor).min_fast(one)
+            } else {
+                const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                    .non_nan_rhs()
+                    .bits();
+                v.max_with::<NON_NAN_RHS>(floor).min_fast(one)
+            };
             let a4 = a.sqrt().sqrt();
             let small = a4.simd_lt(f32x4::splat_t(t, 0.1));
-            let p = f32x4::blend(
+            let p = polynomial::eval_blended_poly_x4(
+                t,
+                a4,
                 small,
-                polynomial::eval_poly_x4(t, a4, PQ_INV_P_SMALL),
-                polynomial::eval_poly_x4(t, a4, PQ_INV_P_LARGE),
+                PQ_INV_P_SMALL,
+                PQ_INV_P_LARGE,
             );
-            let q = f32x4::blend(
+            let q = polynomial::eval_blended_poly_x4(
+                t,
+                a4,
                 small,
-                polynomial::eval_poly_x4(t, a4, PQ_INV_Q_SMALL),
-                polynomial::eval_poly_x4(t, a4, PQ_INV_Q_LARGE),
+                PQ_INV_Q_SMALL,
+                PQ_INV_Q_LARGE,
             );
             let zero = f32x4::zero_t(t);
             let positive = v.simd_gt(zero);
             let result = f32x4::blend(v.simd_ge(one), one, (p / q) & positive);
             let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
+            (fallback, result)
+        }
+        #[inline(always)]
+        pub(crate) fn try_linear_to_pq_x4<T: F32x4Convert>(
+            t: T,
+            v: f32x4<T>,
+        ) -> Option<f32x4<T>> {
+            let (fallback, result) = linear_to_pq_poly_x4(t, v);
+            if fallback.bitcast_to_i32().any_true() { None } else { Some(result) }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn linear_to_pq_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
+            let (fallback, result) = linear_to_pq_poly_x4(t, v);
             if fallback.bitcast_to_i32().any_true() {
-                let mut result = result.to_array();
-                for (source, output) in v.to_array().into_iter().zip(&mut result) {
-                    if source.is_nan() || (0.0 < source && source < OETF_POLY_FLOOR) {
-                        *output = linear_to_pq_precise(source);
-                    }
-                }
-                f32x4::from_array_t(t, result)
+                f32x4::from_array_t(
+                    t,
+                    linear_to_pq_fallback(v.to_array(), result.to_array()),
+                )
             } else {
                 result
             }
         }
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn pq_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
+        pub(crate) fn linear_to_pq_slice_x4<T: F32x4Convert>(t: T, values: &mut [f32]) {
+            fn slow<T: F32x4Convert>(t: T, chunk: [f32; 4]) -> [f32; 4] {
+                linear_to_pq_x4(t, f32x4::from_array_t(t, chunk)).to_array()
+            }
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<4>();
+                let mut idx = 0;
+                while idx < chunks.len() {
+                    let chunk: [f32; 4] = chunks[idx];
+                    let Some(converted) = (try_linear_to_pq_x4(
+                            t,
+                            f32x4::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut chunks[idx..],
+                            remainder,
+                            t,
+                            slow::<T>,
+                        );
+                        return;
+                    };
+                    chunks[idx] = converted;
+                    idx += 1;
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 4];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 4] = block;
+                    let Some(converted) = (try_linear_to_pq_x4(
+                            t,
+                            f32x4::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut [],
+                            remainder,
+                            t,
+                            slow::<T>,
+                        );
+                        return;
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        fn pq_to_linear_poly_x8<T: F32x8Convert>(
+            t: T,
+            v: f32x8<T>,
+        ) -> (f32x8<T>, f32x8<T>) {
             let floor = f32x8::splat_t(t, EOTF_POLY_FLOOR);
             let one = f32x8::splat_t(t, 1.0);
-            let a = v.max(floor).min(one);
+            let a = if true {
+                f32x8::blend(v.simd_gt(floor), v, floor).min_fast(one)
+            } else {
+                const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                    .non_nan_rhs()
+                    .bits();
+                v.max_with::<NON_NAN_RHS>(floor).min_fast(one)
+            };
             let x = a.mla(a, a);
             let small = a.simd_lt(f32x8::splat_t(t, 0.25));
-            let p = f32x8::blend(
+            let p = polynomial::eval_blended_poly_x8(
+                t,
+                x,
                 small,
-                polynomial::eval_poly_x8(t, x, PQ_EOTF_P_SMALL),
-                polynomial::eval_poly_x8(t, x, PQ_EOTF_P_LARGE),
+                PQ_EOTF_P_SMALL,
+                PQ_EOTF_P_LARGE,
             );
-            let q = f32x8::blend(
+            let q = polynomial::eval_blended_poly_x8(
+                t,
+                x,
                 small,
-                polynomial::eval_poly_x8(t, x, PQ_EOTF_Q_SMALL),
-                polynomial::eval_poly_x8(t, x, PQ_EOTF_Q_LARGE),
+                PQ_EOTF_Q_SMALL,
+                PQ_EOTF_Q_LARGE,
             );
             let zero = f32x8::zero_t(t);
             let positive = v.simd_gt(zero);
             let result = f32x8::blend(v.simd_ge(one), one, (p / q) & positive);
             let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
-            if fallback.bitcast_to_i32().any_true() {
-                let mut result = result.to_array();
-                for (source, output) in v.to_array().into_iter().zip(&mut result) {
-                    if source.is_nan() || (0.0 < source && source < EOTF_POLY_FLOOR) {
-                        *output = pq_to_linear_precise(source);
-                    }
-                }
-                f32x8::from_array_t(t, result)
-            } else {
-                result
-            }
+            (fallback, result)
         }
         #[inline(always)]
-        pub(crate) fn linear_to_pq_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
+        pub(crate) fn try_pq_to_linear_x8<T: F32x8Convert>(
+            t: T,
+            v: f32x8<T>,
+        ) -> Option<f32x8<T>> {
+            let (fallback, result) = pq_to_linear_poly_x8(t, v);
+            if fallback.bitcast_to_i32().any_true() { None } else { Some(result) }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn pq_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
+            let (fallback, result) = pq_to_linear_poly_x8(t, v);
+            if fallback.bitcast_to_i32().any_true() {
+                f32x8::from_array_t(
+                    t,
+                    pq_to_linear_fallback(v.to_array(), result.to_array()),
+                )
+            } else {
+                result
+            }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn pq_to_linear_slice_x8<T: F32x8Convert>(t: T, values: &mut [f32]) {
+            fn slow<T: F32x8Convert>(t: T, chunk: [f32; 8]) -> [f32; 8] {
+                pq_to_linear_x8(t, f32x8::from_array_t(t, chunk)).to_array()
+            }
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<8>();
+                let mut idx = 0;
+                while idx < chunks.len() {
+                    let chunk: [f32; 8] = chunks[idx];
+                    let Some(converted) = (try_pq_to_linear_x8(
+                            t,
+                            f32x8::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut chunks[idx..],
+                            remainder,
+                            t,
+                            slow::<T>,
+                        );
+                        return;
+                    };
+                    chunks[idx] = converted;
+                    idx += 1;
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 8];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 8] = block;
+                    let Some(converted) = (try_pq_to_linear_x8(
+                            t,
+                            f32x8::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut [],
+                            remainder,
+                            t,
+                            slow::<T>,
+                        );
+                        return;
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        fn linear_to_pq_poly_x8<T: F32x8Convert>(
+            t: T,
+            v: f32x8<T>,
+        ) -> (f32x8<T>, f32x8<T>) {
             let floor = f32x8::splat_t(t, OETF_POLY_FLOOR);
             let one = f32x8::splat_t(t, 1.0);
-            let a = v.max(floor).min(one);
+            let a = if true {
+                f32x8::blend(v.simd_gt(floor), v, floor).min_fast(one)
+            } else {
+                const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                    .non_nan_rhs()
+                    .bits();
+                v.max_with::<NON_NAN_RHS>(floor).min_fast(one)
+            };
             let a4 = a.sqrt().sqrt();
             let small = a4.simd_lt(f32x8::splat_t(t, 0.1));
-            let p = f32x8::blend(
+            let p = polynomial::eval_blended_poly_x8(
+                t,
+                a4,
                 small,
-                polynomial::eval_poly_x8(t, a4, PQ_INV_P_SMALL),
-                polynomial::eval_poly_x8(t, a4, PQ_INV_P_LARGE),
+                PQ_INV_P_SMALL,
+                PQ_INV_P_LARGE,
             );
-            let q = f32x8::blend(
+            let q = polynomial::eval_blended_poly_x8(
+                t,
+                a4,
                 small,
-                polynomial::eval_poly_x8(t, a4, PQ_INV_Q_SMALL),
-                polynomial::eval_poly_x8(t, a4, PQ_INV_Q_LARGE),
+                PQ_INV_Q_SMALL,
+                PQ_INV_Q_LARGE,
             );
             let zero = f32x8::zero_t(t);
             let positive = v.simd_gt(zero);
             let result = f32x8::blend(v.simd_ge(one), one, (p / q) & positive);
             let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
+            (fallback, result)
+        }
+        #[inline(always)]
+        pub(crate) fn try_linear_to_pq_x8<T: F32x8Convert>(
+            t: T,
+            v: f32x8<T>,
+        ) -> Option<f32x8<T>> {
+            let (fallback, result) = linear_to_pq_poly_x8(t, v);
+            if fallback.bitcast_to_i32().any_true() { None } else { Some(result) }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn linear_to_pq_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
+            let (fallback, result) = linear_to_pq_poly_x8(t, v);
             if fallback.bitcast_to_i32().any_true() {
-                let mut result = result.to_array();
-                for (source, output) in v.to_array().into_iter().zip(&mut result) {
-                    if source.is_nan() || (0.0 < source && source < OETF_POLY_FLOOR) {
-                        *output = linear_to_pq_precise(source);
-                    }
-                }
-                f32x8::from_array_t(t, result)
+                f32x8::from_array_t(
+                    t,
+                    linear_to_pq_fallback(v.to_array(), result.to_array()),
+                )
             } else {
                 result
             }
         }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn linear_to_pq_slice_x8<T: F32x8Convert>(t: T, values: &mut [f32]) {
+            fn slow<T: F32x8Convert>(t: T, chunk: [f32; 8]) -> [f32; 8] {
+                linear_to_pq_x8(t, f32x8::from_array_t(t, chunk)).to_array()
+            }
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<8>();
+                let mut idx = 0;
+                while idx < chunks.len() {
+                    let chunk: [f32; 8] = chunks[idx];
+                    let Some(converted) = (try_linear_to_pq_x8(
+                            t,
+                            f32x8::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut chunks[idx..],
+                            remainder,
+                            t,
+                            slow::<T>,
+                        );
+                        return;
+                    };
+                    chunks[idx] = converted;
+                    idx += 1;
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 8];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 8] = block;
+                    let Some(converted) = (try_linear_to_pq_x8(
+                            t,
+                            f32x8::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut [],
+                            remainder,
+                            t,
+                            slow::<T>,
+                        );
+                        return;
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        fn pq_to_linear_poly_x16<T: F32x16Convert>(
+            t: T,
+            v: f32x16<T>,
+        ) -> (f32x16<T>, f32x16<T>) {
+            let floor = f32x16::splat_t(t, EOTF_POLY_FLOOR);
+            let one = f32x16::splat_t(t, 1.0);
+            let a = if true {
+                f32x16::blend(v.simd_gt(floor), v, floor).min_fast(one)
+            } else {
+                const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                    .non_nan_rhs()
+                    .bits();
+                v.max_with::<NON_NAN_RHS>(floor).min_fast(one)
+            };
+            let x = a.mla(a, a);
+            let small = a.simd_lt(f32x16::splat_t(t, 0.25));
+            let p = polynomial::eval_blended_poly_x16(
+                t,
+                x,
+                small,
+                PQ_EOTF_P_SMALL,
+                PQ_EOTF_P_LARGE,
+            );
+            let q = polynomial::eval_blended_poly_x16(
+                t,
+                x,
+                small,
+                PQ_EOTF_Q_SMALL,
+                PQ_EOTF_Q_LARGE,
+            );
+            let zero = f32x16::zero_t(t);
+            let positive = v.simd_gt(zero);
+            let result = f32x16::blend(v.simd_ge(one), one, (p / q) & positive);
+            let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
+            (fallback, result)
+        }
+        #[inline(always)]
+        pub(crate) fn try_pq_to_linear_x16<T: F32x16Convert>(
+            t: T,
+            v: f32x16<T>,
+        ) -> Option<f32x16<T>> {
+            let (fallback, result) = pq_to_linear_poly_x16(t, v);
+            if fallback.bitcast_to_i32().any_true() { None } else { Some(result) }
+        }
+        #[allow(dead_code)]
         #[inline(always)]
         pub(crate) fn pq_to_linear_x16<T: F32x16Convert>(
             t: T,
             v: f32x16<T>,
         ) -> f32x16<T> {
-            let floor = f32x16::splat_t(t, EOTF_POLY_FLOOR);
+            let (fallback, result) = pq_to_linear_poly_x16(t, v);
+            if fallback.bitcast_to_i32().any_true() {
+                f32x16::from_array_t(
+                    t,
+                    pq_to_linear_fallback(v.to_array(), result.to_array()),
+                )
+            } else {
+                result
+            }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn pq_to_linear_slice_x16<T: F32x16Convert>(
+            t: T,
+            values: &mut [f32],
+        ) {
+            fn slow<T: F32x16Convert>(t: T, chunk: [f32; 16]) -> [f32; 16] {
+                pq_to_linear_x16(t, f32x16::from_array_t(t, chunk)).to_array()
+            }
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<16>();
+                let mut idx = 0;
+                while idx < chunks.len() {
+                    let chunk: [f32; 16] = chunks[idx];
+                    let Some(converted) = (try_pq_to_linear_x16(
+                            t,
+                            f32x16::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut chunks[idx..],
+                            remainder,
+                            t,
+                            slow::<T>,
+                        );
+                        return;
+                    };
+                    chunks[idx] = converted;
+                    idx += 1;
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 16];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 16] = block;
+                    let Some(converted) = (try_pq_to_linear_x16(
+                            t,
+                            f32x16::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut [],
+                            remainder,
+                            t,
+                            slow::<T>,
+                        );
+                        return;
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
+        }
+        #[inline(always)]
+        fn linear_to_pq_poly_x16<T: F32x16Convert>(
+            t: T,
+            v: f32x16<T>,
+        ) -> (f32x16<T>, f32x16<T>) {
+            let floor = f32x16::splat_t(t, OETF_POLY_FLOOR);
             let one = f32x16::splat_t(t, 1.0);
-            let a = v.max(floor).min(one);
-            let x = a.mla(a, a);
-            let small = a.simd_lt(f32x16::splat_t(t, 0.25));
-            let p = f32x16::blend(
+            let a = if true {
+                f32x16::blend(v.simd_gt(floor), v, floor).min_fast(one)
+            } else {
+                const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                    .non_nan_rhs()
+                    .bits();
+                v.max_with::<NON_NAN_RHS>(floor).min_fast(one)
+            };
+            let a4 = a.sqrt().sqrt();
+            let small = a4.simd_lt(f32x16::splat_t(t, 0.1));
+            let p = polynomial::eval_blended_poly_x16(
+                t,
+                a4,
                 small,
-                polynomial::eval_poly_x16(t, x, PQ_EOTF_P_SMALL),
-                polynomial::eval_poly_x16(t, x, PQ_EOTF_P_LARGE),
+                PQ_INV_P_SMALL,
+                PQ_INV_P_LARGE,
             );
-            let q = f32x16::blend(
+            let q = polynomial::eval_blended_poly_x16(
+                t,
+                a4,
                 small,
-                polynomial::eval_poly_x16(t, x, PQ_EOTF_Q_SMALL),
-                polynomial::eval_poly_x16(t, x, PQ_EOTF_Q_LARGE),
+                PQ_INV_Q_SMALL,
+                PQ_INV_Q_LARGE,
             );
             let zero = f32x16::zero_t(t);
             let positive = v.simd_gt(zero);
             let result = f32x16::blend(v.simd_ge(one), one, (p / q) & positive);
             let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
-            if fallback.bitcast_to_i32().any_true() {
-                let mut result = result.to_array();
-                for (source, output) in v.to_array().into_iter().zip(&mut result) {
-                    if source.is_nan() || (0.0 < source && source < EOTF_POLY_FLOOR) {
-                        *output = pq_to_linear_precise(source);
-                    }
-                }
-                f32x16::from_array_t(t, result)
-            } else {
-                result
-            }
+            (fallback, result)
         }
+        #[inline(always)]
+        pub(crate) fn try_linear_to_pq_x16<T: F32x16Convert>(
+            t: T,
+            v: f32x16<T>,
+        ) -> Option<f32x16<T>> {
+            let (fallback, result) = linear_to_pq_poly_x16(t, v);
+            if fallback.bitcast_to_i32().any_true() { None } else { Some(result) }
+        }
+        #[allow(dead_code)]
         #[inline(always)]
         pub(crate) fn linear_to_pq_x16<T: F32x16Convert>(
             t: T,
             v: f32x16<T>,
         ) -> f32x16<T> {
-            let floor = f32x16::splat_t(t, OETF_POLY_FLOOR);
-            let one = f32x16::splat_t(t, 1.0);
-            let a = v.max(floor).min(one);
-            let a4 = a.sqrt().sqrt();
-            let small = a4.simd_lt(f32x16::splat_t(t, 0.1));
-            let p = f32x16::blend(
-                small,
-                polynomial::eval_poly_x16(t, a4, PQ_INV_P_SMALL),
-                polynomial::eval_poly_x16(t, a4, PQ_INV_P_LARGE),
-            );
-            let q = f32x16::blend(
-                small,
-                polynomial::eval_poly_x16(t, a4, PQ_INV_Q_SMALL),
-                polynomial::eval_poly_x16(t, a4, PQ_INV_Q_LARGE),
-            );
-            let zero = f32x16::zero_t(t);
-            let positive = v.simd_gt(zero);
-            let result = f32x16::blend(v.simd_ge(one), one, (p / q) & positive);
-            let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
+            let (fallback, result) = linear_to_pq_poly_x16(t, v);
             if fallback.bitcast_to_i32().any_true() {
-                let mut result = result.to_array();
-                for (source, output) in v.to_array().into_iter().zip(&mut result) {
-                    if source.is_nan() || (0.0 < source && source < OETF_POLY_FLOOR) {
-                        *output = linear_to_pq_precise(source);
-                    }
-                }
-                f32x16::from_array_t(t, result)
+                f32x16::from_array_t(
+                    t,
+                    linear_to_pq_fallback(v.to_array(), result.to_array()),
+                )
             } else {
                 result
             }
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn linear_to_pq_slice_x16<T: F32x16Convert>(
+            t: T,
+            values: &mut [f32],
+        ) {
+            fn slow<T: F32x16Convert>(t: T, chunk: [f32; 16]) -> [f32; 16] {
+                linear_to_pq_x16(t, f32x16::from_array_t(t, chunk)).to_array()
+            }
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<16>();
+                let mut idx = 0;
+                while idx < chunks.len() {
+                    let chunk: [f32; 16] = chunks[idx];
+                    let Some(converted) = (try_linear_to_pq_x16(
+                            t,
+                            f32x16::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut chunks[idx..],
+                            remainder,
+                            t,
+                            slow::<T>,
+                        );
+                        return;
+                    };
+                    chunks[idx] = converted;
+                    idx += 1;
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 16];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 16] = block;
+                    let Some(converted) = (try_linear_to_pq_x16(
+                            t,
+                            f32x16::from_array_t(t, chunk),
+                        )
+                        .map(|r| r.to_array())) else {
+                        crate::kernels::finish_slice_cold(
+                            &mut [],
+                            remainder,
+                            t,
+                            slow::<T>,
+                        );
+                        return;
+                    };
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
         }
     }
     pub(crate) mod srgb {

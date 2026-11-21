@@ -42,6 +42,21 @@ pub(crate) fn mla_scalar<T: F32ScalarBackend>(token: T, a: f32, b: f32, c: f32) 
     }
 }
 
+/// IEEE-754 correctly-rounded `f32` square root: emits hardware `vsqrtss` /
+/// `fsqrt` / `f32.sqrt` when `std` is enabled and falls back to Magetypes'
+/// IEEE-754 software `sqrt_f32` in `#![no_std]` builds.
+#[inline(always)]
+pub(crate) fn fast_sqrt_f32(x: f32) -> f32 {
+    #[cfg(feature = "std")]
+    {
+        x.sqrt()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        magetypes::scalar::sqrt_f32(x)
+    }
+}
+
 // x86 and WASM can select the non-NaN right operand directly. NEON's
 // numeric max can return a NaN for a signalling input, so use an ordered
 // mask there to guarantee positive zero for every NaN.
@@ -86,6 +101,7 @@ mla_for!(f32x16, F32x16Backend);
 
 macro_rules! polynomial_for {
     ($name:ident, $float:ident, $backend:ident) => {
+        #[allow(dead_code)]
         #[inline(always)]
         pub(crate) fn $name<T: $backend, const N: usize>(
             t: T,
@@ -105,3 +121,42 @@ macro_rules! polynomial_for {
 polynomial_for!(eval_poly_x4, f32x4, F32x4Backend);
 polynomial_for!(eval_poly_x8, f32x8, F32x8Backend);
 polynomial_for!(eval_poly_x16, f32x16, F32x16Backend);
+
+macro_rules! blended_polynomial_for {
+    ($name:ident, $float:ident, $backend:ident) => {
+        #[cfg(feature = "transfer")]
+        #[inline(always)]
+        pub(crate) fn $name<T: $backend, const N: usize>(
+            t: T,
+            x: $float<T>,
+            mask: $float<T>,
+            when_true: [f32; N],
+            when_false: [f32; N],
+        ) -> $float<T> {
+            let last_t = when_true[N - 1];
+            let last_f = when_false[N - 1];
+            let mut acc = if last_t.to_bits() == last_f.to_bits() {
+                $float::splat_t(t, last_t)
+            } else {
+                $float::blend(mask, $float::splat_t(t, last_t), $float::splat_t(t, last_f))
+            };
+            let mut i = N - 1;
+            while i > 0 {
+                i -= 1;
+                let ct = when_true[i];
+                let cf = when_false[i];
+                let c = if ct.to_bits() == cf.to_bits() {
+                    $float::splat_t(t, ct)
+                } else {
+                    $float::blend(mask, $float::splat_t(t, ct), $float::splat_t(t, cf))
+                };
+                acc = acc.mla(x, c);
+            }
+            acc
+        }
+    };
+}
+
+blended_polynomial_for!(eval_blended_poly_x4, f32x4, F32x4Backend);
+blended_polynomial_for!(eval_blended_poly_x8, f32x8, F32x8Backend);
+blended_polynomial_for!(eval_blended_poly_x16, f32x16, F32x16Backend);

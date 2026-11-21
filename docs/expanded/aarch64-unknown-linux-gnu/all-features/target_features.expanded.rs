@@ -723,17 +723,19 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn srgb_to_linear_extended_slice_neon(values: &mut [f32]) {
-            crate::kernels::map_slice::<
-                4,
-            >(values, |chunk| srgb_to_linear_extended_neon(chunk));
+            crate::kernels::float::x4::srgb_to_linear_extended_slice(
+                archmage::NeonToken::from_context(),
+                values,
+            );
         }
         #[target_feature(enable = "neon")]
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_srgb_extended_slice_neon(values: &mut [f32]) {
-            crate::kernels::map_slice::<
-                4,
-            >(values, |chunk| linear_to_srgb_extended_neon(chunk));
+            crate::kernels::float::x4::linear_to_srgb_extended_slice(
+                archmage::NeonToken::from_context(),
+                values,
+            );
         }
     }
     pub(crate) mod x8 {}
@@ -1026,7 +1028,20 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn srgb_to_linear_slice_neon(values: &mut [f32]) {
-            crate::kernels::map_slice::<16>(values, |chunk| srgb_to_linear_neon(chunk));
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<16>();
+                for slot in chunks {
+                    let chunk: [f32; 16] = *slot;
+                    *slot = srgb_to_linear_neon(chunk);
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 16];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 16] = block;
+                    let converted = srgb_to_linear_neon(chunk);
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
         }
         #[target_feature(enable = "neon")]
         #[inline]
@@ -1041,7 +1056,20 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_srgb_slice_neon(values: &mut [f32]) {
-            crate::kernels::map_slice::<16>(values, |chunk| linear_to_srgb_neon(chunk));
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<16>();
+                for slot in chunks {
+                    let chunk: [f32; 16] = *slot;
+                    *slot = linear_to_srgb_neon(chunk);
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 16];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 16] = block;
+                    let converted = linear_to_srgb_neon(chunk);
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
         }
         #[target_feature(enable = "neon")]
         #[inline]
@@ -1056,9 +1084,10 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn srgb_to_linear_extended_slice_neon(values: &mut [f32]) {
-            crate::kernels::map_slice::<
-                16,
-            >(values, |chunk| srgb_to_linear_extended_neon(chunk));
+            crate::kernels::float::x16::srgb_to_linear_extended_slice(
+                archmage::NeonToken::from_context(),
+                values,
+            );
         }
         #[target_feature(enable = "neon")]
         #[inline]
@@ -1073,9 +1102,10 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_srgb_extended_slice_neon(values: &mut [f32]) {
-            crate::kernels::map_slice::<
-                16,
-            >(values, |chunk| linear_to_srgb_extended_neon(chunk));
+            crate::kernels::float::x16::linear_to_srgb_extended_slice(
+                archmage::NeonToken::from_context(),
+                values,
+            );
         }
         #[target_feature(enable = "neon")]
         #[inline]
@@ -1091,9 +1121,11 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn gamma_to_linear_slice_neon(values: &mut [f32], gamma: f32) {
-            crate::kernels::map_slice::<
-                16,
-            >(values, |chunk| gamma_to_linear_neon(chunk, gamma));
+            crate::kernels::float::x16::gamma_to_linear_slice(
+                archmage::NeonToken::from_context(),
+                values,
+                gamma,
+            );
         }
         #[target_feature(enable = "neon")]
         #[inline]
@@ -1109,9 +1141,11 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_gamma_slice_neon(values: &mut [f32], gamma: f32) {
-            crate::kernels::map_slice::<
-                16,
-            >(values, |chunk| linear_to_gamma_neon(chunk, gamma));
+            crate::kernels::float::x16::linear_to_gamma_slice(
+                archmage::NeonToken::from_context(),
+                values,
+                gamma,
+            );
         }
         #[target_feature(enable = "neon")]
         #[inline]
@@ -1133,9 +1167,20 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn tf_srgb_to_linear_slice_neon(values: &mut [f32]) {
-            crate::kernels::map_slice::<
-                16,
-            >(values, |chunk| tf_srgb_to_linear_neon(chunk));
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<16>();
+                for slot in chunks {
+                    let chunk: [f32; 16] = *slot;
+                    *slot = tf_srgb_to_linear_neon(chunk);
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 16];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 16] = block;
+                    let converted = tf_srgb_to_linear_neon(chunk);
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
         }
         #[target_feature(enable = "neon")]
         #[inline]
@@ -1157,9 +1202,20 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn tf_linear_to_srgb_slice_neon(values: &mut [f32]) {
-            crate::kernels::map_slice::<
-                16,
-            >(values, |chunk| tf_linear_to_srgb_neon(chunk));
+            {
+                let (chunks, remainder) = (values).as_chunks_mut::<16>();
+                for slot in chunks {
+                    let chunk: [f32; 16] = *slot;
+                    *slot = tf_linear_to_srgb_neon(chunk);
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; 16];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let chunk: [f32; 16] = block;
+                    let converted = tf_linear_to_srgb_neon(chunk);
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+            };
         }
         #[target_feature(enable = "neon")]
         #[inline]
@@ -1176,7 +1232,10 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn bt709_to_linear_slice_neon(values: &mut [f32]) {
-            crate::kernels::map_slice::<16>(values, |chunk| bt709_to_linear_neon(chunk));
+            crate::tf::bt709::bt709_to_linear_slice_x16(
+                archmage::NeonToken::from_context(),
+                values,
+            );
         }
         #[target_feature(enable = "neon")]
         #[inline]
@@ -1193,7 +1252,10 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_bt709_slice_neon(values: &mut [f32]) {
-            crate::kernels::map_slice::<16>(values, |chunk| linear_to_bt709_neon(chunk));
+            crate::tf::bt709::linear_to_bt709_slice_x16(
+                archmage::NeonToken::from_context(),
+                values,
+            );
         }
         #[target_feature(enable = "neon")]
         #[inline]
@@ -1210,7 +1272,10 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn pq_to_linear_slice_neon(values: &mut [f32]) {
-            crate::kernels::map_slice::<16>(values, |chunk| pq_to_linear_neon(chunk));
+            crate::tf::pq::pq_to_linear_slice_x16(
+                archmage::NeonToken::from_context(),
+                values,
+            );
         }
         #[target_feature(enable = "neon")]
         #[inline]
@@ -1227,7 +1292,10 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_pq_slice_neon(values: &mut [f32]) {
-            crate::kernels::map_slice::<16>(values, |chunk| linear_to_pq_neon(chunk));
+            crate::tf::pq::linear_to_pq_slice_x16(
+                archmage::NeonToken::from_context(),
+                values,
+            );
         }
         #[target_feature(enable = "neon")]
         #[inline]
@@ -1244,7 +1312,10 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn hlg_to_linear_slice_neon(values: &mut [f32]) {
-            crate::kernels::map_slice::<16>(values, |chunk| hlg_to_linear_neon(chunk));
+            crate::tf::hlg::hlg_to_linear_slice_x16(
+                archmage::NeonToken::from_context(),
+                values,
+            );
         }
         #[target_feature(enable = "neon")]
         #[inline]
@@ -1261,7 +1332,10 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_hlg_slice_neon(values: &mut [f32]) {
-            crate::kernels::map_slice::<16>(values, |chunk| linear_to_hlg_neon(chunk));
+            crate::tf::hlg::linear_to_hlg_slice_x16(
+                archmage::NeonToken::from_context(),
+                values,
+            );
         }
     }
 }

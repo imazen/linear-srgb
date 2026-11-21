@@ -173,13 +173,19 @@ pub(crate) fn linear_to_hlg_scalar(values: [f32; 4]) -> [f32; 4] {
 /// Convert all values, including a final partial array.
 #[archmage::attune(v3, inline(hint))]
 pub(crate) fn srgb_to_linear_extended_slice_v3(values: &mut [f32]) {
-    crate::kernels::map_slice::<4>(values, |chunk| srgb_to_linear_extended_v3(chunk));
+    crate::kernels::float::x4::srgb_to_linear_extended_slice(
+        archmage::X64V3Token::from_context(),
+        values,
+    );
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::attune(v3, inline(hint))]
 pub(crate) fn linear_to_srgb_extended_slice_v3(values: &mut [f32]) {
-    crate::kernels::map_slice::<4>(values, |chunk| linear_to_srgb_extended_v3(chunk));
+    crate::kernels::float::x4::linear_to_srgb_extended_slice(
+        archmage::X64V3Token::from_context(),
+        values,
+    );
 }
 
 /// Convert 4 values; see the module calling-context requirements.
@@ -193,7 +199,7 @@ pub(crate) fn srgb_to_linear_v4(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn srgb_to_linear_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice::<4>(values, |chunk| srgb_to_linear_v4(chunk));
+    crate::kernels::map_slice_inline!(values, 4, |chunk| srgb_to_linear_v4(chunk));
 }
 
 /// Convert 4 values; see the module calling-context requirements.
@@ -207,7 +213,7 @@ pub(crate) fn linear_to_srgb_v4(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn linear_to_srgb_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice::<4>(values, |chunk| linear_to_srgb_v4(chunk));
+    crate::kernels::map_slice_inline!(values, 4, |chunk| linear_to_srgb_v4(chunk));
 }
 
 /// Convert 4 values; see the module calling-context requirements.
@@ -221,7 +227,10 @@ pub(crate) fn srgb_to_linear_extended_v4(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn srgb_to_linear_extended_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice::<4>(values, |chunk| srgb_to_linear_extended_v4(chunk));
+    crate::kernels::float::x4::srgb_to_linear_extended_slice(
+        archmage::X64V4Token::from_context(),
+        values,
+    );
 }
 
 /// Convert 4 values; see the module calling-context requirements.
@@ -235,7 +244,10 @@ pub(crate) fn linear_to_srgb_extended_v4(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn linear_to_srgb_extended_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice::<4>(values, |chunk| linear_to_srgb_extended_v4(chunk));
+    crate::kernels::float::x4::linear_to_srgb_extended_slice(
+        archmage::X64V4Token::from_context(),
+        values,
+    );
 }
 
 /// Convert 4 values; see the module calling-context requirements.
@@ -249,7 +261,11 @@ pub(crate) fn gamma_to_linear_v4(values: [f32; 4], gamma: f32) -> [f32; 4] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn gamma_to_linear_slice_v4(values: &mut [f32], gamma: f32) {
-    crate::kernels::map_slice::<4>(values, |chunk| gamma_to_linear_v4(chunk, gamma));
+    crate::kernels::float::x4::gamma_to_linear_slice(
+        archmage::X64V4Token::from_context(),
+        values,
+        gamma,
+    );
 }
 
 /// Convert 4 values; see the module calling-context requirements.
@@ -263,7 +279,11 @@ pub(crate) fn linear_to_gamma_v4(values: [f32; 4], gamma: f32) -> [f32; 4] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn linear_to_gamma_slice_v4(values: &mut [f32], gamma: f32) {
-    crate::kernels::map_slice::<4>(values, |chunk| linear_to_gamma_v4(chunk, gamma));
+    crate::kernels::float::x4::linear_to_gamma_slice(
+        archmage::X64V4Token::from_context(),
+        values,
+        gamma,
+    );
 }
 
 /// Convert 4 values; see the module calling-context requirements.
@@ -284,7 +304,7 @@ pub(crate) fn tf_srgb_to_linear_v4(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn tf_srgb_to_linear_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice::<4>(values, |chunk| tf_srgb_to_linear_v4(chunk));
+    crate::kernels::map_slice_inline!(values, 4, |chunk| tf_srgb_to_linear_v4(chunk));
 }
 
 /// Convert 4 values; see the module calling-context requirements.
@@ -305,7 +325,7 @@ pub(crate) fn tf_linear_to_srgb_v4(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn tf_linear_to_srgb_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice::<4>(values, |chunk| tf_linear_to_srgb_v4(chunk));
+    crate::kernels::map_slice_inline!(values, 4, |chunk| tf_linear_to_srgb_v4(chunk));
 }
 
 /// Convert 4 values; see the module calling-context requirements.
@@ -326,7 +346,7 @@ pub(crate) fn bt709_to_linear_v4(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn bt709_to_linear_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice::<4>(values, |chunk| bt709_to_linear_v4(chunk));
+    crate::tf::bt709::bt709_to_linear_slice_x4(archmage::X64V4Token::from_context(), values);
 }
 
 /// Convert 4 values; see the module calling-context requirements.
@@ -347,7 +367,7 @@ pub(crate) fn linear_to_bt709_v4(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn linear_to_bt709_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice::<4>(values, |chunk| linear_to_bt709_v4(chunk));
+    crate::tf::bt709::linear_to_bt709_slice_x4(archmage::X64V4Token::from_context(), values);
 }
 
 /// Convert 4 values; see the module calling-context requirements.
@@ -368,7 +388,7 @@ pub(crate) fn pq_to_linear_v4(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn pq_to_linear_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice::<4>(values, |chunk| pq_to_linear_v4(chunk));
+    crate::tf::pq::pq_to_linear_slice_x4(archmage::X64V4Token::from_context(), values);
 }
 
 /// Convert 4 values; see the module calling-context requirements.
@@ -389,7 +409,7 @@ pub(crate) fn linear_to_pq_v4(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn linear_to_pq_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice::<4>(values, |chunk| linear_to_pq_v4(chunk));
+    crate::tf::pq::linear_to_pq_slice_x4(archmage::X64V4Token::from_context(), values);
 }
 
 /// Convert 4 values; see the module calling-context requirements.
@@ -410,7 +430,7 @@ pub(crate) fn hlg_to_linear_v4(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn hlg_to_linear_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice::<4>(values, |chunk| hlg_to_linear_v4(chunk));
+    crate::tf::hlg::hlg_to_linear_slice_x4(archmage::X64V4Token::from_context(), values);
 }
 
 /// Convert 4 values; see the module calling-context requirements.
@@ -431,29 +451,41 @@ pub(crate) fn linear_to_hlg_v4(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn linear_to_hlg_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice::<4>(values, |chunk| linear_to_hlg_v4(chunk));
+    crate::tf::hlg::linear_to_hlg_slice_x4(archmage::X64V4Token::from_context(), values);
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::attune(neon, inline(hint))]
 pub(crate) fn srgb_to_linear_extended_slice_neon(values: &mut [f32]) {
-    crate::kernels::map_slice::<4>(values, |chunk| srgb_to_linear_extended_neon(chunk));
+    crate::kernels::float::x4::srgb_to_linear_extended_slice(
+        archmage::NeonToken::from_context(),
+        values,
+    );
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::attune(neon, inline(hint))]
 pub(crate) fn linear_to_srgb_extended_slice_neon(values: &mut [f32]) {
-    crate::kernels::map_slice::<4>(values, |chunk| linear_to_srgb_extended_neon(chunk));
+    crate::kernels::float::x4::linear_to_srgb_extended_slice(
+        archmage::NeonToken::from_context(),
+        values,
+    );
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::attune(wasm128, inline(hint))]
 pub(crate) fn srgb_to_linear_extended_slice_wasm128(values: &mut [f32]) {
-    crate::kernels::map_slice::<4>(values, |chunk| srgb_to_linear_extended_wasm128(chunk));
+    crate::kernels::float::x4::srgb_to_linear_extended_slice(
+        archmage::Wasm128Token::from_context(),
+        values,
+    );
 }
 
 /// Convert all values, including a final partial array.
 #[archmage::attune(wasm128, inline(hint))]
 pub(crate) fn linear_to_srgb_extended_slice_wasm128(values: &mut [f32]) {
-    crate::kernels::map_slice::<4>(values, |chunk| linear_to_srgb_extended_wasm128(chunk));
+    crate::kernels::float::x4::linear_to_srgb_extended_slice(
+        archmage::Wasm128Token::from_context(),
+        values,
+    );
 }

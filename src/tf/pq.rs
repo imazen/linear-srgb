@@ -1,8 +1,7 @@
 //! PQ (SMPTE ST 2084) transfer function (scalar + generic SIMD).
 
 use super::polynomial;
-use super::polynomial::{Mla, mla_scalar};
-use magetypes::scalar::sqrt_f32;
+use super::polynomial::{Mla, fast_sqrt_f32, mla_scalar};
 #[allow(unused_imports)]
 use num_traits::Float; // provides powf/sqrt via libm in no_std
 
@@ -58,7 +57,7 @@ pub(crate) fn linear_to_pq_with_token<T: magetypes::scalar::F32ScalarBackend>(
     if v.is_nan() || v <= 0.0 || v >= 1.0 || v < OETF_POLY_FLOOR {
         return linear_to_pq_precise(v);
     }
-    let a = sqrt_f32(sqrt_f32(v));
+    let a = fast_sqrt_f32(fast_sqrt_f32(v));
     if a < 0.1 {
         polynomial::eval_rational_poly(token, a, PQ_INV_P_SMALL, PQ_INV_Q_SMALL)
     } else {
@@ -175,97 +174,203 @@ pub(crate) const PQ_INV_Q_SMALL: [f32; 5] =
 
 use magetypes::simd::{backends::*, generic::*};
 
+#[cold]
+#[inline(never)]
+fn pq_to_linear_fallback<const N: usize>(source: [f32; N], mut result: [f32; N]) -> [f32; N] {
+    for (s, o) in source.into_iter().zip(&mut result) {
+        if s.is_nan() || (0.0 < s && s < EOTF_POLY_FLOOR) {
+            *o = pq_to_linear_precise(s);
+        }
+    }
+    result
+}
+
+#[cold]
+#[inline(never)]
+fn linear_to_pq_fallback<const N: usize>(source: [f32; N], mut result: [f32; N]) -> [f32; N] {
+    for (s, o) in source.into_iter().zip(&mut result) {
+        if s.is_nan() || (0.0 < s && s < OETF_POLY_FLOOR) {
+            *o = linear_to_pq_precise(s);
+        }
+    }
+    result
+}
+
 macro_rules! pq_for {
-    ($decode:ident, $encode:ident, $float:ident, $backend:ident, $poly:ident) => {
+    (
+        $decode_poly:ident,
+        $try_decode:ident,
+        $decode:ident,
+        $decode_slice:ident,
+        $encode_poly:ident,
+        $try_encode:ident,
+        $encode:ident,
+        $encode_slice:ident,
+        $float:ident,
+        $backend:ident,
+        $blend_poly:ident,
+        $width:literal
+    ) => {
         #[inline(always)]
-        pub(crate) fn $decode<T: $backend>(t: T, v: $float<T>) -> $float<T> {
+        fn $decode_poly<T: $backend>(t: T, v: $float<T>) -> ($float<T>, $float<T>) {
             let floor = $float::splat_t(t, EOTF_POLY_FLOOR);
             let one = $float::splat_t(t, 1.0);
             // Keep the small fit above its pole even on lanes replaced below.
-            let a = v.max(floor).min(one);
+            let a = if cfg!(target_arch = "aarch64") {
+                $float::blend(v.simd_gt(floor), v, floor).min_fast(one)
+            } else {
+                const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                    .non_nan_rhs()
+                    .bits();
+                v.max_with::<NON_NAN_RHS>(floor).min_fast(one)
+            };
             let x = a.mla(a, a);
             let small = a.simd_lt($float::splat_t(t, 0.25));
-            let p = $float::blend(
-                small,
-                polynomial::$poly(t, x, PQ_EOTF_P_SMALL),
-                polynomial::$poly(t, x, PQ_EOTF_P_LARGE),
-            );
-            let q = $float::blend(
-                small,
-                polynomial::$poly(t, x, PQ_EOTF_Q_SMALL),
-                polynomial::$poly(t, x, PQ_EOTF_Q_LARGE),
-            );
+            let p = polynomial::$blend_poly(t, x, small, PQ_EOTF_P_SMALL, PQ_EOTF_P_LARGE);
+            let q = polynomial::$blend_poly(t, x, small, PQ_EOTF_Q_SMALL, PQ_EOTF_Q_LARGE);
             let zero = $float::zero_t(t);
             let positive = v.simd_gt(zero);
             let result = $float::blend(v.simd_ge(one), one, (p / q) & positive);
             let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
+            (fallback, result)
+        }
+
+        #[inline(always)]
+        pub(crate) fn $try_decode<T: $backend>(t: T, v: $float<T>) -> Option<$float<T>> {
+            let (fallback, result) = $decode_poly(t, v);
             if fallback.bitcast_to_i32().any_true() {
-                let mut result = result.to_array();
-                for (source, output) in v.to_array().into_iter().zip(&mut result) {
-                    if source.is_nan() || (0.0 < source && source < EOTF_POLY_FLOOR) {
-                        *output = pq_to_linear_precise(source);
-                    }
-                }
-                $float::from_array_t(t, result)
+                None
+            } else {
+                Some(result)
+            }
+        }
+
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn $decode<T: $backend>(t: T, v: $float<T>) -> $float<T> {
+            let (fallback, result) = $decode_poly(t, v);
+            if fallback.bitcast_to_i32().any_true() {
+                $float::from_array_t(t, pq_to_linear_fallback(v.to_array(), result.to_array()))
             } else {
                 result
             }
         }
 
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn $encode<T: $backend>(t: T, v: $float<T>) -> $float<T> {
+        pub(crate) fn $decode_slice<T: $backend>(t: T, values: &mut [f32]) {
+            fn slow<T: $backend>(t: T, chunk: [f32; $width]) -> [f32; $width] {
+                $decode(t, $float::from_array_t(t, chunk)).to_array()
+            }
+            crate::kernels::map_slice_try_inline!(
+                values,
+                $width,
+                t,
+                |chunk| $try_decode(t, $float::from_array_t(t, chunk)).map(|r| r.to_array()),
+                slow::<T>
+            );
+        }
+
+        #[inline(always)]
+        fn $encode_poly<T: $backend>(t: T, v: $float<T>) -> ($float<T>, $float<T>) {
             let floor = $float::splat_t(t, OETF_POLY_FLOOR);
             let one = $float::splat_t(t, 1.0);
-            let a = v.max(floor).min(one);
+            let a = if cfg!(target_arch = "aarch64") {
+                $float::blend(v.simd_gt(floor), v, floor).min_fast(one)
+            } else {
+                const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                    .non_nan_rhs()
+                    .bits();
+                v.max_with::<NON_NAN_RHS>(floor).min_fast(one)
+            };
             let a4 = a.sqrt().sqrt();
             let small = a4.simd_lt($float::splat_t(t, 0.1));
-            let p = $float::blend(
-                small,
-                polynomial::$poly(t, a4, PQ_INV_P_SMALL),
-                polynomial::$poly(t, a4, PQ_INV_P_LARGE),
-            );
-            let q = $float::blend(
-                small,
-                polynomial::$poly(t, a4, PQ_INV_Q_SMALL),
-                polynomial::$poly(t, a4, PQ_INV_Q_LARGE),
-            );
+            let p = polynomial::$blend_poly(t, a4, small, PQ_INV_P_SMALL, PQ_INV_P_LARGE);
+            let q = polynomial::$blend_poly(t, a4, small, PQ_INV_Q_SMALL, PQ_INV_Q_LARGE);
             let zero = $float::zero_t(t);
             let positive = v.simd_gt(zero);
             let result = $float::blend(v.simd_ge(one), one, (p / q) & positive);
             let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
+            (fallback, result)
+        }
+
+        #[inline(always)]
+        pub(crate) fn $try_encode<T: $backend>(t: T, v: $float<T>) -> Option<$float<T>> {
+            let (fallback, result) = $encode_poly(t, v);
             if fallback.bitcast_to_i32().any_true() {
-                let mut result = result.to_array();
-                for (source, output) in v.to_array().into_iter().zip(&mut result) {
-                    if source.is_nan() || (0.0 < source && source < OETF_POLY_FLOOR) {
-                        *output = linear_to_pq_precise(source);
-                    }
-                }
-                $float::from_array_t(t, result)
+                None
+            } else {
+                Some(result)
+            }
+        }
+
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn $encode<T: $backend>(t: T, v: $float<T>) -> $float<T> {
+            let (fallback, result) = $encode_poly(t, v);
+            if fallback.bitcast_to_i32().any_true() {
+                $float::from_array_t(t, linear_to_pq_fallback(v.to_array(), result.to_array()))
             } else {
                 result
             }
+        }
+
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn $encode_slice<T: $backend>(t: T, values: &mut [f32]) {
+            fn slow<T: $backend>(t: T, chunk: [f32; $width]) -> [f32; $width] {
+                $encode(t, $float::from_array_t(t, chunk)).to_array()
+            }
+            crate::kernels::map_slice_try_inline!(
+                values,
+                $width,
+                t,
+                |chunk| $try_encode(t, $float::from_array_t(t, chunk)).map(|r| r.to_array()),
+                slow::<T>
+            );
         }
     };
 }
 
 pq_for!(
+    pq_to_linear_poly_x4,
+    try_pq_to_linear_x4,
     pq_to_linear_x4,
+    pq_to_linear_slice_x4,
+    linear_to_pq_poly_x4,
+    try_linear_to_pq_x4,
     linear_to_pq_x4,
+    linear_to_pq_slice_x4,
     f32x4,
     F32x4Convert,
-    eval_poly_x4
+    eval_blended_poly_x4,
+    4
 );
 pq_for!(
+    pq_to_linear_poly_x8,
+    try_pq_to_linear_x8,
     pq_to_linear_x8,
+    pq_to_linear_slice_x8,
+    linear_to_pq_poly_x8,
+    try_linear_to_pq_x8,
     linear_to_pq_x8,
+    linear_to_pq_slice_x8,
     f32x8,
     F32x8Convert,
-    eval_poly_x8
+    eval_blended_poly_x8,
+    8
 );
 pq_for!(
+    pq_to_linear_poly_x16,
+    try_pq_to_linear_x16,
     pq_to_linear_x16,
+    pq_to_linear_slice_x16,
+    linear_to_pq_poly_x16,
+    try_linear_to_pq_x16,
     linear_to_pq_x16,
+    linear_to_pq_slice_x16,
     f32x16,
     F32x16Convert,
-    eval_poly_x16
+    eval_blended_poly_x16,
+    16
 );

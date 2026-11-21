@@ -110,29 +110,34 @@ pub(crate) fn srgb_u8_to_linear_slice_v4(_token: X64V4Token, input: &[u8], outpu
 /// Call from inside an `#[arcane]` function for zero-overhead inlining.
 #[attune(inline(hint))]
 pub(crate) fn linear_to_srgb_u8_v4(token: X64V4Token, linear: [f32; 16]) -> [u8; 16] {
+    const TRUNC: u32 = magetypes::numerics::IntConvert::new()
+        .trunc()
+        .in_range()
+        .bits();
+    let v = mt_f32x16::from_array_t(token, linear);
     let zero = mt_f32x16::zero_t(token);
     let one = mt_f32x16::splat_t(token, 1.0);
-    let linear = mt_f32x16::from_array_t(token, linear).max(zero).min(one);
-    let scaled = linear * mt_f32x16::splat_t(token, 4095.0) + mt_f32x16::splat_t(token, 0.5);
-    let arr = scaled.to_array();
+    let clamped = crate::tf::polynomial::floor_zero!(v, zero).min_fast(one);
+    let scaled = clamped * mt_f32x16::splat_t(token, 4095.0) + mt_f32x16::splat_t(token, 0.5);
+    let idx = scaled.to_i32_with::<TRUNC>().to_array();
     let lut = crate::const_luts::linear_to_srgb_u8();
     [
-        lut[arr[0] as usize & 0xFFF],
-        lut[arr[1] as usize & 0xFFF],
-        lut[arr[2] as usize & 0xFFF],
-        lut[arr[3] as usize & 0xFFF],
-        lut[arr[4] as usize & 0xFFF],
-        lut[arr[5] as usize & 0xFFF],
-        lut[arr[6] as usize & 0xFFF],
-        lut[arr[7] as usize & 0xFFF],
-        lut[arr[8] as usize & 0xFFF],
-        lut[arr[9] as usize & 0xFFF],
-        lut[arr[10] as usize & 0xFFF],
-        lut[arr[11] as usize & 0xFFF],
-        lut[arr[12] as usize & 0xFFF],
-        lut[arr[13] as usize & 0xFFF],
-        lut[arr[14] as usize & 0xFFF],
-        lut[arr[15] as usize & 0xFFF],
+        lut[idx[0] as usize & 0xFFF],
+        lut[idx[1] as usize & 0xFFF],
+        lut[idx[2] as usize & 0xFFF],
+        lut[idx[3] as usize & 0xFFF],
+        lut[idx[4] as usize & 0xFFF],
+        lut[idx[5] as usize & 0xFFF],
+        lut[idx[6] as usize & 0xFFF],
+        lut[idx[7] as usize & 0xFFF],
+        lut[idx[8] as usize & 0xFFF],
+        lut[idx[9] as usize & 0xFFF],
+        lut[idx[10] as usize & 0xFFF],
+        lut[idx[11] as usize & 0xFFF],
+        lut[idx[12] as usize & 0xFFF],
+        lut[idx[13] as usize & 0xFFF],
+        lut[idx[14] as usize & 0xFFF],
+        lut[idx[15] as usize & 0xFFF],
     ]
 }
 
@@ -183,18 +188,7 @@ pub(crate) fn linear_to_srgb_slice_v4(token: X64V4Token, values: &mut [f32]) {
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[attune(inline(hint))]
 pub(crate) fn gamma_to_linear_slice_v4(token: X64V4Token, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<16>();
-
-    for chunk in chunks {
-        *chunk = gamma_to_linear_v4(token, *chunk, gamma);
-    }
-
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 16];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = gamma_to_linear_v4(token, padded, gamma);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x16::gamma_to_linear_slice(token, values, gamma);
 }
 
 /// Convert linear f32 values to gamma-encoded in-place using 16-wide SIMD.
@@ -202,18 +196,7 @@ pub(crate) fn gamma_to_linear_slice_v4(token: X64V4Token, values: &mut [f32], ga
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[attune(inline(hint))]
 pub(crate) fn linear_to_gamma_slice_v4(token: X64V4Token, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<16>();
-
-    for chunk in chunks {
-        *chunk = linear_to_gamma_v4(token, *chunk, gamma);
-    }
-
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 16];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = linear_to_gamma_v4(token, padded, gamma);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x16::linear_to_gamma_slice(token, values, gamma);
 }
 
 /// Convert linear f32 values to sRGB u8 using 16-wide SIMD + LUT.
@@ -296,7 +279,7 @@ pub(crate) fn linear_to_hlg_v4(token: X64V4Token, v: [f32; 16]) -> [f32; 16] {
 
 #[cfg(feature = "transfer")]
 macro_rules! tf_slice_v4 {
-    ($name:ident, $rite:ident, $scalar:path) => {
+    ($name:ident, $rite:ident) => {
         /// Apply transfer function to a slice using AVX-512.
         ///
         /// # Safety
@@ -304,68 +287,38 @@ macro_rules! tf_slice_v4 {
         /// Call from an `#[arcane]` context with a valid `X64V4Token`.
         #[attune(inline(hint))]
         pub(crate) fn $name(token: X64V4Token, values: &mut [f32]) {
-            let (chunks, remainder) = values.as_chunks_mut::<16>();
-            for chunk in chunks {
-                *chunk = $rite(token, *chunk);
-            }
-            if !remainder.is_empty() {
-                let mut padded = [0.0; 16];
-                padded[..remainder.len()].copy_from_slice(remainder);
-                let converted = $rite(token, padded);
-                remainder.copy_from_slice(&converted[..remainder.len()]);
-            }
+            crate::kernels::map_slice_inline!(values, 16, |chunk| $rite(token, chunk));
+        }
+    };
+    ($name:ident => $slice_fn:path) => {
+        /// Apply transfer function to a slice using AVX-512.
+        ///
+        /// # Safety
+        ///
+        /// Call from an `#[arcane]` context with a valid `X64V4Token`.
+        #[attune(inline(hint))]
+        pub(crate) fn $name(token: X64V4Token, values: &mut [f32]) {
+            $slice_fn(token, values);
         }
     };
 }
 
 #[cfg(feature = "transfer")]
-tf_slice_v4!(
-    tf_srgb_to_linear_slice_v4,
-    tf_srgb_to_linear_v4,
-    crate::tf::srgb_to_linear
-);
+tf_slice_v4!(tf_srgb_to_linear_slice_v4, tf_srgb_to_linear_v4);
 #[cfg(feature = "transfer")]
-tf_slice_v4!(
-    tf_linear_to_srgb_slice_v4,
-    tf_linear_to_srgb_v4,
-    crate::tf::linear_to_srgb
-);
+tf_slice_v4!(tf_linear_to_srgb_slice_v4, tf_linear_to_srgb_v4);
 #[cfg(feature = "transfer")]
-tf_slice_v4!(
-    bt709_to_linear_slice_v4,
-    bt709_to_linear_v4,
-    crate::tf::bt709_to_linear
-);
+tf_slice_v4!(bt709_to_linear_slice_v4 => crate::tf::bt709::bt709_to_linear_slice_x16);
 #[cfg(feature = "transfer")]
-tf_slice_v4!(
-    linear_to_bt709_slice_v4,
-    linear_to_bt709_v4,
-    crate::tf::linear_to_bt709
-);
+tf_slice_v4!(linear_to_bt709_slice_v4 => crate::tf::bt709::linear_to_bt709_slice_x16);
 #[cfg(feature = "transfer")]
-tf_slice_v4!(
-    pq_to_linear_slice_v4,
-    pq_to_linear_v4,
-    crate::tf::pq_to_linear
-);
+tf_slice_v4!(pq_to_linear_slice_v4 => crate::tf::pq::pq_to_linear_slice_x16);
 #[cfg(feature = "transfer")]
-tf_slice_v4!(
-    linear_to_pq_slice_v4,
-    linear_to_pq_v4,
-    crate::tf::linear_to_pq
-);
+tf_slice_v4!(linear_to_pq_slice_v4 => crate::tf::pq::linear_to_pq_slice_x16);
 #[cfg(feature = "transfer")]
-tf_slice_v4!(
-    hlg_to_linear_slice_v4,
-    hlg_to_linear_v4,
-    crate::tf::hlg_to_linear
-);
+tf_slice_v4!(hlg_to_linear_slice_v4 => crate::tf::hlg::hlg_to_linear_slice_x16);
 #[cfg(feature = "transfer")]
-tf_slice_v4!(
-    linear_to_hlg_slice_v4,
-    linear_to_hlg_v4,
-    crate::tf::linear_to_hlg
-);
+tf_slice_v4!(linear_to_hlg_slice_v4 => crate::tf::hlg::linear_to_hlg_slice_x16);
 
 // ============================================================================
 // Tests

@@ -134,16 +134,7 @@ pub(crate) fn linear_to_srgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune(inline(hint))]
 pub(crate) fn gamma_to_linear_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = gamma_to_linear_core(token, *chunk, gamma);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = gamma_to_linear_core(token, padded, gamma);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x4::gamma_to_linear_slice(token, values, gamma);
 }
 
 /// Convert linear f32 values to gamma-encoded in-place using 4-wide SSE SIMD.
@@ -152,16 +143,7 @@ pub(crate) fn gamma_to_linear_slice_v3(token: X64V3Token, values: &mut [f32], ga
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune(inline(hint))]
 pub(crate) fn linear_to_gamma_slice_v3(token: X64V3Token, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = linear_to_gamma_core(token, *chunk, gamma);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = linear_to_gamma_core(token, padded, gamma);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x4::linear_to_gamma_slice(token, values, gamma);
 }
 
 // ============================================================================
@@ -247,16 +229,7 @@ pub(crate) fn linear_to_srgb_slice_neon(token: NeonToken, values: &mut [f32]) {
 #[cfg(target_arch = "aarch64")]
 #[attune(inline(hint))]
 pub(crate) fn gamma_to_linear_slice_neon(token: NeonToken, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = gamma_to_linear_core(token, *chunk, gamma);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = gamma_to_linear_core(token, padded, gamma);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x4::gamma_to_linear_slice(token, values, gamma);
 }
 
 /// Convert linear f32 values to gamma-encoded in-place using 4-wide NEON SIMD.
@@ -265,16 +238,7 @@ pub(crate) fn gamma_to_linear_slice_neon(token: NeonToken, values: &mut [f32], g
 #[cfg(target_arch = "aarch64")]
 #[attune(inline(hint))]
 pub(crate) fn linear_to_gamma_slice_neon(token: NeonToken, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = linear_to_gamma_core(token, *chunk, gamma);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = linear_to_gamma_core(token, padded, gamma);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x4::linear_to_gamma_slice(token, values, gamma);
 }
 
 // ============================================================================
@@ -368,16 +332,7 @@ pub(crate) fn linear_to_srgb_slice_wasm128(token: Wasm128Token, values: &mut [f3
 #[cfg(target_arch = "wasm32")]
 #[attune(inline(hint))]
 pub(crate) fn gamma_to_linear_slice_wasm128(token: Wasm128Token, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = gamma_to_linear_core(token, *chunk, gamma);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = gamma_to_linear_core(token, padded, gamma);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x4::gamma_to_linear_slice(token, values, gamma);
 }
 
 /// Convert linear f32 values to gamma-encoded in-place using 4-wide WASM SIMD.
@@ -386,16 +341,7 @@ pub(crate) fn gamma_to_linear_slice_wasm128(token: Wasm128Token, values: &mut [f
 #[cfg(target_arch = "wasm32")]
 #[attune(inline(hint))]
 pub(crate) fn linear_to_gamma_slice_wasm128(token: Wasm128Token, values: &mut [f32], gamma: f32) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = linear_to_gamma_core(token, *chunk, gamma);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = linear_to_gamma_core(token, padded, gamma);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x4::linear_to_gamma_slice(token, values, gamma);
 }
 
 // ============================================================================
@@ -430,7 +376,7 @@ x86_tf_rite!(hlg_to_linear_v3, crate::tf::hlg::hlg_to_linear_x4);
 x86_tf_rite!(linear_to_hlg_v3, crate::tf::hlg::linear_to_hlg_x4);
 
 macro_rules! x86_tf_slice_rite {
-    ($name:ident, $rite:ident, $scalar:path) => {
+    ($name:ident, $rite:ident) => {
         /// Transfer function slice rite (4×f32, x86-64 V3). Requires `transfer` feature.
         ///
         /// # Safety
@@ -442,60 +388,34 @@ macro_rules! x86_tf_slice_rite {
         ))]
         #[attune(inline(hint))]
         pub(crate) fn $name(token: X64V3Token, values: &mut [f32]) {
-            let (chunks, remainder) = values.as_chunks_mut::<4>();
-            for chunk in chunks {
-                *chunk = $rite(token, *chunk);
-            }
-            if !remainder.is_empty() {
-                let mut padded = [0.0; 4];
-                padded[..remainder.len()].copy_from_slice(remainder);
-                let converted = $rite(token, padded);
-                remainder.copy_from_slice(&converted[..remainder.len()]);
-            }
+            crate::kernels::map_slice_inline!(values, 4, |chunk| $rite(token, chunk));
+        }
+    };
+    ($name:ident => $slice_fn:path) => {
+        /// Transfer function slice rite (4×f32, x86-64 V3). Requires `transfer` feature.
+        ///
+        /// # Safety
+        ///
+        /// Call from an `#[arcane]` context with a valid `X64V3Token`.
+        #[cfg(all(
+            feature = "transfer",
+            all(target_arch = "x86_64", target_feature = "sse2")
+        ))]
+        #[attune(inline(hint))]
+        pub(crate) fn $name(token: X64V3Token, values: &mut [f32]) {
+            $slice_fn(token, values);
         }
     };
 }
 
-x86_tf_slice_rite!(
-    tf_srgb_to_linear_slice_v3,
-    tf_srgb_to_linear_v3,
-    crate::tf::srgb_to_linear
-);
-x86_tf_slice_rite!(
-    tf_linear_to_srgb_slice_v3,
-    tf_linear_to_srgb_v3,
-    crate::tf::linear_to_srgb
-);
-x86_tf_slice_rite!(
-    bt709_to_linear_slice_v3,
-    bt709_to_linear_v3,
-    crate::tf::bt709_to_linear
-);
-x86_tf_slice_rite!(
-    linear_to_bt709_slice_v3,
-    linear_to_bt709_v3,
-    crate::tf::linear_to_bt709
-);
-x86_tf_slice_rite!(
-    pq_to_linear_slice_v3,
-    pq_to_linear_v3,
-    crate::tf::pq_to_linear
-);
-x86_tf_slice_rite!(
-    linear_to_pq_slice_v3,
-    linear_to_pq_v3,
-    crate::tf::linear_to_pq
-);
-x86_tf_slice_rite!(
-    hlg_to_linear_slice_v3,
-    hlg_to_linear_v3,
-    crate::tf::hlg_to_linear
-);
-x86_tf_slice_rite!(
-    linear_to_hlg_slice_v3,
-    linear_to_hlg_v3,
-    crate::tf::linear_to_hlg
-);
+x86_tf_slice_rite!(tf_srgb_to_linear_slice_v3, tf_srgb_to_linear_v3);
+x86_tf_slice_rite!(tf_linear_to_srgb_slice_v3, tf_linear_to_srgb_v3);
+x86_tf_slice_rite!(bt709_to_linear_slice_v3 => crate::tf::bt709::bt709_to_linear_slice_x4);
+x86_tf_slice_rite!(linear_to_bt709_slice_v3 => crate::tf::bt709::linear_to_bt709_slice_x4);
+x86_tf_slice_rite!(pq_to_linear_slice_v3 => crate::tf::pq::pq_to_linear_slice_x4);
+x86_tf_slice_rite!(linear_to_pq_slice_v3 => crate::tf::pq::linear_to_pq_slice_x4);
+x86_tf_slice_rite!(hlg_to_linear_slice_v3 => crate::tf::hlg::hlg_to_linear_slice_x4);
+x86_tf_slice_rite!(linear_to_hlg_slice_v3 => crate::tf::hlg::linear_to_hlg_slice_x4);
 
 // ============================================================================
 // Transfer function rites — AArch64 NEON (behind `transfer` feature)
@@ -522,65 +442,32 @@ neon_tf_rite!(hlg_to_linear_neon, crate::tf::hlg::hlg_to_linear_x4);
 neon_tf_rite!(linear_to_hlg_neon, crate::tf::hlg::linear_to_hlg_x4);
 
 macro_rules! neon_tf_slice_rite {
-    ($name:ident, $rite:ident, $scalar:path) => {
+    ($name:ident, $rite:ident) => {
         /// Transfer function slice rite (4×f32, AArch64 NEON). Requires `transfer` feature.
         #[cfg(all(feature = "transfer", target_arch = "aarch64"))]
         #[attune(inline(hint))]
         pub(crate) fn $name(token: NeonToken, values: &mut [f32]) {
-            let (chunks, remainder) = values.as_chunks_mut::<4>();
-            for chunk in chunks {
-                *chunk = $rite(token, *chunk);
-            }
-            if !remainder.is_empty() {
-                let mut padded = [0.0; 4];
-                padded[..remainder.len()].copy_from_slice(remainder);
-                let converted = $rite(token, padded);
-                remainder.copy_from_slice(&converted[..remainder.len()]);
-            }
+            crate::kernels::map_slice_inline!(values, 4, |chunk| $rite(token, chunk));
+        }
+    };
+    ($name:ident => $slice_fn:path) => {
+        /// Transfer function slice rite (4×f32, AArch64 NEON). Requires `transfer` feature.
+        #[cfg(all(feature = "transfer", target_arch = "aarch64"))]
+        #[attune(inline(hint))]
+        pub(crate) fn $name(token: NeonToken, values: &mut [f32]) {
+            $slice_fn(token, values);
         }
     };
 }
 
-neon_tf_slice_rite!(
-    tf_srgb_to_linear_slice_neon,
-    tf_srgb_to_linear_neon,
-    crate::tf::srgb_to_linear
-);
-neon_tf_slice_rite!(
-    tf_linear_to_srgb_slice_neon,
-    tf_linear_to_srgb_neon,
-    crate::tf::linear_to_srgb
-);
-neon_tf_slice_rite!(
-    bt709_to_linear_slice_neon,
-    bt709_to_linear_neon,
-    crate::tf::bt709_to_linear
-);
-neon_tf_slice_rite!(
-    linear_to_bt709_slice_neon,
-    linear_to_bt709_neon,
-    crate::tf::linear_to_bt709
-);
-neon_tf_slice_rite!(
-    pq_to_linear_slice_neon,
-    pq_to_linear_neon,
-    crate::tf::pq_to_linear
-);
-neon_tf_slice_rite!(
-    linear_to_pq_slice_neon,
-    linear_to_pq_neon,
-    crate::tf::linear_to_pq
-);
-neon_tf_slice_rite!(
-    hlg_to_linear_slice_neon,
-    hlg_to_linear_neon,
-    crate::tf::hlg_to_linear
-);
-neon_tf_slice_rite!(
-    linear_to_hlg_slice_neon,
-    linear_to_hlg_neon,
-    crate::tf::linear_to_hlg
-);
+neon_tf_slice_rite!(tf_srgb_to_linear_slice_neon, tf_srgb_to_linear_neon);
+neon_tf_slice_rite!(tf_linear_to_srgb_slice_neon, tf_linear_to_srgb_neon);
+neon_tf_slice_rite!(bt709_to_linear_slice_neon => crate::tf::bt709::bt709_to_linear_slice_x4);
+neon_tf_slice_rite!(linear_to_bt709_slice_neon => crate::tf::bt709::linear_to_bt709_slice_x4);
+neon_tf_slice_rite!(pq_to_linear_slice_neon => crate::tf::pq::pq_to_linear_slice_x4);
+neon_tf_slice_rite!(linear_to_pq_slice_neon => crate::tf::pq::linear_to_pq_slice_x4);
+neon_tf_slice_rite!(hlg_to_linear_slice_neon => crate::tf::hlg::hlg_to_linear_slice_x4);
+neon_tf_slice_rite!(linear_to_hlg_slice_neon => crate::tf::hlg::linear_to_hlg_slice_x4);
 
 // ============================================================================
 // Transfer function rites — WebAssembly SIMD128 (behind `transfer` feature)
@@ -619,65 +506,32 @@ wasm_tf_rite!(hlg_to_linear_wasm128, crate::tf::hlg::hlg_to_linear_x4);
 wasm_tf_rite!(linear_to_hlg_wasm128, crate::tf::hlg::linear_to_hlg_x4);
 
 macro_rules! wasm_tf_slice_rite {
-    ($name:ident, $rite:ident, $scalar:path) => {
+    ($name:ident, $rite:ident) => {
         /// Transfer function slice rite (4×f32, WASM SIMD128). Requires `transfer` feature.
         #[cfg(all(feature = "transfer", target_arch = "wasm32"))]
         #[attune(inline(hint))]
         pub(crate) fn $name(token: Wasm128Token, values: &mut [f32]) {
-            let (chunks, remainder) = values.as_chunks_mut::<4>();
-            for chunk in chunks {
-                *chunk = $rite(token, *chunk);
-            }
-            if !remainder.is_empty() {
-                let mut padded = [0.0; 4];
-                padded[..remainder.len()].copy_from_slice(remainder);
-                let converted = $rite(token, padded);
-                remainder.copy_from_slice(&converted[..remainder.len()]);
-            }
+            crate::kernels::map_slice_inline!(values, 4, |chunk| $rite(token, chunk));
+        }
+    };
+    ($name:ident => $slice_fn:path) => {
+        /// Transfer function slice rite (4×f32, WASM SIMD128). Requires `transfer` feature.
+        #[cfg(all(feature = "transfer", target_arch = "wasm32"))]
+        #[attune(inline(hint))]
+        pub(crate) fn $name(token: Wasm128Token, values: &mut [f32]) {
+            $slice_fn(token, values);
         }
     };
 }
 
-wasm_tf_slice_rite!(
-    tf_srgb_to_linear_slice_wasm128,
-    tf_srgb_to_linear_wasm128,
-    crate::tf::srgb_to_linear
-);
-wasm_tf_slice_rite!(
-    tf_linear_to_srgb_slice_wasm128,
-    tf_linear_to_srgb_wasm128,
-    crate::tf::linear_to_srgb
-);
-wasm_tf_slice_rite!(
-    bt709_to_linear_slice_wasm128,
-    bt709_to_linear_wasm128,
-    crate::tf::bt709_to_linear
-);
-wasm_tf_slice_rite!(
-    linear_to_bt709_slice_wasm128,
-    linear_to_bt709_wasm128,
-    crate::tf::linear_to_bt709
-);
-wasm_tf_slice_rite!(
-    pq_to_linear_slice_wasm128,
-    pq_to_linear_wasm128,
-    crate::tf::pq_to_linear
-);
-wasm_tf_slice_rite!(
-    linear_to_pq_slice_wasm128,
-    linear_to_pq_wasm128,
-    crate::tf::linear_to_pq
-);
-wasm_tf_slice_rite!(
-    hlg_to_linear_slice_wasm128,
-    hlg_to_linear_wasm128,
-    crate::tf::hlg_to_linear
-);
-wasm_tf_slice_rite!(
-    linear_to_hlg_slice_wasm128,
-    linear_to_hlg_wasm128,
-    crate::tf::linear_to_hlg
-);
+wasm_tf_slice_rite!(tf_srgb_to_linear_slice_wasm128, tf_srgb_to_linear_wasm128);
+wasm_tf_slice_rite!(tf_linear_to_srgb_slice_wasm128, tf_linear_to_srgb_wasm128);
+wasm_tf_slice_rite!(bt709_to_linear_slice_wasm128 => crate::tf::bt709::bt709_to_linear_slice_x4);
+wasm_tf_slice_rite!(linear_to_bt709_slice_wasm128 => crate::tf::bt709::linear_to_bt709_slice_x4);
+wasm_tf_slice_rite!(pq_to_linear_slice_wasm128 => crate::tf::pq::pq_to_linear_slice_x4);
+wasm_tf_slice_rite!(linear_to_pq_slice_wasm128 => crate::tf::pq::linear_to_pq_slice_x4);
+wasm_tf_slice_rite!(hlg_to_linear_slice_wasm128 => crate::tf::hlg::hlg_to_linear_slice_x4);
+wasm_tf_slice_rite!(linear_to_hlg_slice_wasm128 => crate::tf::hlg::linear_to_hlg_slice_x4);
 
 // ============================================================================
 // Tests
