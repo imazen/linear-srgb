@@ -163,6 +163,7 @@ macro_rules! bt709_for {
             values: &mut [f32],
         ) {
             if !RAILS {
+                #[cfg(not(target_arch = "x86_64"))]
                 fn tail<T: $($bound)+>(t: T, chunk: [f32; $width]) -> [f32; $width] {
                     $decode_cfg::<T, false>(t, $float::from_array_t(t, chunk)).to_array()
                 }
@@ -175,15 +176,19 @@ macro_rules! bt709_for {
                 );
                 return;
             }
-            fn slow<T: $($bound)+>(t: T, chunk: [f32; $width]) -> [f32; $width] {
+            #[cfg(not(target_arch = "x86_64"))]
+            fn tail<T: $($bound)+>(t: T, chunk: [f32; $width]) -> [f32; $width] {
                 $decode(t, $float::from_array_t(t, chunk)).to_array()
             }
-            crate::kernels::map_slice_try_inline!(
+            crate::kernels::map_slice_inline!(
                 values,
                 $width,
                 t,
-                |chunk| $try_decode(t, $float::from_array_t(t, chunk)).map(|r| r.to_array()),
-                slow::<T>
+                |chunk| match $try_decode(t, $float::from_array_t(t, chunk)) {
+                    Some(out) => out.to_array(),
+                    None => bt709_to_linear_fallback(t, chunk),
+                },
+                tail::<T>
             );
         }
 
@@ -255,6 +260,7 @@ macro_rules! bt709_for {
             values: &mut [f32],
         ) {
             if !RAILS {
+                #[cfg(not(target_arch = "x86_64"))]
                 fn tail<T: $($bound)+>(t: T, chunk: [f32; $width]) -> [f32; $width] {
                     $encode_cfg::<T, false>(t, $float::from_array_t(t, chunk)).to_array()
                 }
@@ -267,15 +273,19 @@ macro_rules! bt709_for {
                 );
                 return;
             }
-            fn slow<T: $($bound)+>(t: T, chunk: [f32; $width]) -> [f32; $width] {
+            #[cfg(not(target_arch = "x86_64"))]
+            fn tail<T: $($bound)+>(t: T, chunk: [f32; $width]) -> [f32; $width] {
                 $encode(t, $float::from_array_t(t, chunk)).to_array()
             }
-            crate::kernels::map_slice_try_inline!(
+            crate::kernels::map_slice_inline!(
                 values,
                 $width,
                 t,
-                |chunk| $try_encode(t, $float::from_array_t(t, chunk)).map(|r| r.to_array()),
-                slow::<T>
+                |chunk| match $try_encode(t, $float::from_array_t(t, chunk)) {
+                    Some(out) => out.to_array(),
+                    None => linear_to_bt709_fallback(t, chunk),
+                },
+                tail::<T>
             );
         }
 

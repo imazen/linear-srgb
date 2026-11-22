@@ -14,5 +14,5 @@ path = "../src/lib.rs"
 
 [dependencies]
 linear-srgb = { path = "../..", features = ["std", "avx512", "alt", "iec", "precise-portable", "transfer", "unsafe_simd"] }
-archmage = { version = "=0.9.32", default-features = false, features = ["macros"] }
-magetypes = { version = "=0.9.32", default-features = false, features = ["w512"] }
+archmage = { version = "=0.9.33", default-features = false, features = ["macros"] }
+magetypes = { version = "=0.9.33", default-features = false, features = ["w512"] }

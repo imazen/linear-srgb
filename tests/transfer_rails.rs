@@ -336,14 +336,20 @@ fn hdr_scalar_and_slice_match_all_positions() {
 #[test]
 fn pq_batches_handle_dark_toes_and_nan_at_every_position() {
     let nan = f32::from_bits(0xffc0_3210);
-    for (fast, precise, samples) in [
+    for (name, fast, scalar, precise, samples, max_rel, max_abs) in [
         (
+            "pq_to_linear",
             pq_to_linear_slice as fn(&mut [f32]),
+            linear_srgb::default::pq_to_linear as fn(f32) -> f32,
             linear_srgb::precise::pq_to_linear_precise_slice as fn(&mut [f32]),
             [0.0, 0.005, 0.0052051, 0.0199, 1.0, f32::INFINITY, nan],
+            2.5e-5_f64,
+            1e-10_f64,
         ),
         (
+            "linear_to_pq",
             linear_to_pq_slice as fn(&mut [f32]),
+            linear_srgb::default::linear_to_pq as fn(f32) -> f32,
             linear_srgb::precise::linear_to_pq_precise_slice as fn(&mut [f32]),
             [
                 0.0,
@@ -354,14 +360,44 @@ fn pq_batches_handle_dark_toes_and_nan_at_every_position() {
                 f32::INFINITY,
                 nan,
             ],
+            5e-5_f64,
+            1e-7_f64,
         ),
     ] {
-        let mut expected = samples;
-        precise(&mut expected);
-        assert_eq!(expected[0].to_bits(), 0);
-        assert!(expected[1] > 0.0);
-        assert_eq!(expected[4..6], [1.0; 2]);
-        assert_eq!(expected[6].to_bits(), nan.to_bits());
+        let mut reference = samples;
+        precise(&mut reference);
+        assert_eq!(reference[0].to_bits(), 0);
+        assert!(reference[1] > 0.0);
+        assert_eq!(reference[4..6], [1.0; 2]);
+        assert_eq!(reference[6].to_bits(), nan.to_bits());
+
+        let expected: [f32; 7] = samples.map(scalar);
+        assert_eq!(expected[0].to_bits(), 0, "{name}: zero");
+        assert!(expected[1] > 0.0, "{name}: dark toe positive");
+        assert_eq!(expected[4..6], [1.0; 2], "{name}: clip high");
+        assert_eq!(expected[6].to_bits(), nan.to_bits(), "{name}: NaN payload");
+
+        for (i, ((&inp, &got), &want)) in samples
+            .iter()
+            .zip(expected.iter())
+            .zip(reference.iter())
+            .enumerate()
+        {
+            if inp.is_nan() {
+                assert_eq!(got.to_bits(), nan.to_bits());
+            } else {
+                let err = (f64::from(got) - f64::from(want)).abs();
+                let rel = if want > 0.0 {
+                    err / f64::from(want)
+                } else {
+                    err
+                };
+                assert!(
+                    err <= max_abs && rel <= max_rel,
+                    "{name}[{i}] input={inp:?}: got={got:?} ref={want:?} abs={err:e} rel={rel:e}"
+                );
+            }
+        }
 
         let mut row = samples.repeat(13);
         fast(&mut row);
@@ -370,13 +406,14 @@ fn pq_batches_handle_dark_toes_and_nan_at_every_position() {
                 chunk
                     .iter()
                     .zip(expected)
-                    .all(|(a, b)| a.to_bits() == b.to_bits())
+                    .all(|(a, b)| a.to_bits() == b.to_bits()),
+                "{name}: slice disagrees with scalar"
             );
         }
         for (input, want) in samples.into_iter().zip(expected) {
             let mut single = [input];
             fast(&mut single);
-            assert_eq!(single[0].to_bits(), want.to_bits(), "input {input}");
+            assert_eq!(single[0].to_bits(), want.to_bits(), "{name} input {input}");
         }
     }
 }
@@ -406,10 +443,9 @@ fn pq_oetf_uses_the_small_fit_within_one_code() {
     linear_to_pq_slice(&mut actual);
     let code = |x: f32| (f64::from(x) * 65535.0 + 0.5) as i32;
 
-    assert_eq!(
-        actual[0].to_bits(),
-        reference[0].to_bits(),
-        "strictly below the floor"
+    assert!(
+        (f64::from(actual[0]) - f64::from(reference[0])).abs() <= 1e-7,
+        "strictly below the floor stays accurate vs f64 reference"
     );
     assert_ne!(
         actual[1].to_bits(),
@@ -495,5 +531,339 @@ fn pq_mixed_dark_toe_and_bright_chunks_match_scalar_and_preserve_alpha() {
                 "rgba px {px} alpha altered"
             );
         }
+    }
+}
+
+#[test]
+fn srgb_slice_into_matches_in_place_across_lengths_and_rails() {
+    let rails = [
+        -65.0,
+        -9.0,
+        -0.1,
+        -0.0,
+        0.0,
+        f32::from_bits(128),
+        0.003,
+        0.04,
+        0.125,
+        0.5,
+        0.999,
+        1.0,
+        1.5,
+        9.0,
+        65.0,
+        f32::INFINITY,
+        f32::NEG_INFINITY,
+        f32::NAN,
+        f32::from_bits(0xff80_1234),
+    ];
+
+    for len in 0..=67 {
+        let input: Vec<f32> = (0..len).map(|i| rails[i % rails.len()]).collect();
+        for (name, inplace, into) in [
+            (
+                "srgb_to_linear",
+                srgb_to_linear_slice as fn(&mut [f32]),
+                srgb_to_linear_slice_into as fn(&[f32], &mut [f32]),
+            ),
+            (
+                "linear_to_srgb",
+                linear_to_srgb_slice,
+                linear_to_srgb_slice_into,
+            ),
+            (
+                "srgb_to_linear_extended",
+                srgb_to_linear_extended_slice,
+                srgb_to_linear_extended_slice_into,
+            ),
+            (
+                "linear_to_srgb_extended",
+                linear_to_srgb_extended_slice,
+                linear_to_srgb_extended_slice_into,
+            ),
+        ] {
+            let mut expected = input.clone();
+            inplace(&mut expected);
+            let mut actual = vec![f32::from_bits(0xdead_beef); len];
+            into(&input, &mut actual);
+            for (i, (&a, &b)) in actual.iter().zip(expected.iter()).enumerate() {
+                if a.is_nan() && b.is_nan() {
+                    continue;
+                }
+                assert_eq!(a.to_bits(), b.to_bits(), "{name} len={len} idx={i}");
+            }
+        }
+
+        let sentinel = f32::from_bits(0x7fc0_beef);
+        for (name, inplace, into) in [
+            (
+                "srgb_to_linear_rgba",
+                srgb_to_linear_rgba_slice as fn(&mut [f32]),
+                srgb_to_linear_rgba_slice_into as fn(&[f32], &mut [f32]),
+            ),
+            (
+                "linear_to_srgb_rgba",
+                linear_to_srgb_rgba_slice,
+                linear_to_srgb_rgba_slice_into,
+            ),
+            (
+                "srgb_to_linear_extended_rgba",
+                srgb_to_linear_extended_rgba_slice,
+                srgb_to_linear_extended_rgba_slice_into,
+            ),
+            (
+                "linear_to_srgb_extended_rgba",
+                linear_to_srgb_extended_rgba_slice,
+                linear_to_srgb_extended_rgba_slice_into,
+            ),
+        ] {
+            let mut expected = input.clone();
+            inplace(&mut expected);
+            let mut actual = vec![sentinel; len];
+            into(&input, &mut actual);
+            let complete = len / 4 * 4;
+            for i in 0..complete {
+                if i % 4 == 3 {
+                    // Alpha must be preserved bit-for-bit including NaN payloads.
+                    assert_eq!(
+                        actual[i].to_bits(),
+                        input[i].to_bits(),
+                        "{name} alpha len={len} idx={i}"
+                    );
+                } else if actual[i].is_nan() && expected[i].is_nan() {
+                    continue;
+                } else {
+                    assert_eq!(
+                        actual[i].to_bits(),
+                        expected[i].to_bits(),
+                        "{name} len={len} idx={i}"
+                    );
+                }
+            }
+            for (i, &v) in actual.iter().enumerate().skip(complete) {
+                assert_eq!(
+                    v.to_bits(),
+                    sentinel.to_bits(),
+                    "{name} trailing lane touched len={len} idx={i}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+#[should_panic]
+fn srgb_to_linear_slice_into_panics_on_length_mismatch() {
+    let mut dst = [0.0f32; 3];
+    srgb_to_linear_slice_into(&[0.5f32; 4], &mut dst);
+}
+
+#[test]
+#[should_panic]
+fn srgb_to_linear_rgba_slice_into_panics_on_length_mismatch() {
+    let mut dst = [0.0f32; 4];
+    srgb_to_linear_rgba_slice_into(&[0.5f32; 8], &mut dst);
+}
+
+#[cfg(feature = "transfer")]
+#[test]
+fn pq_dark_toe_f32_magemath_accuracy_scalar_parity_and_seam_monotonicity() {
+    const M1: f64 = 2610.0 / 16384.0;
+    const M2: f64 = 2523.0 / 32.0;
+    const C1: f64 = 3424.0 / 4096.0;
+    const C2: f64 = 2413.0 / 128.0;
+    const C3: f64 = 2392.0 / 128.0;
+    let ref_eotf = |v: f32| -> f32 {
+        if v.is_nan() {
+            return v;
+        }
+        if v <= 0.0 {
+            return 0.0;
+        }
+        if v >= 1.0 {
+            return 1.0;
+        }
+        let vp = f64::from(v).powf(1.0 / M2);
+        (((vp - C1).max(0.0) / (C2 - C3 * vp)).powf(1.0 / M1)) as f32
+    };
+    let ref_oetf = |v: f32| -> f32 {
+        if v.is_nan() {
+            return v;
+        }
+        if v <= 0.0 {
+            return 0.0;
+        }
+        if v >= 1.0 {
+            return 1.0;
+        }
+        let vp = f64::from(v).powf(M1);
+        ((C1 + C2 * vp) / (1.0 + C3 * vp)).powf(M2) as f32
+    };
+    let ref_oetf_f64 = |y: f64| -> f64 {
+        if y <= 0.0 {
+            return 0.0;
+        }
+        let vp = y.powf(M1);
+        ((C1 + C2 * vp) / (1.0 + C3 * vp)).powf(M2)
+    };
+
+    // 1. EOTF dark toe: 65,536 samples across [7.313e-7, 0.02) + rails & NaN payload.
+    let mut dark = Vec::with_capacity(65_546);
+    dark.extend_from_slice(&[
+        -1.0,
+        -0.0,
+        0.0,
+        f32::from_bits(1),
+        7.309_559e-7,
+        7.313e-7,
+        7.313e-7_f32.next_up(),
+        7.4e-7,
+        1e-6,
+        f32::from_bits(0xffc0_1234),
+    ]);
+    let lo = 7.313e-7_f32.next_up().to_bits();
+    let hi = 0.02_f32.to_bits();
+    let step = (hi - lo) / 65_536;
+    for k in 0..65_536u32 {
+        dark.push(f32::from_bits(lo + k * step));
+    }
+
+    let mut via_precise = dark.clone();
+    linear_srgb::precise::pq_to_linear_precise_slice(&mut via_precise);
+    let mut via_fast = dark.clone();
+    pq_to_linear_slice(&mut via_fast);
+
+    let mut max_eotf_rel = 0.0_f64;
+    let mut max_eotf_abs = 0.0_f64;
+    let mut max_eotf_rt_u16 = 0.0_f64;
+    for (i, ((&inp, &p), &f)) in dark
+        .iter()
+        .zip(via_precise.iter())
+        .zip(via_fast.iter())
+        .enumerate()
+    {
+        let want = ref_eotf(inp);
+        assert_eq!(
+            p.to_bits(),
+            want.to_bits(),
+            "pq_to_linear_precise_slice mismatch at {i} (input={inp:?})"
+        );
+        assert_eq!(
+            f.to_bits(),
+            linear_srgb::default::pq_to_linear(inp).to_bits(),
+            "pq_to_linear_slice != scalar at {i} (input={inp:?})"
+        );
+        if inp.is_nan() {
+            assert_eq!(f.to_bits(), inp.to_bits());
+        } else if inp <= 7.313e-7 {
+            assert_eq!(f.to_bits(), 0);
+        } else {
+            let err = (f64::from(f) - f64::from(want)).abs();
+            max_eotf_abs = max_eotf_abs.max(err);
+            if want > 0.0 {
+                max_eotf_rel = max_eotf_rel.max(err / f64::from(want));
+            }
+            let rt_u16 = (ref_oetf_f64(f64::from(f)) - f64::from(inp)).abs() * 65535.0;
+            max_eotf_rt_u16 = max_eotf_rt_u16.max(rt_u16);
+        }
+    }
+    assert!(
+        max_eotf_rel <= 1e-4 && max_eotf_abs <= 1e-10 && max_eotf_rt_u16 <= 0.02,
+        "PQ EOTF dark toe error too large: max_rel={max_eotf_rel:e} max_abs={max_eotf_abs:e} max_rt_u16={max_eotf_rt_u16}"
+    );
+
+    // 2. OETF dark toe: 65,536 samples across (0, 1e-7) including subnormals + rails.
+    let mut oetf_dark = Vec::with_capacity(65_542);
+    oetf_dark.extend_from_slice(&[
+        -1.0,
+        -0.0,
+        0.0,
+        f32::from_bits(1),
+        f32::MIN_POSITIVE,
+        f32::from_bits(0xffc0_5678),
+    ]);
+    let o_lo = 1u32;
+    let o_hi = 1e-7_f32.to_bits();
+    let o_step = (o_hi - o_lo) / 65_536;
+    for k in 0..65_536u32 {
+        oetf_dark.push(f32::from_bits(o_lo + k * o_step));
+    }
+
+    let mut o_precise = oetf_dark.clone();
+    linear_srgb::precise::linear_to_pq_precise_slice(&mut o_precise);
+    let mut o_fast = oetf_dark.clone();
+    linear_to_pq_slice(&mut o_fast);
+
+    let mut max_oetf_abs = 0.0_f64;
+    let mut max_oetf_rel = 0.0_f64;
+    for (i, ((&inp, &p), &f)) in oetf_dark
+        .iter()
+        .zip(o_precise.iter())
+        .zip(o_fast.iter())
+        .enumerate()
+    {
+        let want = ref_oetf(inp);
+        assert_eq!(
+            p.to_bits(),
+            want.to_bits(),
+            "linear_to_pq_precise_slice mismatch at {i} (input={inp:?})"
+        );
+        assert_eq!(
+            f.to_bits(),
+            linear_srgb::default::linear_to_pq(inp).to_bits(),
+            "linear_to_pq_slice != scalar at {i} (input={inp:?})"
+        );
+        if inp.is_nan() {
+            assert_eq!(f.to_bits(), inp.to_bits());
+        } else if inp <= 0.0 {
+            assert_eq!(f.to_bits(), 0);
+        } else {
+            let err = (f64::from(f) - f64::from(want)).abs();
+            max_oetf_abs = max_oetf_abs.max(err);
+            max_oetf_rel = max_oetf_rel.max(err / f64::from(want));
+        }
+    }
+    assert!(
+        max_oetf_abs <= 1e-7 && max_oetf_rel <= 1e-4,
+        "PQ OETF dark toe error too large: max_abs={max_oetf_abs:e} max_rel={max_oetf_rel:e}"
+    );
+
+    // 3. Seam continuity at 0.02 (EOTF) and 1e-7 (OETF): no big step-down across the split.
+    for (name, f, seam) in [
+        (
+            "pq_to_linear",
+            pq_to_linear_slice as fn(&mut [f32]),
+            0.02_f32,
+        ),
+        (
+            "linear_to_pq",
+            linear_to_pq_slice as fn(&mut [f32]),
+            1e-7_f32,
+        ),
+    ] {
+        let center = seam.to_bits();
+        let mut out: Vec<f32> = (0..=2048u32)
+            .map(|i| f32::from_bits(center - 1024 + i))
+            .collect();
+        f(&mut out);
+        let seam_drop = out[1023] - out[1024];
+        assert!(
+            seam_drop <= out[1024] * 1e-4,
+            "{name} stepped down across seam {seam}: {} -> {}",
+            out[1023],
+            out[1024]
+        );
+    }
+
+    // 4. Full [0, 1] sweep for `pq_to_linear_precise_slice`.
+    let full: Vec<f32> = (0..=65_535).map(|i| i as f32 / 65_535.0).collect();
+    let mut got = full.clone();
+    linear_srgb::precise::pq_to_linear_precise_slice(&mut got);
+    for (&inp, &out) in full.iter().zip(got.iter()) {
+        assert_eq!(
+            out.to_bits(),
+            ref_eotf(inp).to_bits(),
+            "pq_to_linear_precise_slice full-range mismatch (input={inp:?})"
+        );
     }
 }

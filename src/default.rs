@@ -59,12 +59,16 @@ pub use crate::simd::{
     linear_to_gamma_slice,
     // Extended-range f32 RGBA slices (no clamping, alpha-preserving)
     linear_to_srgb_extended_rgba_slice,
+    linear_to_srgb_extended_rgba_slice_into,
     // Extended-range f32 slices (no clamping, sign-preserving)
     linear_to_srgb_extended_slice,
+    linear_to_srgb_extended_slice_into,
     // f32 RGBA slices (alpha-preserving)
     linear_to_srgb_rgba_slice,
-    // f32 slices (in-place)
+    linear_to_srgb_rgba_slice_into,
+    // f32 slices (in-place and out-of-place)
     linear_to_srgb_slice,
+    linear_to_srgb_slice_into,
     linear_to_srgb_u8_rgba_slice,
     // u8 slices
     linear_to_srgb_u8_slice,
@@ -74,13 +78,17 @@ pub use crate::simd::{
     linear_to_srgb_u16_slice,
     linear_to_srgb_u16_slice_fast,
     srgb_to_linear_extended_rgba_slice,
+    srgb_to_linear_extended_rgba_slice_into,
     srgb_to_linear_extended_slice,
+    srgb_to_linear_extended_slice_into,
     // Fused premultiply/unpremultiply
     srgb_to_linear_premultiply_rgba_slice,
     // f32 RGBA slices (alpha-preserving)
     srgb_to_linear_rgba_slice,
-    // f32 slices (in-place)
+    srgb_to_linear_rgba_slice_into,
+    // f32 slices (in-place and out-of-place)
     srgb_to_linear_slice,
+    srgb_to_linear_slice_into,
     srgb_u8_to_linear_premultiply_rgba_slice,
     srgb_u8_to_linear_rgba_slice,
     // u8 slices

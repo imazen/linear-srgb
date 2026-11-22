@@ -72,7 +72,8 @@
 //! | Single f32 value | [`default::srgb_to_linear`] |
 //! | Single u8 value | [`default::srgb_u8_to_linear`] |
 //! | f32 slice (in-place) | [`default::srgb_to_linear_slice`] |
-//! | RGBA f32 slice (alpha-preserving) | [`default::srgb_to_linear_rgba_slice`] |
+//! | f32 slice (out-of-place) | [`default::srgb_to_linear_slice_into`] |
+//! | RGBA f32 slice (alpha-preserving, in-place / out-of-place) | [`default::srgb_to_linear_rgba_slice`] / [`default::srgb_to_linear_rgba_slice_into`] |
 //! | u8 slice → f32 slice | [`default::srgb_u8_to_linear_slice`] |
 //! | RGBA u8 → f32 (alpha-preserving) | [`default::srgb_u8_to_linear_rgba_slice`] |
 //! | RGBA f32 sRGB → linear premul | [`default::srgb_to_linear_premultiply_rgba_slice`] |

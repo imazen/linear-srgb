@@ -30,7 +30,7 @@ use archmage::{attune, attuned};
 // Shared private kernels preserve evaluation across public entry points.
 use crate::kernels::float::x16::{linear_to_srgb_vector, srgb_to_linear_vector};
 
-use crate::kernels::{map_rgba_slice_inline, map_rgba_slice_try_inline};
+use crate::kernels::{map_rgba_slice_inline, map_rgba_slice_into_inline};
 
 // ============================================================================
 // sRGB ↔ Linear Slice Functions (plain + RGBA, magetypes-unified)
@@ -61,6 +61,7 @@ fn srgb_to_linear_rgba_slice_tier(_token: Token, values: &mut [f32]) {
         }
         return;
     }
+    #[cfg(not(target_arch = "x86_64"))]
     fn tail<T: magetypes::simd::backends::F32x16Backend>(token: T, chunk: &mut [f32; 16]) {
         let original = magetypes::simd::generic::f32x16::load_t(token, chunk);
         crate::kernels::float::x16::srgb_to_linear_vector(token, original)
@@ -146,6 +147,7 @@ fn linear_to_srgb_rgba_slice_tier(_token: Token, values: &mut [f32]) {
         }
         return;
     }
+    #[cfg(not(target_arch = "x86_64"))]
     fn tail<T: magetypes::simd::backends::F32x16Backend>(token: T, chunk: &mut [f32; 16]) {
         let original = magetypes::simd::generic::f32x16::load_t(token, chunk);
         crate::kernels::float::x16::linear_to_srgb_vector(token, original)
@@ -348,26 +350,35 @@ fn srgb_to_linear_extended_rgba_slice_tier(token: Token, values: &mut [f32]) {
         }
         return;
     }
-    fn slow<T: magetypes::simd::backends::F32x16Convert>(token: T, chunk: &mut [f32; 16]) {
+    #[cfg(not(target_arch = "x86_64"))]
+    fn tail<T: magetypes::simd::backends::F32x16Convert>(token: T, chunk: &mut [f32; 16]) {
         let original = magetypes::simd::generic::f32x16::load_t(token, chunk);
         crate::kernels::float::x16::srgb_to_linear_extended_vector(token, original)
             .with_rgba_alpha(original)
             .store(chunk);
     }
-    map_rgba_slice_try_inline!(
+    map_rgba_slice_inline!(
         values,
         token,
         |chunk| {
             let original = f32x16::load_t(token, chunk);
-            match crate::kernels::float::x16::try_srgb_to_linear_extended_vector(token, original) {
-                Some(converted) => {
-                    converted.with_rgba_alpha(original).store(chunk);
-                    true
-                }
-                None => false,
+            let (abs_v, result) =
+                crate::kernels::float::x16::srgb_to_linear_extended_poly(token, original);
+            if abs_v
+                .simd_gt(f32x16::splat_t(token, 8.0))
+                .bitcast_to_i32()
+                .any_true()
+            {
+                let mut out = result.to_array();
+                crate::kernels::float::srgb_to_linear_extended_patch(chunk, &mut out);
+                f32x16::from_array_t(token, out)
+                    .with_rgba_alpha(original)
+                    .store(chunk);
+            } else {
+                result.with_rgba_alpha(original).store(chunk);
             }
         },
-        slow::<Token>
+        tail::<Token>
     );
 }
 
@@ -416,26 +427,35 @@ fn linear_to_srgb_extended_rgba_slice_tier(token: Token, values: &mut [f32]) {
         }
         return;
     }
-    fn slow<T: magetypes::simd::backends::F32x16Convert>(token: T, chunk: &mut [f32; 16]) {
+    #[cfg(not(target_arch = "x86_64"))]
+    fn tail<T: magetypes::simd::backends::F32x16Convert>(token: T, chunk: &mut [f32; 16]) {
         let original = magetypes::simd::generic::f32x16::load_t(token, chunk);
         crate::kernels::float::x16::linear_to_srgb_extended_vector(token, original)
             .with_rgba_alpha(original)
             .store(chunk);
     }
-    map_rgba_slice_try_inline!(
+    map_rgba_slice_inline!(
         values,
         token,
         |chunk| {
             let original = f32x16::load_t(token, chunk);
-            match crate::kernels::float::x16::try_linear_to_srgb_extended_vector(token, original) {
-                Some(converted) => {
-                    converted.with_rgba_alpha(original).store(chunk);
-                    true
-                }
-                None => false,
+            let (abs_v, result) =
+                crate::kernels::float::x16::linear_to_srgb_extended_poly(token, original);
+            if abs_v
+                .simd_gt(f32x16::splat_t(token, 64.0))
+                .bitcast_to_i32()
+                .any_true()
+            {
+                let mut out = result.to_array();
+                crate::kernels::float::linear_to_srgb_extended_patch(token, chunk, &mut out);
+                f32x16::from_array_t(token, out)
+                    .with_rgba_alpha(original)
+                    .store(chunk);
+            } else {
+                result.with_rgba_alpha(original).store(chunk);
             }
         },
-        slow::<Token>
+        tail::<Token>
     );
 }
 
@@ -471,6 +491,439 @@ pub fn linear_to_srgb_extended_rgba_slice(values: &mut [f32]) {
 }
 
 // ============================================================================
+// Out-of-place sRGB ↔ Linear f32 Slice Functions (`input -> output`)
+// ============================================================================
+//
+// Avoids a separate `output.copy_from_slice(input)` pre-copy (and separate
+// alpha-restore pass on RGBA) when reading from an immutable source buffer.
+// Uses the exact same SIMD kernels and padded-tail policy as the in-place
+// `*_slice` functions, so outputs are bit-identical at every position.
+
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn srgb_to_linear_slice_into_tier(token: Token, input: &[f32], output: &mut [f32]) {
+    if archmage::IntoConcreteToken::as_scalar(token).is_some() {
+        if crate::tf::polynomial::USE_FUSED_MATH {
+            for (s, d) in input.iter().zip(output.iter_mut()) {
+                *d = crate::lanes::srgb_to_linear(*s);
+            }
+        } else {
+            crate::kernels::float::x4::srgb_to_linear_slice_into(token, input, output);
+        }
+        return;
+    }
+    if cfg!(any(target_arch = "aarch64", target_arch = "wasm32")) {
+        crate::kernels::float::x4::srgb_to_linear_slice_into(token, input, output);
+        return;
+    }
+    crate::kernels::float::x16::srgb_to_linear_slice_into(token, input, output);
+}
+
+/// Convert sRGB f32 values from `input` into `output` (clamped to `[0, 1]`).
+///
+/// Out-of-place counterpart to [`srgb_to_linear_slice`], producing bit-identical
+/// results without an intermediate copy.
+///
+/// # Panics
+/// Panics if `input.len() != output.len()`.
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::srgb_to_linear_slice_into;
+///
+/// let input = [0.0f32, 0.25, 0.5, 0.75, 1.0];
+/// let mut output = [0.0f32; 5];
+/// srgb_to_linear_slice_into(&input, &mut output);
+/// assert_eq!(output[0], 0.0);
+/// assert_eq!(output[4], 1.0);
+/// ```
+#[inline]
+pub fn srgb_to_linear_slice_into(input: &[f32], output: &mut [f32]) {
+    assert_eq!(input.len(), output.len());
+    incant!(
+        srgb_to_linear_slice_into_tier(input, output),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_srgb_slice_into_tier(token: Token, input: &[f32], output: &mut [f32]) {
+    if archmage::IntoConcreteToken::as_scalar(token).is_some() {
+        if crate::tf::polynomial::USE_FUSED_MATH {
+            for (s, d) in input.iter().zip(output.iter_mut()) {
+                *d = crate::lanes::linear_to_srgb(*s);
+            }
+        } else {
+            crate::kernels::float::x4::linear_to_srgb_slice_into(token, input, output);
+        }
+        return;
+    }
+    if cfg!(any(target_arch = "aarch64", target_arch = "wasm32")) {
+        crate::kernels::float::x4::linear_to_srgb_slice_into(token, input, output);
+        return;
+    }
+    crate::kernels::float::x16::linear_to_srgb_slice_into(token, input, output);
+}
+
+/// Convert linear f32 values from `input` into `output` (clamped to `[0, 1]`).
+///
+/// Out-of-place counterpart to [`linear_to_srgb_slice`], producing bit-identical
+/// results without an intermediate copy.
+///
+/// # Panics
+/// Panics if `input.len() != output.len()`.
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::linear_to_srgb_slice_into;
+///
+/// let input = [0.0f32, 0.1, 0.2, 0.5, 1.0];
+/// let mut output = [0.0f32; 5];
+/// linear_to_srgb_slice_into(&input, &mut output);
+/// assert_eq!(output[0], 0.0);
+/// assert_eq!(output[4], 1.0);
+/// ```
+#[inline]
+pub fn linear_to_srgb_slice_into(input: &[f32], output: &mut [f32]) {
+    assert_eq!(input.len(), output.len());
+    incant!(
+        linear_to_srgb_slice_into_tier(input, output),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn srgb_to_linear_rgba_slice_into_tier(token: Token, input: &[f32], output: &mut [f32]) {
+    if cfg!(any(target_arch = "aarch64", target_arch = "wasm32"))
+        || archmage::IntoConcreteToken::as_scalar(token).is_some()
+    {
+        for (src, dst) in input
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(output.as_chunks_mut::<4>().0)
+        {
+            let original = magetypes::simd::generic::f32x4::load_t(token, src);
+            crate::kernels::float::x4::srgb_to_linear_vector(token, original)
+                .with_rgba_alpha(original)
+                .store(dst);
+        }
+        return;
+    }
+    map_rgba_slice_into_inline!(input, output, |src_chunk, dst_chunk| {
+        let original = f32x16::load_t(token, src_chunk);
+        crate::kernels::float::x16::srgb_to_linear_vector(token, original)
+            .with_rgba_alpha(original)
+            .store(dst_chunk);
+    });
+}
+
+/// Convert sRGB RGBA f32 values from `input` into `output`, preserving alpha bit-for-bit.
+///
+/// Out-of-place counterpart to [`srgb_to_linear_rgba_slice`]. Expects interleaved
+/// RGBA data (`[R, G, B, A, ...]`). Trailing elements that don't form a complete
+/// RGBA pixel are ignored.
+///
+/// # Panics
+/// Panics if `input.len() != output.len()`.
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::srgb_to_linear_rgba_slice_into;
+///
+/// let input = [0.5f32, 0.5, 0.5, 0.75, 1.0, 1.0, 1.0, 1.0];
+/// let mut output = [0.0f32; 8];
+/// srgb_to_linear_rgba_slice_into(&input, &mut output);
+/// assert_eq!(output[3], 0.75); // alpha preserved
+/// ```
+#[inline]
+pub fn srgb_to_linear_rgba_slice_into(input: &[f32], output: &mut [f32]) {
+    assert_eq!(input.len(), output.len());
+    incant!(
+        srgb_to_linear_rgba_slice_into_tier(input, output),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_srgb_rgba_slice_into_tier(token: Token, input: &[f32], output: &mut [f32]) {
+    if cfg!(any(target_arch = "aarch64", target_arch = "wasm32"))
+        || archmage::IntoConcreteToken::as_scalar(token).is_some()
+    {
+        for (src, dst) in input
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(output.as_chunks_mut::<4>().0)
+        {
+            let original = magetypes::simd::generic::f32x4::load_t(token, src);
+            crate::kernels::float::x4::linear_to_srgb_vector(token, original)
+                .with_rgba_alpha(original)
+                .store(dst);
+        }
+        return;
+    }
+    map_rgba_slice_into_inline!(input, output, |src_chunk, dst_chunk| {
+        let original = f32x16::load_t(token, src_chunk);
+        crate::kernels::float::x16::linear_to_srgb_vector(token, original)
+            .with_rgba_alpha(original)
+            .store(dst_chunk);
+    });
+}
+
+/// Convert linear RGBA f32 values from `input` into `output`, preserving alpha bit-for-bit.
+///
+/// Out-of-place counterpart to [`linear_to_srgb_rgba_slice`]. Expects interleaved
+/// RGBA data (`[R, G, B, A, ...]`). Trailing elements that don't form a complete
+/// RGBA pixel are ignored.
+///
+/// # Panics
+/// Panics if `input.len() != output.len()`.
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::linear_to_srgb_rgba_slice_into;
+///
+/// let input = [0.2f32, 0.2, 0.2, 0.75, 0.8, 0.8, 0.8, 1.0];
+/// let mut output = [0.0f32; 8];
+/// linear_to_srgb_rgba_slice_into(&input, &mut output);
+/// assert_eq!(output[3], 0.75); // alpha preserved
+/// ```
+#[inline]
+pub fn linear_to_srgb_rgba_slice_into(input: &[f32], output: &mut [f32]) {
+    assert_eq!(input.len(), output.len());
+    incant!(
+        linear_to_srgb_rgba_slice_into_tier(input, output),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn srgb_to_linear_extended_slice_into_tier(token: Token, input: &[f32], output: &mut [f32]) {
+    if archmage::IntoConcreteToken::as_scalar(token).is_some() {
+        if crate::tf::polynomial::USE_FUSED_MATH {
+            for (s, d) in input.iter().zip(output.iter_mut()) {
+                *d = crate::lanes::srgb_to_linear_extended(*s);
+            }
+        } else {
+            crate::kernels::float::x4::srgb_to_linear_extended_slice_into(token, input, output);
+        }
+        return;
+    }
+    if cfg!(any(target_arch = "aarch64", target_arch = "wasm32")) {
+        crate::kernels::float::x4::srgb_to_linear_extended_slice_into(token, input, output);
+        return;
+    }
+    crate::kernels::float::x16::srgb_to_linear_extended_slice_into(token, input, output);
+}
+
+/// Convert sRGB f32 values from `input` into `output` without clamping (extended range).
+///
+/// Out-of-place counterpart to [`srgb_to_linear_extended_slice`], producing
+/// bit-identical results without an intermediate copy.
+///
+/// # Panics
+/// Panics if `input.len() != output.len()`.
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::srgb_to_linear_extended_slice_into;
+///
+/// let input = [-0.1f32, 0.0, 0.5, 1.0, 1.5];
+/// let mut output = [0.0f32; 5];
+/// srgb_to_linear_extended_slice_into(&input, &mut output);
+/// assert!(output[0] < 0.0);
+/// assert!(output[4] > 1.0);
+/// ```
+#[inline]
+pub fn srgb_to_linear_extended_slice_into(input: &[f32], output: &mut [f32]) {
+    assert_eq!(input.len(), output.len());
+    incant!(
+        srgb_to_linear_extended_slice_into_tier(input, output),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_srgb_extended_slice_into_tier(token: Token, input: &[f32], output: &mut [f32]) {
+    if archmage::IntoConcreteToken::as_scalar(token).is_some() {
+        if crate::tf::polynomial::USE_FUSED_MATH {
+            for (s, d) in input.iter().zip(output.iter_mut()) {
+                *d = crate::lanes::linear_to_srgb_extended(*s);
+            }
+        } else {
+            crate::kernels::float::x4::linear_to_srgb_extended_slice_into(token, input, output);
+        }
+        return;
+    }
+    if cfg!(any(target_arch = "aarch64", target_arch = "wasm32")) {
+        crate::kernels::float::x4::linear_to_srgb_extended_slice_into(token, input, output);
+        return;
+    }
+    crate::kernels::float::x16::linear_to_srgb_extended_slice_into(token, input, output);
+}
+
+/// Convert linear f32 values from `input` into `output` without clamping (extended range).
+///
+/// Out-of-place counterpart to [`linear_to_srgb_extended_slice`], producing
+/// bit-identical results without an intermediate copy.
+///
+/// # Panics
+/// Panics if `input.len() != output.len()`.
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::linear_to_srgb_extended_slice_into;
+///
+/// let input = [-0.1f32, 0.0, 0.5, 1.0, 1.5];
+/// let mut output = [0.0f32; 5];
+/// linear_to_srgb_extended_slice_into(&input, &mut output);
+/// assert!(output[0] < 0.0);
+/// assert!(output[4] > 1.0);
+/// ```
+#[inline]
+pub fn linear_to_srgb_extended_slice_into(input: &[f32], output: &mut [f32]) {
+    assert_eq!(input.len(), output.len());
+    incant!(
+        linear_to_srgb_extended_slice_into_tier(input, output),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn srgb_to_linear_extended_rgba_slice_into_tier(token: Token, input: &[f32], output: &mut [f32]) {
+    if cfg!(any(target_arch = "aarch64", target_arch = "wasm32"))
+        || archmage::IntoConcreteToken::as_scalar(token).is_some()
+    {
+        for (src, dst) in input
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(output.as_chunks_mut::<4>().0)
+        {
+            let original = magetypes::simd::generic::f32x4::load_t(token, src);
+            crate::kernels::float::x4::srgb_to_linear_extended_vector(token, original)
+                .with_rgba_alpha(original)
+                .store(dst);
+        }
+        return;
+    }
+    map_rgba_slice_into_inline!(input, output, |src_chunk, dst_chunk| {
+        let original = f32x16::load_t(token, src_chunk);
+        let (abs_v, result) =
+            crate::kernels::float::x16::srgb_to_linear_extended_poly(token, original);
+        if abs_v
+            .simd_gt(f32x16::splat_t(token, 8.0))
+            .bitcast_to_i32()
+            .any_true()
+        {
+            let mut out = result.to_array();
+            crate::kernels::float::srgb_to_linear_extended_patch(src_chunk, &mut out);
+            f32x16::from_array_t(token, out)
+                .with_rgba_alpha(original)
+                .store(dst_chunk);
+        } else {
+            result.with_rgba_alpha(original).store(dst_chunk);
+        }
+    });
+}
+
+/// Convert sRGB RGBA f32 values from `input` into `output` without clamping
+/// (extended range), preserving alpha bit-for-bit.
+///
+/// Out-of-place counterpart to [`srgb_to_linear_extended_rgba_slice`]. Trailing
+/// elements that don't form a complete RGBA pixel are ignored.
+///
+/// # Panics
+/// Panics if `input.len() != output.len()`.
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::srgb_to_linear_extended_rgba_slice_into;
+///
+/// let input = [-0.1f32, 0.5, 1.5, 0.75, 1.0, 1.0, 1.0, 2.0];
+/// let mut output = [0.0f32; 8];
+/// srgb_to_linear_extended_rgba_slice_into(&input, &mut output);
+/// assert!(output[0] < 0.0);
+/// assert_eq!(output[3], 0.75);
+/// assert_eq!(output[7], 2.0);
+/// ```
+#[inline]
+pub fn srgb_to_linear_extended_rgba_slice_into(input: &[f32], output: &mut [f32]) {
+    assert_eq!(input.len(), output.len());
+    incant!(
+        srgb_to_linear_extended_rgba_slice_into_tier(input, output),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+#[archmage::magetypes(define(f32x16), v4(cfg(avx512)), v3, neon, wasm128, scalar)]
+fn linear_to_srgb_extended_rgba_slice_into_tier(token: Token, input: &[f32], output: &mut [f32]) {
+    if cfg!(any(target_arch = "aarch64", target_arch = "wasm32"))
+        || archmage::IntoConcreteToken::as_scalar(token).is_some()
+    {
+        for (src, dst) in input
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(output.as_chunks_mut::<4>().0)
+        {
+            let original = magetypes::simd::generic::f32x4::load_t(token, src);
+            crate::kernels::float::x4::linear_to_srgb_extended_vector(token, original)
+                .with_rgba_alpha(original)
+                .store(dst);
+        }
+        return;
+    }
+    map_rgba_slice_into_inline!(input, output, |src_chunk, dst_chunk| {
+        let original = f32x16::load_t(token, src_chunk);
+        let (abs_v, result) =
+            crate::kernels::float::x16::linear_to_srgb_extended_poly(token, original);
+        if abs_v
+            .simd_gt(f32x16::splat_t(token, 64.0))
+            .bitcast_to_i32()
+            .any_true()
+        {
+            let mut out = result.to_array();
+            crate::kernels::float::linear_to_srgb_extended_patch(token, src_chunk, &mut out);
+            f32x16::from_array_t(token, out)
+                .with_rgba_alpha(original)
+                .store(dst_chunk);
+        } else {
+            result.with_rgba_alpha(original).store(dst_chunk);
+        }
+    });
+}
+
+/// Convert linear RGBA f32 values from `input` into `output` without clamping
+/// (extended range), preserving alpha bit-for-bit.
+///
+/// Out-of-place counterpart to [`linear_to_srgb_extended_rgba_slice`]. Trailing
+/// elements that don't form a complete RGBA pixel are ignored.
+///
+/// # Panics
+/// Panics if `input.len() != output.len()`.
+///
+/// # Example
+/// ```
+/// use linear_srgb::default::linear_to_srgb_extended_rgba_slice_into;
+///
+/// let input = [-0.1f32, 0.5, 1.5, 0.75, 1.0, 1.0, 1.0, 2.0];
+/// let mut output = [0.0f32; 8];
+/// linear_to_srgb_extended_rgba_slice_into(&input, &mut output);
+/// assert!(output[0] < 0.0);
+/// assert_eq!(output[3], 0.75);
+/// assert_eq!(output[7], 2.0);
+/// ```
+#[inline]
+pub fn linear_to_srgb_extended_rgba_slice_into(input: &[f32], output: &mut [f32]) {
+    assert_eq!(input.len(), output.len());
+    incant!(
+        linear_to_srgb_extended_rgba_slice_into_tier(input, output),
+        [v4, v3, neon, wasm128, scalar]
+    )
+}
+
+// ============================================================================
 // sRGB→Linear + Premultiply RGBA f32 (SIMD-fused single-pass)
 // ============================================================================
 
@@ -488,6 +941,7 @@ fn srgb_to_linear_premultiply_rgba_slice_tier(token: Token, values: &mut [f32]) 
         }
         return;
     }
+    #[cfg(not(target_arch = "x86_64"))]
     fn tail<T: magetypes::simd::backends::F32x16Backend>(token: T, chunk: &mut [f32; 16]) {
         let original = magetypes::simd::generic::f32x16::load_t(token, chunk);
         (srgb_to_linear_vector(token, original) * original.broadcast_rgba_alpha())
@@ -558,6 +1012,7 @@ fn unpremultiply_linear_to_srgb_rgba_slice_tier(token: Token, values: &mut [f32]
         }
         return;
     }
+    #[cfg(not(target_arch = "x86_64"))]
     fn tail<T: magetypes::simd::backends::F32x16Backend>(token: T, chunk: &mut [f32; 16]) {
         let one = magetypes::simd::generic::f32x16::splat_t(token, 1.0);
         let threshold =
@@ -811,6 +1266,7 @@ fn srgb_u16_to_linear_slice_tier(token: Token, input: &[u16], output: &mut [f32]
         }
         return;
     }
+    #[cfg(not(target_arch = "x86_64"))]
     #[cold]
     #[inline(never)]
     fn tail_x16<T: magetypes::simd::backends::F32x16Backend>(
@@ -842,7 +1298,23 @@ fn srgb_u16_to_linear_slice_tier(token: Token, input: &[u16], output: &mut [f32]
         .to_array();
     }
     if !in_rem.is_empty() {
-        tail_x16(token, in_rem, out_rem);
+        #[cfg(target_arch = "x86_64")]
+        {
+            let n = in_rem.len().min(out_rem.len()) & 15;
+            let mut padded = [0u16; 16];
+            padded[..n].copy_from_slice(&in_rem[..n]);
+            let v = f32x16::from_u16_t(token, &padded) * inv_65535;
+            let conv = crate::kernels::float::x16::srgb_to_linear_vector_cfg::<
+                _,
+                { crate::kernels::float::cfg::SRGB_UNIT_NONNEG },
+            >(token, v)
+            .to_array();
+            out_rem[..n].copy_from_slice(&conv[..n]);
+        }
+        #[cfg(not(target_arch = "x86_64"))]
+        {
+            tail_x16(token, in_rem, out_rem);
+        }
     }
 }
 
@@ -919,6 +1391,7 @@ fn linear_to_srgb_u16_slice_tier(token: Token, input: &[f32], output: &mut [u16]
         }
         return;
     }
+    #[cfg(not(target_arch = "x86_64"))]
     #[cold]
     #[inline(never)]
     fn tail_x16<T: magetypes::simd::backends::F32x16Backend>(
@@ -953,7 +1426,20 @@ fn linear_to_srgb_u16_slice_tier(token: Token, input: &[f32], output: &mut [u16]
         *out = srgb.mla(scale, bias).to_u16_with::<TRUNC>();
     }
     if !in_rem.is_empty() {
-        tail_x16(token, in_rem, out_rem);
+        #[cfg(target_arch = "x86_64")]
+        {
+            let n = in_rem.len().min(out_rem.len()) & 15;
+            let mut padded = [0.0f32; 16];
+            padded[..n].copy_from_slice(&in_rem[..n]);
+            let linear = f32x16::from_array_t(token, padded);
+            let srgb = linear_to_srgb_vector(token, linear);
+            let conv = srgb.mla(scale, bias).to_u16_with::<TRUNC>();
+            out_rem[..n].copy_from_slice(&conv[..n]);
+        }
+        #[cfg(not(target_arch = "x86_64"))]
+        {
+            tail_x16(token, in_rem, out_rem);
+        }
     }
 }
 
@@ -1504,6 +1990,7 @@ fn unpremultiply_u8_rgba_chunk_x16<
     }
 }
 
+#[cfg(not(target_arch = "x86_64"))]
 #[cold]
 #[inline(never)]
 fn unpremultiply_u8_rgba_tail_cold<
@@ -1590,7 +2077,21 @@ fn unpremultiply_linear_to_srgb_u8_rgba_slice_tier(token: Token, input: &[f32], 
         unpremultiply_u8_rgba_chunk_x16(token, inp, out);
     }
     if in_rem.len() >= 4 {
-        unpremultiply_u8_rgba_tail_cold(token, in_rem, out_rem);
+        #[cfg(target_arch = "x86_64")]
+        {
+            let n = in_rem.len().min(out_rem.len()) & 12;
+            if n != 0 {
+                let mut padded_in = [0.0f32; 16];
+                let mut padded_out = [0u8; 16];
+                padded_in[..n].copy_from_slice(&in_rem[..n]);
+                unpremultiply_u8_rgba_chunk_x16(token, &padded_in, &mut padded_out);
+                out_rem[..n].copy_from_slice(&padded_out[..n]);
+            }
+        }
+        #[cfg(not(target_arch = "x86_64"))]
+        {
+            unpremultiply_u8_rgba_tail_cold(token, in_rem, out_rem);
+        }
     }
 }
 
@@ -1929,6 +2430,7 @@ fn gamma_to_linear_rgba_slice_tier(token: Token, values: &mut [f32], gamma: f32)
         return;
     }
     if !(0.0..=4.0).contains(&gamma) {
+        #[cfg(not(target_arch = "x86_64"))]
         fn tail_out<T: magetypes::simd::backends::F32x16Convert>(
             (token, gamma): (T, f32),
             chunk: &mut [f32; 16],
@@ -1954,6 +2456,7 @@ fn gamma_to_linear_rgba_slice_tier(token: Token, values: &mut [f32], gamma: f32)
         return;
     }
     if gamma == 0.0 {
+        #[cfg(not(target_arch = "x86_64"))]
         fn tail_zero<T: magetypes::simd::backends::F32x16Convert>(token: T, chunk: &mut [f32; 16]) {
             let original = magetypes::simd::generic::f32x16::load_t(token, chunk);
             crate::tf::math::gamma_zero_x16(token, original)
@@ -1973,6 +2476,7 @@ fn gamma_to_linear_rgba_slice_tier(token: Token, values: &mut [f32], gamma: f32)
         );
         return;
     }
+    #[cfg(not(target_arch = "x86_64"))]
     fn tail_in<T: magetypes::simd::backends::F32x16Convert>(
         (token, gamma): (T, f32),
         chunk: &mut [f32; 16],
@@ -2060,6 +2564,7 @@ fn linear_to_gamma_rgba_slice_tier(token: Token, values: &mut [f32], gamma: f32)
         return;
     }
     if !(0.0..=4.0).contains(&exponent) {
+        #[cfg(not(target_arch = "x86_64"))]
         fn tail_out<T: magetypes::simd::backends::F32x16Convert>(
             (token, exponent): (T, f32),
             chunk: &mut [f32; 16],
@@ -2085,6 +2590,7 @@ fn linear_to_gamma_rgba_slice_tier(token: Token, values: &mut [f32], gamma: f32)
         return;
     }
     if exponent == 0.0 {
+        #[cfg(not(target_arch = "x86_64"))]
         fn tail_zero<T: magetypes::simd::backends::F32x16Convert>(token: T, chunk: &mut [f32; 16]) {
             let original = magetypes::simd::generic::f32x16::load_t(token, chunk);
             crate::tf::math::gamma_zero_x16(token, original)
@@ -2104,6 +2610,7 @@ fn linear_to_gamma_rgba_slice_tier(token: Token, values: &mut [f32], gamma: f32)
         );
         return;
     }
+    #[cfg(not(target_arch = "x86_64"))]
     fn tail_in<T: magetypes::simd::backends::F32x16Convert>(
         (token, exponent): (T, f32),
         chunk: &mut [f32; 16],
@@ -2196,6 +2703,7 @@ fn gamma_to_linear_premultiply_rgba_slice_tier(token: Token, values: &mut [f32],
         return;
     }
     if !(0.0..=4.0).contains(&gamma) {
+        #[cfg(not(target_arch = "x86_64"))]
         fn tail_out<T: magetypes::simd::backends::F32x16Convert>(
             (token, gamma): (T, f32),
             chunk: &mut [f32; 16],
@@ -2222,6 +2730,7 @@ fn gamma_to_linear_premultiply_rgba_slice_tier(token: Token, values: &mut [f32],
         return;
     }
     if gamma == 0.0 {
+        #[cfg(not(target_arch = "x86_64"))]
         fn tail_zero<T: magetypes::simd::backends::F32x16Convert>(token: T, chunk: &mut [f32; 16]) {
             let original = magetypes::simd::generic::f32x16::load_t(token, chunk);
             (crate::tf::math::gamma_zero_x16(token, original) * original.broadcast_rgba_alpha())
@@ -2242,6 +2751,7 @@ fn gamma_to_linear_premultiply_rgba_slice_tier(token: Token, values: &mut [f32],
         );
         return;
     }
+    #[cfg(not(target_arch = "x86_64"))]
     fn tail_in<T: magetypes::simd::backends::F32x16Convert>(
         (token, gamma): (T, f32),
         chunk: &mut [f32; 16],
@@ -2351,6 +2861,7 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier(token: Token, values: &mut [f32
     let one = f32x16::splat_t(token, 1.0);
     let threshold = f32x16::splat_t(token, crate::UNPREMUL_ALPHA_THRESHOLD);
     if !(0.0..=4.0).contains(&exponent) {
+        #[cfg(not(target_arch = "x86_64"))]
         fn tail_out<T: magetypes::simd::backends::F32x16Convert>(
             (token, exponent): (T, f32),
             chunk: &mut [f32; 16],
@@ -2385,6 +2896,7 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier(token: Token, values: &mut [f32
         return;
     }
     if exponent == 0.0 {
+        #[cfg(not(target_arch = "x86_64"))]
         fn tail_zero<T: magetypes::simd::backends::F32x16Convert>(token: T, chunk: &mut [f32; 16]) {
             let one = magetypes::simd::generic::f32x16::splat_t(token, 1.0);
             let threshold =
@@ -2411,6 +2923,7 @@ fn unpremultiply_linear_to_gamma_rgba_slice_tier(token: Token, values: &mut [f32
         );
         return;
     }
+    #[cfg(not(target_arch = "x86_64"))]
     fn tail_in<T: magetypes::simd::backends::F32x16Convert>(
         (token, exponent): (T, f32),
         chunk: &mut [f32; 16],

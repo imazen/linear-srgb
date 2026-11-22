@@ -14,7 +14,7 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 TOOLCHAIN = "1.99.0"
 EXPAND = "cargo-expand 1.0.126"
-PROVIDERS = {"archmage": "0.9.32", "archmage-macros": "0.9.32", "magetypes": "0.9.32", "magemath": "0.1.0"}
+PROVIDERS = {"archmage": "0.9.33", "archmage-macros": "0.9.33", "magetypes": "0.9.33", "magemath": "0.1.1"}
 TARGETS = ("x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "wasm32-wasip1")
 PRESETS = {"default": ROOT / "expand/Cargo.toml", "all-features": ROOT / "expand/all-features/Cargo.toml"}
 MODULES = ("target_features", "tokens", "simd", "kernels", "tf")

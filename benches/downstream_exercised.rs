@@ -154,6 +154,135 @@ fn bench_downstream(suite: &mut Suite) {
             }
         });
 
+        suite.compare(format!("{tag}/f32_into_vs_copy"), |g| {
+            g.throughput(Throughput::Bytes((n * 4) as u64));
+            {
+                let s = src_f32.clone();
+                let mut buf = vec![0.0f32; n];
+                g.bench("srgb_to_linear_copy", move |b| {
+                    b.iter(|| {
+                        buf.copy_from_slice(&s);
+                        ls::srgb_to_linear_slice(&mut buf);
+                        black_box(buf[0])
+                    })
+                });
+            }
+            {
+                let s = src_f32.clone();
+                let mut dst = vec![0.0f32; n];
+                g.bench("srgb_to_linear_into", move |b| {
+                    b.iter(|| {
+                        ls::srgb_to_linear_slice_into(&s, &mut dst);
+                        black_box(dst[0])
+                    })
+                });
+            }
+            {
+                let s = src_f32.clone();
+                let mut buf = vec![0.0f32; n];
+                g.bench("linear_to_srgb_copy", move |b| {
+                    b.iter(|| {
+                        buf.copy_from_slice(&s);
+                        ls::linear_to_srgb_slice(&mut buf);
+                        black_box(buf[0])
+                    })
+                });
+            }
+            {
+                let s = src_f32.clone();
+                let mut dst = vec![0.0f32; n];
+                g.bench("linear_to_srgb_into", move |b| {
+                    b.iter(|| {
+                        ls::linear_to_srgb_slice_into(&s, &mut dst);
+                        black_box(dst[0])
+                    })
+                });
+            }
+            {
+                let s = src_f32.clone();
+                let mut buf = vec![0.0f32; n];
+                g.bench("srgb_to_linear_rgba_copy", move |b| {
+                    b.iter(|| {
+                        buf.copy_from_slice(&s);
+                        ls::srgb_to_linear_rgba_slice(&mut buf);
+                        black_box(buf[0])
+                    })
+                });
+            }
+            {
+                let s = src_f32.clone();
+                let mut dst = vec![0.0f32; n];
+                g.bench("srgb_to_linear_rgba_into", move |b| {
+                    b.iter(|| {
+                        ls::srgb_to_linear_rgba_slice_into(&s, &mut dst);
+                        black_box(dst[0])
+                    })
+                });
+            }
+            {
+                let s = src_f32.clone();
+                let mut buf = vec![0.0f32; n];
+                g.bench("srgb_to_linear_ext_copy", move |b| {
+                    b.iter(|| {
+                        buf.copy_from_slice(&s);
+                        ls::srgb_to_linear_extended_slice(&mut buf);
+                        black_box(buf[0])
+                    })
+                });
+            }
+            {
+                let s = src_f32.clone();
+                let mut dst = vec![0.0f32; n];
+                g.bench("srgb_to_linear_ext_into", move |b| {
+                    b.iter(|| {
+                        ls::srgb_to_linear_extended_slice_into(&s, &mut dst);
+                        black_box(dst[0])
+                    })
+                });
+            }
+        });
+
+        let src_pq_uniform: Vec<f32> = (0..n).map(|i| ((i % 4096) as f32) / 4095.0).collect();
+        let src_pq_dark: Vec<f32> = (0..n)
+            .map(|i| 0.0001 + ((i % 1024) as f32) * (0.0198 / 1024.0))
+            .collect();
+        suite.compare(format!("{tag}/pq_regimes"), |g| {
+            g.throughput(Throughput::Bytes((n * 4) as u64));
+            {
+                let s = src_pq_uniform.clone();
+                let mut buf = s.clone();
+                g.bench("pq_to_linear_uniform_0_1", move |b| {
+                    b.iter(|| {
+                        buf.copy_from_slice(&s);
+                        ls::pq_to_linear_slice(&mut buf);
+                        black_box(buf[0])
+                    })
+                });
+            }
+            {
+                let s = src_pq_dark.clone();
+                let mut buf = s.clone();
+                g.bench("pq_to_linear_near_black", move |b| {
+                    b.iter(|| {
+                        buf.copy_from_slice(&s);
+                        ls::pq_to_linear_slice(&mut buf);
+                        black_box(buf[0])
+                    })
+                });
+            }
+            {
+                let s = src_pq_uniform.clone();
+                let mut buf = s.clone();
+                g.bench("linear_to_pq_uniform_0_1", move |b| {
+                    b.iter(|| {
+                        buf.copy_from_slice(&s);
+                        ls::linear_to_pq_slice(&mut buf);
+                        black_box(buf[0])
+                    })
+                });
+            }
+        });
+
         suite.compare(format!("{tag}/int_slices"), |g| {
             g.throughput(Throughput::Elements(n as u64));
             {

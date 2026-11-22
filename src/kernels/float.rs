@@ -43,30 +43,49 @@ pub(crate) mod cfg {
 
 #[cold]
 #[inline(never)]
-fn srgb_to_linear_extended_fallback<const N: usize>(
-    source: [f32; N],
-    mut result: [f32; N],
-) -> [f32; N] {
-    for (s, o) in source.into_iter().zip(&mut result) {
+pub(crate) fn srgb_to_linear_extended_patch<const N: usize>(
+    source: &[f32; N],
+    result: &mut [f32; N],
+) {
+    for (&s, o) in source.iter().zip(result.iter_mut()) {
         if s.abs() > 8.0 {
             *o = crate::scalar::srgb_to_linear_extended(s);
         }
     }
+}
+
+#[cold]
+#[inline(never)]
+pub(crate) fn srgb_to_linear_extended_fallback<const N: usize>(
+    source: [f32; N],
+    mut result: [f32; N],
+) -> [f32; N] {
+    srgb_to_linear_extended_patch(&source, &mut result);
     result
 }
 
 #[cold]
 #[inline(never)]
-fn linear_to_srgb_extended_fallback<T: F32ScalarBackend, const N: usize>(
+pub(crate) fn linear_to_srgb_extended_patch<T: F32ScalarBackend, const N: usize>(
     token: T,
-    source: [f32; N],
-    mut result: [f32; N],
-) -> [f32; N] {
-    for (s, o) in source.into_iter().zip(&mut result) {
+    source: &[f32; N],
+    result: &mut [f32; N],
+) {
+    for (&s, o) in source.iter().zip(result.iter_mut()) {
         if s.abs() > 64.0 {
             *o = crate::scalar::linear_to_srgb_extended_with_token(token, s);
         }
     }
+}
+
+#[cold]
+#[inline(never)]
+pub(crate) fn linear_to_srgb_extended_fallback<T: F32ScalarBackend, const N: usize>(
+    token: T,
+    source: [f32; N],
+    mut result: [f32; N],
+) -> [f32; N] {
+    linear_to_srgb_extended_patch(token, &source, &mut result);
     result
 }
 
@@ -102,6 +121,7 @@ macro_rules! width {
                 token: T,
                 values: &mut [f32],
             ) {
+                #[cfg(not(target_arch = "x86_64"))]
                 fn tail<T: $backend, const CFG: u32>(
                     token: T,
                     chunk: [f32; $width],
@@ -121,6 +141,18 @@ macro_rules! width {
             #[inline(always)]
             pub(crate) fn srgb_to_linear_slice<T: $backend>(token: T, values: &mut [f32]) {
                 srgb_to_linear_slice_cfg::<T, { cfg::SRGB_CLAMPED }>(token, values);
+            }
+
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn srgb_to_linear_slice_into<T: $backend>(
+                token: T,
+                input: &[f32],
+                output: &mut [f32],
+            ) {
+                crate::kernels::map_slice_into_inline!(input, output, $width, |chunk| {
+                    srgb_to_linear_cfg::<T, { cfg::SRGB_CLAMPED }>(token, chunk)
+                });
             }
 
             #[inline(always)]
@@ -200,6 +232,7 @@ macro_rules! width {
                 token: T,
                 values: &mut [f32],
             ) {
+                #[cfg(not(target_arch = "x86_64"))]
                 fn tail<T: $backend, const CFG: u32>(
                     token: T,
                     chunk: [f32; $width],
@@ -219,6 +252,18 @@ macro_rules! width {
             #[inline(always)]
             pub(crate) fn linear_to_srgb_slice<T: $backend>(token: T, values: &mut [f32]) {
                 linear_to_srgb_slice_cfg::<T, { cfg::SRGB_CLAMPED }>(token, values);
+            }
+
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn linear_to_srgb_slice_into<T: $backend>(
+                token: T,
+                input: &[f32],
+                output: &mut [f32],
+            ) {
+                crate::kernels::map_slice_into_inline!(input, output, $width, |chunk| {
+                    linear_to_srgb_cfg::<T, { cfg::SRGB_CLAMPED }>(token, chunk)
+                });
             }
 
             #[inline(always)]
@@ -387,19 +432,6 @@ macro_rules! width {
                 (abs_v, result.abs() | (v & sign))
             }
 
-            #[inline(always)]
-            pub(crate) fn try_srgb_to_linear_extended_vector<T: $convert>(
-                token: T,
-                v: $float<T>,
-            ) -> Option<$float<T>> {
-                let (abs_v, result) = srgb_to_linear_extended_poly(token, v);
-                if abs_v.simd_gt($float::splat_t(token, 8.0)).bitcast_to_i32().any_true() {
-                    None
-                } else {
-                    Some(result)
-                }
-            }
-
             $(#[$array_only])*
             #[allow(dead_code)]
             #[inline(always)]
@@ -410,6 +442,7 @@ macro_rules! width {
                 srgb_to_linear_extended_vector(token, $float::from_array_t(token, srgb)).to_array()
             }
 
+            #[allow(dead_code)]
             #[inline(always)]
             pub(crate) fn srgb_to_linear_extended_vector<T: $convert>(
                 token: T,
@@ -446,6 +479,7 @@ macro_rules! width {
                 values: &mut [f32],
             ) {
                 if !FALLBACK {
+                    #[cfg(not(target_arch = "x86_64"))]
                     fn tail<T: $convert>(token: T, chunk: [f32; $width]) -> [f32; $width] {
                         srgb_to_linear_extended_vector_cfg::<T, false>(
                             token,
@@ -468,20 +502,41 @@ macro_rules! width {
                     );
                     return;
                 }
-                fn slow<T: $convert>(token: T, chunk: [f32; $width]) -> [f32; $width] {
-                    srgb_to_linear_extended_vector(token, $float::from_array_t(token, chunk))
-                        .to_array()
+                let (chunks, remainder) = values.as_chunks_mut::<$width>();
+                let limit = $float::splat_t(token, 8.0);
+                for slot in chunks {
+                    let (abs_v, result) =
+                        srgb_to_linear_extended_poly(token, $float::load_t(token, slot));
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        let mut out = result.to_array();
+                        srgb_to_linear_extended_patch(slot, &mut out);
+                        *slot = out;
+                    } else {
+                        result.store(slot);
+                    }
                 }
-                crate::kernels::map_slice_try_inline!(
-                    values,
-                    $width,
-                    token,
-                    |chunk| {
-                        try_srgb_to_linear_extended_vector(token, $float::from_array_t(token, chunk))
-                            .map(|r| r.to_array())
-                    },
-                    slow::<T>
-                );
+                if !remainder.is_empty() {
+                    #[cfg(target_arch = "x86_64")]
+                    {
+                        let mut block = [0.0; $width];
+                        block[..remainder.len()].copy_from_slice(remainder);
+                        let (abs_v, result) =
+                            srgb_to_linear_extended_poly(token, $float::load_t(token, &block));
+                        let mut out = result.to_array();
+                        if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                            srgb_to_linear_extended_patch(&block, &mut out);
+                        }
+                        remainder.copy_from_slice(&out[..remainder.len()]);
+                    }
+                    #[cfg(not(target_arch = "x86_64"))]
+                    {
+                        fn tail<T: $convert>(token: T, chunk: [f32; $width]) -> [f32; $width] {
+                            srgb_to_linear_extended_vector(token, $float::from_array_t(token, chunk))
+                                .to_array()
+                        }
+                        crate::kernels::finish_tail_cold(remainder, token, tail::<T>);
+                    }
+                }
             }
 
             #[allow(dead_code)]
@@ -491,6 +546,38 @@ macro_rules! width {
                 values: &mut [f32],
             ) {
                 srgb_to_linear_extended_slice_cfg::<T, true>(token, values);
+            }
+
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn srgb_to_linear_extended_slice_into<T: $convert>(
+                token: T,
+                input: &[f32],
+                output: &mut [f32],
+            ) {
+                assert_eq!(input.len(), output.len());
+                let (in_chunks, in_rem) = input.as_chunks::<$width>();
+                let (out_chunks, out_rem) = output.as_chunks_mut::<$width>();
+                let limit = $float::splat_t(token, 8.0);
+                for (src_slot, dst_slot) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                    let (abs_v, result) =
+                        srgb_to_linear_extended_poly(token, $float::load_t(token, src_slot));
+                    result.store(dst_slot);
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        srgb_to_linear_extended_patch(src_slot, dst_slot);
+                    }
+                }
+                if !in_rem.is_empty() {
+                    let mut src_block = [0.0; $width];
+                    src_block[..in_rem.len()].copy_from_slice(in_rem);
+                    let (abs_v, result) =
+                        srgb_to_linear_extended_poly(token, $float::load_t(token, &src_block));
+                    let mut out = result.to_array();
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        srgb_to_linear_extended_patch(&src_block, &mut out);
+                    }
+                    out_rem.copy_from_slice(&out[..out_rem.len()]);
+                }
             }
 
             #[inline(always)]
@@ -521,23 +608,6 @@ macro_rules! width {
                 (abs_v, result.abs() | (v & sign))
             }
 
-            #[inline(always)]
-            pub(crate) fn try_linear_to_srgb_extended_vector<T: $convert>(
-                token: T,
-                v: $float<T>,
-            ) -> Option<$float<T>> {
-                let (abs_v, result) = linear_to_srgb_extended_poly(token, v);
-                if abs_v
-                    .simd_gt($float::splat_t(token, 64.0))
-                    .bitcast_to_i32()
-                    .any_true()
-                {
-                    None
-                } else {
-                    Some(result)
-                }
-            }
-
             $(#[$array_only])*
             #[allow(dead_code)]
             #[inline(always)]
@@ -549,6 +619,7 @@ macro_rules! width {
                     .to_array()
             }
 
+            #[allow(dead_code)]
             #[inline(always)]
             pub(crate) fn linear_to_srgb_extended_vector<T: $convert>(
                 token: T,
@@ -585,6 +656,7 @@ macro_rules! width {
                 values: &mut [f32],
             ) {
                 if !FALLBACK {
+                    #[cfg(not(target_arch = "x86_64"))]
                     fn tail<T: $convert>(token: T, chunk: [f32; $width]) -> [f32; $width] {
                         linear_to_srgb_extended_vector_cfg::<T, false>(
                             token,
@@ -607,23 +679,41 @@ macro_rules! width {
                     );
                     return;
                 }
-                fn slow<T: $convert>(token: T, chunk: [f32; $width]) -> [f32; $width] {
-                    linear_to_srgb_extended_vector(token, $float::from_array_t(token, chunk))
-                        .to_array()
+                let (chunks, remainder) = values.as_chunks_mut::<$width>();
+                let limit = $float::splat_t(token, 64.0);
+                for slot in chunks {
+                    let (abs_v, result) =
+                        linear_to_srgb_extended_poly(token, $float::load_t(token, slot));
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        let mut out = result.to_array();
+                        linear_to_srgb_extended_patch(token, slot, &mut out);
+                        *slot = out;
+                    } else {
+                        result.store(slot);
+                    }
                 }
-                crate::kernels::map_slice_try_inline!(
-                    values,
-                    $width,
-                    token,
-                    |chunk| {
-                        try_linear_to_srgb_extended_vector(
-                            token,
-                            $float::from_array_t(token, chunk),
-                        )
-                        .map(|r| r.to_array())
-                    },
-                    slow::<T>
-                );
+                if !remainder.is_empty() {
+                    #[cfg(target_arch = "x86_64")]
+                    {
+                        let mut block = [0.0; $width];
+                        block[..remainder.len()].copy_from_slice(remainder);
+                        let (abs_v, result) =
+                            linear_to_srgb_extended_poly(token, $float::load_t(token, &block));
+                        let mut out = result.to_array();
+                        if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                            linear_to_srgb_extended_patch(token, &block, &mut out);
+                        }
+                        remainder.copy_from_slice(&out[..remainder.len()]);
+                    }
+                    #[cfg(not(target_arch = "x86_64"))]
+                    {
+                        fn tail<T: $convert>(token: T, chunk: [f32; $width]) -> [f32; $width] {
+                            linear_to_srgb_extended_vector(token, $float::from_array_t(token, chunk))
+                                .to_array()
+                        }
+                        crate::kernels::finish_tail_cold(remainder, token, tail::<T>);
+                    }
+                }
             }
 
             #[allow(dead_code)]
@@ -633,6 +723,38 @@ macro_rules! width {
                 values: &mut [f32],
             ) {
                 linear_to_srgb_extended_slice_cfg::<T, true>(token, values);
+            }
+
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn linear_to_srgb_extended_slice_into<T: $convert>(
+                token: T,
+                input: &[f32],
+                output: &mut [f32],
+            ) {
+                assert_eq!(input.len(), output.len());
+                let (in_chunks, in_rem) = input.as_chunks::<$width>();
+                let (out_chunks, out_rem) = output.as_chunks_mut::<$width>();
+                let limit = $float::splat_t(token, 64.0);
+                for (src_slot, dst_slot) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                    let (abs_v, result) =
+                        linear_to_srgb_extended_poly(token, $float::load_t(token, src_slot));
+                    result.store(dst_slot);
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        linear_to_srgb_extended_patch(token, src_slot, dst_slot);
+                    }
+                }
+                if !in_rem.is_empty() {
+                    let mut src_block = [0.0; $width];
+                    src_block[..in_rem.len()].copy_from_slice(in_rem);
+                    let (abs_v, result) =
+                        linear_to_srgb_extended_poly(token, $float::load_t(token, &src_block));
+                    let mut out = result.to_array();
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        linear_to_srgb_extended_patch(token, &src_block, &mut out);
+                    }
+                    out_rem.copy_from_slice(&out[..out_rem.len()]);
+                }
             }
         }
     };
