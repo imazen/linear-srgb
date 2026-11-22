@@ -31,7 +31,7 @@ pub(crate) mod simd {
     };
     use archmage::{attune, attuned};
     use crate::kernels::float::x16::{linear_to_srgb_vector, srgb_to_linear_vector};
-    use crate::kernels::{map_rgba_slice_inline, map_rgba_slice_try_inline, tail_block};
+    use crate::kernels::{map_rgba_slice_inline, map_rgba_slice_try_inline};
     #[target_feature(
         enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe,pclmulqdq,aes,avx512f,avx512bw,avx512cd,avx512dq,avx512vl"
     )]
@@ -1929,6 +1929,22 @@ pub(crate) mod simd {
             *out = crate::scalar::srgb_u8_to_linear(*inp);
         }
     }
+    #[cold]
+    #[inline(never)]
+    fn linear_to_srgb_u8_tail_cold<const N: usize>(in_rem: &[f32], out_rem: &mut [u8]) {
+        const {
+            if !N.is_power_of_two() {
+                ::core::panicking::panic("assertion failed: N.is_power_of_two()")
+            }
+        };
+        let lut = crate::const_luts::linear_to_srgb_u8();
+        let n = in_rem.len().min(out_rem.len()) & (N - 1);
+        for (inp, out) in in_rem[..n].iter().zip(out_rem[..n].iter_mut()) {
+            let clamped = inp.clamp(0.0, 1.0);
+            let idx = (clamped * 4095.0 + 0.5) as usize & 0xFFF;
+            *out = lut[idx];
+        }
+    }
     #[doc(hidden)]
     #[target_feature(
         enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe,pclmulqdq,aes,avx512f,avx512bw,avx512cd,avx512dq,avx512vl"
@@ -1946,10 +1962,42 @@ pub(crate) mod simd {
             .in_range()
             .bits();
         let lut = crate::const_luts::linear_to_srgb_u8();
+        if false || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            let zero = magetypes::simd::generic::f32x4::zero_t(token);
+            let one = magetypes::simd::generic::f32x4::splat_t(token, 1.0);
+            let scale = magetypes::simd::generic::f32x4::splat_t(token, 4095.0);
+            let bias = magetypes::simd::generic::f32x4::splat_t(token, 0.5);
+            let mask = magetypes::simd::generic::i32x4::splat_t(token, 0xFFF);
+            let (in_chunks, in_rem) = input.as_chunks::<4>();
+            let (out_chunks, out_rem) = output.as_chunks_mut::<4>();
+            for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                let v = magetypes::simd::generic::f32x4::from_array_t(token, *inp);
+                let clamped = if false {
+                    v & v.simd_gt(zero)
+                } else {
+                    const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                        .non_nan_rhs()
+                        .bits();
+                    v.max_with::<NON_NAN_RHS>(zero)
+                }
+                    .min_fast(one);
+                let idx_f = clamped.mla(scale, bias);
+                let idx_i = (idx_f.to_i32_with::<TRUNC>() & mask).to_array();
+                out[0] = lut[idx_i[0] as u32 as usize];
+                out[1] = lut[idx_i[1] as u32 as usize];
+                out[2] = lut[idx_i[2] as u32 as usize];
+                out[3] = lut[idx_i[3] as u32 as usize];
+            }
+            if !in_rem.is_empty() {
+                linear_to_srgb_u8_tail_cold::<4>(in_rem, out_rem);
+            }
+            return;
+        }
         let zero = f32x16::zero_t(token);
         let one = f32x16::splat_t(token, 1.0);
         let scale = f32x16::splat_t(token, 4095.0);
         let bias = f32x16::splat_t(token, 0.5);
+        let mask = magetypes::simd::generic::i32x16::splat_t(token, 0xFFF);
         let (in_chunks, in_rem) = input.as_chunks::<16>();
         let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
         for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
@@ -1964,15 +2012,13 @@ pub(crate) mod simd {
             }
                 .min_fast(one);
             let idx_f = clamped.mla(scale, bias);
-            let idx_i = idx_f.to_i32_with::<TRUNC>().to_array();
+            let idx_i = (idx_f.to_i32_with::<TRUNC>() & mask).to_array();
             for i in 0..16 {
-                out[i] = lut[(idx_i[i] as usize) & 0xFFF];
+                out[i] = lut[idx_i[i] as u32 as usize];
             }
         }
-        for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
-            let clamped = inp.clamp(0.0, 1.0);
-            let idx = (clamped * 4095.0 + 0.5) as usize & 0xFFF;
-            *out = lut[idx];
+        if !in_rem.is_empty() {
+            linear_to_srgb_u8_tail_cold::<16>(in_rem, out_rem);
         }
     }
     #[inline(always)]
@@ -2001,10 +2047,42 @@ pub(crate) mod simd {
             .in_range()
             .bits();
         let lut = crate::const_luts::linear_to_srgb_u8();
+        if false || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            let zero = magetypes::simd::generic::f32x4::zero_t(token);
+            let one = magetypes::simd::generic::f32x4::splat_t(token, 1.0);
+            let scale = magetypes::simd::generic::f32x4::splat_t(token, 4095.0);
+            let bias = magetypes::simd::generic::f32x4::splat_t(token, 0.5);
+            let mask = magetypes::simd::generic::i32x4::splat_t(token, 0xFFF);
+            let (in_chunks, in_rem) = input.as_chunks::<4>();
+            let (out_chunks, out_rem) = output.as_chunks_mut::<4>();
+            for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                let v = magetypes::simd::generic::f32x4::from_array_t(token, *inp);
+                let clamped = if false {
+                    v & v.simd_gt(zero)
+                } else {
+                    const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                        .non_nan_rhs()
+                        .bits();
+                    v.max_with::<NON_NAN_RHS>(zero)
+                }
+                    .min_fast(one);
+                let idx_f = clamped.mla(scale, bias);
+                let idx_i = (idx_f.to_i32_with::<TRUNC>() & mask).to_array();
+                out[0] = lut[idx_i[0] as u32 as usize];
+                out[1] = lut[idx_i[1] as u32 as usize];
+                out[2] = lut[idx_i[2] as u32 as usize];
+                out[3] = lut[idx_i[3] as u32 as usize];
+            }
+            if !in_rem.is_empty() {
+                linear_to_srgb_u8_tail_cold::<4>(in_rem, out_rem);
+            }
+            return;
+        }
         let zero = f32x16::zero_t(token);
         let one = f32x16::splat_t(token, 1.0);
         let scale = f32x16::splat_t(token, 4095.0);
         let bias = f32x16::splat_t(token, 0.5);
+        let mask = magetypes::simd::generic::i32x16::splat_t(token, 0xFFF);
         let (in_chunks, in_rem) = input.as_chunks::<16>();
         let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
         for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
@@ -2019,15 +2097,13 @@ pub(crate) mod simd {
             }
                 .min_fast(one);
             let idx_f = clamped.mla(scale, bias);
-            let idx_i = idx_f.to_i32_with::<TRUNC>().to_array();
+            let idx_i = (idx_f.to_i32_with::<TRUNC>() & mask).to_array();
             for i in 0..16 {
-                out[i] = lut[(idx_i[i] as usize) & 0xFFF];
+                out[i] = lut[idx_i[i] as u32 as usize];
             }
         }
-        for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
-            let clamped = inp.clamp(0.0, 1.0);
-            let idx = (clamped * 4095.0 + 0.5) as usize & 0xFFF;
-            *out = lut[idx];
+        if !in_rem.is_empty() {
+            linear_to_srgb_u8_tail_cold::<16>(in_rem, out_rem);
         }
     }
     #[inline(always)]
@@ -2051,10 +2127,42 @@ pub(crate) mod simd {
             .in_range()
             .bits();
         let lut = crate::const_luts::linear_to_srgb_u8();
+        if false || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            let zero = magetypes::simd::generic::f32x4::zero_t(token);
+            let one = magetypes::simd::generic::f32x4::splat_t(token, 1.0);
+            let scale = magetypes::simd::generic::f32x4::splat_t(token, 4095.0);
+            let bias = magetypes::simd::generic::f32x4::splat_t(token, 0.5);
+            let mask = magetypes::simd::generic::i32x4::splat_t(token, 0xFFF);
+            let (in_chunks, in_rem) = input.as_chunks::<4>();
+            let (out_chunks, out_rem) = output.as_chunks_mut::<4>();
+            for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                let v = magetypes::simd::generic::f32x4::from_array_t(token, *inp);
+                let clamped = if false {
+                    v & v.simd_gt(zero)
+                } else {
+                    const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                        .non_nan_rhs()
+                        .bits();
+                    v.max_with::<NON_NAN_RHS>(zero)
+                }
+                    .min_fast(one);
+                let idx_f = clamped.mla(scale, bias);
+                let idx_i = (idx_f.to_i32_with::<TRUNC>() & mask).to_array();
+                out[0] = lut[idx_i[0] as u32 as usize];
+                out[1] = lut[idx_i[1] as u32 as usize];
+                out[2] = lut[idx_i[2] as u32 as usize];
+                out[3] = lut[idx_i[3] as u32 as usize];
+            }
+            if !in_rem.is_empty() {
+                linear_to_srgb_u8_tail_cold::<4>(in_rem, out_rem);
+            }
+            return;
+        }
         let zero = f32x16::zero_t(token);
         let one = f32x16::splat_t(token, 1.0);
         let scale = f32x16::splat_t(token, 4095.0);
         let bias = f32x16::splat_t(token, 0.5);
+        let mask = magetypes::simd::generic::i32x16::splat_t(token, 0xFFF);
         let (in_chunks, in_rem) = input.as_chunks::<16>();
         let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
         for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
@@ -2069,15 +2177,13 @@ pub(crate) mod simd {
             }
                 .min_fast(one);
             let idx_f = clamped.mla(scale, bias);
-            let idx_i = idx_f.to_i32_with::<TRUNC>().to_array();
+            let idx_i = (idx_f.to_i32_with::<TRUNC>() & mask).to_array();
             for i in 0..16 {
-                out[i] = lut[(idx_i[i] as usize) & 0xFFF];
+                out[i] = lut[idx_i[i] as u32 as usize];
             }
         }
-        for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
-            let clamped = inp.clamp(0.0, 1.0);
-            let idx = (clamped * 4095.0 + 0.5) as usize & 0xFFF;
-            *out = lut[idx];
+        if !in_rem.is_empty() {
+            linear_to_srgb_u8_tail_cold::<16>(in_rem, out_rem);
         }
     }
     /// Convert linear f32 values to sRGB u8.
@@ -2155,8 +2261,9 @@ pub(crate) mod simd {
                 in_rem: &[u16],
                 out_rem: &mut [f32],
             ) {
+                let n = in_rem.len().min(out_rem.len()) & 3;
                 let mut padded = [0u16; 4];
-                padded[..in_rem.len()].copy_from_slice(in_rem);
+                padded[..n].copy_from_slice(&in_rem[..n]);
                 let v = magetypes::simd::generic::f32x4::from_u16_t(token, &padded)
                     * magetypes::simd::generic::f32x4::splat_t(token, 1.0 / 65535.0);
                 let conv = crate::kernels::float::x4::srgb_to_linear_vector_cfg::<
@@ -2164,7 +2271,7 @@ pub(crate) mod simd {
                     { crate::kernels::float::cfg::SRGB_UNIT_NONNEG },
                 >(token, v)
                     .to_array();
-                out_rem.copy_from_slice(&conv[..in_rem.len()]);
+                out_rem[..n].copy_from_slice(&conv[..n]);
             }
             let (in_chunks, in_rem) = input.as_chunks::<4>();
             let (out_chunks, out_rem) = output.as_chunks_mut::<4>();
@@ -2193,8 +2300,9 @@ pub(crate) mod simd {
             in_rem: &[u16],
             out_rem: &mut [f32],
         ) {
+            let n = in_rem.len().min(out_rem.len()) & 15;
             let mut padded = [0u16; 16];
-            padded[..in_rem.len()].copy_from_slice(in_rem);
+            padded[..n].copy_from_slice(&in_rem[..n]);
             let v = magetypes::simd::generic::f32x16::from_u16_t(token, &padded)
                 * magetypes::simd::generic::f32x16::splat_t(token, 1.0 / 65535.0);
             let conv = crate::kernels::float::x16::srgb_to_linear_vector_cfg::<
@@ -2202,7 +2310,7 @@ pub(crate) mod simd {
                 { crate::kernels::float::cfg::SRGB_UNIT_NONNEG },
             >(token, v)
                 .to_array();
-            out_rem.copy_from_slice(&conv[..in_rem.len()]);
+            out_rem[..n].copy_from_slice(&conv[..n]);
         }
         let (in_chunks, in_rem) = input.as_chunks::<16>();
         let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
@@ -2248,8 +2356,9 @@ pub(crate) mod simd {
                 in_rem: &[u16],
                 out_rem: &mut [f32],
             ) {
+                let n = in_rem.len().min(out_rem.len()) & 3;
                 let mut padded = [0u16; 4];
-                padded[..in_rem.len()].copy_from_slice(in_rem);
+                padded[..n].copy_from_slice(&in_rem[..n]);
                 let v = magetypes::simd::generic::f32x4::from_u16_t(token, &padded)
                     * magetypes::simd::generic::f32x4::splat_t(token, 1.0 / 65535.0);
                 let conv = crate::kernels::float::x4::srgb_to_linear_vector_cfg::<
@@ -2257,7 +2366,7 @@ pub(crate) mod simd {
                     { crate::kernels::float::cfg::SRGB_UNIT_NONNEG },
                 >(token, v)
                     .to_array();
-                out_rem.copy_from_slice(&conv[..in_rem.len()]);
+                out_rem[..n].copy_from_slice(&conv[..n]);
             }
             let (in_chunks, in_rem) = input.as_chunks::<4>();
             let (out_chunks, out_rem) = output.as_chunks_mut::<4>();
@@ -2286,8 +2395,9 @@ pub(crate) mod simd {
             in_rem: &[u16],
             out_rem: &mut [f32],
         ) {
+            let n = in_rem.len().min(out_rem.len()) & 15;
             let mut padded = [0u16; 16];
-            padded[..in_rem.len()].copy_from_slice(in_rem);
+            padded[..n].copy_from_slice(&in_rem[..n]);
             let v = magetypes::simd::generic::f32x16::from_u16_t(token, &padded)
                 * magetypes::simd::generic::f32x16::splat_t(token, 1.0 / 65535.0);
             let conv = crate::kernels::float::x16::srgb_to_linear_vector_cfg::<
@@ -2295,7 +2405,7 @@ pub(crate) mod simd {
                 { crate::kernels::float::cfg::SRGB_UNIT_NONNEG },
             >(token, v)
                 .to_array();
-            out_rem.copy_from_slice(&conv[..in_rem.len()]);
+            out_rem[..n].copy_from_slice(&conv[..n]);
         }
         let (in_chunks, in_rem) = input.as_chunks::<16>();
         let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
@@ -2336,8 +2446,9 @@ pub(crate) mod simd {
                 in_rem: &[u16],
                 out_rem: &mut [f32],
             ) {
+                let n = in_rem.len().min(out_rem.len()) & 3;
                 let mut padded = [0u16; 4];
-                padded[..in_rem.len()].copy_from_slice(in_rem);
+                padded[..n].copy_from_slice(&in_rem[..n]);
                 let v = magetypes::simd::generic::f32x4::from_u16_t(token, &padded)
                     * magetypes::simd::generic::f32x4::splat_t(token, 1.0 / 65535.0);
                 let conv = crate::kernels::float::x4::srgb_to_linear_vector_cfg::<
@@ -2345,7 +2456,7 @@ pub(crate) mod simd {
                     { crate::kernels::float::cfg::SRGB_UNIT_NONNEG },
                 >(token, v)
                     .to_array();
-                out_rem.copy_from_slice(&conv[..in_rem.len()]);
+                out_rem[..n].copy_from_slice(&conv[..n]);
             }
             let (in_chunks, in_rem) = input.as_chunks::<4>();
             let (out_chunks, out_rem) = output.as_chunks_mut::<4>();
@@ -2374,8 +2485,9 @@ pub(crate) mod simd {
             in_rem: &[u16],
             out_rem: &mut [f32],
         ) {
+            let n = in_rem.len().min(out_rem.len()) & 15;
             let mut padded = [0u16; 16];
-            padded[..in_rem.len()].copy_from_slice(in_rem);
+            padded[..n].copy_from_slice(&in_rem[..n]);
             let v = magetypes::simd::generic::f32x16::from_u16_t(token, &padded)
                 * magetypes::simd::generic::f32x16::splat_t(token, 1.0 / 65535.0);
             let conv = crate::kernels::float::x16::srgb_to_linear_vector_cfg::<
@@ -2383,7 +2495,7 @@ pub(crate) mod simd {
                 { crate::kernels::float::cfg::SRGB_UNIT_NONNEG },
             >(token, v)
                 .to_array();
-            out_rem.copy_from_slice(&conv[..in_rem.len()]);
+            out_rem[..n].copy_from_slice(&conv[..n]);
         }
         let (in_chunks, in_rem) = input.as_chunks::<16>();
         let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
@@ -2476,8 +2588,9 @@ pub(crate) mod simd {
                     .trunc()
                     .in_range()
                     .bits();
+                let n = in_rem.len().min(out_rem.len()) & 3;
                 let mut padded = [0.0f32; 4];
-                padded[..in_rem.len()].copy_from_slice(in_rem);
+                padded[..n].copy_from_slice(&in_rem[..n]);
                 let linear = magetypes::simd::generic::f32x4::from_array_t(
                     token,
                     padded,
@@ -2492,7 +2605,7 @@ pub(crate) mod simd {
                         magetypes::simd::generic::f32x4::splat_t(token, 0.5),
                     )
                     .to_u16_with::<TRUNC>();
-                out_rem.copy_from_slice(&conv[..in_rem.len()]);
+                out_rem[..n].copy_from_slice(&conv[..n]);
             }
             let (in_chunks, in_rem) = input.as_chunks::<4>();
             let (out_chunks, out_rem) = output.as_chunks_mut::<4>();
@@ -2522,8 +2635,9 @@ pub(crate) mod simd {
                 .trunc()
                 .in_range()
                 .bits();
+            let n = in_rem.len().min(out_rem.len()) & 15;
             let mut padded = [0.0f32; 16];
-            padded[..in_rem.len()].copy_from_slice(in_rem);
+            padded[..n].copy_from_slice(&in_rem[..n]);
             let linear = magetypes::simd::generic::f32x16::from_array_t(token, padded);
             let srgb = linear_to_srgb_vector(token, linear);
             let conv = srgb
@@ -2532,7 +2646,7 @@ pub(crate) mod simd {
                     magetypes::simd::generic::f32x16::splat_t(token, 0.5),
                 )
                 .to_u16_with::<TRUNC>();
-            out_rem.copy_from_slice(&conv[..in_rem.len()]);
+            out_rem[..n].copy_from_slice(&conv[..n]);
         }
         let (in_chunks, in_rem) = input.as_chunks::<16>();
         let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
@@ -2583,8 +2697,9 @@ pub(crate) mod simd {
                     .trunc()
                     .in_range()
                     .bits();
+                let n = in_rem.len().min(out_rem.len()) & 3;
                 let mut padded = [0.0f32; 4];
-                padded[..in_rem.len()].copy_from_slice(in_rem);
+                padded[..n].copy_from_slice(&in_rem[..n]);
                 let linear = magetypes::simd::generic::f32x4::from_array_t(
                     token,
                     padded,
@@ -2599,7 +2714,7 @@ pub(crate) mod simd {
                         magetypes::simd::generic::f32x4::splat_t(token, 0.5),
                     )
                     .to_u16_with::<TRUNC>();
-                out_rem.copy_from_slice(&conv[..in_rem.len()]);
+                out_rem[..n].copy_from_slice(&conv[..n]);
             }
             let (in_chunks, in_rem) = input.as_chunks::<4>();
             let (out_chunks, out_rem) = output.as_chunks_mut::<4>();
@@ -2629,8 +2744,9 @@ pub(crate) mod simd {
                 .trunc()
                 .in_range()
                 .bits();
+            let n = in_rem.len().min(out_rem.len()) & 15;
             let mut padded = [0.0f32; 16];
-            padded[..in_rem.len()].copy_from_slice(in_rem);
+            padded[..n].copy_from_slice(&in_rem[..n]);
             let linear = magetypes::simd::generic::f32x16::from_array_t(token, padded);
             let srgb = linear_to_srgb_vector(token, linear);
             let conv = srgb
@@ -2639,7 +2755,7 @@ pub(crate) mod simd {
                     magetypes::simd::generic::f32x16::splat_t(token, 0.5),
                 )
                 .to_u16_with::<TRUNC>();
-            out_rem.copy_from_slice(&conv[..in_rem.len()]);
+            out_rem[..n].copy_from_slice(&conv[..n]);
         }
         let (in_chunks, in_rem) = input.as_chunks::<16>();
         let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
@@ -2728,6 +2844,27 @@ pub(crate) mod simd {
             }
         }
     }
+    #[cold]
+    #[inline(never)]
+    fn linear_to_srgb_u16_fast_tail_cold<const N: usize>(
+        lut: &[u16; crate::u16_lut::ENCODE_LUT_N],
+        in_rem: &[f32],
+        out_rem: &mut [u16],
+    ) {
+        const {
+            if !N.is_power_of_two() {
+                ::core::panicking::panic("assertion failed: N.is_power_of_two()")
+            }
+        };
+        let max_idx = crate::u16_lut::ENCODE_LUT_N - 1;
+        let n = in_rem.len().min(out_rem.len()) & (N - 1);
+        for (inp, out) in in_rem[..n].iter().zip(out_rem[..n].iter_mut()) {
+            let clamped = inp.clamp(0.0, 1.0);
+            let idx = (crate::mlaf::hw_sqrt_f32(clamped)
+                * crate::u16_lut::ENCODE_SQRT_SCALE + 0.5) as u32 as usize;
+            *out = lut[idx.min(max_idx)];
+        }
+    }
     #[doc(hidden)]
     #[target_feature(
         enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe,pclmulqdq,aes,avx512f,avx512bw,avx512cd,avx512dq,avx512vl"
@@ -2746,6 +2883,39 @@ pub(crate) mod simd {
             .bits();
         let lut = crate::u16_lut::encode_lut();
         let max_idx = crate::u16_lut::ENCODE_LUT_N - 1;
+        if false || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            let zero = magetypes::simd::generic::f32x4::zero_t(token);
+            let one = magetypes::simd::generic::f32x4::splat_t(token, 1.0);
+            let scale = magetypes::simd::generic::f32x4::splat_t(
+                token,
+                crate::u16_lut::ENCODE_SQRT_SCALE,
+            );
+            let bias = magetypes::simd::generic::f32x4::splat_t(token, 0.5);
+            let (in_chunks, in_rem) = input.as_chunks::<4>();
+            let (out_chunks, out_rem) = output.as_chunks_mut::<4>();
+            for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                let v = magetypes::simd::generic::f32x4::from_array_t(token, *inp);
+                let clamped = if false {
+                    v & v.simd_gt(zero)
+                } else {
+                    const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                        .non_nan_rhs()
+                        .bits();
+                    v.max_with::<NON_NAN_RHS>(zero)
+                }
+                    .min_fast(one);
+                let idx_f = clamped.fast_sqrt().mla(scale, bias);
+                let idx_i = idx_f.to_i32_with::<TRUNC>().to_array();
+                out[0] = lut[(idx_i[0] as u32 as usize).min(max_idx)];
+                out[1] = lut[(idx_i[1] as u32 as usize).min(max_idx)];
+                out[2] = lut[(idx_i[2] as u32 as usize).min(max_idx)];
+                out[3] = lut[(idx_i[3] as u32 as usize).min(max_idx)];
+            }
+            if !in_rem.is_empty() {
+                linear_to_srgb_u16_fast_tail_cold::<4>(lut, in_rem, out_rem);
+            }
+            return;
+        }
         let zero = f32x16::zero_t(token);
         let one = f32x16::splat_t(token, 1.0);
         let scale = f32x16::splat_t(token, crate::u16_lut::ENCODE_SQRT_SCALE);
@@ -2766,11 +2936,11 @@ pub(crate) mod simd {
             let idx_f = clamped.fast_sqrt().mla(scale, bias);
             let idx_i = idx_f.to_i32_with::<TRUNC>().to_array();
             for i in 0..16 {
-                out[i] = lut[(idx_i[i] as usize).min(max_idx)];
+                out[i] = lut[(idx_i[i] as u32 as usize).min(max_idx)];
             }
         }
-        for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
-            *out = crate::scalar::linear_to_srgb_u16_fast(*inp);
+        if !in_rem.is_empty() {
+            linear_to_srgb_u16_fast_tail_cold::<16>(lut, in_rem, out_rem);
         }
     }
     #[inline(always)]
@@ -2800,6 +2970,39 @@ pub(crate) mod simd {
             .bits();
         let lut = crate::u16_lut::encode_lut();
         let max_idx = crate::u16_lut::ENCODE_LUT_N - 1;
+        if false || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            let zero = magetypes::simd::generic::f32x4::zero_t(token);
+            let one = magetypes::simd::generic::f32x4::splat_t(token, 1.0);
+            let scale = magetypes::simd::generic::f32x4::splat_t(
+                token,
+                crate::u16_lut::ENCODE_SQRT_SCALE,
+            );
+            let bias = magetypes::simd::generic::f32x4::splat_t(token, 0.5);
+            let (in_chunks, in_rem) = input.as_chunks::<4>();
+            let (out_chunks, out_rem) = output.as_chunks_mut::<4>();
+            for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                let v = magetypes::simd::generic::f32x4::from_array_t(token, *inp);
+                let clamped = if false {
+                    v & v.simd_gt(zero)
+                } else {
+                    const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                        .non_nan_rhs()
+                        .bits();
+                    v.max_with::<NON_NAN_RHS>(zero)
+                }
+                    .min_fast(one);
+                let idx_f = clamped.fast_sqrt().mla(scale, bias);
+                let idx_i = idx_f.to_i32_with::<TRUNC>().to_array();
+                out[0] = lut[(idx_i[0] as u32 as usize).min(max_idx)];
+                out[1] = lut[(idx_i[1] as u32 as usize).min(max_idx)];
+                out[2] = lut[(idx_i[2] as u32 as usize).min(max_idx)];
+                out[3] = lut[(idx_i[3] as u32 as usize).min(max_idx)];
+            }
+            if !in_rem.is_empty() {
+                linear_to_srgb_u16_fast_tail_cold::<4>(lut, in_rem, out_rem);
+            }
+            return;
+        }
         let zero = f32x16::zero_t(token);
         let one = f32x16::splat_t(token, 1.0);
         let scale = f32x16::splat_t(token, crate::u16_lut::ENCODE_SQRT_SCALE);
@@ -2820,11 +3023,11 @@ pub(crate) mod simd {
             let idx_f = clamped.fast_sqrt().mla(scale, bias);
             let idx_i = idx_f.to_i32_with::<TRUNC>().to_array();
             for i in 0..16 {
-                out[i] = lut[(idx_i[i] as usize).min(max_idx)];
+                out[i] = lut[(idx_i[i] as u32 as usize).min(max_idx)];
             }
         }
-        for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
-            *out = crate::scalar::linear_to_srgb_u16_fast(*inp);
+        if !in_rem.is_empty() {
+            linear_to_srgb_u16_fast_tail_cold::<16>(lut, in_rem, out_rem);
         }
     }
     #[inline(always)]
@@ -2849,6 +3052,39 @@ pub(crate) mod simd {
             .bits();
         let lut = crate::u16_lut::encode_lut();
         let max_idx = crate::u16_lut::ENCODE_LUT_N - 1;
+        if false || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            let zero = magetypes::simd::generic::f32x4::zero_t(token);
+            let one = magetypes::simd::generic::f32x4::splat_t(token, 1.0);
+            let scale = magetypes::simd::generic::f32x4::splat_t(
+                token,
+                crate::u16_lut::ENCODE_SQRT_SCALE,
+            );
+            let bias = magetypes::simd::generic::f32x4::splat_t(token, 0.5);
+            let (in_chunks, in_rem) = input.as_chunks::<4>();
+            let (out_chunks, out_rem) = output.as_chunks_mut::<4>();
+            for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                let v = magetypes::simd::generic::f32x4::from_array_t(token, *inp);
+                let clamped = if false {
+                    v & v.simd_gt(zero)
+                } else {
+                    const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                        .non_nan_rhs()
+                        .bits();
+                    v.max_with::<NON_NAN_RHS>(zero)
+                }
+                    .min_fast(one);
+                let idx_f = clamped.fast_sqrt().mla(scale, bias);
+                let idx_i = idx_f.to_i32_with::<TRUNC>().to_array();
+                out[0] = lut[(idx_i[0] as u32 as usize).min(max_idx)];
+                out[1] = lut[(idx_i[1] as u32 as usize).min(max_idx)];
+                out[2] = lut[(idx_i[2] as u32 as usize).min(max_idx)];
+                out[3] = lut[(idx_i[3] as u32 as usize).min(max_idx)];
+            }
+            if !in_rem.is_empty() {
+                linear_to_srgb_u16_fast_tail_cold::<4>(lut, in_rem, out_rem);
+            }
+            return;
+        }
         let zero = f32x16::zero_t(token);
         let one = f32x16::splat_t(token, 1.0);
         let scale = f32x16::splat_t(token, crate::u16_lut::ENCODE_SQRT_SCALE);
@@ -2869,11 +3105,11 @@ pub(crate) mod simd {
             let idx_f = clamped.fast_sqrt().mla(scale, bias);
             let idx_i = idx_f.to_i32_with::<TRUNC>().to_array();
             for i in 0..16 {
-                out[i] = lut[(idx_i[i] as usize).min(max_idx)];
+                out[i] = lut[(idx_i[i] as u32 as usize).min(max_idx)];
             }
         }
-        for (inp, out) in in_rem.iter().zip(out_rem.iter_mut()) {
-            *out = crate::scalar::linear_to_srgb_u16_fast(*inp);
+        if !in_rem.is_empty() {
+            linear_to_srgb_u16_fast_tail_cold::<16>(lut, in_rem, out_rem);
         }
     }
     /// Convert linear f32 values to sRGB u16 using sqrt-indexed LUT (~10× faster).
@@ -2986,62 +3222,35 @@ pub(crate) mod simd {
     }
     #[doc(hidden)]
     #[target_feature(
-        enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe,pclmulqdq,aes,avx512f,avx512bw,avx512cd,avx512dq,avx512vl"
+        enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe"
     )]
     #[inline]
-    fn __arcane_linear_to_srgb_u8_rgba_slice_tier_v4(
-        token: archmage::X64V4Token,
-        input: &[f32],
-        output: &mut [u8],
-    ) {
-        #[allow(non_camel_case_types, dead_code)]
-        type f32x16 = ::magetypes::simd::generic::f32x16<archmage::X64V4Token>;
-        const TRUNC: u32 = magetypes::numerics::IntConvert::new()
-            .trunc()
-            .in_range()
-            .bits();
-        let lut = crate::const_luts::linear_to_srgb_u8();
-        let zero = f32x16::zero_t(token);
-        let one = f32x16::splat_t(token, 1.0);
-        let scale = f32x16::splat_t(token, 4095.0);
-        let bias = f32x16::splat_t(token, 0.5);
-        let (in_chunks, in_rem) = input.as_chunks::<16>();
-        let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
-        for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
-            let v = f32x16::from_array_t(token, *inp);
-            let clamped = if false {
-                v & v.simd_gt(zero)
-            } else {
-                const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
-                    .non_nan_rhs()
-                    .bits();
-                v.max_with::<NON_NAN_RHS>(zero)
-            }
-                .min_fast(one);
-            let idx_f = clamped.mla(scale, bias);
-            let idx_i = idx_f.to_i32_with::<TRUNC>().to_array();
-            for px in 0..4 {
-                let base = px * 4;
-                out[base] = lut[(idx_i[base] as usize) & 0xFFF];
-                out[base + 1] = lut[(idx_i[base + 1] as usize) & 0xFFF];
-                out[base + 2] = lut[(idx_i[base + 2] as usize) & 0xFFF];
-                out[base + 3] = (f64::from(inp[base + 3]).clamp(0.0, 1.0) * 255.0 + 0.5)
-                    as u8;
-            }
-        }
-        for (inp, out) in in_rem
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .zip(out_rem.as_chunks_mut::<4>().0.iter_mut())
-        {
-            for i in 0..3 {
-                let clamped = inp[i].clamp(0.0, 1.0);
-                let idx = (clamped * 4095.0 + 0.5) as usize & 0xFFF;
-                out[i] = lut[idx];
-            }
-            out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
-        }
+    fn __arcane_quantize_alpha_u8_x4_v3(
+        _token: X64V3Token,
+        [lo,
+        hi,
+        ]: [core::arch::x86_64::__m256; 2],
+    ) -> [u8; 4] {
+        use core::arch::x86_64::*;
+        let p = _mm256_shuffle_ps(lo, hi, 0xFF);
+        let t = _mm_shuffle_ps(
+            _mm256_castps256_ps128(p),
+            _mm256_extractf128_ps(p, 1),
+            0x88,
+        );
+        let vf = _mm_permute_ps::<0xD8>(t);
+        let vd = _mm256_cvtps_pd(vf);
+        let zero = _mm256_setzero_pd();
+        let one = _mm256_set1_pd(1.0);
+        let clamped = _mm256_min_pd(_mm256_max_pd(vd, zero), one);
+        let scaled = _mm256_add_pd(
+            _mm256_mul_pd(clamped, _mm256_set1_pd(255.0)),
+            _mm256_set1_pd(0.5),
+        );
+        let vi = _mm256_cvttpd_epi32(scaled);
+        let p16 = _mm_packus_epi32(vi, vi);
+        let p8 = _mm_packus_epi16(p16, p16);
+        (_mm_cvtsi128_si32(p8) as u32).to_le_bytes()
     }
     /// Convert linear RGBA f32 values to sRGB u8, preserving alpha.
     ///
@@ -3062,6 +3271,186 @@ pub(crate) mod simd {
     /// assert_eq!(output[3], 255);  // alpha 1.0 → 255
     /// assert_eq!(output[7], 128);  // alpha 0.5 → 128
     /// ```
+    #[inline(always)]
+    fn quantize_alpha_u8_x4_v3(
+        __archmage_token: X64V3Token,
+        __archmage_arg_0: [core::arch::x86_64::__m256; 2],
+    ) -> [u8; 4] {
+        let _: () = <X64V3Token>::__ARCHMAGE_ASSERT_TIER_F38B284B;
+        unsafe { __arcane_quantize_alpha_u8_x4_v3(__archmage_token, __archmage_arg_0) }
+    }
+    #[doc(hidden)]
+    #[target_feature(
+        enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe,pclmulqdq,aes,avx512f,avx512bw,avx512cd,avx512dq,avx512vl"
+    )]
+    #[inline]
+    fn __arcane_quantize_alpha_u8_x4_v4(
+        _token: X64V4Token,
+        v: core::arch::x86_64::__m512,
+    ) -> [u8; 4] {
+        use core::arch::x86_64::*;
+        let idx = _mm512_setr_epi32(3, 7, 11, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        let vf = _mm512_castps512_ps128(_mm512_permutexvar_ps(idx, v));
+        let vd = _mm256_cvtps_pd(vf);
+        let zero = _mm256_setzero_pd();
+        let one = _mm256_set1_pd(1.0);
+        let clamped = _mm256_min_pd(_mm256_max_pd(vd, zero), one);
+        let scaled = _mm256_add_pd(
+            _mm256_mul_pd(clamped, _mm256_set1_pd(255.0)),
+            _mm256_set1_pd(0.5),
+        );
+        let vi = _mm256_cvttpd_epi32(scaled);
+        let p16 = _mm_packus_epi32(vi, vi);
+        let p8 = _mm_packus_epi16(p16, p16);
+        (_mm_cvtsi128_si32(p8) as u32).to_le_bytes()
+    }
+    #[inline(always)]
+    fn quantize_alpha_u8_x4_v4(
+        __archmage_token: X64V4Token,
+        v: core::arch::x86_64::__m512,
+    ) -> [u8; 4] {
+        let _: () = <X64V4Token>::__ARCHMAGE_ASSERT_TIER_FE1B900C;
+        unsafe { __arcane_quantize_alpha_u8_x4_v4(__archmage_token, v) }
+    }
+    trait QuantizeAlphaRgba16: magetypes::simd::backends::F32x16Backend {
+        fn quantize_alpha_rgba16(
+            self,
+            v: magetypes::simd::generic::f32x16<Self>,
+        ) -> [u8; 4];
+    }
+    impl QuantizeAlphaRgba16 for X64V4Token {
+        #[inline(always)]
+        fn quantize_alpha_rgba16(
+            self,
+            v: magetypes::simd::generic::f32x16<Self>,
+        ) -> [u8; 4] {
+            quantize_alpha_u8_x4_v4(self, v.into_repr())
+        }
+    }
+    impl QuantizeAlphaRgba16 for X64V3Token {
+        #[inline(always)]
+        fn quantize_alpha_rgba16(
+            self,
+            v: magetypes::simd::generic::f32x16<Self>,
+        ) -> [u8; 4] {
+            quantize_alpha_u8_x4_v3(self, v.into_repr())
+        }
+    }
+    impl QuantizeAlphaRgba16 for ScalarToken {
+        #[inline(always)]
+        fn quantize_alpha_rgba16(
+            self,
+            v: magetypes::simd::generic::f32x16<Self>,
+        ) -> [u8; 4] {
+            let a = v.to_array();
+            [
+                (f64::from(a[3]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8,
+                (f64::from(a[7]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8,
+                (f64::from(a[11]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8,
+                (f64::from(a[15]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8,
+            ]
+        }
+    }
+    #[cold]
+    #[inline(never)]
+    fn linear_to_srgb_u8_rgba_tail_cold(in_rem: &[f32], out_rem: &mut [u8]) {
+        let lut = crate::const_luts::linear_to_srgb_u8();
+        let n = in_rem.len().min(out_rem.len()) & 12;
+        for (inp, out) in in_rem[..n]
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(out_rem[..n].as_chunks_mut::<4>().0.iter_mut())
+        {
+            for i in 0..3 {
+                let clamped = inp[i].clamp(0.0, 1.0);
+                let idx = (clamped * 4095.0 + 0.5) as usize & 0xFFF;
+                out[i] = lut[idx];
+            }
+            out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+        }
+    }
+    #[doc(hidden)]
+    #[target_feature(
+        enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe,pclmulqdq,aes,avx512f,avx512bw,avx512cd,avx512dq,avx512vl"
+    )]
+    #[inline]
+    fn __arcane_linear_to_srgb_u8_rgba_slice_tier_v4(
+        token: archmage::X64V4Token,
+        input: &[f32],
+        output: &mut [u8],
+    ) {
+        #[allow(non_camel_case_types, dead_code)]
+        type f32x16 = ::magetypes::simd::generic::f32x16<archmage::X64V4Token>;
+        const TRUNC: u32 = magetypes::numerics::IntConvert::new()
+            .trunc()
+            .in_range()
+            .bits();
+        let lut = crate::const_luts::linear_to_srgb_u8();
+        if false || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            let zero = magetypes::simd::generic::f32x4::zero_t(token);
+            let one = magetypes::simd::generic::f32x4::splat_t(token, 1.0);
+            let scale = magetypes::simd::generic::f32x4::splat_t(token, 4095.0);
+            let bias = magetypes::simd::generic::f32x4::splat_t(token, 0.5);
+            let mask = magetypes::simd::generic::i32x4::splat_t(token, 0xFFF);
+            for (inp, out) in input
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(output.as_chunks_mut::<4>().0.iter_mut())
+            {
+                let v = magetypes::simd::generic::f32x4::from_array_t(token, *inp);
+                let clamped = if false {
+                    v & v.simd_gt(zero)
+                } else {
+                    const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                        .non_nan_rhs()
+                        .bits();
+                    v.max_with::<NON_NAN_RHS>(zero)
+                }
+                    .min_fast(one);
+                let idx_f = clamped.mla(scale, bias);
+                let idx_i = (idx_f.to_i32_with::<TRUNC>() & mask).to_array();
+                out[0] = lut[idx_i[0] as u32 as usize];
+                out[1] = lut[idx_i[1] as u32 as usize];
+                out[2] = lut[idx_i[2] as u32 as usize];
+                out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+            }
+            return;
+        }
+        let zero = f32x16::zero_t(token);
+        let one = f32x16::splat_t(token, 1.0);
+        let scale = f32x16::splat_t(token, 4095.0);
+        let bias = f32x16::splat_t(token, 0.5);
+        let mask = magetypes::simd::generic::i32x16::splat_t(token, 0xFFF);
+        let (in_chunks, in_rem) = input.as_chunks::<16>();
+        let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
+        for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+            let v = f32x16::load_t(token, inp);
+            let clamped = if false {
+                v & v.simd_gt(zero)
+            } else {
+                const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                    .non_nan_rhs()
+                    .bits();
+                v.max_with::<NON_NAN_RHS>(zero)
+            }
+                .min_fast(one);
+            let idx_f = clamped.mla(scale, bias);
+            let idx_i = (idx_f.to_i32_with::<TRUNC>() & mask).to_array();
+            let alphas = token.quantize_alpha_rgba16(v);
+            for (px, &alpha) in alphas.iter().enumerate() {
+                let base = px * 4;
+                out[base] = lut[idx_i[base] as u32 as usize];
+                out[base + 1] = lut[idx_i[base + 1] as u32 as usize];
+                out[base + 2] = lut[idx_i[base + 2] as u32 as usize];
+                out[base + 3] = alpha;
+            }
+        }
+        if in_rem.len() >= 4 {
+            linear_to_srgb_u8_rgba_tail_cold(in_rem, out_rem);
+        }
+    }
     #[inline(always)]
     fn linear_to_srgb_u8_rgba_slice_tier_v4(
         token: archmage::X64V4Token,
@@ -3088,14 +3477,46 @@ pub(crate) mod simd {
             .in_range()
             .bits();
         let lut = crate::const_luts::linear_to_srgb_u8();
+        if false || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            let zero = magetypes::simd::generic::f32x4::zero_t(token);
+            let one = magetypes::simd::generic::f32x4::splat_t(token, 1.0);
+            let scale = magetypes::simd::generic::f32x4::splat_t(token, 4095.0);
+            let bias = magetypes::simd::generic::f32x4::splat_t(token, 0.5);
+            let mask = magetypes::simd::generic::i32x4::splat_t(token, 0xFFF);
+            for (inp, out) in input
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(output.as_chunks_mut::<4>().0.iter_mut())
+            {
+                let v = magetypes::simd::generic::f32x4::from_array_t(token, *inp);
+                let clamped = if false {
+                    v & v.simd_gt(zero)
+                } else {
+                    const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                        .non_nan_rhs()
+                        .bits();
+                    v.max_with::<NON_NAN_RHS>(zero)
+                }
+                    .min_fast(one);
+                let idx_f = clamped.mla(scale, bias);
+                let idx_i = (idx_f.to_i32_with::<TRUNC>() & mask).to_array();
+                out[0] = lut[idx_i[0] as u32 as usize];
+                out[1] = lut[idx_i[1] as u32 as usize];
+                out[2] = lut[idx_i[2] as u32 as usize];
+                out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+            }
+            return;
+        }
         let zero = f32x16::zero_t(token);
         let one = f32x16::splat_t(token, 1.0);
         let scale = f32x16::splat_t(token, 4095.0);
         let bias = f32x16::splat_t(token, 0.5);
+        let mask = magetypes::simd::generic::i32x16::splat_t(token, 0xFFF);
         let (in_chunks, in_rem) = input.as_chunks::<16>();
         let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
         for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
-            let v = f32x16::from_array_t(token, *inp);
+            let v = f32x16::load_t(token, inp);
             let clamped = if false {
                 v & v.simd_gt(zero)
             } else {
@@ -3106,49 +3527,20 @@ pub(crate) mod simd {
             }
                 .min_fast(one);
             let idx_f = clamped.mla(scale, bias);
-            let idx_i = idx_f.to_i32_with::<TRUNC>().to_array();
-            for px in 0..4 {
+            let idx_i = (idx_f.to_i32_with::<TRUNC>() & mask).to_array();
+            let alphas = token.quantize_alpha_rgba16(v);
+            for (px, &alpha) in alphas.iter().enumerate() {
                 let base = px * 4;
-                out[base] = lut[(idx_i[base] as usize) & 0xFFF];
-                out[base + 1] = lut[(idx_i[base + 1] as usize) & 0xFFF];
-                out[base + 2] = lut[(idx_i[base + 2] as usize) & 0xFFF];
-                out[base + 3] = (f64::from(inp[base + 3]).clamp(0.0, 1.0) * 255.0 + 0.5)
-                    as u8;
+                out[base] = lut[idx_i[base] as u32 as usize];
+                out[base + 1] = lut[idx_i[base + 1] as u32 as usize];
+                out[base + 2] = lut[idx_i[base + 2] as u32 as usize];
+                out[base + 3] = alpha;
             }
         }
-        for (inp, out) in in_rem
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .zip(out_rem.as_chunks_mut::<4>().0.iter_mut())
-        {
-            for i in 0..3 {
-                let clamped = inp[i].clamp(0.0, 1.0);
-                let idx = (clamped * 4095.0 + 0.5) as usize & 0xFFF;
-                out[i] = lut[idx];
-            }
-            out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+        if in_rem.len() >= 4 {
+            linear_to_srgb_u8_rgba_tail_cold(in_rem, out_rem);
         }
     }
-    /// Convert linear RGBA f32 values to sRGB u8, preserving alpha.
-    ///
-    /// RGB channels are encoded via 4096-entry const LUT. Alpha is passed through
-    /// as `(a * 255 + 0.5) as u8` without sRGB transfer. Trailing elements that
-    /// don't form a complete RGBA pixel are ignored.
-    ///
-    /// # Panics
-    /// Panics if `input.len() != output.len()`.
-    ///
-    /// # Example
-    /// ```
-    /// use linear_srgb::default::linear_to_srgb_u8_rgba_slice;
-    ///
-    /// let input = [0.2158f32, 0.2158, 0.2158, 1.0, 0.05, 0.05, 0.05, 0.5];
-    /// let mut output = [0u8; 8];
-    /// linear_to_srgb_u8_rgba_slice(&input, &mut output);
-    /// assert_eq!(output[3], 255);  // alpha 1.0 → 255
-    /// assert_eq!(output[7], 128);  // alpha 0.5 → 128
-    /// ```
     #[inline(always)]
     fn linear_to_srgb_u8_rgba_slice_tier_v3(
         token: archmage::X64V3Token,
@@ -3158,25 +3550,6 @@ pub(crate) mod simd {
         let _: () = <archmage::X64V3Token>::__ARCHMAGE_ASSERT_TIER_F38B284B;
         unsafe { __arcane_linear_to_srgb_u8_rgba_slice_tier_v3(token, input, output) }
     }
-    /// Convert linear RGBA f32 values to sRGB u8, preserving alpha.
-    ///
-    /// RGB channels are encoded via 4096-entry const LUT. Alpha is passed through
-    /// as `(a * 255 + 0.5) as u8` without sRGB transfer. Trailing elements that
-    /// don't form a complete RGBA pixel are ignored.
-    ///
-    /// # Panics
-    /// Panics if `input.len() != output.len()`.
-    ///
-    /// # Example
-    /// ```
-    /// use linear_srgb::default::linear_to_srgb_u8_rgba_slice;
-    ///
-    /// let input = [0.2158f32, 0.2158, 0.2158, 1.0, 0.05, 0.05, 0.05, 0.5];
-    /// let mut output = [0u8; 8];
-    /// linear_to_srgb_u8_rgba_slice(&input, &mut output);
-    /// assert_eq!(output[3], 255);  // alpha 1.0 → 255
-    /// assert_eq!(output[7], 128);  // alpha 0.5 → 128
-    /// ```
     fn linear_to_srgb_u8_rgba_slice_tier_scalar(
         token: archmage::ScalarToken,
         input: &[f32],
@@ -3189,14 +3562,46 @@ pub(crate) mod simd {
             .in_range()
             .bits();
         let lut = crate::const_luts::linear_to_srgb_u8();
+        if false || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            let zero = magetypes::simd::generic::f32x4::zero_t(token);
+            let one = magetypes::simd::generic::f32x4::splat_t(token, 1.0);
+            let scale = magetypes::simd::generic::f32x4::splat_t(token, 4095.0);
+            let bias = magetypes::simd::generic::f32x4::splat_t(token, 0.5);
+            let mask = magetypes::simd::generic::i32x4::splat_t(token, 0xFFF);
+            for (inp, out) in input
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(output.as_chunks_mut::<4>().0.iter_mut())
+            {
+                let v = magetypes::simd::generic::f32x4::from_array_t(token, *inp);
+                let clamped = if false {
+                    v & v.simd_gt(zero)
+                } else {
+                    const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                        .non_nan_rhs()
+                        .bits();
+                    v.max_with::<NON_NAN_RHS>(zero)
+                }
+                    .min_fast(one);
+                let idx_f = clamped.mla(scale, bias);
+                let idx_i = (idx_f.to_i32_with::<TRUNC>() & mask).to_array();
+                out[0] = lut[idx_i[0] as u32 as usize];
+                out[1] = lut[idx_i[1] as u32 as usize];
+                out[2] = lut[idx_i[2] as u32 as usize];
+                out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+            }
+            return;
+        }
         let zero = f32x16::zero_t(token);
         let one = f32x16::splat_t(token, 1.0);
         let scale = f32x16::splat_t(token, 4095.0);
         let bias = f32x16::splat_t(token, 0.5);
+        let mask = magetypes::simd::generic::i32x16::splat_t(token, 0xFFF);
         let (in_chunks, in_rem) = input.as_chunks::<16>();
         let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
         for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
-            let v = f32x16::from_array_t(token, *inp);
+            let v = f32x16::load_t(token, inp);
             let clamped = if false {
                 v & v.simd_gt(zero)
             } else {
@@ -3207,28 +3612,18 @@ pub(crate) mod simd {
             }
                 .min_fast(one);
             let idx_f = clamped.mla(scale, bias);
-            let idx_i = idx_f.to_i32_with::<TRUNC>().to_array();
-            for px in 0..4 {
+            let idx_i = (idx_f.to_i32_with::<TRUNC>() & mask).to_array();
+            let alphas = token.quantize_alpha_rgba16(v);
+            for (px, &alpha) in alphas.iter().enumerate() {
                 let base = px * 4;
-                out[base] = lut[(idx_i[base] as usize) & 0xFFF];
-                out[base + 1] = lut[(idx_i[base + 1] as usize) & 0xFFF];
-                out[base + 2] = lut[(idx_i[base + 2] as usize) & 0xFFF];
-                out[base + 3] = (f64::from(inp[base + 3]).clamp(0.0, 1.0) * 255.0 + 0.5)
-                    as u8;
+                out[base] = lut[idx_i[base] as u32 as usize];
+                out[base + 1] = lut[idx_i[base + 1] as u32 as usize];
+                out[base + 2] = lut[idx_i[base + 2] as u32 as usize];
+                out[base + 3] = alpha;
             }
         }
-        for (inp, out) in in_rem
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .zip(out_rem.as_chunks_mut::<4>().0.iter_mut())
-        {
-            for i in 0..3 {
-                let clamped = inp[i].clamp(0.0, 1.0);
-                let idx = (clamped * 4095.0 + 0.5) as usize & 0xFFF;
-                out[i] = lut[idx];
-            }
-            out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+        if in_rem.len() >= 4 {
+            linear_to_srgb_u8_rgba_tail_cold(in_rem, out_rem);
         }
     }
     /// Convert linear RGBA f32 to sRGB RGBA u8, preserving alpha.
@@ -3347,6 +3742,77 @@ pub(crate) mod simd {
             out[3] = a;
         }
     }
+    #[inline(always)]
+    fn unpremultiply_u8_rgba_chunk_x16<
+        T: magetypes::simd::backends::F32x16Backend
+            + magetypes::simd::backends::F32x16Convert
+            + magetypes::simd::backends::I32x16Backend + QuantizeAlphaRgba16,
+    >(token: T, inp: &[f32; 16], out: &mut [u8; 16]) {
+        const APPROX: u32 = magetypes::numerics::RecipOptions::new().approx().bits();
+        const TRUNC: u32 = magetypes::numerics::IntConvert::new()
+            .trunc()
+            .in_range()
+            .bits();
+        let lut = crate::const_luts::linear_to_srgb_u8();
+        let zero = magetypes::simd::generic::f32x16::zero_t(token);
+        let one = magetypes::simd::generic::f32x16::splat_t(token, 1.0);
+        let scale = magetypes::simd::generic::f32x16::splat_t(token, 4095.0);
+        let bias = magetypes::simd::generic::f32x16::splat_t(token, 0.5);
+        let threshold = magetypes::simd::generic::f32x16::splat_t(
+            token,
+            crate::UNPREMUL_ALPHA_THRESHOLD,
+        );
+        let huge = magetypes::simd::generic::f32x16::splat_t(
+            token,
+            1.0 / f32::MIN_POSITIVE,
+        );
+        let mask = magetypes::simd::generic::i32x16::splat_t(token, 0xFFF);
+        let v = magetypes::simd::generic::f32x16::load_t(token, inp);
+        let alpha = v.broadcast_rgba_alpha();
+        let visible = alpha.simd_gt(threshold);
+        let seed = alpha.recip_with::<APPROX>();
+        let residual = alpha.mul_neg_add_relaxed(seed, one);
+        let inv = seed.mul_add_relaxed(residual, seed);
+        let straight = v * (inv & visible);
+        let scaled = (straight & straight.simd_gt(zero)).min_fast(one) * scale + bias;
+        let near_edge = (scaled - scaled.round())
+            .abs()
+            .simd_le(magetypes::simd::generic::f32x16::splat_t(token, 1.0 / 128.0))
+            .with_rgba_alpha(zero);
+        let fallback = near_edge | alpha.simd_ge(huge);
+        let scaled = if fallback.bitcast_to_i32().any_true() {
+            let straight_exact = v * ((one / alpha) & visible);
+            (straight_exact & straight_exact.simd_gt(zero)).min_fast(one) * scale + bias
+        } else {
+            scaled
+        };
+        let indices = (scaled.to_i32_with::<TRUNC>() & mask).to_array();
+        let alphas = token.quantize_alpha_rgba16(v);
+        for (px, &alpha) in alphas.iter().enumerate() {
+            let i = 4 * px;
+            out[i] = lut[indices[i] as u32 as usize];
+            out[i + 1] = lut[indices[i + 1] as u32 as usize];
+            out[i + 2] = lut[indices[i + 2] as u32 as usize];
+            out[i + 3] = alpha;
+        }
+    }
+    #[cold]
+    #[inline(never)]
+    fn unpremultiply_u8_rgba_tail_cold<
+        T: magetypes::simd::backends::F32x16Backend
+            + magetypes::simd::backends::F32x16Convert
+            + magetypes::simd::backends::I32x16Backend + QuantizeAlphaRgba16,
+    >(token: T, in_rem: &[f32], out_rem: &mut [u8]) {
+        let n = in_rem.len().min(out_rem.len()) & 12;
+        if n == 0 {
+            return;
+        }
+        let mut padded_in = [0.0f32; 16];
+        let mut padded_out = [0u8; 16];
+        padded_in[..n].copy_from_slice(&in_rem[..n]);
+        unpremultiply_u8_rgba_chunk_x16(token, &padded_in, &mut padded_out);
+        out_rem[..n].copy_from_slice(&padded_out[..n]);
+    }
     #[doc(hidden)]
     #[target_feature(
         enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe,pclmulqdq,aes,avx512f,avx512bw,avx512cd,avx512dq,avx512vl"
@@ -3359,58 +3825,69 @@ pub(crate) mod simd {
     ) {
         #[allow(non_camel_case_types, dead_code)]
         type f32x16 = ::magetypes::simd::generic::f32x16<archmage::X64V4Token>;
-        const APPROX: u32 = magetypes::numerics::RecipOptions::new().approx().bits();
-        const TRUNC: u32 = magetypes::numerics::IntConvert::new()
-            .trunc()
-            .in_range()
-            .bits();
-        let lut = crate::const_luts::linear_to_srgb_u8();
-        let zero = f32x16::zero_t(token);
-        let one = f32x16::splat_t(token, 1.0);
-        let scale = f32x16::splat_t(token, 4095.0);
-        let bias = f32x16::splat_t(token, 0.5);
-        let threshold = f32x16::splat_t(token, crate::UNPREMUL_ALPHA_THRESHOLD);
-        let huge = f32x16::splat_t(token, 1.0 / f32::MIN_POSITIVE);
-        let convert = |inp: &[f32; 16], out: &mut [u8]| {
-            let v = f32x16::load_t(token, inp);
-            let alpha = v.broadcast_rgba_alpha();
-            let visible = alpha.simd_gt(threshold);
-            let lookup_input = |inv: f32x16| {
+        if false || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            const APPROX: u32 = magetypes::numerics::RecipOptions::new().approx().bits();
+            const TRUNC: u32 = magetypes::numerics::IntConvert::new()
+                .trunc()
+                .in_range()
+                .bits();
+            let lut = crate::const_luts::linear_to_srgb_u8();
+            let zero = magetypes::simd::generic::f32x4::zero_t(token);
+            let one = magetypes::simd::generic::f32x4::splat_t(token, 1.0);
+            let scale = magetypes::simd::generic::f32x4::splat_t(token, 4095.0);
+            let bias = magetypes::simd::generic::f32x4::splat_t(token, 0.5);
+            let threshold = magetypes::simd::generic::f32x4::splat_t(
+                token,
+                crate::UNPREMUL_ALPHA_THRESHOLD,
+            );
+            let huge = magetypes::simd::generic::f32x4::splat_t(
+                token,
+                1.0 / f32::MIN_POSITIVE,
+            );
+            let edge_tol = magetypes::simd::generic::f32x4::splat_t(token, 1.0 / 128.0);
+            let mask = magetypes::simd::generic::i32x4::splat_t(token, 0xFFF);
+            for (inp, out) in input
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(output.as_chunks_mut::<4>().0.iter_mut())
+            {
+                let v = magetypes::simd::generic::f32x4::load_t(token, inp);
+                let alpha = v.broadcast_rgba_alpha();
+                let visible = alpha.simd_gt(threshold);
+                let seed = alpha.recip_with::<APPROX>();
+                let residual = alpha.mul_neg_add_relaxed(seed, one);
+                let inv = seed.mul_add_relaxed(residual, seed);
                 let straight = v * (inv & visible);
-                (straight & straight.simd_gt(zero)).min_fast(one) * scale + bias
-            };
-            let seed = alpha.recip_with::<APPROX>();
-            let residual = alpha.mul_neg_add_relaxed(seed, one);
-            let inv = seed.mul_add_relaxed(residual, seed);
-            let scaled = lookup_input(inv);
-            let near_edge = (scaled - scaled.round())
-                .abs()
-                .simd_le(f32x16::splat_t(token, 1.0 / 128.0))
-                .with_rgba_alpha(zero);
-            let fallback = near_edge | alpha.simd_ge(huge);
-            let scaled = if fallback.bitcast_to_i32().any_true() {
-                lookup_input(one / alpha)
-            } else {
-                scaled
-            };
-            let indices = scaled.to_i32_with::<TRUNC>().to_array();
-            for (pixel, rgb) in out.as_chunks_mut::<4>().0.iter_mut().enumerate() {
-                let i = 4 * pixel;
-                let a = inp[i + 3];
-                rgb[0] = lut[indices[i] as usize];
-                rgb[1] = lut[indices[i + 1] as usize];
-                rgb[2] = lut[indices[i + 2] as usize];
-                rgb[3] = (f64::from(a).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+                let scaled = (straight & straight.simd_gt(zero)).min_fast(one) * scale
+                    + bias;
+                let near_edge = (scaled - scaled.round())
+                    .abs()
+                    .simd_le(edge_tol)
+                    .with_rgba_alpha(zero);
+                let fallback = near_edge | alpha.simd_ge(huge);
+                let scaled = if fallback.bitcast_to_i32().any_true() {
+                    let straight_exact = v * ((one / alpha) & visible);
+                    (straight_exact & straight_exact.simd_gt(zero)).min_fast(one) * scale
+                        + bias
+                } else {
+                    scaled
+                };
+                let indices = (scaled.to_i32_with::<TRUNC>() & mask).to_array();
+                out[0] = lut[indices[0] as u32 as usize];
+                out[1] = lut[indices[1] as u32 as usize];
+                out[2] = lut[indices[2] as u32 as usize];
+                out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
             }
-        };
+            return;
+        }
         let (in_chunks, in_rem) = input.as_chunks::<16>();
         let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
-        for (inp, out) in in_chunks.iter().zip(out_chunks) {
-            convert(inp, out);
+        for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+            unpremultiply_u8_rgba_chunk_x16(token, inp, out);
         }
-        let remainder = in_rem.as_chunks::<4>().0.as_flattened();
-        if let Some(tail) = tail_block::<16>(remainder) {
-            convert(&tail, &mut out_rem[..remainder.len()]);
+        if in_rem.len() >= 4 {
+            unpremultiply_u8_rgba_tail_cold(token, in_rem, out_rem);
         }
     }
     #[inline(always)]
@@ -3440,58 +3917,69 @@ pub(crate) mod simd {
     ) {
         #[allow(non_camel_case_types, dead_code)]
         type f32x16 = ::magetypes::simd::generic::f32x16<archmage::X64V3Token>;
-        const APPROX: u32 = magetypes::numerics::RecipOptions::new().approx().bits();
-        const TRUNC: u32 = magetypes::numerics::IntConvert::new()
-            .trunc()
-            .in_range()
-            .bits();
-        let lut = crate::const_luts::linear_to_srgb_u8();
-        let zero = f32x16::zero_t(token);
-        let one = f32x16::splat_t(token, 1.0);
-        let scale = f32x16::splat_t(token, 4095.0);
-        let bias = f32x16::splat_t(token, 0.5);
-        let threshold = f32x16::splat_t(token, crate::UNPREMUL_ALPHA_THRESHOLD);
-        let huge = f32x16::splat_t(token, 1.0 / f32::MIN_POSITIVE);
-        let convert = |inp: &[f32; 16], out: &mut [u8]| {
-            let v = f32x16::load_t(token, inp);
-            let alpha = v.broadcast_rgba_alpha();
-            let visible = alpha.simd_gt(threshold);
-            let lookup_input = |inv: f32x16| {
+        if false || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            const APPROX: u32 = magetypes::numerics::RecipOptions::new().approx().bits();
+            const TRUNC: u32 = magetypes::numerics::IntConvert::new()
+                .trunc()
+                .in_range()
+                .bits();
+            let lut = crate::const_luts::linear_to_srgb_u8();
+            let zero = magetypes::simd::generic::f32x4::zero_t(token);
+            let one = magetypes::simd::generic::f32x4::splat_t(token, 1.0);
+            let scale = magetypes::simd::generic::f32x4::splat_t(token, 4095.0);
+            let bias = magetypes::simd::generic::f32x4::splat_t(token, 0.5);
+            let threshold = magetypes::simd::generic::f32x4::splat_t(
+                token,
+                crate::UNPREMUL_ALPHA_THRESHOLD,
+            );
+            let huge = magetypes::simd::generic::f32x4::splat_t(
+                token,
+                1.0 / f32::MIN_POSITIVE,
+            );
+            let edge_tol = magetypes::simd::generic::f32x4::splat_t(token, 1.0 / 128.0);
+            let mask = magetypes::simd::generic::i32x4::splat_t(token, 0xFFF);
+            for (inp, out) in input
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(output.as_chunks_mut::<4>().0.iter_mut())
+            {
+                let v = magetypes::simd::generic::f32x4::load_t(token, inp);
+                let alpha = v.broadcast_rgba_alpha();
+                let visible = alpha.simd_gt(threshold);
+                let seed = alpha.recip_with::<APPROX>();
+                let residual = alpha.mul_neg_add_relaxed(seed, one);
+                let inv = seed.mul_add_relaxed(residual, seed);
                 let straight = v * (inv & visible);
-                (straight & straight.simd_gt(zero)).min_fast(one) * scale + bias
-            };
-            let seed = alpha.recip_with::<APPROX>();
-            let residual = alpha.mul_neg_add_relaxed(seed, one);
-            let inv = seed.mul_add_relaxed(residual, seed);
-            let scaled = lookup_input(inv);
-            let near_edge = (scaled - scaled.round())
-                .abs()
-                .simd_le(f32x16::splat_t(token, 1.0 / 128.0))
-                .with_rgba_alpha(zero);
-            let fallback = near_edge | alpha.simd_ge(huge);
-            let scaled = if fallback.bitcast_to_i32().any_true() {
-                lookup_input(one / alpha)
-            } else {
-                scaled
-            };
-            let indices = scaled.to_i32_with::<TRUNC>().to_array();
-            for (pixel, rgb) in out.as_chunks_mut::<4>().0.iter_mut().enumerate() {
-                let i = 4 * pixel;
-                let a = inp[i + 3];
-                rgb[0] = lut[indices[i] as usize];
-                rgb[1] = lut[indices[i + 1] as usize];
-                rgb[2] = lut[indices[i + 2] as usize];
-                rgb[3] = (f64::from(a).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+                let scaled = (straight & straight.simd_gt(zero)).min_fast(one) * scale
+                    + bias;
+                let near_edge = (scaled - scaled.round())
+                    .abs()
+                    .simd_le(edge_tol)
+                    .with_rgba_alpha(zero);
+                let fallback = near_edge | alpha.simd_ge(huge);
+                let scaled = if fallback.bitcast_to_i32().any_true() {
+                    let straight_exact = v * ((one / alpha) & visible);
+                    (straight_exact & straight_exact.simd_gt(zero)).min_fast(one) * scale
+                        + bias
+                } else {
+                    scaled
+                };
+                let indices = (scaled.to_i32_with::<TRUNC>() & mask).to_array();
+                out[0] = lut[indices[0] as u32 as usize];
+                out[1] = lut[indices[1] as u32 as usize];
+                out[2] = lut[indices[2] as u32 as usize];
+                out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
             }
-        };
+            return;
+        }
         let (in_chunks, in_rem) = input.as_chunks::<16>();
         let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
-        for (inp, out) in in_chunks.iter().zip(out_chunks) {
-            convert(inp, out);
+        for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+            unpremultiply_u8_rgba_chunk_x16(token, inp, out);
         }
-        let remainder = in_rem.as_chunks::<4>().0.as_flattened();
-        if let Some(tail) = tail_block::<16>(remainder) {
-            convert(&tail, &mut out_rem[..remainder.len()]);
+        if in_rem.len() >= 4 {
+            unpremultiply_u8_rgba_tail_cold(token, in_rem, out_rem);
         }
     }
     #[inline(always)]
@@ -3516,58 +4004,69 @@ pub(crate) mod simd {
     ) {
         #[allow(non_camel_case_types, dead_code)]
         type f32x16 = ::magetypes::simd::generic::f32x16<archmage::ScalarToken>;
-        const APPROX: u32 = magetypes::numerics::RecipOptions::new().approx().bits();
-        const TRUNC: u32 = magetypes::numerics::IntConvert::new()
-            .trunc()
-            .in_range()
-            .bits();
-        let lut = crate::const_luts::linear_to_srgb_u8();
-        let zero = f32x16::zero_t(token);
-        let one = f32x16::splat_t(token, 1.0);
-        let scale = f32x16::splat_t(token, 4095.0);
-        let bias = f32x16::splat_t(token, 0.5);
-        let threshold = f32x16::splat_t(token, crate::UNPREMUL_ALPHA_THRESHOLD);
-        let huge = f32x16::splat_t(token, 1.0 / f32::MIN_POSITIVE);
-        let convert = |inp: &[f32; 16], out: &mut [u8]| {
-            let v = f32x16::load_t(token, inp);
-            let alpha = v.broadcast_rgba_alpha();
-            let visible = alpha.simd_gt(threshold);
-            let lookup_input = |inv: f32x16| {
+        if false || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            const APPROX: u32 = magetypes::numerics::RecipOptions::new().approx().bits();
+            const TRUNC: u32 = magetypes::numerics::IntConvert::new()
+                .trunc()
+                .in_range()
+                .bits();
+            let lut = crate::const_luts::linear_to_srgb_u8();
+            let zero = magetypes::simd::generic::f32x4::zero_t(token);
+            let one = magetypes::simd::generic::f32x4::splat_t(token, 1.0);
+            let scale = magetypes::simd::generic::f32x4::splat_t(token, 4095.0);
+            let bias = magetypes::simd::generic::f32x4::splat_t(token, 0.5);
+            let threshold = magetypes::simd::generic::f32x4::splat_t(
+                token,
+                crate::UNPREMUL_ALPHA_THRESHOLD,
+            );
+            let huge = magetypes::simd::generic::f32x4::splat_t(
+                token,
+                1.0 / f32::MIN_POSITIVE,
+            );
+            let edge_tol = magetypes::simd::generic::f32x4::splat_t(token, 1.0 / 128.0);
+            let mask = magetypes::simd::generic::i32x4::splat_t(token, 0xFFF);
+            for (inp, out) in input
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(output.as_chunks_mut::<4>().0.iter_mut())
+            {
+                let v = magetypes::simd::generic::f32x4::load_t(token, inp);
+                let alpha = v.broadcast_rgba_alpha();
+                let visible = alpha.simd_gt(threshold);
+                let seed = alpha.recip_with::<APPROX>();
+                let residual = alpha.mul_neg_add_relaxed(seed, one);
+                let inv = seed.mul_add_relaxed(residual, seed);
                 let straight = v * (inv & visible);
-                (straight & straight.simd_gt(zero)).min_fast(one) * scale + bias
-            };
-            let seed = alpha.recip_with::<APPROX>();
-            let residual = alpha.mul_neg_add_relaxed(seed, one);
-            let inv = seed.mul_add_relaxed(residual, seed);
-            let scaled = lookup_input(inv);
-            let near_edge = (scaled - scaled.round())
-                .abs()
-                .simd_le(f32x16::splat_t(token, 1.0 / 128.0))
-                .with_rgba_alpha(zero);
-            let fallback = near_edge | alpha.simd_ge(huge);
-            let scaled = if fallback.bitcast_to_i32().any_true() {
-                lookup_input(one / alpha)
-            } else {
-                scaled
-            };
-            let indices = scaled.to_i32_with::<TRUNC>().to_array();
-            for (pixel, rgb) in out.as_chunks_mut::<4>().0.iter_mut().enumerate() {
-                let i = 4 * pixel;
-                let a = inp[i + 3];
-                rgb[0] = lut[indices[i] as usize];
-                rgb[1] = lut[indices[i + 1] as usize];
-                rgb[2] = lut[indices[i + 2] as usize];
-                rgb[3] = (f64::from(a).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+                let scaled = (straight & straight.simd_gt(zero)).min_fast(one) * scale
+                    + bias;
+                let near_edge = (scaled - scaled.round())
+                    .abs()
+                    .simd_le(edge_tol)
+                    .with_rgba_alpha(zero);
+                let fallback = near_edge | alpha.simd_ge(huge);
+                let scaled = if fallback.bitcast_to_i32().any_true() {
+                    let straight_exact = v * ((one / alpha) & visible);
+                    (straight_exact & straight_exact.simd_gt(zero)).min_fast(one) * scale
+                        + bias
+                } else {
+                    scaled
+                };
+                let indices = (scaled.to_i32_with::<TRUNC>() & mask).to_array();
+                out[0] = lut[indices[0] as u32 as usize];
+                out[1] = lut[indices[1] as u32 as usize];
+                out[2] = lut[indices[2] as u32 as usize];
+                out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
             }
-        };
+            return;
+        }
         let (in_chunks, in_rem) = input.as_chunks::<16>();
         let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
-        for (inp, out) in in_chunks.iter().zip(out_chunks) {
-            convert(inp, out);
+        for (inp, out) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+            unpremultiply_u8_rgba_chunk_x16(token, inp, out);
         }
-        let remainder = in_rem.as_chunks::<4>().0.as_flattened();
-        if let Some(tail) = tail_block::<16>(remainder) {
-            convert(&tail, &mut out_rem[..remainder.len()]);
+        if in_rem.len() >= 4 {
+            unpremultiply_u8_rgba_tail_cold(token, in_rem, out_rem);
         }
     }
     /// Convert linear premultiplied RGBA f32 to sRGB straight-alpha RGBA u8.
@@ -3711,6 +4210,30 @@ pub(crate) mod simd {
             dst[3] = (f64::from(src[3]).clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
         }
     }
+    #[cold]
+    #[inline(never)]
+    fn linear_to_srgb_u16_rgba_fast_tail_cold(
+        lut: &[u16; crate::u16_lut::ENCODE_LUT_N],
+        in_rem: &[f32],
+        out_rem: &mut [u16],
+    ) {
+        let max_idx = crate::u16_lut::ENCODE_LUT_N - 1;
+        let n = in_rem.len().min(out_rem.len()) & 12;
+        for (inp, out) in in_rem[..n]
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(out_rem[..n].as_chunks_mut::<4>().0.iter_mut())
+        {
+            for i in 0..3 {
+                let clamped = inp[i].clamp(0.0, 1.0);
+                let idx = (crate::mlaf::hw_sqrt_f32(clamped)
+                    * crate::u16_lut::ENCODE_SQRT_SCALE + 0.5) as u32 as usize;
+                out[i] = lut[idx.min(max_idx)];
+            }
+            out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+        }
+    }
     #[doc(hidden)]
     #[target_feature(
         enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe,pclmulqdq,aes,avx512f,avx512bw,avx512cd,avx512dq,avx512vl"
@@ -3729,6 +4252,39 @@ pub(crate) mod simd {
             .bits();
         let lut = crate::u16_lut::encode_lut();
         let max_idx = crate::u16_lut::ENCODE_LUT_N - 1;
+        if false || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            let zero = magetypes::simd::generic::f32x4::zero_t(token);
+            let one = magetypes::simd::generic::f32x4::splat_t(token, 1.0);
+            let scale = magetypes::simd::generic::f32x4::splat_t(
+                token,
+                crate::u16_lut::ENCODE_SQRT_SCALE,
+            );
+            let bias = magetypes::simd::generic::f32x4::splat_t(token, 0.5);
+            for (inp, out) in input
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(output.as_chunks_mut::<4>().0.iter_mut())
+            {
+                let v = magetypes::simd::generic::f32x4::from_array_t(token, *inp);
+                let clamped = if false {
+                    v & v.simd_gt(zero)
+                } else {
+                    const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                        .non_nan_rhs()
+                        .bits();
+                    v.max_with::<NON_NAN_RHS>(zero)
+                }
+                    .min_fast(one);
+                let idx_f = clamped.fast_sqrt().mla(scale, bias);
+                let idx_i = idx_f.to_i32_with::<TRUNC>().to_array();
+                out[0] = lut[(idx_i[0] as u32 as usize).min(max_idx)];
+                out[1] = lut[(idx_i[1] as u32 as usize).min(max_idx)];
+                out[2] = lut[(idx_i[2] as u32 as usize).min(max_idx)];
+                out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+            }
+            return;
+        }
         let zero = f32x16::zero_t(token);
         let one = f32x16::splat_t(token, 1.0);
         let scale = f32x16::splat_t(token, crate::u16_lut::ENCODE_SQRT_SCALE);
@@ -3750,30 +4306,17 @@ pub(crate) mod simd {
             let idx_i = idx_f.to_i32_with::<TRUNC>().to_array();
             for px in 0..4 {
                 let base = px * 4;
-                out[base] = lut[(idx_i[base] as usize).min(max_idx)];
-                out[base + 1] = lut[(idx_i[base + 1] as usize).min(max_idx)];
-                out[base + 2] = lut[(idx_i[base + 2] as usize).min(max_idx)];
+                out[base] = lut[(idx_i[base] as u32 as usize).min(max_idx)];
+                out[base + 1] = lut[(idx_i[base + 1] as u32 as usize).min(max_idx)];
+                out[base + 2] = lut[(idx_i[base + 2] as u32 as usize).min(max_idx)];
                 out[base + 3] = (f64::from(inp[base + 3]).clamp(0.0, 1.0) * 65535.0
                     + 0.5) as u16;
             }
         }
-        for (inp, out) in in_rem
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .zip(out_rem.as_chunks_mut::<4>().0.iter_mut())
-        {
-            out[0] = crate::scalar::linear_to_srgb_u16_fast(inp[0]);
-            out[1] = crate::scalar::linear_to_srgb_u16_fast(inp[1]);
-            out[2] = crate::scalar::linear_to_srgb_u16_fast(inp[2]);
-            out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+        if in_rem.len() >= 4 {
+            linear_to_srgb_u16_rgba_fast_tail_cold(lut, in_rem, out_rem);
         }
     }
-    /// Convert linear RGBA f32 to sRGB u16, preserving alpha. Sqrt-indexed LUT
-    /// encode (~10× faster, max ±1 roundtrip error).
-    ///
-    /// # Panics
-    /// Panics if `input.len() != output.len()`.
     #[inline(always)]
     fn linear_to_srgb_u16_rgba_slice_fast_tier_v4(
         token: archmage::X64V4Token,
@@ -3803,6 +4346,39 @@ pub(crate) mod simd {
             .bits();
         let lut = crate::u16_lut::encode_lut();
         let max_idx = crate::u16_lut::ENCODE_LUT_N - 1;
+        if false || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            let zero = magetypes::simd::generic::f32x4::zero_t(token);
+            let one = magetypes::simd::generic::f32x4::splat_t(token, 1.0);
+            let scale = magetypes::simd::generic::f32x4::splat_t(
+                token,
+                crate::u16_lut::ENCODE_SQRT_SCALE,
+            );
+            let bias = magetypes::simd::generic::f32x4::splat_t(token, 0.5);
+            for (inp, out) in input
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(output.as_chunks_mut::<4>().0.iter_mut())
+            {
+                let v = magetypes::simd::generic::f32x4::from_array_t(token, *inp);
+                let clamped = if false {
+                    v & v.simd_gt(zero)
+                } else {
+                    const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                        .non_nan_rhs()
+                        .bits();
+                    v.max_with::<NON_NAN_RHS>(zero)
+                }
+                    .min_fast(one);
+                let idx_f = clamped.fast_sqrt().mla(scale, bias);
+                let idx_i = idx_f.to_i32_with::<TRUNC>().to_array();
+                out[0] = lut[(idx_i[0] as u32 as usize).min(max_idx)];
+                out[1] = lut[(idx_i[1] as u32 as usize).min(max_idx)];
+                out[2] = lut[(idx_i[2] as u32 as usize).min(max_idx)];
+                out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+            }
+            return;
+        }
         let zero = f32x16::zero_t(token);
         let one = f32x16::splat_t(token, 1.0);
         let scale = f32x16::splat_t(token, crate::u16_lut::ENCODE_SQRT_SCALE);
@@ -3824,30 +4400,17 @@ pub(crate) mod simd {
             let idx_i = idx_f.to_i32_with::<TRUNC>().to_array();
             for px in 0..4 {
                 let base = px * 4;
-                out[base] = lut[(idx_i[base] as usize).min(max_idx)];
-                out[base + 1] = lut[(idx_i[base + 1] as usize).min(max_idx)];
-                out[base + 2] = lut[(idx_i[base + 2] as usize).min(max_idx)];
+                out[base] = lut[(idx_i[base] as u32 as usize).min(max_idx)];
+                out[base + 1] = lut[(idx_i[base + 1] as u32 as usize).min(max_idx)];
+                out[base + 2] = lut[(idx_i[base + 2] as u32 as usize).min(max_idx)];
                 out[base + 3] = (f64::from(inp[base + 3]).clamp(0.0, 1.0) * 65535.0
                     + 0.5) as u16;
             }
         }
-        for (inp, out) in in_rem
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .zip(out_rem.as_chunks_mut::<4>().0.iter_mut())
-        {
-            out[0] = crate::scalar::linear_to_srgb_u16_fast(inp[0]);
-            out[1] = crate::scalar::linear_to_srgb_u16_fast(inp[1]);
-            out[2] = crate::scalar::linear_to_srgb_u16_fast(inp[2]);
-            out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+        if in_rem.len() >= 4 {
+            linear_to_srgb_u16_rgba_fast_tail_cold(lut, in_rem, out_rem);
         }
     }
-    /// Convert linear RGBA f32 to sRGB u16, preserving alpha. Sqrt-indexed LUT
-    /// encode (~10× faster, max ±1 roundtrip error).
-    ///
-    /// # Panics
-    /// Panics if `input.len() != output.len()`.
     #[inline(always)]
     fn linear_to_srgb_u16_rgba_slice_fast_tier_v3(
         token: archmage::X64V3Token,
@@ -3859,11 +4422,6 @@ pub(crate) mod simd {
             __arcane_linear_to_srgb_u16_rgba_slice_fast_tier_v3(token, input, output)
         }
     }
-    /// Convert linear RGBA f32 to sRGB u16, preserving alpha. Sqrt-indexed LUT
-    /// encode (~10× faster, max ±1 roundtrip error).
-    ///
-    /// # Panics
-    /// Panics if `input.len() != output.len()`.
     fn linear_to_srgb_u16_rgba_slice_fast_tier_scalar(
         token: archmage::ScalarToken,
         input: &[f32],
@@ -3877,6 +4435,39 @@ pub(crate) mod simd {
             .bits();
         let lut = crate::u16_lut::encode_lut();
         let max_idx = crate::u16_lut::ENCODE_LUT_N - 1;
+        if false || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            let zero = magetypes::simd::generic::f32x4::zero_t(token);
+            let one = magetypes::simd::generic::f32x4::splat_t(token, 1.0);
+            let scale = magetypes::simd::generic::f32x4::splat_t(
+                token,
+                crate::u16_lut::ENCODE_SQRT_SCALE,
+            );
+            let bias = magetypes::simd::generic::f32x4::splat_t(token, 0.5);
+            for (inp, out) in input
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(output.as_chunks_mut::<4>().0.iter_mut())
+            {
+                let v = magetypes::simd::generic::f32x4::from_array_t(token, *inp);
+                let clamped = if false {
+                    v & v.simd_gt(zero)
+                } else {
+                    const NON_NAN_RHS: u32 = magetypes::numerics::ExtremaOptions::new()
+                        .non_nan_rhs()
+                        .bits();
+                    v.max_with::<NON_NAN_RHS>(zero)
+                }
+                    .min_fast(one);
+                let idx_f = clamped.fast_sqrt().mla(scale, bias);
+                let idx_i = idx_f.to_i32_with::<TRUNC>().to_array();
+                out[0] = lut[(idx_i[0] as u32 as usize).min(max_idx)];
+                out[1] = lut[(idx_i[1] as u32 as usize).min(max_idx)];
+                out[2] = lut[(idx_i[2] as u32 as usize).min(max_idx)];
+                out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+            }
+            return;
+        }
         let zero = f32x16::zero_t(token);
         let one = f32x16::splat_t(token, 1.0);
         let scale = f32x16::splat_t(token, crate::u16_lut::ENCODE_SQRT_SCALE);
@@ -3898,23 +4489,15 @@ pub(crate) mod simd {
             let idx_i = idx_f.to_i32_with::<TRUNC>().to_array();
             for px in 0..4 {
                 let base = px * 4;
-                out[base] = lut[(idx_i[base] as usize).min(max_idx)];
-                out[base + 1] = lut[(idx_i[base + 1] as usize).min(max_idx)];
-                out[base + 2] = lut[(idx_i[base + 2] as usize).min(max_idx)];
+                out[base] = lut[(idx_i[base] as u32 as usize).min(max_idx)];
+                out[base + 1] = lut[(idx_i[base + 1] as u32 as usize).min(max_idx)];
+                out[base + 2] = lut[(idx_i[base + 2] as u32 as usize).min(max_idx)];
                 out[base + 3] = (f64::from(inp[base + 3]).clamp(0.0, 1.0) * 65535.0
                     + 0.5) as u16;
             }
         }
-        for (inp, out) in in_rem
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .zip(out_rem.as_chunks_mut::<4>().0.iter_mut())
-        {
-            out[0] = crate::scalar::linear_to_srgb_u16_fast(inp[0]);
-            out[1] = crate::scalar::linear_to_srgb_u16_fast(inp[1]);
-            out[2] = crate::scalar::linear_to_srgb_u16_fast(inp[2]);
-            out[3] = (f64::from(inp[3]).clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+        if in_rem.len() >= 4 {
+            linear_to_srgb_u16_rgba_fast_tail_cold(lut, in_rem, out_rem);
         }
     }
     /// Convert linear RGBA f32 to sRGB u16, preserving alpha. Sqrt-indexed LUT

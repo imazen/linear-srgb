@@ -117,11 +117,28 @@ Crate-private `*_cfg` kernels (`src/kernels/float.rs`, `src/tf/{math,bt709,hlg,p
 | `DRAM_2M/bt709_to_linear_slice` | `+100.9%..+104.9%` | `+5.5%..+10.8%` (domain/C1 rails) | `9.08 GiB/s` | **`8.40 GiB/s`** | `8.39 GiB/s` |
 | `DRAM_2M/linear_to_bt709_slice` | `+35.1%..+35.8%` | `+11.4%..+15.5%` (domain rails) | `10.7 GiB/s` | **`9.36 GiB/s`** | **`9.78 GiB/s`** |
 | `DRAM_2M/gamma_to_linear_slice_2.2` | `+13.5%..+14.2%` | `+7.8%..+14.1%` railed / **`-31.9%` unclamped** | `7.83 GiB/s` | `7.06 GiB/s` | **`11.5 GiB/s` (1.47×)** |
-| `DRAM_2M/srgb_u8_to_linear_slice` | `-0.5%..+0.3%` | **`-0.4%..+0.0%` (~tie)** | `5.32 Gelem/s` | **`5.34 Gelem/s`** | — |
-| `DRAM_2M/linear_to_srgb_u8_slice` | `-0.9%..-0.3%` | **`-0.4%..+0.1%` (~tie)** | `3.60 Gelem/s` | **`3.61 Gelem/s`** | — |
+| `DRAM_2M/srgb_u8_to_linear_slice` | `-0.5%..+0.3%` | **`-0.1%..+0.3%` (~tie)** | `5.33 Gelem/s` | **`5.33 Gelem/s`** | — |
+| `DRAM_2M/linear_to_srgb_u8_slice` | `-0.9%..-0.3%` | **`-8.9%..-8.2%` (`1.10×`, L1 `-11.0%`)** | `3.58 Gelem/s` | **`3.92 Gelem/s`** | — |
+| `DRAM_2M/linear_to_srgb_u8_rgba_slice` | — | **`-18.7%..-18.4%` (`1.23×`, L1 `-20.7%`)** | `3.58 Gelem/s` | **`4.40 Gelem/s`** | — |
+| `DRAM_2M/unpremul_linear_to_srgb_u8_rgba_slice` | — | **`-10.8%..-9.8%` (`1.13×`, L1 `-14.1%`)** | `2.11 Gelem/s` | **`2.38 Gelem/s`** | — |
 | `DRAM_2M/srgb_u16_to_linear_slice` | `-0.4%..+0.5%` | **`-1.5%..-1.0%`** | `6.09 Gelem/s` | **`6.14 Gelem/s`** | — |
 | `DRAM_2M/linear_to_srgb_u16_slice` | `+9.2%..+10.8%` | **`-1.1%..-0.7%`** | `4.39 Gelem/s` | **`4.44 Gelem/s`** | — |
 | `DRAM_2M/linear_to_srgb_u16_slice_fast` | `-1.6%..+0.9%` | **`-1.5%..+0.5%` (~tie)** | `1.98 Gelem/s` | **`1.98 Gelem/s`** | — |
+
+---
+
+## 6b. Invariant-Proof & `KnownBits` Instruction Ablation (`u8` / `u8_rgba` / `u16_fast` / Cold Tails)
+
+Eliminating scalar load-address `& 0xFFF` masks, per-lane bounds checks, closure outlines, and load-shredded alpha quantization under `#![forbid(unsafe_code)]`:
+
+1. **SIMD `KnownBits` LUT mask (`vpand` / `i32x16::splat_t(token, 0xFFF)` before `.to_array()`):**
+   - Propagates `< 4096` through `vextracti128` + `vmovd`/`vpextrd` + `zext`, deleting `16` scalar `andl $4095` ops from the LUT load-address chain (`0` bounds checks) and speeding up `linear_to_srgb_u8_slice` by **`-11.2%..-10.8%` at L1 (`3.49 -> 3.92 Gelem/s`)** and **`-8.9%..-8.2%` at `8 MiB` DRAM (`3.58 -> 3.92 Gelem/s`)**.
+2. **In-register AVX2/AVX-512 `f64x4` alpha quantizer (`QuantizeAlphaRgba16`):**
+   - Extracts the 4 alpha lanes directly from the already-loaded `f32x16` SIMD register (`_mm512_permutexvar_ps` on V4, `_mm256_shuffle_ps + _mm_shuffle_ps + _mm_permute_ps` on V3 — zero load shredding!) and quantizes all 4 alphas in parallel via `_mm256_cvtps_pd -> vmaxpd -> vminpd -> vmulpd -> vaddpd -> vcvttpd2dq -> vpackusdw -> vpackuswb` (`0` bit differences vs scalar `f64`).
+   - Shrinks `ds_linear_to_srgb_u8_rgba_slice` from **`364 -> 109` (`-70%`) on V3**, **`654 -> 239` (`-63%`) on V4**, **`316 -> 68` (`-78%`) on NEON**, and **`728 -> 131` (`-82%`) on WASM128**, speeding up `linear_to_srgb_u8_rgba_slice` by **`-21.0%..-20.4%` at L1 (`3.55 -> 4.46 Gelem/s`, `1.26×`)** and **`-18.7%..-18.4%` at `8 MiB` DRAM (`3.58 -> 4.40 Gelem/s`, `1.23×`)**.
+3. **Zero-panic `unpremultiply_linear_to_srgb_u8_rgba_slice` & power-of-two tail masks (`rem & (N - 1)`):**
+   - Inlining `unpremultiply_u8_rgba_chunk_x16` over fixed `&[f32; 16]` / `&mut [u8; 16]` chunks + native `f32x4` on `wasm128`/`scalar` eliminates all `4` `panic_bounds_check` sites in `v3/_full.s` (`4 -> 0`), shrinks WASM128 from **`812 -> 184` (`-77%`)**, and speeds up `unpremultiply_linear_to_srgb_u8_rgba_slice` by **`-14.2%..-13.9%` at L1 (`2.12 -> 2.46 Gelem/s`)** and **`-10.8%..-9.8%` at `8 MiB` DRAM (`2.11 -> 2.38 Gelem/s`)**.
+   - Power-of-two remainder masks (`remainder.len() & (N - 1)`, `& 12` for RGBA, plus `OnceLock`-free `u16_fast` cold tails) remove all `slice_index_fail` and `len_mismatch_fail` landing pads from cold tails (`ds_linear_to_srgb_u16_slice_fast`: NEON `192 -> 107`, WASM128 `493 -> 179`).
 
 ---
 

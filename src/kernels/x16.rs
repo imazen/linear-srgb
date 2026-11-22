@@ -119,25 +119,27 @@ pub(crate) fn linear_to_srgb_u8_v4(token: X64V4Token, linear: [f32; 16]) -> [u8;
     let one = mt_f32x16::splat_t(token, 1.0);
     let clamped = crate::tf::polynomial::floor_zero!(v, zero).min_fast(one);
     let scaled = clamped * mt_f32x16::splat_t(token, 4095.0) + mt_f32x16::splat_t(token, 0.5);
-    let idx = scaled.to_i32_with::<TRUNC>().to_array();
+    let idx = (scaled.to_i32_with::<TRUNC>()
+        & magetypes::simd::generic::i32x16::splat_t(token, 0xFFF))
+    .to_array();
     let lut = crate::const_luts::linear_to_srgb_u8();
     [
-        lut[idx[0] as usize & 0xFFF],
-        lut[idx[1] as usize & 0xFFF],
-        lut[idx[2] as usize & 0xFFF],
-        lut[idx[3] as usize & 0xFFF],
-        lut[idx[4] as usize & 0xFFF],
-        lut[idx[5] as usize & 0xFFF],
-        lut[idx[6] as usize & 0xFFF],
-        lut[idx[7] as usize & 0xFFF],
-        lut[idx[8] as usize & 0xFFF],
-        lut[idx[9] as usize & 0xFFF],
-        lut[idx[10] as usize & 0xFFF],
-        lut[idx[11] as usize & 0xFFF],
-        lut[idx[12] as usize & 0xFFF],
-        lut[idx[13] as usize & 0xFFF],
-        lut[idx[14] as usize & 0xFFF],
-        lut[idx[15] as usize & 0xFFF],
+        lut[idx[0] as u32 as usize],
+        lut[idx[1] as u32 as usize],
+        lut[idx[2] as u32 as usize],
+        lut[idx[3] as u32 as usize],
+        lut[idx[4] as u32 as usize],
+        lut[idx[5] as u32 as usize],
+        lut[idx[6] as u32 as usize],
+        lut[idx[7] as u32 as usize],
+        lut[idx[8] as u32 as usize],
+        lut[idx[9] as u32 as usize],
+        lut[idx[10] as u32 as usize],
+        lut[idx[11] as u32 as usize],
+        lut[idx[12] as u32 as usize],
+        lut[idx[13] as u32 as usize],
+        lut[idx[14] as u32 as usize],
+        lut[idx[15] as u32 as usize],
     ]
 }
 

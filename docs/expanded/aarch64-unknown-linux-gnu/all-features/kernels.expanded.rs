@@ -2236,6 +2236,7 @@ mod kernels {
     ///
     /// Tails run through the same kernel as the body, so a value converts to the same bits
     /// wherever it sits in a slice and however a row is split.
+    #[allow(dead_code)]
     #[inline(always)]
     pub(crate) fn tail_block<const N: usize>(tail: &[f32]) -> Option<[f32; N]> {
         if tail.is_empty() {
@@ -2269,10 +2270,17 @@ mod kernels {
         ctx: C,
         convert: fn(C, [f32; N]) -> [f32; N],
     ) {
+        const {
+            if !N.is_power_of_two() {
+                ::core::panicking::panic("assertion failed: N.is_power_of_two()")
+            }
+        };
+        let n = remainder.len() & (N - 1);
+        let rem = &mut remainder[..n];
         let mut block = [0.0; N];
-        block[..remainder.len()].copy_from_slice(remainder);
+        block[..n].copy_from_slice(rem);
         let converted = convert(ctx, block);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
+        rem.copy_from_slice(&converted[..n]);
     }
     pub(crate) use map_slice_inline;
     #[cold]
@@ -2282,10 +2290,12 @@ mod kernels {
         ctx: C,
         convert: fn(C, &mut [f32; 16]),
     ) {
+        let n = remainder.len() & 12;
+        let rem = &mut remainder[..n];
         let mut block = [0.0; 16];
-        block[..remainder.len()].copy_from_slice(remainder);
+        block[..n].copy_from_slice(rem);
         convert(ctx, &mut block);
-        remainder.copy_from_slice(&block[..remainder.len()]);
+        rem.copy_from_slice(&block[..n]);
     }
     pub(crate) use map_rgba_slice_inline;
     #[cold]
@@ -2296,14 +2306,21 @@ mod kernels {
         ctx: C,
         slow: fn(C, [f32; N]) -> [f32; N],
     ) {
+        const {
+            if !N.is_power_of_two() {
+                ::core::panicking::panic("assertion failed: N.is_power_of_two()")
+            }
+        };
         for chunk in rest_chunks {
             *chunk = slow(ctx, *chunk);
         }
-        if !remainder.is_empty() {
+        let n = remainder.len() & (N - 1);
+        if n != 0 {
+            let rem = &mut remainder[..n];
             let mut block = [0.0; N];
-            block[..remainder.len()].copy_from_slice(remainder);
+            block[..n].copy_from_slice(rem);
             let converted = slow(ctx, block);
-            remainder.copy_from_slice(&converted[..remainder.len()]);
+            rem.copy_from_slice(&converted[..n]);
         }
     }
     pub(crate) use map_slice_try_inline;
@@ -2318,11 +2335,13 @@ mod kernels {
         for chunk in rest_chunks {
             slow(ctx, chunk);
         }
-        if !remainder.is_empty() {
+        let n = remainder.len() & 12;
+        if n != 0 {
+            let rem = &mut remainder[..n];
             let mut block = [0.0; 16];
-            block[..remainder.len()].copy_from_slice(remainder);
+            block[..n].copy_from_slice(rem);
             slow(ctx, &mut block);
-            remainder.copy_from_slice(&block[..remainder.len()]);
+            rem.copy_from_slice(&block[..n]);
         }
     }
     pub(crate) use map_rgba_slice_try_inline;

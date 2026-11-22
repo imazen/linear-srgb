@@ -2146,25 +2146,27 @@ mod kernels {
                 .min_fast(one);
             let scaled = clamped * mt_f32x16::splat_t(token, 4095.0)
                 + mt_f32x16::splat_t(token, 0.5);
-            let idx = scaled.to_i32_with::<TRUNC>().to_array();
+            let idx = (scaled.to_i32_with::<TRUNC>()
+                & magetypes::simd::generic::i32x16::splat_t(token, 0xFFF))
+                .to_array();
             let lut = crate::const_luts::linear_to_srgb_u8();
             [
-                lut[idx[0] as usize & 0xFFF],
-                lut[idx[1] as usize & 0xFFF],
-                lut[idx[2] as usize & 0xFFF],
-                lut[idx[3] as usize & 0xFFF],
-                lut[idx[4] as usize & 0xFFF],
-                lut[idx[5] as usize & 0xFFF],
-                lut[idx[6] as usize & 0xFFF],
-                lut[idx[7] as usize & 0xFFF],
-                lut[idx[8] as usize & 0xFFF],
-                lut[idx[9] as usize & 0xFFF],
-                lut[idx[10] as usize & 0xFFF],
-                lut[idx[11] as usize & 0xFFF],
-                lut[idx[12] as usize & 0xFFF],
-                lut[idx[13] as usize & 0xFFF],
-                lut[idx[14] as usize & 0xFFF],
-                lut[idx[15] as usize & 0xFFF],
+                lut[idx[0] as u32 as usize],
+                lut[idx[1] as u32 as usize],
+                lut[idx[2] as u32 as usize],
+                lut[idx[3] as u32 as usize],
+                lut[idx[4] as u32 as usize],
+                lut[idx[5] as u32 as usize],
+                lut[idx[6] as u32 as usize],
+                lut[idx[7] as u32 as usize],
+                lut[idx[8] as u32 as usize],
+                lut[idx[9] as u32 as usize],
+                lut[idx[10] as u32 as usize],
+                lut[idx[11] as u32 as usize],
+                lut[idx[12] as u32 as usize],
+                lut[idx[13] as u32 as usize],
+                lut[idx[14] as u32 as usize],
+                lut[idx[15] as u32 as usize],
             ]
         }
         #[target_feature(
@@ -3053,17 +3055,19 @@ mod kernels {
                 .min_fast(one);
             let scaled = clamped * mt_f32x8::splat_t(token, 4095.0)
                 + mt_f32x8::splat_t(token, 0.5);
-            let idx = scaled.to_i32_with::<TRUNC>().to_array();
+            let idx = (scaled.to_i32_with::<TRUNC>()
+                & magetypes::simd::i32x8::splat_t(token, 0xFFF))
+                .to_array();
             let lut = crate::const_luts::linear_to_srgb_u8();
             [
-                lut[idx[0] as usize & 0xFFF],
-                lut[idx[1] as usize & 0xFFF],
-                lut[idx[2] as usize & 0xFFF],
-                lut[idx[3] as usize & 0xFFF],
-                lut[idx[4] as usize & 0xFFF],
-                lut[idx[5] as usize & 0xFFF],
-                lut[idx[6] as usize & 0xFFF],
-                lut[idx[7] as usize & 0xFFF],
+                lut[idx[0] as u32 as usize],
+                lut[idx[1] as u32 as usize],
+                lut[idx[2] as u32 as usize],
+                lut[idx[3] as u32 as usize],
+                lut[idx[4] as u32 as usize],
+                lut[idx[5] as u32 as usize],
+                lut[idx[6] as u32 as usize],
+                lut[idx[7] as u32 as usize],
             ]
         }
         #[target_feature(
@@ -3396,6 +3400,7 @@ mod kernels {
     ///
     /// Tails run through the same kernel as the body, so a value converts to the same bits
     /// wherever it sits in a slice and however a row is split.
+    #[allow(dead_code)]
     #[inline(always)]
     pub(crate) fn tail_block<const N: usize>(tail: &[f32]) -> Option<[f32; N]> {
         if tail.is_empty() {
@@ -3429,10 +3434,17 @@ mod kernels {
         ctx: C,
         convert: fn(C, [f32; N]) -> [f32; N],
     ) {
+        const {
+            if !N.is_power_of_two() {
+                ::core::panicking::panic("assertion failed: N.is_power_of_two()")
+            }
+        };
+        let n = remainder.len() & (N - 1);
+        let rem = &mut remainder[..n];
         let mut block = [0.0; N];
-        block[..remainder.len()].copy_from_slice(remainder);
+        block[..n].copy_from_slice(rem);
         let converted = convert(ctx, block);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
+        rem.copy_from_slice(&converted[..n]);
     }
     pub(crate) use map_slice_inline;
     #[cold]
@@ -3442,10 +3454,12 @@ mod kernels {
         ctx: C,
         convert: fn(C, &mut [f32; 16]),
     ) {
+        let n = remainder.len() & 12;
+        let rem = &mut remainder[..n];
         let mut block = [0.0; 16];
-        block[..remainder.len()].copy_from_slice(remainder);
+        block[..n].copy_from_slice(rem);
         convert(ctx, &mut block);
-        remainder.copy_from_slice(&block[..remainder.len()]);
+        rem.copy_from_slice(&block[..n]);
     }
     pub(crate) use map_rgba_slice_inline;
     #[cold]
@@ -3456,14 +3470,21 @@ mod kernels {
         ctx: C,
         slow: fn(C, [f32; N]) -> [f32; N],
     ) {
+        const {
+            if !N.is_power_of_two() {
+                ::core::panicking::panic("assertion failed: N.is_power_of_two()")
+            }
+        };
         for chunk in rest_chunks {
             *chunk = slow(ctx, *chunk);
         }
-        if !remainder.is_empty() {
+        let n = remainder.len() & (N - 1);
+        if n != 0 {
+            let rem = &mut remainder[..n];
             let mut block = [0.0; N];
-            block[..remainder.len()].copy_from_slice(remainder);
+            block[..n].copy_from_slice(rem);
             let converted = slow(ctx, block);
-            remainder.copy_from_slice(&converted[..remainder.len()]);
+            rem.copy_from_slice(&converted[..n]);
         }
     }
     pub(crate) use map_slice_try_inline;
@@ -3478,11 +3499,13 @@ mod kernels {
         for chunk in rest_chunks {
             slow(ctx, chunk);
         }
-        if !remainder.is_empty() {
+        let n = remainder.len() & 12;
+        if n != 0 {
+            let rem = &mut remainder[..n];
             let mut block = [0.0; 16];
-            block[..remainder.len()].copy_from_slice(remainder);
+            block[..n].copy_from_slice(rem);
             slow(ctx, &mut block);
-            remainder.copy_from_slice(&block[..remainder.len()]);
+            rem.copy_from_slice(&block[..n]);
         }
     }
     pub(crate) use map_rgba_slice_try_inline;
