@@ -18,13 +18,13 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	ldr x8, [x8, :got_lo12:archmage::tokens::generated::arm::NEON_CACHE]
 	ldrb w8, [x8]
 	cmp w8, #1
-	b.eq .LBB25_7
+	b.eq .LBB24_7
 	cmp w8, #2
-	b.ne .LBB25_6
-.LBB25_2:
+	b.ne .LBB24_6
+.LBB24_2:
 	lsl x8, x1, #2
 	ands x8, x8, #0x7ffffffffffffff0
-	b.eq .LBB25_5
+	b.eq .LBB24_5
 	mov w10, #47186
 	mov w11, #25800
 	mov w9, #981467136
@@ -61,7 +61,7 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	dup v18.4s, w9
 	dup v19.4s, w10
 	dup v20.4s, w11
-.LBB25_4:
+.LBB24_4:
 	ldr q21, [x0]
 	mov v25.16b, v4.16b
 	mov v27.16b, v5.16b
@@ -96,8 +96,8 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	bsl v22.16b, v0.16b, v23.16b
 	mov v22.s[3], v21.s[3]
 	str q22, [x0], #16
-	b.ne .LBB25_4
-.LBB25_5:
+	b.ne .LBB24_4
+.LBB24_5:
 	.cfi_def_cfa wsp, 32
 	ldp x20, x19, [sp, #16]
 	ldp x29, x30, [sp], #32
@@ -107,7 +107,7 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	.cfi_restore w30
 	.cfi_restore w29
 	ret
-.LBB25_6:
+.LBB24_6:
 	.cfi_restore_state
 	mov x19, x0
 	mov x20, x1
@@ -115,8 +115,8 @@ stub_unpremultiply_linear_to_srgb_rgba_slice:
 	mov x1, x20
 	mov w8, w0
 	mov x0, x19
-	cbnz w8, .LBB25_2
-.LBB25_7:
+	cbnz w8, .LBB24_2
+.LBB24_7:
 	.cfi_def_cfa wsp, 32
 	ldp x20, x19, [sp, #16]
 	ldp x29, x30, [sp], #32

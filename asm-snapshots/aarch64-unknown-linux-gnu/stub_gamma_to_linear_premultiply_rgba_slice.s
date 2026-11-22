@@ -30,22 +30,22 @@ stub_gamma_to_linear_premultiply_rgba_slice:
 	ldr x8, [x8, :got_lo12:archmage::tokens::generated::arm::NEON_CACHE]
 	ldrb w8, [x8]
 	cmp w8, #1
-	b.eq .LBB14_15
+	b.eq .LBB13_15
 	cmp w8, #2
-	b.ne .LBB14_14
-.LBB14_2:
+	b.ne .LBB13_14
+.LBB13_2:
 	fcmp s0, #0.0
-	b.lt .LBB14_8
+	b.lt .LBB13_8
 	fmov s1, #4.00000000
 	fcmp s0, s1
-	b.hi .LBB14_8
+	b.hi .LBB13_8
 	fcmp s0, #0.0
 	lsl x8, x1, #2
 	and x8, x8, #0x7ffffffffffffff0
-	b.ne .LBB14_10
-	cbz x8, .LBB14_13
+	b.ne .LBB13_10
+	cbz x8, .LBB13_13
 	fmov v0.4s, #1.00000000
-.LBB14_7:
+.LBB13_7:
 	ldr q1, [x0]
 	subs x8, x8, #16
 	fcmgt v2.4s, v1.4s, #0.0
@@ -56,13 +56,13 @@ stub_gamma_to_linear_premultiply_rgba_slice:
 	fmul v2.4s, v2.4s, v1.s[3]
 	mov v2.s[3], v1.s[3]
 	str q2, [x0], #16
-	b.ne .LBB14_7
-	b .LBB14_13
-.LBB14_8:
+	b.ne .LBB13_7
+	b .LBB13_13
+.LBB13_8:
 	lsl x8, x1, #2
 	ands x19, x8, #0x7ffffffffffffff0
-	b.eq .LBB14_13
-.LBB14_9:
+	b.eq .LBB13_13
+.LBB13_9:
 	ldr q1, [x0]
 	add x8, sp, #16
 	mov x20, x0
@@ -78,10 +78,10 @@ stub_gamma_to_linear_premultiply_rgba_slice:
 	fmul v1.4s, v1.4s, v2.s[3]
 	mov v1.s[3], v2.s[3]
 	str q1, [x0], #16
-	b.ne .LBB14_9
-	b .LBB14_13
-.LBB14_10:
-	cbz x8, .LBB14_13
+	b.ne .LBB13_9
+	b .LBB13_13
+.LBB13_10:
+	cbz x8, .LBB13_13
 	fcmp s0, s1
 	mov w9, #8388607
 	movi d27, #0000000000000000
@@ -141,9 +141,9 @@ stub_gamma_to_linear_premultiply_rgba_slice:
 	movk w9, #16177, lsl #16
 	dup v28.4s, w10
 	dup v29.4s, w9
-	adrp x9, .LCPI14_0
-	ldr q30, [x9, :lo12:.LCPI14_0]
-.LBB14_12:
+	adrp x9, .LCPI13_0
+	ldr q30, [x9, :lo12:.LCPI13_0]
+.LBB13_12:
 	ldr q31, [x0]
 	mov v12.16b, v16.16b
 	mov v14.16b, v18.16b
@@ -203,8 +203,8 @@ stub_gamma_to_linear_premultiply_rgba_slice:
 	fmul v8.4s, v8.4s, v31.s[3]
 	mov v8.s[3], v31.s[3]
 	str q8, [x0], #16
-	b.ne .LBB14_12
-.LBB14_13:
+	b.ne .LBB13_12
+.LBB13_13:
 	.cfi_def_cfa wsp, 144
 	ldp x20, x19, [sp, #128]
 	ldr d14, [sp, #48]
@@ -226,7 +226,7 @@ stub_gamma_to_linear_premultiply_rgba_slice:
 	.cfi_restore b13
 	.cfi_restore b14
 	ret
-.LBB14_14:
+.LBB13_14:
 	.cfi_restore_state
 	mov x19, x0
 	fmov s8, s0
@@ -236,8 +236,8 @@ stub_gamma_to_linear_premultiply_rgba_slice:
 	mov x1, x20
 	mov w8, w0
 	mov x0, x19
-	cbnz w8, .LBB14_2
-.LBB14_15:
+	cbnz w8, .LBB13_2
+.LBB13_15:
 	.cfi_def_cfa wsp, 144
 	ldp x20, x19, [sp, #128]
 	ldr d14, [sp, #48]

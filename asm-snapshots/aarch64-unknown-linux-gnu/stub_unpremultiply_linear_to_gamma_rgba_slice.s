@@ -31,23 +31,23 @@ stub_unpremultiply_linear_to_gamma_rgba_slice:
 	ldr x8, [x8, :got_lo12:archmage::tokens::generated::arm::NEON_CACHE]
 	ldrb w8, [x8]
 	cmp w8, #1
-	b.eq .LBB24_15
+	b.eq .LBB23_15
 	cmp w8, #2
-	b.ne .LBB24_14
-.LBB24_2:
+	b.ne .LBB23_14
+.LBB23_2:
 	fmov s1, #1.00000000
 	fdiv s8, s1, s0
 	fmov s0, #4.00000000
 	fcmp s8, #0.0
 	fccmp s8, s0, #2, ge
-	b.ls .LBB24_6
+	b.ls .LBB23_6
 	lsl x8, x1, #2
 	ands x19, x8, #0x7ffffffffffffff0
-	b.eq .LBB24_13
+	b.eq .LBB23_13
 	mov w8, #981467136
 	dup v0.4s, w8
 	str q0, [sp]
-.LBB24_5:
+.LBB23_5:
 	ldr q3, [x0]
 	fmov v1.4s, #1.00000000
 	ldr q2, [sp]
@@ -68,18 +68,18 @@ stub_unpremultiply_linear_to_gamma_rgba_slice:
 	subs x19, x19, #16
 	mov v0.s[3], v1.s[3]
 	str q0, [x0], #16
-	b.ne .LBB24_5
-	b .LBB24_13
-.LBB24_6:
+	b.ne .LBB23_5
+	b .LBB23_13
+.LBB23_6:
 	fcmp s8, #0.0
 	lsl x8, x1, #2
 	and x8, x8, #0x7ffffffffffffff0
-	b.ne .LBB24_10
-	cbz x8, .LBB24_13
+	b.ne .LBB23_10
+	cbz x8, .LBB23_13
 	fmov v0.4s, #1.00000000
 	mov w9, #981467136
 	dup v1.4s, w9
-.LBB24_9:
+.LBB23_9:
 	ldr q2, [x0]
 	subs x8, x8, #16
 	dup v3.4s, v2.s[3]
@@ -94,10 +94,10 @@ stub_unpremultiply_linear_to_gamma_rgba_slice:
 	orr v3.16b, v4.16b, v3.16b
 	mov v3.s[3], v2.s[3]
 	str q3, [x0], #16
-	b.ne .LBB24_9
-	b .LBB24_13
-.LBB24_10:
-	cbz x8, .LBB24_13
+	b.ne .LBB23_9
+	b .LBB23_13
+.LBB23_10:
+	cbz x8, .LBB23_13
 	fcmp s8, s0
 	mov w9, #8388607
 	movi d28, #0000000000000000
@@ -158,9 +158,9 @@ stub_unpremultiply_linear_to_gamma_rgba_slice:
 	dup v28.4s, v29.s[0]
 	dup v29.4s, w9
 	dup v30.4s, w10
-	adrp x9, .LCPI24_0
-	ldr q31, [x9, :lo12:.LCPI24_0]
-.LBB24_12:
+	adrp x9, .LCPI23_0
+	ldr q31, [x9, :lo12:.LCPI23_0]
+.LBB23_12:
 	ldr q8, [x0]
 	movi v19.4s, #128, lsl #16
 	mov v14.16b, v17.16b
@@ -225,8 +225,8 @@ stub_unpremultiply_linear_to_gamma_rgba_slice:
 	bif v19.16b, v9.16b, v10.16b
 	mov v19.s[3], v8.s[3]
 	str q19, [x0], #16
-	b.ne .LBB24_12
-.LBB24_13:
+	b.ne .LBB23_12
+.LBB23_13:
 	.cfi_def_cfa wsp, 160
 	ldp x20, x19, [sp, #144]
 	ldp x29, x30, [sp, #128]
@@ -249,7 +249,7 @@ stub_unpremultiply_linear_to_gamma_rgba_slice:
 	.cfi_restore b14
 	.cfi_restore b15
 	ret
-.LBB24_14:
+.LBB23_14:
 	.cfi_restore_state
 	mov x19, x0
 	mov x20, x1
@@ -259,8 +259,8 @@ stub_unpremultiply_linear_to_gamma_rgba_slice:
 	mov x1, x20
 	mov w8, w0
 	mov x0, x19
-	cbnz w8, .LBB24_2
-.LBB24_15:
+	cbnz w8, .LBB23_2
+.LBB23_15:
 	.cfi_def_cfa wsp, 160
 	ldp x20, x19, [sp, #144]
 	ldp x29, x30, [sp, #128]

@@ -2,8 +2,8 @@
 // rustc 1.99.0 (b940084d7 2026-09-28); cargo-expand 1.0.126
 // Target: wasm32-wasip1; preset: default; module: tf
 // Library features: avx512, default, std
-// Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 14673aa21189a9e47385a75230c76b50f305b6e20ec5ce875382a964e2578dbd
+// Providers: archmage 0.9.33, archmage-macros 0.9.33, magetypes 0.9.33, magemath 0.1.1
+// Resolution lock SHA-256: 34b0d7fcbb900335f549b1d2668d4d26690f157b1fed566f5c0791434a67dff7
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 /// Deprecated transfer-function compatibility module: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).
@@ -178,11 +178,13 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(
-                            remainder,
-                            (t, n),
-                            tail_unchecked::<T>,
-                        );
+                        {
+                            crate::kernels::finish_tail_cold(
+                                remainder,
+                                (t, n),
+                                tail_unchecked::<T>,
+                            );
+                        }
                     }
                 };
                 return;
@@ -203,7 +205,13 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail_zero::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(
+                                remainder,
+                                t,
+                                tail_zero::<T>,
+                            );
+                        }
                     }
                 };
                 return;
@@ -222,11 +230,13 @@ pub mod tf {
                         .to_array();
                 }
                 if !remainder.is_empty() {
-                    crate::kernels::finish_tail_cold(
-                        remainder,
-                        (t, n),
-                        tail_in_range::<T>,
-                    );
+                    {
+                        crate::kernels::finish_tail_cold(
+                            remainder,
+                            (t, n),
+                            tail_in_range::<T>,
+                        );
+                    }
                 }
             };
         }
@@ -295,11 +305,13 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(
-                            remainder,
-                            (t, n),
-                            tail_unchecked::<T>,
-                        );
+                        {
+                            crate::kernels::finish_tail_cold(
+                                remainder,
+                                (t, n),
+                                tail_unchecked::<T>,
+                            );
+                        }
                     }
                 };
                 return;
@@ -320,7 +332,13 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail_zero::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(
+                                remainder,
+                                t,
+                                tail_zero::<T>,
+                            );
+                        }
                     }
                 };
                 return;
@@ -339,11 +357,13 @@ pub mod tf {
                         .to_array();
                 }
                 if !remainder.is_empty() {
-                    crate::kernels::finish_tail_cold(
-                        remainder,
-                        (t, n),
-                        tail_in_range::<T>,
-                    );
+                    {
+                        crate::kernels::finish_tail_cold(
+                            remainder,
+                            (t, n),
+                            tail_in_range::<T>,
+                        );
+                    }
                 }
             };
         }
@@ -416,11 +436,13 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(
-                            remainder,
-                            (t, n),
-                            tail_unchecked::<T>,
-                        );
+                        {
+                            crate::kernels::finish_tail_cold(
+                                remainder,
+                                (t, n),
+                                tail_unchecked::<T>,
+                            );
+                        }
                     }
                 };
                 return;
@@ -441,7 +463,13 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail_zero::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(
+                                remainder,
+                                t,
+                                tail_zero::<T>,
+                            );
+                        }
                     }
                 };
                 return;
@@ -460,11 +488,13 @@ pub mod tf {
                         .to_array();
                 }
                 if !remainder.is_empty() {
-                    crate::kernels::finish_tail_cold(
-                        remainder,
-                        (t, n),
-                        tail_in_range::<T>,
-                    );
+                    {
+                        crate::kernels::finish_tail_cold(
+                            remainder,
+                            (t, n),
+                            tail_in_range::<T>,
+                        );
+                    }
                 }
             };
         }

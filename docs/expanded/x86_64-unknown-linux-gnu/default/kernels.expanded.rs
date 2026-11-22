@@ -2,8 +2,8 @@
 // rustc 1.99.0 (b940084d7 2026-09-28); cargo-expand 1.0.126
 // Target: x86_64-unknown-linux-gnu; preset: default; module: kernels
 // Library features: avx512, default, std
-// Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 14673aa21189a9e47385a75230c76b50f305b6e20ec5ce875382a964e2578dbd
+// Providers: archmage 0.9.33, archmage-macros 0.9.33, magetypes 0.9.33, magemath 0.1.1
+// Resolution lock SHA-256: 34b0d7fcbb900335f549b1d2668d4d26690f157b1fed566f5c0791434a67dff7
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 #[allow(deprecated)]
@@ -49,29 +49,45 @@ mod kernels {
         }
         #[cold]
         #[inline(never)]
-        fn srgb_to_linear_extended_fallback<const N: usize>(
-            source: [f32; N],
-            mut result: [f32; N],
-        ) -> [f32; N] {
-            for (s, o) in source.into_iter().zip(&mut result) {
+        pub(crate) fn srgb_to_linear_extended_patch<const N: usize>(
+            source: &[f32; N],
+            result: &mut [f32; N],
+        ) {
+            for (&s, o) in source.iter().zip(result.iter_mut()) {
                 if s.abs() > 8.0 {
                     *o = crate::scalar::srgb_to_linear_extended(s);
                 }
             }
+        }
+        #[cold]
+        #[inline(never)]
+        pub(crate) fn srgb_to_linear_extended_fallback<const N: usize>(
+            source: [f32; N],
+            mut result: [f32; N],
+        ) -> [f32; N] {
+            srgb_to_linear_extended_patch(&source, &mut result);
             result
         }
         #[cold]
         #[inline(never)]
-        fn linear_to_srgb_extended_fallback<T: F32ScalarBackend, const N: usize>(
+        pub(crate) fn linear_to_srgb_extended_patch<T: F32ScalarBackend, const N: usize>(
             token: T,
-            source: [f32; N],
-            mut result: [f32; N],
-        ) -> [f32; N] {
-            for (s, o) in source.into_iter().zip(&mut result) {
+            source: &[f32; N],
+            result: &mut [f32; N],
+        ) {
+            for (&s, o) in source.iter().zip(result.iter_mut()) {
                 if s.abs() > 64.0 {
                     *o = crate::scalar::linear_to_srgb_extended_with_token(token, s);
                 }
             }
+        }
+        #[cold]
+        #[inline(never)]
+        pub(crate) fn linear_to_srgb_extended_fallback<
+            T: F32ScalarBackend,
+            const N: usize,
+        >(token: T, source: [f32; N], mut result: [f32; N]) -> [f32; N] {
+            linear_to_srgb_extended_patch(token, &source, &mut result);
             result
         }
         pub(crate) mod x4 {
@@ -102,12 +118,6 @@ mod kernels {
                 token: T,
                 values: &mut [f32],
             ) {
-                fn tail<T: F32x4Backend, const CFG: u32>(
-                    token: T,
-                    chunk: [f32; 4],
-                ) -> [f32; 4] {
-                    srgb_to_linear_cfg::<T, CFG>(token, chunk)
-                }
                 {
                     let (chunks, remainder) = (values).as_chunks_mut::<4>();
                     for slot in chunks {
@@ -115,11 +125,14 @@ mod kernels {
                         *slot = srgb_to_linear_cfg::<T, CFG>(token, chunk);
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(
-                            remainder,
-                            token,
-                            tail::<T, CFG>,
-                        );
+                        {
+                            let _ = &token;
+                            let mut block = [0.0; 4];
+                            block[..remainder.len()].copy_from_slice(remainder);
+                            let chunk: [f32; 4] = block;
+                            let converted = srgb_to_linear_cfg::<T, CFG>(token, chunk);
+                            remainder.copy_from_slice(&converted[..remainder.len()]);
+                        }
                     }
                 };
             }
@@ -130,6 +143,51 @@ mod kernels {
                 values: &mut [f32],
             ) {
                 srgb_to_linear_slice_cfg::<T, { cfg::SRGB_CLAMPED }>(token, values);
+            }
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn srgb_to_linear_slice_into<T: F32x4Backend>(
+                token: T,
+                input: &[f32],
+                output: &mut [f32],
+            ) {
+                {
+                    {
+                        match (&(input).len(), &(output).len()) {
+                            (left_val, right_val) => {
+                                if !(*left_val == *right_val) {
+                                    let kind = ::core::panicking::AssertKind::Eq;
+                                    ::core::panicking::assert_failed(
+                                        kind,
+                                        &*left_val,
+                                        &*right_val,
+                                        ::core::option::Option::None,
+                                    );
+                                }
+                            }
+                        }
+                    };
+                    let (in_chunks, in_rem) = (input).as_chunks::<4>();
+                    let (out_chunks, out_rem) = (output).as_chunks_mut::<4>();
+                    for (src_slot, dst_slot) in in_chunks
+                        .iter()
+                        .zip(out_chunks.iter_mut())
+                    {
+                        let chunk: [f32; 4] = *src_slot;
+                        *dst_slot = {
+                            srgb_to_linear_cfg::<T, { cfg::SRGB_CLAMPED }>(token, chunk)
+                        };
+                    }
+                    if !in_rem.is_empty() {
+                        let mut block = [0.0; 4];
+                        block[..in_rem.len()].copy_from_slice(in_rem);
+                        let chunk: [f32; 4] = block;
+                        let converted = {
+                            srgb_to_linear_cfg::<T, { cfg::SRGB_CLAMPED }>(token, chunk)
+                        };
+                        out_rem.copy_from_slice(&converted[..out_rem.len()]);
+                    }
+                };
             }
             #[inline(always)]
             pub(crate) fn srgb_to_linear_vector<T: F32x4Backend>(
@@ -213,12 +271,6 @@ mod kernels {
                 token: T,
                 values: &mut [f32],
             ) {
-                fn tail<T: F32x4Backend, const CFG: u32>(
-                    token: T,
-                    chunk: [f32; 4],
-                ) -> [f32; 4] {
-                    linear_to_srgb_cfg::<T, CFG>(token, chunk)
-                }
                 {
                     let (chunks, remainder) = (values).as_chunks_mut::<4>();
                     for slot in chunks {
@@ -226,11 +278,14 @@ mod kernels {
                         *slot = linear_to_srgb_cfg::<T, CFG>(token, chunk);
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(
-                            remainder,
-                            token,
-                            tail::<T, CFG>,
-                        );
+                        {
+                            let _ = &token;
+                            let mut block = [0.0; 4];
+                            block[..remainder.len()].copy_from_slice(remainder);
+                            let chunk: [f32; 4] = block;
+                            let converted = linear_to_srgb_cfg::<T, CFG>(token, chunk);
+                            remainder.copy_from_slice(&converted[..remainder.len()]);
+                        }
                     }
                 };
             }
@@ -241,6 +296,51 @@ mod kernels {
                 values: &mut [f32],
             ) {
                 linear_to_srgb_slice_cfg::<T, { cfg::SRGB_CLAMPED }>(token, values);
+            }
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn linear_to_srgb_slice_into<T: F32x4Backend>(
+                token: T,
+                input: &[f32],
+                output: &mut [f32],
+            ) {
+                {
+                    {
+                        match (&(input).len(), &(output).len()) {
+                            (left_val, right_val) => {
+                                if !(*left_val == *right_val) {
+                                    let kind = ::core::panicking::AssertKind::Eq;
+                                    ::core::panicking::assert_failed(
+                                        kind,
+                                        &*left_val,
+                                        &*right_val,
+                                        ::core::option::Option::None,
+                                    );
+                                }
+                            }
+                        }
+                    };
+                    let (in_chunks, in_rem) = (input).as_chunks::<4>();
+                    let (out_chunks, out_rem) = (output).as_chunks_mut::<4>();
+                    for (src_slot, dst_slot) in in_chunks
+                        .iter()
+                        .zip(out_chunks.iter_mut())
+                    {
+                        let chunk: [f32; 4] = *src_slot;
+                        *dst_slot = {
+                            linear_to_srgb_cfg::<T, { cfg::SRGB_CLAMPED }>(token, chunk)
+                        };
+                    }
+                    if !in_rem.is_empty() {
+                        let mut block = [0.0; 4];
+                        block[..in_rem.len()].copy_from_slice(in_rem);
+                        let chunk: [f32; 4] = block;
+                        let converted = {
+                            linear_to_srgb_cfg::<T, { cfg::SRGB_CLAMPED }>(token, chunk)
+                        };
+                        out_rem.copy_from_slice(&converted[..out_rem.len()]);
+                    }
+                };
             }
             #[inline(always)]
             pub(crate) fn linear_to_srgb_vector<T: F32x4Backend>(
@@ -406,19 +506,6 @@ mod kernels {
                 let result = f32x4::blend(thresh_mask, linear_result, power_result);
                 (abs_v, result.abs() | (v & sign))
             }
-            #[inline(always)]
-            pub(crate) fn try_srgb_to_linear_extended_vector<T: F32x4Convert>(
-                token: T,
-                v: f32x4<T>,
-            ) -> Option<f32x4<T>> {
-                let (abs_v, result) = srgb_to_linear_extended_poly(token, v);
-                if abs_v.simd_gt(f32x4::splat_t(token, 8.0)).bitcast_to_i32().any_true()
-                {
-                    None
-                } else {
-                    Some(result)
-                }
-            }
             #[allow(dead_code)]
             #[inline(always)]
             pub(crate) fn srgb_to_linear_extended<T: F32x4Convert>(
@@ -428,6 +515,7 @@ mod kernels {
                 srgb_to_linear_extended_vector(token, f32x4::from_array_t(token, srgb))
                     .to_array()
             }
+            #[allow(dead_code)]
             #[inline(always)]
             pub(crate) fn srgb_to_linear_extended_vector<T: F32x4Convert>(
                 token: T,
@@ -462,13 +550,6 @@ mod kernels {
                 const FALLBACK: bool,
             >(token: T, values: &mut [f32]) {
                 if !FALLBACK {
-                    fn tail<T: F32x4Convert>(token: T, chunk: [f32; 4]) -> [f32; 4] {
-                        srgb_to_linear_extended_vector_cfg::<
-                            T,
-                            false,
-                        >(token, f32x4::from_array_t(token, chunk))
-                            .to_array()
-                    }
                     {
                         let (chunks, remainder) = (values).as_chunks_mut::<4>();
                         for slot in chunks {
@@ -482,54 +563,54 @@ mod kernels {
                             };
                         }
                         if !remainder.is_empty() {
-                            crate::kernels::finish_tail_cold(
-                                remainder,
-                                token,
-                                tail::<T>,
-                            );
+                            {
+                                let _ = &token;
+                                let mut block = [0.0; 4];
+                                block[..remainder.len()].copy_from_slice(remainder);
+                                let chunk: [f32; 4] = block;
+                                let converted = {
+                                    srgb_to_linear_extended_vector_cfg::<
+                                        T,
+                                        false,
+                                    >(token, f32x4::from_array_t(token, chunk))
+                                        .to_array()
+                                };
+                                remainder.copy_from_slice(&converted[..remainder.len()]);
+                            }
                         }
                     };
                     return;
                 }
-                fn slow<T: F32x4Convert>(token: T, chunk: [f32; 4]) -> [f32; 4] {
-                    srgb_to_linear_extended_vector(
-                            token,
-                            f32x4::from_array_t(token, chunk),
-                        )
-                        .to_array()
+                let (chunks, remainder) = values.as_chunks_mut::<4>();
+                let limit = f32x4::splat_t(token, 8.0);
+                for slot in chunks {
+                    let (abs_v, result) = srgb_to_linear_extended_poly(
+                        token,
+                        f32x4::load_t(token, slot),
+                    );
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        let mut out = result.to_array();
+                        srgb_to_linear_extended_patch(slot, &mut out);
+                        *slot = out;
+                    } else {
+                        result.store(slot);
+                    }
                 }
-                {
-                    let (chunks, remainder) = (values).as_chunks_mut::<4>();
-                    let mut idx = 0;
-                    while idx < chunks.len() {
-                        let chunk: [f32; 4] = chunks[idx];
-                        let Some(converted) = ({
-                            try_srgb_to_linear_extended_vector(
-                                    token,
-                                    f32x4::from_array_t(token, chunk),
-                                )
-                                .map(|r| r.to_array())
-                        }) else {
-                            crate::kernels::finish_slice_cold(
-                                &mut chunks[idx..],
-                                remainder,
-                                token,
-                                slow::<T>,
-                            );
-                            return;
-                        };
-                        chunks[idx] = converted;
-                        idx += 1;
-                    }
-                    if !remainder.is_empty() {
-                        crate::kernels::finish_slice_cold(
-                            &mut [],
-                            remainder,
+                if !remainder.is_empty() {
+                    {
+                        let mut block = [0.0; 4];
+                        block[..remainder.len()].copy_from_slice(remainder);
+                        let (abs_v, result) = srgb_to_linear_extended_poly(
                             token,
-                            slow::<T>,
+                            f32x4::load_t(token, &block),
                         );
+                        let mut out = result.to_array();
+                        if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                            srgb_to_linear_extended_patch(&block, &mut out);
+                        }
+                        remainder.copy_from_slice(&out[..remainder.len()]);
                     }
-                };
+                }
             }
             #[allow(dead_code)]
             #[inline(always)]
@@ -538,6 +619,55 @@ mod kernels {
                 values: &mut [f32],
             ) {
                 srgb_to_linear_extended_slice_cfg::<T, true>(token, values);
+            }
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn srgb_to_linear_extended_slice_into<T: F32x4Convert>(
+                token: T,
+                input: &[f32],
+                output: &mut [f32],
+            ) {
+                {
+                    match (&input.len(), &output.len()) {
+                        (left_val, right_val) => {
+                            if !(*left_val == *right_val) {
+                                let kind = ::core::panicking::AssertKind::Eq;
+                                ::core::panicking::assert_failed(
+                                    kind,
+                                    &*left_val,
+                                    &*right_val,
+                                    ::core::option::Option::None,
+                                );
+                            }
+                        }
+                    }
+                };
+                let (in_chunks, in_rem) = input.as_chunks::<4>();
+                let (out_chunks, out_rem) = output.as_chunks_mut::<4>();
+                let limit = f32x4::splat_t(token, 8.0);
+                for (src_slot, dst_slot) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                    let (abs_v, result) = srgb_to_linear_extended_poly(
+                        token,
+                        f32x4::load_t(token, src_slot),
+                    );
+                    result.store(dst_slot);
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        srgb_to_linear_extended_patch(src_slot, dst_slot);
+                    }
+                }
+                if !in_rem.is_empty() {
+                    let mut src_block = [0.0; 4];
+                    src_block[..in_rem.len()].copy_from_slice(in_rem);
+                    let (abs_v, result) = srgb_to_linear_extended_poly(
+                        token,
+                        f32x4::load_t(token, &src_block),
+                    );
+                    let mut out = result.to_array();
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        srgb_to_linear_extended_patch(&src_block, &mut out);
+                    }
+                    out_rem.copy_from_slice(&out[..out_rem.len()]);
+                }
             }
             #[inline(always)]
             pub(crate) fn linear_to_srgb_extended_poly<T: F32x4Convert>(
@@ -566,19 +696,6 @@ mod kernels {
                 let result = f32x4::blend(thresh_mask, linear_result, power_result);
                 (abs_v, result.abs() | (v & sign))
             }
-            #[inline(always)]
-            pub(crate) fn try_linear_to_srgb_extended_vector<T: F32x4Convert>(
-                token: T,
-                v: f32x4<T>,
-            ) -> Option<f32x4<T>> {
-                let (abs_v, result) = linear_to_srgb_extended_poly(token, v);
-                if abs_v.simd_gt(f32x4::splat_t(token, 64.0)).bitcast_to_i32().any_true()
-                {
-                    None
-                } else {
-                    Some(result)
-                }
-            }
             #[allow(dead_code)]
             #[inline(always)]
             pub(crate) fn linear_to_srgb_extended<T: F32x4Convert>(
@@ -588,6 +705,7 @@ mod kernels {
                 linear_to_srgb_extended_vector(token, f32x4::from_array_t(token, linear))
                     .to_array()
             }
+            #[allow(dead_code)]
             #[inline(always)]
             pub(crate) fn linear_to_srgb_extended_vector<T: F32x4Convert>(
                 token: T,
@@ -626,13 +744,6 @@ mod kernels {
                 const FALLBACK: bool,
             >(token: T, values: &mut [f32]) {
                 if !FALLBACK {
-                    fn tail<T: F32x4Convert>(token: T, chunk: [f32; 4]) -> [f32; 4] {
-                        linear_to_srgb_extended_vector_cfg::<
-                            T,
-                            false,
-                        >(token, f32x4::from_array_t(token, chunk))
-                            .to_array()
-                    }
                     {
                         let (chunks, remainder) = (values).as_chunks_mut::<4>();
                         for slot in chunks {
@@ -646,54 +757,54 @@ mod kernels {
                             };
                         }
                         if !remainder.is_empty() {
-                            crate::kernels::finish_tail_cold(
-                                remainder,
-                                token,
-                                tail::<T>,
-                            );
+                            {
+                                let _ = &token;
+                                let mut block = [0.0; 4];
+                                block[..remainder.len()].copy_from_slice(remainder);
+                                let chunk: [f32; 4] = block;
+                                let converted = {
+                                    linear_to_srgb_extended_vector_cfg::<
+                                        T,
+                                        false,
+                                    >(token, f32x4::from_array_t(token, chunk))
+                                        .to_array()
+                                };
+                                remainder.copy_from_slice(&converted[..remainder.len()]);
+                            }
                         }
                     };
                     return;
                 }
-                fn slow<T: F32x4Convert>(token: T, chunk: [f32; 4]) -> [f32; 4] {
-                    linear_to_srgb_extended_vector(
-                            token,
-                            f32x4::from_array_t(token, chunk),
-                        )
-                        .to_array()
+                let (chunks, remainder) = values.as_chunks_mut::<4>();
+                let limit = f32x4::splat_t(token, 64.0);
+                for slot in chunks {
+                    let (abs_v, result) = linear_to_srgb_extended_poly(
+                        token,
+                        f32x4::load_t(token, slot),
+                    );
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        let mut out = result.to_array();
+                        linear_to_srgb_extended_patch(token, slot, &mut out);
+                        *slot = out;
+                    } else {
+                        result.store(slot);
+                    }
                 }
-                {
-                    let (chunks, remainder) = (values).as_chunks_mut::<4>();
-                    let mut idx = 0;
-                    while idx < chunks.len() {
-                        let chunk: [f32; 4] = chunks[idx];
-                        let Some(converted) = ({
-                            try_linear_to_srgb_extended_vector(
-                                    token,
-                                    f32x4::from_array_t(token, chunk),
-                                )
-                                .map(|r| r.to_array())
-                        }) else {
-                            crate::kernels::finish_slice_cold(
-                                &mut chunks[idx..],
-                                remainder,
-                                token,
-                                slow::<T>,
-                            );
-                            return;
-                        };
-                        chunks[idx] = converted;
-                        idx += 1;
-                    }
-                    if !remainder.is_empty() {
-                        crate::kernels::finish_slice_cold(
-                            &mut [],
-                            remainder,
+                if !remainder.is_empty() {
+                    {
+                        let mut block = [0.0; 4];
+                        block[..remainder.len()].copy_from_slice(remainder);
+                        let (abs_v, result) = linear_to_srgb_extended_poly(
                             token,
-                            slow::<T>,
+                            f32x4::load_t(token, &block),
                         );
+                        let mut out = result.to_array();
+                        if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                            linear_to_srgb_extended_patch(token, &block, &mut out);
+                        }
+                        remainder.copy_from_slice(&out[..remainder.len()]);
                     }
-                };
+                }
             }
             #[allow(dead_code)]
             #[inline(always)]
@@ -702,6 +813,55 @@ mod kernels {
                 values: &mut [f32],
             ) {
                 linear_to_srgb_extended_slice_cfg::<T, true>(token, values);
+            }
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn linear_to_srgb_extended_slice_into<T: F32x4Convert>(
+                token: T,
+                input: &[f32],
+                output: &mut [f32],
+            ) {
+                {
+                    match (&input.len(), &output.len()) {
+                        (left_val, right_val) => {
+                            if !(*left_val == *right_val) {
+                                let kind = ::core::panicking::AssertKind::Eq;
+                                ::core::panicking::assert_failed(
+                                    kind,
+                                    &*left_val,
+                                    &*right_val,
+                                    ::core::option::Option::None,
+                                );
+                            }
+                        }
+                    }
+                };
+                let (in_chunks, in_rem) = input.as_chunks::<4>();
+                let (out_chunks, out_rem) = output.as_chunks_mut::<4>();
+                let limit = f32x4::splat_t(token, 64.0);
+                for (src_slot, dst_slot) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                    let (abs_v, result) = linear_to_srgb_extended_poly(
+                        token,
+                        f32x4::load_t(token, src_slot),
+                    );
+                    result.store(dst_slot);
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        linear_to_srgb_extended_patch(token, src_slot, dst_slot);
+                    }
+                }
+                if !in_rem.is_empty() {
+                    let mut src_block = [0.0; 4];
+                    src_block[..in_rem.len()].copy_from_slice(in_rem);
+                    let (abs_v, result) = linear_to_srgb_extended_poly(
+                        token,
+                        f32x4::load_t(token, &src_block),
+                    );
+                    let mut out = result.to_array();
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        linear_to_srgb_extended_patch(token, &src_block, &mut out);
+                    }
+                    out_rem.copy_from_slice(&out[..out_rem.len()]);
+                }
             }
         }
         pub(crate) mod x8 {
@@ -732,12 +892,6 @@ mod kernels {
                 token: T,
                 values: &mut [f32],
             ) {
-                fn tail<T: F32x8Backend, const CFG: u32>(
-                    token: T,
-                    chunk: [f32; 8],
-                ) -> [f32; 8] {
-                    srgb_to_linear_cfg::<T, CFG>(token, chunk)
-                }
                 {
                     let (chunks, remainder) = (values).as_chunks_mut::<8>();
                     for slot in chunks {
@@ -745,11 +899,14 @@ mod kernels {
                         *slot = srgb_to_linear_cfg::<T, CFG>(token, chunk);
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(
-                            remainder,
-                            token,
-                            tail::<T, CFG>,
-                        );
+                        {
+                            let _ = &token;
+                            let mut block = [0.0; 8];
+                            block[..remainder.len()].copy_from_slice(remainder);
+                            let chunk: [f32; 8] = block;
+                            let converted = srgb_to_linear_cfg::<T, CFG>(token, chunk);
+                            remainder.copy_from_slice(&converted[..remainder.len()]);
+                        }
                     }
                 };
             }
@@ -760,6 +917,51 @@ mod kernels {
                 values: &mut [f32],
             ) {
                 srgb_to_linear_slice_cfg::<T, { cfg::SRGB_CLAMPED }>(token, values);
+            }
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn srgb_to_linear_slice_into<T: F32x8Backend>(
+                token: T,
+                input: &[f32],
+                output: &mut [f32],
+            ) {
+                {
+                    {
+                        match (&(input).len(), &(output).len()) {
+                            (left_val, right_val) => {
+                                if !(*left_val == *right_val) {
+                                    let kind = ::core::panicking::AssertKind::Eq;
+                                    ::core::panicking::assert_failed(
+                                        kind,
+                                        &*left_val,
+                                        &*right_val,
+                                        ::core::option::Option::None,
+                                    );
+                                }
+                            }
+                        }
+                    };
+                    let (in_chunks, in_rem) = (input).as_chunks::<8>();
+                    let (out_chunks, out_rem) = (output).as_chunks_mut::<8>();
+                    for (src_slot, dst_slot) in in_chunks
+                        .iter()
+                        .zip(out_chunks.iter_mut())
+                    {
+                        let chunk: [f32; 8] = *src_slot;
+                        *dst_slot = {
+                            srgb_to_linear_cfg::<T, { cfg::SRGB_CLAMPED }>(token, chunk)
+                        };
+                    }
+                    if !in_rem.is_empty() {
+                        let mut block = [0.0; 8];
+                        block[..in_rem.len()].copy_from_slice(in_rem);
+                        let chunk: [f32; 8] = block;
+                        let converted = {
+                            srgb_to_linear_cfg::<T, { cfg::SRGB_CLAMPED }>(token, chunk)
+                        };
+                        out_rem.copy_from_slice(&converted[..out_rem.len()]);
+                    }
+                };
             }
             #[inline(always)]
             pub(crate) fn srgb_to_linear_vector<T: F32x8Backend>(
@@ -843,12 +1045,6 @@ mod kernels {
                 token: T,
                 values: &mut [f32],
             ) {
-                fn tail<T: F32x8Backend, const CFG: u32>(
-                    token: T,
-                    chunk: [f32; 8],
-                ) -> [f32; 8] {
-                    linear_to_srgb_cfg::<T, CFG>(token, chunk)
-                }
                 {
                     let (chunks, remainder) = (values).as_chunks_mut::<8>();
                     for slot in chunks {
@@ -856,11 +1052,14 @@ mod kernels {
                         *slot = linear_to_srgb_cfg::<T, CFG>(token, chunk);
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(
-                            remainder,
-                            token,
-                            tail::<T, CFG>,
-                        );
+                        {
+                            let _ = &token;
+                            let mut block = [0.0; 8];
+                            block[..remainder.len()].copy_from_slice(remainder);
+                            let chunk: [f32; 8] = block;
+                            let converted = linear_to_srgb_cfg::<T, CFG>(token, chunk);
+                            remainder.copy_from_slice(&converted[..remainder.len()]);
+                        }
                     }
                 };
             }
@@ -871,6 +1070,51 @@ mod kernels {
                 values: &mut [f32],
             ) {
                 linear_to_srgb_slice_cfg::<T, { cfg::SRGB_CLAMPED }>(token, values);
+            }
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn linear_to_srgb_slice_into<T: F32x8Backend>(
+                token: T,
+                input: &[f32],
+                output: &mut [f32],
+            ) {
+                {
+                    {
+                        match (&(input).len(), &(output).len()) {
+                            (left_val, right_val) => {
+                                if !(*left_val == *right_val) {
+                                    let kind = ::core::panicking::AssertKind::Eq;
+                                    ::core::panicking::assert_failed(
+                                        kind,
+                                        &*left_val,
+                                        &*right_val,
+                                        ::core::option::Option::None,
+                                    );
+                                }
+                            }
+                        }
+                    };
+                    let (in_chunks, in_rem) = (input).as_chunks::<8>();
+                    let (out_chunks, out_rem) = (output).as_chunks_mut::<8>();
+                    for (src_slot, dst_slot) in in_chunks
+                        .iter()
+                        .zip(out_chunks.iter_mut())
+                    {
+                        let chunk: [f32; 8] = *src_slot;
+                        *dst_slot = {
+                            linear_to_srgb_cfg::<T, { cfg::SRGB_CLAMPED }>(token, chunk)
+                        };
+                    }
+                    if !in_rem.is_empty() {
+                        let mut block = [0.0; 8];
+                        block[..in_rem.len()].copy_from_slice(in_rem);
+                        let chunk: [f32; 8] = block;
+                        let converted = {
+                            linear_to_srgb_cfg::<T, { cfg::SRGB_CLAMPED }>(token, chunk)
+                        };
+                        out_rem.copy_from_slice(&converted[..out_rem.len()]);
+                    }
+                };
             }
             #[inline(always)]
             pub(crate) fn linear_to_srgb_vector<T: F32x8Backend>(
@@ -1036,19 +1280,6 @@ mod kernels {
                 let result = f32x8::blend(thresh_mask, linear_result, power_result);
                 (abs_v, result.abs() | (v & sign))
             }
-            #[inline(always)]
-            pub(crate) fn try_srgb_to_linear_extended_vector<T: F32x8Convert>(
-                token: T,
-                v: f32x8<T>,
-            ) -> Option<f32x8<T>> {
-                let (abs_v, result) = srgb_to_linear_extended_poly(token, v);
-                if abs_v.simd_gt(f32x8::splat_t(token, 8.0)).bitcast_to_i32().any_true()
-                {
-                    None
-                } else {
-                    Some(result)
-                }
-            }
             #[allow(dead_code)]
             #[inline(always)]
             pub(crate) fn srgb_to_linear_extended<T: F32x8Convert>(
@@ -1058,6 +1289,7 @@ mod kernels {
                 srgb_to_linear_extended_vector(token, f32x8::from_array_t(token, srgb))
                     .to_array()
             }
+            #[allow(dead_code)]
             #[inline(always)]
             pub(crate) fn srgb_to_linear_extended_vector<T: F32x8Convert>(
                 token: T,
@@ -1092,13 +1324,6 @@ mod kernels {
                 const FALLBACK: bool,
             >(token: T, values: &mut [f32]) {
                 if !FALLBACK {
-                    fn tail<T: F32x8Convert>(token: T, chunk: [f32; 8]) -> [f32; 8] {
-                        srgb_to_linear_extended_vector_cfg::<
-                            T,
-                            false,
-                        >(token, f32x8::from_array_t(token, chunk))
-                            .to_array()
-                    }
                     {
                         let (chunks, remainder) = (values).as_chunks_mut::<8>();
                         for slot in chunks {
@@ -1112,54 +1337,54 @@ mod kernels {
                             };
                         }
                         if !remainder.is_empty() {
-                            crate::kernels::finish_tail_cold(
-                                remainder,
-                                token,
-                                tail::<T>,
-                            );
+                            {
+                                let _ = &token;
+                                let mut block = [0.0; 8];
+                                block[..remainder.len()].copy_from_slice(remainder);
+                                let chunk: [f32; 8] = block;
+                                let converted = {
+                                    srgb_to_linear_extended_vector_cfg::<
+                                        T,
+                                        false,
+                                    >(token, f32x8::from_array_t(token, chunk))
+                                        .to_array()
+                                };
+                                remainder.copy_from_slice(&converted[..remainder.len()]);
+                            }
                         }
                     };
                     return;
                 }
-                fn slow<T: F32x8Convert>(token: T, chunk: [f32; 8]) -> [f32; 8] {
-                    srgb_to_linear_extended_vector(
-                            token,
-                            f32x8::from_array_t(token, chunk),
-                        )
-                        .to_array()
+                let (chunks, remainder) = values.as_chunks_mut::<8>();
+                let limit = f32x8::splat_t(token, 8.0);
+                for slot in chunks {
+                    let (abs_v, result) = srgb_to_linear_extended_poly(
+                        token,
+                        f32x8::load_t(token, slot),
+                    );
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        let mut out = result.to_array();
+                        srgb_to_linear_extended_patch(slot, &mut out);
+                        *slot = out;
+                    } else {
+                        result.store(slot);
+                    }
                 }
-                {
-                    let (chunks, remainder) = (values).as_chunks_mut::<8>();
-                    let mut idx = 0;
-                    while idx < chunks.len() {
-                        let chunk: [f32; 8] = chunks[idx];
-                        let Some(converted) = ({
-                            try_srgb_to_linear_extended_vector(
-                                    token,
-                                    f32x8::from_array_t(token, chunk),
-                                )
-                                .map(|r| r.to_array())
-                        }) else {
-                            crate::kernels::finish_slice_cold(
-                                &mut chunks[idx..],
-                                remainder,
-                                token,
-                                slow::<T>,
-                            );
-                            return;
-                        };
-                        chunks[idx] = converted;
-                        idx += 1;
-                    }
-                    if !remainder.is_empty() {
-                        crate::kernels::finish_slice_cold(
-                            &mut [],
-                            remainder,
+                if !remainder.is_empty() {
+                    {
+                        let mut block = [0.0; 8];
+                        block[..remainder.len()].copy_from_slice(remainder);
+                        let (abs_v, result) = srgb_to_linear_extended_poly(
                             token,
-                            slow::<T>,
+                            f32x8::load_t(token, &block),
                         );
+                        let mut out = result.to_array();
+                        if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                            srgb_to_linear_extended_patch(&block, &mut out);
+                        }
+                        remainder.copy_from_slice(&out[..remainder.len()]);
                     }
-                };
+                }
             }
             #[allow(dead_code)]
             #[inline(always)]
@@ -1168,6 +1393,55 @@ mod kernels {
                 values: &mut [f32],
             ) {
                 srgb_to_linear_extended_slice_cfg::<T, true>(token, values);
+            }
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn srgb_to_linear_extended_slice_into<T: F32x8Convert>(
+                token: T,
+                input: &[f32],
+                output: &mut [f32],
+            ) {
+                {
+                    match (&input.len(), &output.len()) {
+                        (left_val, right_val) => {
+                            if !(*left_val == *right_val) {
+                                let kind = ::core::panicking::AssertKind::Eq;
+                                ::core::panicking::assert_failed(
+                                    kind,
+                                    &*left_val,
+                                    &*right_val,
+                                    ::core::option::Option::None,
+                                );
+                            }
+                        }
+                    }
+                };
+                let (in_chunks, in_rem) = input.as_chunks::<8>();
+                let (out_chunks, out_rem) = output.as_chunks_mut::<8>();
+                let limit = f32x8::splat_t(token, 8.0);
+                for (src_slot, dst_slot) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                    let (abs_v, result) = srgb_to_linear_extended_poly(
+                        token,
+                        f32x8::load_t(token, src_slot),
+                    );
+                    result.store(dst_slot);
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        srgb_to_linear_extended_patch(src_slot, dst_slot);
+                    }
+                }
+                if !in_rem.is_empty() {
+                    let mut src_block = [0.0; 8];
+                    src_block[..in_rem.len()].copy_from_slice(in_rem);
+                    let (abs_v, result) = srgb_to_linear_extended_poly(
+                        token,
+                        f32x8::load_t(token, &src_block),
+                    );
+                    let mut out = result.to_array();
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        srgb_to_linear_extended_patch(&src_block, &mut out);
+                    }
+                    out_rem.copy_from_slice(&out[..out_rem.len()]);
+                }
             }
             #[inline(always)]
             pub(crate) fn linear_to_srgb_extended_poly<T: F32x8Convert>(
@@ -1196,19 +1470,6 @@ mod kernels {
                 let result = f32x8::blend(thresh_mask, linear_result, power_result);
                 (abs_v, result.abs() | (v & sign))
             }
-            #[inline(always)]
-            pub(crate) fn try_linear_to_srgb_extended_vector<T: F32x8Convert>(
-                token: T,
-                v: f32x8<T>,
-            ) -> Option<f32x8<T>> {
-                let (abs_v, result) = linear_to_srgb_extended_poly(token, v);
-                if abs_v.simd_gt(f32x8::splat_t(token, 64.0)).bitcast_to_i32().any_true()
-                {
-                    None
-                } else {
-                    Some(result)
-                }
-            }
             #[allow(dead_code)]
             #[inline(always)]
             pub(crate) fn linear_to_srgb_extended<T: F32x8Convert>(
@@ -1218,6 +1479,7 @@ mod kernels {
                 linear_to_srgb_extended_vector(token, f32x8::from_array_t(token, linear))
                     .to_array()
             }
+            #[allow(dead_code)]
             #[inline(always)]
             pub(crate) fn linear_to_srgb_extended_vector<T: F32x8Convert>(
                 token: T,
@@ -1256,13 +1518,6 @@ mod kernels {
                 const FALLBACK: bool,
             >(token: T, values: &mut [f32]) {
                 if !FALLBACK {
-                    fn tail<T: F32x8Convert>(token: T, chunk: [f32; 8]) -> [f32; 8] {
-                        linear_to_srgb_extended_vector_cfg::<
-                            T,
-                            false,
-                        >(token, f32x8::from_array_t(token, chunk))
-                            .to_array()
-                    }
                     {
                         let (chunks, remainder) = (values).as_chunks_mut::<8>();
                         for slot in chunks {
@@ -1276,54 +1531,54 @@ mod kernels {
                             };
                         }
                         if !remainder.is_empty() {
-                            crate::kernels::finish_tail_cold(
-                                remainder,
-                                token,
-                                tail::<T>,
-                            );
+                            {
+                                let _ = &token;
+                                let mut block = [0.0; 8];
+                                block[..remainder.len()].copy_from_slice(remainder);
+                                let chunk: [f32; 8] = block;
+                                let converted = {
+                                    linear_to_srgb_extended_vector_cfg::<
+                                        T,
+                                        false,
+                                    >(token, f32x8::from_array_t(token, chunk))
+                                        .to_array()
+                                };
+                                remainder.copy_from_slice(&converted[..remainder.len()]);
+                            }
                         }
                     };
                     return;
                 }
-                fn slow<T: F32x8Convert>(token: T, chunk: [f32; 8]) -> [f32; 8] {
-                    linear_to_srgb_extended_vector(
-                            token,
-                            f32x8::from_array_t(token, chunk),
-                        )
-                        .to_array()
+                let (chunks, remainder) = values.as_chunks_mut::<8>();
+                let limit = f32x8::splat_t(token, 64.0);
+                for slot in chunks {
+                    let (abs_v, result) = linear_to_srgb_extended_poly(
+                        token,
+                        f32x8::load_t(token, slot),
+                    );
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        let mut out = result.to_array();
+                        linear_to_srgb_extended_patch(token, slot, &mut out);
+                        *slot = out;
+                    } else {
+                        result.store(slot);
+                    }
                 }
-                {
-                    let (chunks, remainder) = (values).as_chunks_mut::<8>();
-                    let mut idx = 0;
-                    while idx < chunks.len() {
-                        let chunk: [f32; 8] = chunks[idx];
-                        let Some(converted) = ({
-                            try_linear_to_srgb_extended_vector(
-                                    token,
-                                    f32x8::from_array_t(token, chunk),
-                                )
-                                .map(|r| r.to_array())
-                        }) else {
-                            crate::kernels::finish_slice_cold(
-                                &mut chunks[idx..],
-                                remainder,
-                                token,
-                                slow::<T>,
-                            );
-                            return;
-                        };
-                        chunks[idx] = converted;
-                        idx += 1;
-                    }
-                    if !remainder.is_empty() {
-                        crate::kernels::finish_slice_cold(
-                            &mut [],
-                            remainder,
+                if !remainder.is_empty() {
+                    {
+                        let mut block = [0.0; 8];
+                        block[..remainder.len()].copy_from_slice(remainder);
+                        let (abs_v, result) = linear_to_srgb_extended_poly(
                             token,
-                            slow::<T>,
+                            f32x8::load_t(token, &block),
                         );
+                        let mut out = result.to_array();
+                        if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                            linear_to_srgb_extended_patch(token, &block, &mut out);
+                        }
+                        remainder.copy_from_slice(&out[..remainder.len()]);
                     }
-                };
+                }
             }
             #[allow(dead_code)]
             #[inline(always)]
@@ -1332,6 +1587,55 @@ mod kernels {
                 values: &mut [f32],
             ) {
                 linear_to_srgb_extended_slice_cfg::<T, true>(token, values);
+            }
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn linear_to_srgb_extended_slice_into<T: F32x8Convert>(
+                token: T,
+                input: &[f32],
+                output: &mut [f32],
+            ) {
+                {
+                    match (&input.len(), &output.len()) {
+                        (left_val, right_val) => {
+                            if !(*left_val == *right_val) {
+                                let kind = ::core::panicking::AssertKind::Eq;
+                                ::core::panicking::assert_failed(
+                                    kind,
+                                    &*left_val,
+                                    &*right_val,
+                                    ::core::option::Option::None,
+                                );
+                            }
+                        }
+                    }
+                };
+                let (in_chunks, in_rem) = input.as_chunks::<8>();
+                let (out_chunks, out_rem) = output.as_chunks_mut::<8>();
+                let limit = f32x8::splat_t(token, 64.0);
+                for (src_slot, dst_slot) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                    let (abs_v, result) = linear_to_srgb_extended_poly(
+                        token,
+                        f32x8::load_t(token, src_slot),
+                    );
+                    result.store(dst_slot);
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        linear_to_srgb_extended_patch(token, src_slot, dst_slot);
+                    }
+                }
+                if !in_rem.is_empty() {
+                    let mut src_block = [0.0; 8];
+                    src_block[..in_rem.len()].copy_from_slice(in_rem);
+                    let (abs_v, result) = linear_to_srgb_extended_poly(
+                        token,
+                        f32x8::load_t(token, &src_block),
+                    );
+                    let mut out = result.to_array();
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        linear_to_srgb_extended_patch(token, &src_block, &mut out);
+                    }
+                    out_rem.copy_from_slice(&out[..out_rem.len()]);
+                }
             }
         }
         pub(crate) mod x16 {
@@ -1363,12 +1667,6 @@ mod kernels {
                 token: T,
                 values: &mut [f32],
             ) {
-                fn tail<T: F32x16Backend, const CFG: u32>(
-                    token: T,
-                    chunk: [f32; 16],
-                ) -> [f32; 16] {
-                    srgb_to_linear_cfg::<T, CFG>(token, chunk)
-                }
                 {
                     let (chunks, remainder) = (values).as_chunks_mut::<16>();
                     for slot in chunks {
@@ -1376,11 +1674,14 @@ mod kernels {
                         *slot = srgb_to_linear_cfg::<T, CFG>(token, chunk);
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(
-                            remainder,
-                            token,
-                            tail::<T, CFG>,
-                        );
+                        {
+                            let _ = &token;
+                            let mut block = [0.0; 16];
+                            block[..remainder.len()].copy_from_slice(remainder);
+                            let chunk: [f32; 16] = block;
+                            let converted = srgb_to_linear_cfg::<T, CFG>(token, chunk);
+                            remainder.copy_from_slice(&converted[..remainder.len()]);
+                        }
                     }
                 };
             }
@@ -1391,6 +1692,51 @@ mod kernels {
                 values: &mut [f32],
             ) {
                 srgb_to_linear_slice_cfg::<T, { cfg::SRGB_CLAMPED }>(token, values);
+            }
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn srgb_to_linear_slice_into<T: F32x16Backend>(
+                token: T,
+                input: &[f32],
+                output: &mut [f32],
+            ) {
+                {
+                    {
+                        match (&(input).len(), &(output).len()) {
+                            (left_val, right_val) => {
+                                if !(*left_val == *right_val) {
+                                    let kind = ::core::panicking::AssertKind::Eq;
+                                    ::core::panicking::assert_failed(
+                                        kind,
+                                        &*left_val,
+                                        &*right_val,
+                                        ::core::option::Option::None,
+                                    );
+                                }
+                            }
+                        }
+                    };
+                    let (in_chunks, in_rem) = (input).as_chunks::<16>();
+                    let (out_chunks, out_rem) = (output).as_chunks_mut::<16>();
+                    for (src_slot, dst_slot) in in_chunks
+                        .iter()
+                        .zip(out_chunks.iter_mut())
+                    {
+                        let chunk: [f32; 16] = *src_slot;
+                        *dst_slot = {
+                            srgb_to_linear_cfg::<T, { cfg::SRGB_CLAMPED }>(token, chunk)
+                        };
+                    }
+                    if !in_rem.is_empty() {
+                        let mut block = [0.0; 16];
+                        block[..in_rem.len()].copy_from_slice(in_rem);
+                        let chunk: [f32; 16] = block;
+                        let converted = {
+                            srgb_to_linear_cfg::<T, { cfg::SRGB_CLAMPED }>(token, chunk)
+                        };
+                        out_rem.copy_from_slice(&converted[..out_rem.len()]);
+                    }
+                };
             }
             #[inline(always)]
             pub(crate) fn srgb_to_linear_vector<T: F32x16Backend>(
@@ -1474,12 +1820,6 @@ mod kernels {
                 token: T,
                 values: &mut [f32],
             ) {
-                fn tail<T: F32x16Backend, const CFG: u32>(
-                    token: T,
-                    chunk: [f32; 16],
-                ) -> [f32; 16] {
-                    linear_to_srgb_cfg::<T, CFG>(token, chunk)
-                }
                 {
                     let (chunks, remainder) = (values).as_chunks_mut::<16>();
                     for slot in chunks {
@@ -1487,11 +1827,14 @@ mod kernels {
                         *slot = linear_to_srgb_cfg::<T, CFG>(token, chunk);
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(
-                            remainder,
-                            token,
-                            tail::<T, CFG>,
-                        );
+                        {
+                            let _ = &token;
+                            let mut block = [0.0; 16];
+                            block[..remainder.len()].copy_from_slice(remainder);
+                            let chunk: [f32; 16] = block;
+                            let converted = linear_to_srgb_cfg::<T, CFG>(token, chunk);
+                            remainder.copy_from_slice(&converted[..remainder.len()]);
+                        }
                     }
                 };
             }
@@ -1502,6 +1845,51 @@ mod kernels {
                 values: &mut [f32],
             ) {
                 linear_to_srgb_slice_cfg::<T, { cfg::SRGB_CLAMPED }>(token, values);
+            }
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn linear_to_srgb_slice_into<T: F32x16Backend>(
+                token: T,
+                input: &[f32],
+                output: &mut [f32],
+            ) {
+                {
+                    {
+                        match (&(input).len(), &(output).len()) {
+                            (left_val, right_val) => {
+                                if !(*left_val == *right_val) {
+                                    let kind = ::core::panicking::AssertKind::Eq;
+                                    ::core::panicking::assert_failed(
+                                        kind,
+                                        &*left_val,
+                                        &*right_val,
+                                        ::core::option::Option::None,
+                                    );
+                                }
+                            }
+                        }
+                    };
+                    let (in_chunks, in_rem) = (input).as_chunks::<16>();
+                    let (out_chunks, out_rem) = (output).as_chunks_mut::<16>();
+                    for (src_slot, dst_slot) in in_chunks
+                        .iter()
+                        .zip(out_chunks.iter_mut())
+                    {
+                        let chunk: [f32; 16] = *src_slot;
+                        *dst_slot = {
+                            linear_to_srgb_cfg::<T, { cfg::SRGB_CLAMPED }>(token, chunk)
+                        };
+                    }
+                    if !in_rem.is_empty() {
+                        let mut block = [0.0; 16];
+                        block[..in_rem.len()].copy_from_slice(in_rem);
+                        let chunk: [f32; 16] = block;
+                        let converted = {
+                            linear_to_srgb_cfg::<T, { cfg::SRGB_CLAMPED }>(token, chunk)
+                        };
+                        out_rem.copy_from_slice(&converted[..out_rem.len()]);
+                    }
+                };
             }
             #[inline(always)]
             pub(crate) fn linear_to_srgb_vector<T: F32x16Backend>(
@@ -1670,19 +2058,6 @@ mod kernels {
                 let result = f32x16::blend(thresh_mask, linear_result, power_result);
                 (abs_v, result.abs() | (v & sign))
             }
-            #[inline(always)]
-            pub(crate) fn try_srgb_to_linear_extended_vector<T: F32x16Convert>(
-                token: T,
-                v: f32x16<T>,
-            ) -> Option<f32x16<T>> {
-                let (abs_v, result) = srgb_to_linear_extended_poly(token, v);
-                if abs_v.simd_gt(f32x16::splat_t(token, 8.0)).bitcast_to_i32().any_true()
-                {
-                    None
-                } else {
-                    Some(result)
-                }
-            }
             #[allow(dead_code)]
             #[inline(always)]
             pub(crate) fn srgb_to_linear_extended<T: F32x16Convert>(
@@ -1692,6 +2067,7 @@ mod kernels {
                 srgb_to_linear_extended_vector(token, f32x16::from_array_t(token, srgb))
                     .to_array()
             }
+            #[allow(dead_code)]
             #[inline(always)]
             pub(crate) fn srgb_to_linear_extended_vector<T: F32x16Convert>(
                 token: T,
@@ -1726,13 +2102,6 @@ mod kernels {
                 const FALLBACK: bool,
             >(token: T, values: &mut [f32]) {
                 if !FALLBACK {
-                    fn tail<T: F32x16Convert>(token: T, chunk: [f32; 16]) -> [f32; 16] {
-                        srgb_to_linear_extended_vector_cfg::<
-                            T,
-                            false,
-                        >(token, f32x16::from_array_t(token, chunk))
-                            .to_array()
-                    }
                     {
                         let (chunks, remainder) = (values).as_chunks_mut::<16>();
                         for slot in chunks {
@@ -1746,54 +2115,54 @@ mod kernels {
                             };
                         }
                         if !remainder.is_empty() {
-                            crate::kernels::finish_tail_cold(
-                                remainder,
-                                token,
-                                tail::<T>,
-                            );
+                            {
+                                let _ = &token;
+                                let mut block = [0.0; 16];
+                                block[..remainder.len()].copy_from_slice(remainder);
+                                let chunk: [f32; 16] = block;
+                                let converted = {
+                                    srgb_to_linear_extended_vector_cfg::<
+                                        T,
+                                        false,
+                                    >(token, f32x16::from_array_t(token, chunk))
+                                        .to_array()
+                                };
+                                remainder.copy_from_slice(&converted[..remainder.len()]);
+                            }
                         }
                     };
                     return;
                 }
-                fn slow<T: F32x16Convert>(token: T, chunk: [f32; 16]) -> [f32; 16] {
-                    srgb_to_linear_extended_vector(
-                            token,
-                            f32x16::from_array_t(token, chunk),
-                        )
-                        .to_array()
+                let (chunks, remainder) = values.as_chunks_mut::<16>();
+                let limit = f32x16::splat_t(token, 8.0);
+                for slot in chunks {
+                    let (abs_v, result) = srgb_to_linear_extended_poly(
+                        token,
+                        f32x16::load_t(token, slot),
+                    );
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        let mut out = result.to_array();
+                        srgb_to_linear_extended_patch(slot, &mut out);
+                        *slot = out;
+                    } else {
+                        result.store(slot);
+                    }
                 }
-                {
-                    let (chunks, remainder) = (values).as_chunks_mut::<16>();
-                    let mut idx = 0;
-                    while idx < chunks.len() {
-                        let chunk: [f32; 16] = chunks[idx];
-                        let Some(converted) = ({
-                            try_srgb_to_linear_extended_vector(
-                                    token,
-                                    f32x16::from_array_t(token, chunk),
-                                )
-                                .map(|r| r.to_array())
-                        }) else {
-                            crate::kernels::finish_slice_cold(
-                                &mut chunks[idx..],
-                                remainder,
-                                token,
-                                slow::<T>,
-                            );
-                            return;
-                        };
-                        chunks[idx] = converted;
-                        idx += 1;
-                    }
-                    if !remainder.is_empty() {
-                        crate::kernels::finish_slice_cold(
-                            &mut [],
-                            remainder,
+                if !remainder.is_empty() {
+                    {
+                        let mut block = [0.0; 16];
+                        block[..remainder.len()].copy_from_slice(remainder);
+                        let (abs_v, result) = srgb_to_linear_extended_poly(
                             token,
-                            slow::<T>,
+                            f32x16::load_t(token, &block),
                         );
+                        let mut out = result.to_array();
+                        if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                            srgb_to_linear_extended_patch(&block, &mut out);
+                        }
+                        remainder.copy_from_slice(&out[..remainder.len()]);
                     }
-                };
+                }
             }
             #[allow(dead_code)]
             #[inline(always)]
@@ -1802,6 +2171,55 @@ mod kernels {
                 values: &mut [f32],
             ) {
                 srgb_to_linear_extended_slice_cfg::<T, true>(token, values);
+            }
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn srgb_to_linear_extended_slice_into<T: F32x16Convert>(
+                token: T,
+                input: &[f32],
+                output: &mut [f32],
+            ) {
+                {
+                    match (&input.len(), &output.len()) {
+                        (left_val, right_val) => {
+                            if !(*left_val == *right_val) {
+                                let kind = ::core::panicking::AssertKind::Eq;
+                                ::core::panicking::assert_failed(
+                                    kind,
+                                    &*left_val,
+                                    &*right_val,
+                                    ::core::option::Option::None,
+                                );
+                            }
+                        }
+                    }
+                };
+                let (in_chunks, in_rem) = input.as_chunks::<16>();
+                let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
+                let limit = f32x16::splat_t(token, 8.0);
+                for (src_slot, dst_slot) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                    let (abs_v, result) = srgb_to_linear_extended_poly(
+                        token,
+                        f32x16::load_t(token, src_slot),
+                    );
+                    result.store(dst_slot);
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        srgb_to_linear_extended_patch(src_slot, dst_slot);
+                    }
+                }
+                if !in_rem.is_empty() {
+                    let mut src_block = [0.0; 16];
+                    src_block[..in_rem.len()].copy_from_slice(in_rem);
+                    let (abs_v, result) = srgb_to_linear_extended_poly(
+                        token,
+                        f32x16::load_t(token, &src_block),
+                    );
+                    let mut out = result.to_array();
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        srgb_to_linear_extended_patch(&src_block, &mut out);
+                    }
+                    out_rem.copy_from_slice(&out[..out_rem.len()]);
+                }
             }
             #[inline(always)]
             pub(crate) fn linear_to_srgb_extended_poly<T: F32x16Convert>(
@@ -1833,22 +2251,6 @@ mod kernels {
                 let result = f32x16::blend(thresh_mask, linear_result, power_result);
                 (abs_v, result.abs() | (v & sign))
             }
-            #[inline(always)]
-            pub(crate) fn try_linear_to_srgb_extended_vector<T: F32x16Convert>(
-                token: T,
-                v: f32x16<T>,
-            ) -> Option<f32x16<T>> {
-                let (abs_v, result) = linear_to_srgb_extended_poly(token, v);
-                if abs_v
-                    .simd_gt(f32x16::splat_t(token, 64.0))
-                    .bitcast_to_i32()
-                    .any_true()
-                {
-                    None
-                } else {
-                    Some(result)
-                }
-            }
             #[allow(dead_code)]
             #[inline(always)]
             pub(crate) fn linear_to_srgb_extended<T: F32x16Convert>(
@@ -1861,6 +2263,7 @@ mod kernels {
                     )
                     .to_array()
             }
+            #[allow(dead_code)]
             #[inline(always)]
             pub(crate) fn linear_to_srgb_extended_vector<T: F32x16Convert>(
                 token: T,
@@ -1899,13 +2302,6 @@ mod kernels {
                 const FALLBACK: bool,
             >(token: T, values: &mut [f32]) {
                 if !FALLBACK {
-                    fn tail<T: F32x16Convert>(token: T, chunk: [f32; 16]) -> [f32; 16] {
-                        linear_to_srgb_extended_vector_cfg::<
-                            T,
-                            false,
-                        >(token, f32x16::from_array_t(token, chunk))
-                            .to_array()
-                    }
                     {
                         let (chunks, remainder) = (values).as_chunks_mut::<16>();
                         for slot in chunks {
@@ -1919,54 +2315,54 @@ mod kernels {
                             };
                         }
                         if !remainder.is_empty() {
-                            crate::kernels::finish_tail_cold(
-                                remainder,
-                                token,
-                                tail::<T>,
-                            );
+                            {
+                                let _ = &token;
+                                let mut block = [0.0; 16];
+                                block[..remainder.len()].copy_from_slice(remainder);
+                                let chunk: [f32; 16] = block;
+                                let converted = {
+                                    linear_to_srgb_extended_vector_cfg::<
+                                        T,
+                                        false,
+                                    >(token, f32x16::from_array_t(token, chunk))
+                                        .to_array()
+                                };
+                                remainder.copy_from_slice(&converted[..remainder.len()]);
+                            }
                         }
                     };
                     return;
                 }
-                fn slow<T: F32x16Convert>(token: T, chunk: [f32; 16]) -> [f32; 16] {
-                    linear_to_srgb_extended_vector(
-                            token,
-                            f32x16::from_array_t(token, chunk),
-                        )
-                        .to_array()
+                let (chunks, remainder) = values.as_chunks_mut::<16>();
+                let limit = f32x16::splat_t(token, 64.0);
+                for slot in chunks {
+                    let (abs_v, result) = linear_to_srgb_extended_poly(
+                        token,
+                        f32x16::load_t(token, slot),
+                    );
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        let mut out = result.to_array();
+                        linear_to_srgb_extended_patch(token, slot, &mut out);
+                        *slot = out;
+                    } else {
+                        result.store(slot);
+                    }
                 }
-                {
-                    let (chunks, remainder) = (values).as_chunks_mut::<16>();
-                    let mut idx = 0;
-                    while idx < chunks.len() {
-                        let chunk: [f32; 16] = chunks[idx];
-                        let Some(converted) = ({
-                            try_linear_to_srgb_extended_vector(
-                                    token,
-                                    f32x16::from_array_t(token, chunk),
-                                )
-                                .map(|r| r.to_array())
-                        }) else {
-                            crate::kernels::finish_slice_cold(
-                                &mut chunks[idx..],
-                                remainder,
-                                token,
-                                slow::<T>,
-                            );
-                            return;
-                        };
-                        chunks[idx] = converted;
-                        idx += 1;
-                    }
-                    if !remainder.is_empty() {
-                        crate::kernels::finish_slice_cold(
-                            &mut [],
-                            remainder,
+                if !remainder.is_empty() {
+                    {
+                        let mut block = [0.0; 16];
+                        block[..remainder.len()].copy_from_slice(remainder);
+                        let (abs_v, result) = linear_to_srgb_extended_poly(
                             token,
-                            slow::<T>,
+                            f32x16::load_t(token, &block),
                         );
+                        let mut out = result.to_array();
+                        if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                            linear_to_srgb_extended_patch(token, &block, &mut out);
+                        }
+                        remainder.copy_from_slice(&out[..remainder.len()]);
                     }
-                };
+                }
             }
             #[allow(dead_code)]
             #[inline(always)]
@@ -1975,6 +2371,55 @@ mod kernels {
                 values: &mut [f32],
             ) {
                 linear_to_srgb_extended_slice_cfg::<T, true>(token, values);
+            }
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn linear_to_srgb_extended_slice_into<T: F32x16Convert>(
+                token: T,
+                input: &[f32],
+                output: &mut [f32],
+            ) {
+                {
+                    match (&input.len(), &output.len()) {
+                        (left_val, right_val) => {
+                            if !(*left_val == *right_val) {
+                                let kind = ::core::panicking::AssertKind::Eq;
+                                ::core::panicking::assert_failed(
+                                    kind,
+                                    &*left_val,
+                                    &*right_val,
+                                    ::core::option::Option::None,
+                                );
+                            }
+                        }
+                    }
+                };
+                let (in_chunks, in_rem) = input.as_chunks::<16>();
+                let (out_chunks, out_rem) = output.as_chunks_mut::<16>();
+                let limit = f32x16::splat_t(token, 64.0);
+                for (src_slot, dst_slot) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                    let (abs_v, result) = linear_to_srgb_extended_poly(
+                        token,
+                        f32x16::load_t(token, src_slot),
+                    );
+                    result.store(dst_slot);
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        linear_to_srgb_extended_patch(token, src_slot, dst_slot);
+                    }
+                }
+                if !in_rem.is_empty() {
+                    let mut src_block = [0.0; 16];
+                    src_block[..in_rem.len()].copy_from_slice(in_rem);
+                    let (abs_v, result) = linear_to_srgb_extended_poly(
+                        token,
+                        f32x16::load_t(token, &src_block),
+                    );
+                    let mut out = result.to_array();
+                    if abs_v.simd_gt(limit).bitcast_to_i32().any_true() {
+                        linear_to_srgb_extended_patch(token, &src_block, &mut out);
+                    }
+                    out_rem.copy_from_slice(&out[..out_rem.len()]);
+                }
             }
         }
     }
@@ -2906,88 +3351,10 @@ mod kernels {
             remainder.copy_from_slice(&converted[..remainder.len()]);
         }
     }
-    #[cold]
-    #[inline(never)]
-    pub(crate) fn finish_tail_cold<C: Copy, const N: usize>(
-        remainder: &mut [f32],
-        ctx: C,
-        convert: fn(C, [f32; N]) -> [f32; N],
-    ) {
-        const {
-            if !N.is_power_of_two() {
-                ::core::panicking::panic("assertion failed: N.is_power_of_two()")
-            }
-        };
-        let n = remainder.len() & (N - 1);
-        let rem = &mut remainder[..n];
-        let mut block = [0.0; N];
-        block[..n].copy_from_slice(rem);
-        let converted = convert(ctx, block);
-        rem.copy_from_slice(&converted[..n]);
-    }
     pub(crate) use map_slice_inline;
-    #[cold]
-    #[inline(never)]
-    pub(crate) fn finish_rgba_tail_cold<C: Copy>(
-        remainder: &mut [f32],
-        ctx: C,
-        convert: fn(C, &mut [f32; 16]),
-    ) {
-        let n = remainder.len() & 12;
-        let rem = &mut remainder[..n];
-        let mut block = [0.0; 16];
-        block[..n].copy_from_slice(rem);
-        convert(ctx, &mut block);
-        rem.copy_from_slice(&block[..n]);
-    }
+    pub(crate) use map_slice_into_inline;
     pub(crate) use map_rgba_slice_inline;
-    #[cold]
-    #[inline(never)]
-    pub(crate) fn finish_slice_cold<C: Copy, const N: usize>(
-        rest_chunks: &mut [[f32; N]],
-        remainder: &mut [f32],
-        ctx: C,
-        slow: fn(C, [f32; N]) -> [f32; N],
-    ) {
-        const {
-            if !N.is_power_of_two() {
-                ::core::panicking::panic("assertion failed: N.is_power_of_two()")
-            }
-        };
-        for chunk in rest_chunks {
-            *chunk = slow(ctx, *chunk);
-        }
-        let n = remainder.len() & (N - 1);
-        if n != 0 {
-            let rem = &mut remainder[..n];
-            let mut block = [0.0; N];
-            block[..n].copy_from_slice(rem);
-            let converted = slow(ctx, block);
-            rem.copy_from_slice(&converted[..n]);
-        }
-    }
-    pub(crate) use map_slice_try_inline;
-    #[cold]
-    #[inline(never)]
-    pub(crate) fn finish_rgba_slice_cold<C: Copy>(
-        rest_chunks: &mut [[f32; 16]],
-        remainder: &mut [f32],
-        ctx: C,
-        slow: fn(C, &mut [f32; 16]),
-    ) {
-        for chunk in rest_chunks {
-            slow(ctx, chunk);
-        }
-        let n = remainder.len() & 12;
-        if n != 0 {
-            let rem = &mut remainder[..n];
-            let mut block = [0.0; 16];
-            block[..n].copy_from_slice(rem);
-            slow(ctx, &mut block);
-            rem.copy_from_slice(&block[..n]);
-        }
-    }
-    pub(crate) use map_rgba_slice_try_inline;
+    pub(crate) use map_rgba_slice_into_inline;
     /// Preserve per-sample fused scalar loops and relaxed-WASM padded vector tails.
     #[inline(always)]
     pub(crate) fn scalar_slice<const N: usize>(
