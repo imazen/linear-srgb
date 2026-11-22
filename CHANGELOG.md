@@ -51,6 +51,7 @@ Prepared package version: **0.6.13**. Publication awaits README approval and rel
 
 ### Changed
 
+- Upgrade `archmage` and `magetypes` to `0.9.33`.
 - Dependency requirements written out in full instead of truncated to two
   components, at the versions already locked and tested: `num-traits` 0.2 →
   0.2.19, `bytemuck` 1.21 → 1.25.2. `zenutils-apidoc` 0.1.0 → 0.1.1 in the
