@@ -71,12 +71,13 @@ fn linear_to_srgb_extended_fallback<T: F32ScalarBackend, const N: usize>(
 }
 
 macro_rules! width {
-    ($(#[$attr:meta])* $module:ident, $float:ident, $backend:ident, $convert:ident, $width:literal, $pow:ident, $pow_slice:ident; $(#[$array_only:meta])*) => {
+    ($(#[$attr:meta])* $module:ident, $float:ident, $backend:ident, $convert:ident, $width:literal, $pow:ident, $pow_cfg:ident, $pow_slice:ident, $pow_slice_cfg:ident; $(#[$array_only:meta])*) => {
         $(#[$attr])*
         pub(crate) mod $module {
             use super::*;
 
             $(#[$array_only])*
+            #[allow(dead_code)]
             #[inline(always)]
             pub(crate) fn srgb_to_linear<T: $backend>(
                 token: T,
@@ -93,6 +94,33 @@ macro_rules! width {
             ) -> [f32; $width] {
                 srgb_to_linear_vector_cfg::<T, CFG>(token, $float::from_array_t(token, srgb))
                     .to_array()
+            }
+
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn srgb_to_linear_slice_cfg<T: $backend, const CFG: u32>(
+                token: T,
+                values: &mut [f32],
+            ) {
+                fn tail<T: $backend, const CFG: u32>(
+                    token: T,
+                    chunk: [f32; $width],
+                ) -> [f32; $width] {
+                    srgb_to_linear_cfg::<T, CFG>(token, chunk)
+                }
+                crate::kernels::map_slice_inline!(
+                    values,
+                    $width,
+                    token,
+                    |chunk| srgb_to_linear_cfg::<T, CFG>(token, chunk),
+                    tail::<T, CFG>
+                );
+            }
+
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn srgb_to_linear_slice<T: $backend>(token: T, values: &mut [f32]) {
+                srgb_to_linear_slice_cfg::<T, { cfg::SRGB_CLAMPED }>(token, values);
             }
 
             #[inline(always)]
@@ -147,6 +175,7 @@ macro_rules! width {
             }
 
             $(#[$array_only])*
+            #[allow(dead_code)]
             #[inline(always)]
             pub(crate) fn linear_to_srgb<T: $backend>(
                 token: T,
@@ -163,6 +192,33 @@ macro_rules! width {
             ) -> [f32; $width] {
                 linear_to_srgb_vector_cfg::<T, CFG>(token, $float::from_array_t(token, linear))
                     .to_array()
+            }
+
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn linear_to_srgb_slice_cfg<T: $backend, const CFG: u32>(
+                token: T,
+                values: &mut [f32],
+            ) {
+                fn tail<T: $backend, const CFG: u32>(
+                    token: T,
+                    chunk: [f32; $width],
+                ) -> [f32; $width] {
+                    linear_to_srgb_cfg::<T, CFG>(token, chunk)
+                }
+                crate::kernels::map_slice_inline!(
+                    values,
+                    $width,
+                    token,
+                    |chunk| linear_to_srgb_cfg::<T, CFG>(token, chunk),
+                    tail::<T, CFG>
+                );
+            }
+
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn linear_to_srgb_slice<T: $backend>(token: T, values: &mut [f32]) {
+                linear_to_srgb_slice_cfg::<T, { cfg::SRGB_CLAMPED }>(token, values);
             }
 
             #[inline(always)]
@@ -191,7 +247,7 @@ macro_rules! width {
                     v
                 };
                 let linear_result = clamped * $float::<T>::splat_t(token, TWELVE_92);
-                let x = clamped.sqrt();
+                let x = clamped.fast_sqrt();
                 let yp = $float::<T>::splat_t(token, L2S_P[4])
                     .mla(x, $float::<T>::splat_t(token, L2S_P[3]));
                 let yp = yp.mla(x, $float::<T>::splat_t(token, L2S_P[2]));
@@ -229,6 +285,17 @@ macro_rules! width {
                 crate::tf::math::$pow(token, v, gamma).to_array()
             }
 
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn gamma_to_linear_cfg<T: $convert, const RAILS: bool>(
+                token: T,
+                encoded: [f32; $width],
+                gamma: f32,
+            ) -> [f32; $width] {
+                let v = $float::<T>::from_array_t(token, encoded);
+                crate::tf::math::$pow_cfg::<T, RAILS>(token, v, gamma).to_array()
+            }
+
             $(#[$array_only])*
             #[allow(dead_code)]
             #[inline(always)]
@@ -243,6 +310,17 @@ macro_rules! width {
 
             #[allow(dead_code)]
             #[inline(always)]
+            pub(crate) fn linear_to_gamma_cfg<T: $convert, const RAILS: bool>(
+                token: T,
+                linear: [f32; $width],
+                gamma: f32,
+            ) -> [f32; $width] {
+                let v = $float::<T>::from_array_t(token, linear);
+                crate::tf::math::$pow_cfg::<T, RAILS>(token, v, 1.0 / gamma).to_array()
+            }
+
+            #[allow(dead_code)]
+            #[inline(always)]
             pub(crate) fn gamma_to_linear_slice<T: $convert>(
                 token: T,
                 values: &mut [f32],
@@ -253,12 +331,32 @@ macro_rules! width {
 
             #[allow(dead_code)]
             #[inline(always)]
+            pub(crate) fn gamma_to_linear_slice_cfg<T: $convert, const RAILS: bool>(
+                token: T,
+                values: &mut [f32],
+                gamma: f32,
+            ) {
+                crate::tf::math::$pow_slice_cfg::<T, RAILS>(token, values, gamma);
+            }
+
+            #[allow(dead_code)]
+            #[inline(always)]
             pub(crate) fn linear_to_gamma_slice<T: $convert>(
                 token: T,
                 values: &mut [f32],
                 gamma: f32,
             ) {
                 crate::tf::math::$pow_slice(token, values, 1.0 / gamma);
+            }
+
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn linear_to_gamma_slice_cfg<T: $convert, const RAILS: bool>(
+                token: T,
+                values: &mut [f32],
+                gamma: f32,
+            ) {
+                crate::tf::math::$pow_slice_cfg::<T, RAILS>(token, values, 1.0 / gamma);
             }
 
             #[inline(always)]
@@ -343,10 +441,33 @@ macro_rules! width {
 
             #[allow(dead_code)]
             #[inline(always)]
-            pub(crate) fn srgb_to_linear_extended_slice<T: $convert>(
+            pub(crate) fn srgb_to_linear_extended_slice_cfg<T: $convert, const FALLBACK: bool>(
                 token: T,
                 values: &mut [f32],
             ) {
+                if !FALLBACK {
+                    fn tail<T: $convert>(token: T, chunk: [f32; $width]) -> [f32; $width] {
+                        srgb_to_linear_extended_vector_cfg::<T, false>(
+                            token,
+                            $float::from_array_t(token, chunk),
+                        )
+                        .to_array()
+                    }
+                    crate::kernels::map_slice_inline!(
+                        values,
+                        $width,
+                        token,
+                        |chunk| {
+                            srgb_to_linear_extended_vector_cfg::<T, false>(
+                                token,
+                                $float::from_array_t(token, chunk),
+                            )
+                            .to_array()
+                        },
+                        tail::<T>
+                    );
+                    return;
+                }
                 fn slow<T: $convert>(token: T, chunk: [f32; $width]) -> [f32; $width] {
                     srgb_to_linear_extended_vector(token, $float::from_array_t(token, chunk))
                         .to_array()
@@ -363,6 +484,15 @@ macro_rules! width {
                 );
             }
 
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn srgb_to_linear_extended_slice<T: $convert>(
+                token: T,
+                values: &mut [f32],
+            ) {
+                srgb_to_linear_extended_slice_cfg::<T, true>(token, values);
+            }
+
             #[inline(always)]
             pub(crate) fn linear_to_srgb_extended_poly<T: $convert>(
                 token: T,
@@ -372,7 +502,7 @@ macro_rules! width {
                 let sign = $float::splat_t(token, -0.0);
                 let abs_v = v.abs();
                 let linear_result = abs_v * $float::splat_t(token, TWELVE_92);
-                let x = abs_v.sqrt();
+                let x = abs_v.fast_sqrt();
                 let yp = $float::splat_t(token, P[6]).mla(x, $float::splat_t(token, P[5]));
                 let yp = yp.mla(x, $float::splat_t(token, P[4]));
                 let yp = yp.mla(x, $float::splat_t(token, P[3]));
@@ -450,10 +580,33 @@ macro_rules! width {
 
             #[allow(dead_code)]
             #[inline(always)]
-            pub(crate) fn linear_to_srgb_extended_slice<T: $convert>(
+            pub(crate) fn linear_to_srgb_extended_slice_cfg<T: $convert, const FALLBACK: bool>(
                 token: T,
                 values: &mut [f32],
             ) {
+                if !FALLBACK {
+                    fn tail<T: $convert>(token: T, chunk: [f32; $width]) -> [f32; $width] {
+                        linear_to_srgb_extended_vector_cfg::<T, false>(
+                            token,
+                            $float::from_array_t(token, chunk),
+                        )
+                        .to_array()
+                    }
+                    crate::kernels::map_slice_inline!(
+                        values,
+                        $width,
+                        token,
+                        |chunk| {
+                            linear_to_srgb_extended_vector_cfg::<T, false>(
+                                token,
+                                $float::from_array_t(token, chunk),
+                            )
+                            .to_array()
+                        },
+                        tail::<T>
+                    );
+                    return;
+                }
                 fn slow<T: $convert>(token: T, chunk: [f32; $width]) -> [f32; $width] {
                     linear_to_srgb_extended_vector(token, $float::from_array_t(token, chunk))
                         .to_array()
@@ -472,11 +625,30 @@ macro_rules! width {
                     slow::<T>
                 );
             }
+
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub(crate) fn linear_to_srgb_extended_slice<T: $convert>(
+                token: T,
+                values: &mut [f32],
+            ) {
+                linear_to_srgb_extended_slice_cfg::<T, true>(token, values);
+            }
         }
     };
 }
 
-width!(x4, f32x4, F32x4Backend, F32x4Convert, 4, gamma_x4, gamma_slice_x4;);
+width!(
+    x4,
+    f32x4,
+    F32x4Backend,
+    F32x4Convert,
+    4,
+    gamma_x4,
+    gamma_x4_cfg,
+    gamma_slice_x4,
+    gamma_slice_x4_cfg;
+);
 width!(
     #[cfg_attr(not(any(all(target_arch = "x86_64", target_feature = "sse2"), test)), allow(dead_code))]
     x8,
@@ -485,10 +657,20 @@ width!(
     F32x8Convert,
     8,
     gamma_x8,
-    gamma_slice_x8;
+    gamma_x8_cfg,
+    gamma_slice_x8,
+    gamma_slice_x8_cfg;
 );
 // The x16 array adapters are used only by native entry points on x86_64.
 width!(
-    x16, f32x16, F32x16Backend, F32x16Convert, 16, gamma_x16, gamma_slice_x16;
+    x16,
+    f32x16,
+    F32x16Backend,
+    F32x16Convert,
+    16,
+    gamma_x16,
+    gamma_x16_cfg,
+    gamma_slice_x16,
+    gamma_slice_x16_cfg;
     #[cfg(not(all(target_arch = "x86_64", not(target_feature = "sse2"))))]
 );

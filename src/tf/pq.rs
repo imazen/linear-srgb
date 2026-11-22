@@ -200,11 +200,15 @@ macro_rules! pq_for {
     (
         $decode_poly:ident,
         $try_decode:ident,
+        $decode_cfg:ident,
         $decode:ident,
+        $decode_slice_cfg:ident,
         $decode_slice:ident,
         $encode_poly:ident,
         $try_encode:ident,
+        $encode_cfg:ident,
         $encode:ident,
+        $encode_slice_cfg:ident,
         $encode_slice:ident,
         $float:ident,
         $backend:ident,
@@ -247,7 +251,14 @@ macro_rules! pq_for {
 
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn $decode<T: $backend>(t: T, v: $float<T>) -> $float<T> {
+        pub(crate) fn $decode_cfg<T: $backend, const RAILS: bool>(t: T, v: $float<T>) -> $float<T> {
+            if !RAILS {
+                let x = v.mla(v, v);
+                let small = v.simd_lt($float::splat_t(t, 0.25));
+                let p = polynomial::$blend_poly(t, x, small, PQ_EOTF_P_SMALL, PQ_EOTF_P_LARGE);
+                let q = polynomial::$blend_poly(t, x, small, PQ_EOTF_Q_SMALL, PQ_EOTF_Q_LARGE);
+                return p / q;
+            }
             let (fallback, result) = $decode_poly(t, v);
             if fallback.bitcast_to_i32().any_true() {
                 $float::from_array_t(t, pq_to_linear_fallback(v.to_array(), result.to_array()))
@@ -258,7 +269,26 @@ macro_rules! pq_for {
 
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn $decode_slice<T: $backend>(t: T, values: &mut [f32]) {
+        pub(crate) fn $decode<T: $backend>(t: T, v: $float<T>) -> $float<T> {
+            $decode_cfg::<T, true>(t, v)
+        }
+
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn $decode_slice_cfg<T: $backend, const RAILS: bool>(t: T, values: &mut [f32]) {
+            if !RAILS {
+                fn tail<T: $backend>(t: T, chunk: [f32; $width]) -> [f32; $width] {
+                    $decode_cfg::<T, false>(t, $float::from_array_t(t, chunk)).to_array()
+                }
+                crate::kernels::map_slice_inline!(
+                    values,
+                    $width,
+                    t,
+                    |chunk| $decode_cfg::<T, false>(t, $float::from_array_t(t, chunk)).to_array(),
+                    tail::<T>
+                );
+                return;
+            }
             fn slow<T: $backend>(t: T, chunk: [f32; $width]) -> [f32; $width] {
                 $decode(t, $float::from_array_t(t, chunk)).to_array()
             }
@@ -269,6 +299,12 @@ macro_rules! pq_for {
                 |chunk| $try_decode(t, $float::from_array_t(t, chunk)).map(|r| r.to_array()),
                 slow::<T>
             );
+        }
+
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn $decode_slice<T: $backend>(t: T, values: &mut [f32]) {
+            $decode_slice_cfg::<T, true>(t, values);
         }
 
         #[inline(always)]
@@ -283,7 +319,7 @@ macro_rules! pq_for {
                     .bits();
                 v.max_with::<NON_NAN_RHS>(floor).min_fast(one)
             };
-            let a4 = a.sqrt().sqrt();
+            let a4 = a.fast_sqrt().fast_sqrt();
             let small = a4.simd_lt($float::splat_t(t, 0.1));
             let p = polynomial::$blend_poly(t, a4, small, PQ_INV_P_SMALL, PQ_INV_P_LARGE);
             let q = polynomial::$blend_poly(t, a4, small, PQ_INV_Q_SMALL, PQ_INV_Q_LARGE);
@@ -306,7 +342,14 @@ macro_rules! pq_for {
 
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn $encode<T: $backend>(t: T, v: $float<T>) -> $float<T> {
+        pub(crate) fn $encode_cfg<T: $backend, const RAILS: bool>(t: T, v: $float<T>) -> $float<T> {
+            if !RAILS {
+                let a4 = v.fast_sqrt().fast_sqrt();
+                let small = a4.simd_lt($float::splat_t(t, 0.1));
+                let p = polynomial::$blend_poly(t, a4, small, PQ_INV_P_SMALL, PQ_INV_P_LARGE);
+                let q = polynomial::$blend_poly(t, a4, small, PQ_INV_Q_SMALL, PQ_INV_Q_LARGE);
+                return p / q;
+            }
             let (fallback, result) = $encode_poly(t, v);
             if fallback.bitcast_to_i32().any_true() {
                 $float::from_array_t(t, linear_to_pq_fallback(v.to_array(), result.to_array()))
@@ -317,7 +360,26 @@ macro_rules! pq_for {
 
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn $encode_slice<T: $backend>(t: T, values: &mut [f32]) {
+        pub(crate) fn $encode<T: $backend>(t: T, v: $float<T>) -> $float<T> {
+            $encode_cfg::<T, true>(t, v)
+        }
+
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn $encode_slice_cfg<T: $backend, const RAILS: bool>(t: T, values: &mut [f32]) {
+            if !RAILS {
+                fn tail<T: $backend>(t: T, chunk: [f32; $width]) -> [f32; $width] {
+                    $encode_cfg::<T, false>(t, $float::from_array_t(t, chunk)).to_array()
+                }
+                crate::kernels::map_slice_inline!(
+                    values,
+                    $width,
+                    t,
+                    |chunk| $encode_cfg::<T, false>(t, $float::from_array_t(t, chunk)).to_array(),
+                    tail::<T>
+                );
+                return;
+            }
             fn slow<T: $backend>(t: T, chunk: [f32; $width]) -> [f32; $width] {
                 $encode(t, $float::from_array_t(t, chunk)).to_array()
             }
@@ -329,17 +391,27 @@ macro_rules! pq_for {
                 slow::<T>
             );
         }
+
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn $encode_slice<T: $backend>(t: T, values: &mut [f32]) {
+            $encode_slice_cfg::<T, true>(t, values);
+        }
     };
 }
 
 pq_for!(
     pq_to_linear_poly_x4,
     try_pq_to_linear_x4,
+    pq_to_linear_x4_cfg,
     pq_to_linear_x4,
+    pq_to_linear_slice_x4_cfg,
     pq_to_linear_slice_x4,
     linear_to_pq_poly_x4,
     try_linear_to_pq_x4,
+    linear_to_pq_x4_cfg,
     linear_to_pq_x4,
+    linear_to_pq_slice_x4_cfg,
     linear_to_pq_slice_x4,
     f32x4,
     F32x4Convert,
@@ -349,11 +421,15 @@ pq_for!(
 pq_for!(
     pq_to_linear_poly_x8,
     try_pq_to_linear_x8,
+    pq_to_linear_x8_cfg,
     pq_to_linear_x8,
+    pq_to_linear_slice_x8_cfg,
     pq_to_linear_slice_x8,
     linear_to_pq_poly_x8,
     try_linear_to_pq_x8,
+    linear_to_pq_x8_cfg,
     linear_to_pq_x8,
+    linear_to_pq_slice_x8_cfg,
     linear_to_pq_slice_x8,
     f32x8,
     F32x8Convert,
@@ -363,11 +439,15 @@ pq_for!(
 pq_for!(
     pq_to_linear_poly_x16,
     try_pq_to_linear_x16,
+    pq_to_linear_x16_cfg,
     pq_to_linear_x16,
+    pq_to_linear_slice_x16_cfg,
     pq_to_linear_slice_x16,
     linear_to_pq_poly_x16,
     try_linear_to_pq_x16,
+    linear_to_pq_x16_cfg,
     linear_to_pq_x16,
+    linear_to_pq_slice_x16_cfg,
     linear_to_pq_slice_x16,
     f32x16,
     F32x16Convert,

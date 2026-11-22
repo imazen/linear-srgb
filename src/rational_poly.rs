@@ -22,9 +22,6 @@
 //!
 //! Roundtrip error is sub-U16 (< 1/65535) across the full [0, 1] range.
 
-#[allow(unused_imports)]
-use num_traits::Float; // provides sqrt via libm in no_std
-
 // =============================================================================
 // Coefficients (lowest-degree-first: p[0] + p[1]*x + p[2]*x^2 + ...)
 // Fitted to the C0-continuous (moxcms) sRGB curve with boundary constraints.
@@ -213,6 +210,6 @@ pub fn linear_to_srgb_fast(linear: f32) -> f32 {
     if linear <= LINEAR_THRESHOLD {
         return linear * TWELVE_92;
     }
-    let s = linear.sqrt();
+    let s = crate::mlaf::hw_sqrt_f32(linear);
     eval_rational_poly_5(s, L2S_P, L2S_Q)
 }

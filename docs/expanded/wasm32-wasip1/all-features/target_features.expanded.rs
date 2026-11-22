@@ -1028,20 +1028,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn srgb_to_linear_slice_wasm128(values: &mut [f32]) {
-            {
-                let (chunks, remainder) = (values).as_chunks_mut::<16>();
-                for slot in chunks {
-                    let chunk: [f32; 16] = *slot;
-                    *slot = srgb_to_linear_wasm128(chunk);
-                }
-                if !remainder.is_empty() {
-                    let mut block = [0.0; 16];
-                    block[..remainder.len()].copy_from_slice(remainder);
-                    let chunk: [f32; 16] = block;
-                    let converted = srgb_to_linear_wasm128(chunk);
-                    remainder.copy_from_slice(&converted[..remainder.len()]);
-                }
-            };
+            super::x4::srgb_to_linear_slice_wasm128(values);
         }
         #[target_feature(enable = "simd128")]
         #[inline]
@@ -1056,20 +1043,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_srgb_slice_wasm128(values: &mut [f32]) {
-            {
-                let (chunks, remainder) = (values).as_chunks_mut::<16>();
-                for slot in chunks {
-                    let chunk: [f32; 16] = *slot;
-                    *slot = linear_to_srgb_wasm128(chunk);
-                }
-                if !remainder.is_empty() {
-                    let mut block = [0.0; 16];
-                    block[..remainder.len()].copy_from_slice(remainder);
-                    let chunk: [f32; 16] = block;
-                    let converted = linear_to_srgb_wasm128(chunk);
-                    remainder.copy_from_slice(&converted[..remainder.len()]);
-                }
-            };
+            super::x4::linear_to_srgb_slice_wasm128(values);
         }
         #[target_feature(enable = "simd128")]
         #[inline]
@@ -1084,10 +1058,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn srgb_to_linear_extended_slice_wasm128(values: &mut [f32]) {
-            crate::kernels::float::x16::srgb_to_linear_extended_slice(
-                archmage::Wasm128Token::from_context(),
-                values,
-            );
+            super::x4::srgb_to_linear_extended_slice_wasm128(values);
         }
         #[target_feature(enable = "simd128")]
         #[inline]
@@ -1102,10 +1073,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_srgb_extended_slice_wasm128(values: &mut [f32]) {
-            crate::kernels::float::x16::linear_to_srgb_extended_slice(
-                archmage::Wasm128Token::from_context(),
-                values,
-            );
+            super::x4::linear_to_srgb_extended_slice_wasm128(values);
         }
         #[target_feature(enable = "simd128")]
         #[inline]
@@ -1124,11 +1092,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn gamma_to_linear_slice_wasm128(values: &mut [f32], gamma: f32) {
-            crate::kernels::float::x16::gamma_to_linear_slice(
-                archmage::Wasm128Token::from_context(),
-                values,
-                gamma,
-            );
+            super::x4::gamma_to_linear_slice_wasm128(values, gamma);
         }
         #[target_feature(enable = "simd128")]
         #[inline]
@@ -1147,11 +1111,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_gamma_slice_wasm128(values: &mut [f32], gamma: f32) {
-            crate::kernels::float::x16::linear_to_gamma_slice(
-                archmage::Wasm128Token::from_context(),
-                values,
-                gamma,
-            );
+            super::x4::linear_to_gamma_slice_wasm128(values, gamma);
         }
         #[target_feature(enable = "simd128")]
         #[inline]
@@ -1173,20 +1133,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn tf_srgb_to_linear_slice_wasm128(values: &mut [f32]) {
-            {
-                let (chunks, remainder) = (values).as_chunks_mut::<16>();
-                for slot in chunks {
-                    let chunk: [f32; 16] = *slot;
-                    *slot = tf_srgb_to_linear_wasm128(chunk);
-                }
-                if !remainder.is_empty() {
-                    let mut block = [0.0; 16];
-                    block[..remainder.len()].copy_from_slice(remainder);
-                    let chunk: [f32; 16] = block;
-                    let converted = tf_srgb_to_linear_wasm128(chunk);
-                    remainder.copy_from_slice(&converted[..remainder.len()]);
-                }
-            };
+            super::x4::tf_srgb_to_linear_slice_wasm128(values);
         }
         #[target_feature(enable = "simd128")]
         #[inline]
@@ -1208,20 +1155,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn tf_linear_to_srgb_slice_wasm128(values: &mut [f32]) {
-            {
-                let (chunks, remainder) = (values).as_chunks_mut::<16>();
-                for slot in chunks {
-                    let chunk: [f32; 16] = *slot;
-                    *slot = tf_linear_to_srgb_wasm128(chunk);
-                }
-                if !remainder.is_empty() {
-                    let mut block = [0.0; 16];
-                    block[..remainder.len()].copy_from_slice(remainder);
-                    let chunk: [f32; 16] = block;
-                    let converted = tf_linear_to_srgb_wasm128(chunk);
-                    remainder.copy_from_slice(&converted[..remainder.len()]);
-                }
-            };
+            super::x4::tf_linear_to_srgb_slice_wasm128(values);
         }
         #[target_feature(enable = "simd128")]
         #[inline]
@@ -1238,10 +1172,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn bt709_to_linear_slice_wasm128(values: &mut [f32]) {
-            crate::tf::bt709::bt709_to_linear_slice_x16(
-                archmage::Wasm128Token::from_context(),
-                values,
-            );
+            super::x4::bt709_to_linear_slice_wasm128(values);
         }
         #[target_feature(enable = "simd128")]
         #[inline]
@@ -1258,10 +1189,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_bt709_slice_wasm128(values: &mut [f32]) {
-            crate::tf::bt709::linear_to_bt709_slice_x16(
-                archmage::Wasm128Token::from_context(),
-                values,
-            );
+            super::x4::linear_to_bt709_slice_wasm128(values);
         }
         #[target_feature(enable = "simd128")]
         #[inline]
@@ -1278,10 +1206,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn pq_to_linear_slice_wasm128(values: &mut [f32]) {
-            crate::tf::pq::pq_to_linear_slice_x16(
-                archmage::Wasm128Token::from_context(),
-                values,
-            );
+            super::x4::pq_to_linear_slice_wasm128(values);
         }
         #[target_feature(enable = "simd128")]
         #[inline]
@@ -1298,10 +1223,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_pq_slice_wasm128(values: &mut [f32]) {
-            crate::tf::pq::linear_to_pq_slice_x16(
-                archmage::Wasm128Token::from_context(),
-                values,
-            );
+            super::x4::linear_to_pq_slice_wasm128(values);
         }
         #[target_feature(enable = "simd128")]
         #[inline]
@@ -1318,10 +1240,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn hlg_to_linear_slice_wasm128(values: &mut [f32]) {
-            crate::tf::hlg::hlg_to_linear_slice_x16(
-                archmage::Wasm128Token::from_context(),
-                values,
-            );
+            super::x4::hlg_to_linear_slice_wasm128(values);
         }
         #[target_feature(enable = "simd128")]
         #[inline]
@@ -1338,10 +1257,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_hlg_slice_wasm128(values: &mut [f32]) {
-            crate::tf::hlg::linear_to_hlg_slice_x16(
-                archmage::Wasm128Token::from_context(),
-                values,
-            );
+            super::x4::linear_to_hlg_slice_wasm128(values);
         }
     }
 }

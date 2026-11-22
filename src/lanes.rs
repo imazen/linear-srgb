@@ -99,6 +99,7 @@ pub(crate) fn linear_to_gamma(v: f32, gamma: f32) -> f32 {
 macro_rules! scalar_hdr {
     ($module:ident, $($name:ident => $kernel:ident),+ $(,)?) => {
         $(
+            #[allow(dead_code)]
             #[inline(always)]
             pub(crate) fn $name(v: f32) -> f32 {
                 crate::tf::$module::$kernel(ScalarToken, v)

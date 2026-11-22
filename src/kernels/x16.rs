@@ -150,18 +150,7 @@ pub(crate) fn linear_to_srgb_u8_v4(token: X64V4Token, linear: [f32; 16]) -> [u8;
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[attune(inline(hint))]
 pub(crate) fn srgb_to_linear_slice_v4(token: X64V4Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<16>();
-
-    for chunk in chunks {
-        *chunk = srgb_to_linear_v4(token, *chunk);
-    }
-
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 16];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = srgb_to_linear_v4(token, padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x16::srgb_to_linear_slice(token, values);
 }
 
 /// Convert linear f32 values to sRGB in-place using 16-wide SIMD.
@@ -169,18 +158,7 @@ pub(crate) fn srgb_to_linear_slice_v4(token: X64V4Token, values: &mut [f32]) {
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[attune(inline(hint))]
 pub(crate) fn linear_to_srgb_slice_v4(token: X64V4Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<16>();
-
-    for chunk in chunks {
-        *chunk = linear_to_srgb_v4(token, *chunk);
-    }
-
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 16];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = linear_to_srgb_v4(token, padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x16::linear_to_srgb_slice(token, values);
 }
 
 /// Convert gamma-encoded f32 values to linear in-place using 16-wide SIMD.
@@ -304,9 +282,9 @@ macro_rules! tf_slice_v4 {
 }
 
 #[cfg(feature = "transfer")]
-tf_slice_v4!(tf_srgb_to_linear_slice_v4, tf_srgb_to_linear_v4);
+tf_slice_v4!(tf_srgb_to_linear_slice_v4 => super::float::x16::srgb_to_linear_slice);
 #[cfg(feature = "transfer")]
-tf_slice_v4!(tf_linear_to_srgb_slice_v4, tf_linear_to_srgb_v4);
+tf_slice_v4!(tf_linear_to_srgb_slice_v4 => super::float::x16::linear_to_srgb_slice);
 #[cfg(feature = "transfer")]
 tf_slice_v4!(bt709_to_linear_slice_v4 => crate::tf::bt709::bt709_to_linear_slice_x16);
 #[cfg(feature = "transfer")]

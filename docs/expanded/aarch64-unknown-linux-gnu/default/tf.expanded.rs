@@ -50,17 +50,35 @@ pub mod tf {
     #[allow(unused_imports)]
     use num_traits::Float;
     pub(crate) mod math {
-        //! Transfer profiles and their exceptional-lane fallbacks.
+        //! Transfer profiles, const-generic rail ablation, and exceptional-lane fallbacks.
         use archmage::ScalarToken;
         use magemath::SimdMath;
         use magemath::powf::{Powf, PowfDomain, PowfOptions};
         use magetypes::simd::{backends::*, generic::*};
+        pub(crate) const MATH_PORTABILITY: magemath::Portability = if super::polynomial::USE_FUSED_MATH {
+            magemath::Portability::BitExact
+        } else {
+            magemath::Portability::BackendDependent
+        };
         const GAMMA_OPTIONS: PowfOptions = PowfOptions::new()
             .domain(PowfDomain::Unit)
             .exponent_range(0.0, 4.0)
             .clamp_finite()
+            .portability(MATH_PORTABILITY)
             .caller();
         const GAMMA: u128 = GAMMA_OPTIONS.bits();
+        /// Unchecked custom-gamma profile for verified finite inputs in `[1e-9, 1.0]`
+        /// and exponents in `(0.0, 4.0]`. Statically proves `|n * log2(x)| <= 120 <= 125`,
+        /// eliding all input clamps, NaN masks, subnormal checks, and `exp2` output saturation.
+        const GAMMA_UNCHECKED: u128 = PowfOptions::new()
+            .domain(PowfDomain::PositiveUnit)
+            .base_range(1.0e-9, 1.0)
+            .exponent_range(0.0, 4.0)
+            .reject_subnormals()
+            .portability(MATH_PORTABILITY)
+            .assume_in_bounds()
+            .caller()
+            .bits();
         const FULL_POW: u128 = PowfOptions::new().full_domain().highp().caller().bits();
         #[inline(always)]
         fn full_pow(base: f32, n: f32) -> f32 {
@@ -115,8 +133,16 @@ pub mod tf {
             let result = v.powf::<GAMMA>(n);
             f32x4::blend(v.simd_ne(v), v, result)
         }
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn gamma_x4<T: F32x4Convert>(t: T, v: f32x4<T>, n: f32) -> f32x4<T> {
+        pub(crate) fn gamma_x4_cfg<T: F32x4Convert, const RAILS: bool>(
+            t: T,
+            v: f32x4<T>,
+            n: f32,
+        ) -> f32x4<T> {
+            if !RAILS {
+                return v.powf::<GAMMA_UNCHECKED>(n);
+            }
             if !(0.0..=4.0).contains(&n) {
                 return f32x4::from_array_t(t, gamma_outside_fit(v.to_array(), n));
             }
@@ -126,50 +152,87 @@ pub mod tf {
             gamma_in_range_x4(t, v, n)
         }
         #[inline(always)]
-        pub(crate) fn gamma_slice_x4<T: F32x4Convert>(t: T, values: &mut [f32], n: f32) {
+        pub(crate) fn gamma_x4<T: F32x4Convert>(t: T, v: f32x4<T>, n: f32) -> f32x4<T> {
+            gamma_x4_cfg::<T, true>(t, v, n)
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn gamma_slice_x4_cfg<T: F32x4Convert, const RAILS: bool>(
+            t: T,
+            values: &mut [f32],
+            n: f32,
+        ) {
+            if !RAILS {
+                fn tail_unchecked<T: F32x4Convert>(
+                    (t, n): (T, f32),
+                    chunk: [f32; 4],
+                ) -> [f32; 4] {
+                    f32x4::from_array_t(t, chunk).powf::<GAMMA_UNCHECKED>(n).to_array()
+                }
+                {
+                    let (chunks, remainder) = (values).as_chunks_mut::<4>();
+                    for slot in chunks {
+                        let chunk: [f32; 4] = *slot;
+                        *slot = f32x4::from_array_t(t, chunk)
+                            .powf::<GAMMA_UNCHECKED>(n)
+                            .to_array();
+                    }
+                    if !remainder.is_empty() {
+                        crate::kernels::finish_tail_cold(
+                            remainder,
+                            (t, n),
+                            tail_unchecked::<T>,
+                        );
+                    }
+                };
+                return;
+            }
             if !(0.0..=4.0).contains(&n) {
                 gamma_outside_fit_slice(values, n);
                 return;
             }
             if n == 0.0 {
+                fn tail_zero<T: F32x4Convert>(t: T, chunk: [f32; 4]) -> [f32; 4] {
+                    gamma_zero_x4(t, f32x4::from_array_t(t, chunk)).to_array()
+                }
                 {
                     let (chunks, remainder) = (values).as_chunks_mut::<4>();
                     for slot in chunks {
                         let chunk: [f32; 4] = *slot;
-                        *slot = {
-                            gamma_zero_x4(t, f32x4::from_array_t(t, chunk)).to_array()
-                        };
+                        *slot = gamma_zero_x4(t, f32x4::from_array_t(t, chunk))
+                            .to_array();
                     }
                     if !remainder.is_empty() {
-                        let mut block = [0.0; 4];
-                        block[..remainder.len()].copy_from_slice(remainder);
-                        let chunk: [f32; 4] = block;
-                        let converted = {
-                            gamma_zero_x4(t, f32x4::from_array_t(t, chunk)).to_array()
-                        };
-                        remainder.copy_from_slice(&converted[..remainder.len()]);
+                        crate::kernels::finish_tail_cold(remainder, t, tail_zero::<T>);
                     }
                 };
                 return;
+            }
+            fn tail_in_range<T: F32x4Convert>(
+                (t, n): (T, f32),
+                chunk: [f32; 4],
+            ) -> [f32; 4] {
+                gamma_in_range_x4(t, f32x4::from_array_t(t, chunk), n).to_array()
             }
             {
                 let (chunks, remainder) = (values).as_chunks_mut::<4>();
                 for slot in chunks {
                     let chunk: [f32; 4] = *slot;
-                    *slot = {
-                        gamma_in_range_x4(t, f32x4::from_array_t(t, chunk), n).to_array()
-                    };
+                    *slot = gamma_in_range_x4(t, f32x4::from_array_t(t, chunk), n)
+                        .to_array();
                 }
                 if !remainder.is_empty() {
-                    let mut block = [0.0; 4];
-                    block[..remainder.len()].copy_from_slice(remainder);
-                    let chunk: [f32; 4] = block;
-                    let converted = {
-                        gamma_in_range_x4(t, f32x4::from_array_t(t, chunk), n).to_array()
-                    };
-                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                    crate::kernels::finish_tail_cold(
+                        remainder,
+                        (t, n),
+                        tail_in_range::<T>,
+                    );
                 }
             };
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_slice_x4<T: F32x4Convert>(t: T, values: &mut [f32], n: f32) {
+            gamma_slice_x4_cfg::<T, true>(t, values, n);
         }
         #[inline(always)]
         pub(crate) fn gamma_zero_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
@@ -187,8 +250,16 @@ pub mod tf {
             let result = v.powf::<GAMMA>(n);
             f32x8::blend(v.simd_ne(v), v, result)
         }
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn gamma_x8<T: F32x8Convert>(t: T, v: f32x8<T>, n: f32) -> f32x8<T> {
+        pub(crate) fn gamma_x8_cfg<T: F32x8Convert, const RAILS: bool>(
+            t: T,
+            v: f32x8<T>,
+            n: f32,
+        ) -> f32x8<T> {
+            if !RAILS {
+                return v.powf::<GAMMA_UNCHECKED>(n);
+            }
             if !(0.0..=4.0).contains(&n) {
                 return f32x8::from_array_t(t, gamma_outside_fit(v.to_array(), n));
             }
@@ -198,50 +269,87 @@ pub mod tf {
             gamma_in_range_x8(t, v, n)
         }
         #[inline(always)]
-        pub(crate) fn gamma_slice_x8<T: F32x8Convert>(t: T, values: &mut [f32], n: f32) {
+        pub(crate) fn gamma_x8<T: F32x8Convert>(t: T, v: f32x8<T>, n: f32) -> f32x8<T> {
+            gamma_x8_cfg::<T, true>(t, v, n)
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn gamma_slice_x8_cfg<T: F32x8Convert, const RAILS: bool>(
+            t: T,
+            values: &mut [f32],
+            n: f32,
+        ) {
+            if !RAILS {
+                fn tail_unchecked<T: F32x8Convert>(
+                    (t, n): (T, f32),
+                    chunk: [f32; 8],
+                ) -> [f32; 8] {
+                    f32x8::from_array_t(t, chunk).powf::<GAMMA_UNCHECKED>(n).to_array()
+                }
+                {
+                    let (chunks, remainder) = (values).as_chunks_mut::<8>();
+                    for slot in chunks {
+                        let chunk: [f32; 8] = *slot;
+                        *slot = f32x8::from_array_t(t, chunk)
+                            .powf::<GAMMA_UNCHECKED>(n)
+                            .to_array();
+                    }
+                    if !remainder.is_empty() {
+                        crate::kernels::finish_tail_cold(
+                            remainder,
+                            (t, n),
+                            tail_unchecked::<T>,
+                        );
+                    }
+                };
+                return;
+            }
             if !(0.0..=4.0).contains(&n) {
                 gamma_outside_fit_slice(values, n);
                 return;
             }
             if n == 0.0 {
+                fn tail_zero<T: F32x8Convert>(t: T, chunk: [f32; 8]) -> [f32; 8] {
+                    gamma_zero_x8(t, f32x8::from_array_t(t, chunk)).to_array()
+                }
                 {
                     let (chunks, remainder) = (values).as_chunks_mut::<8>();
                     for slot in chunks {
                         let chunk: [f32; 8] = *slot;
-                        *slot = {
-                            gamma_zero_x8(t, f32x8::from_array_t(t, chunk)).to_array()
-                        };
+                        *slot = gamma_zero_x8(t, f32x8::from_array_t(t, chunk))
+                            .to_array();
                     }
                     if !remainder.is_empty() {
-                        let mut block = [0.0; 8];
-                        block[..remainder.len()].copy_from_slice(remainder);
-                        let chunk: [f32; 8] = block;
-                        let converted = {
-                            gamma_zero_x8(t, f32x8::from_array_t(t, chunk)).to_array()
-                        };
-                        remainder.copy_from_slice(&converted[..remainder.len()]);
+                        crate::kernels::finish_tail_cold(remainder, t, tail_zero::<T>);
                     }
                 };
                 return;
+            }
+            fn tail_in_range<T: F32x8Convert>(
+                (t, n): (T, f32),
+                chunk: [f32; 8],
+            ) -> [f32; 8] {
+                gamma_in_range_x8(t, f32x8::from_array_t(t, chunk), n).to_array()
             }
             {
                 let (chunks, remainder) = (values).as_chunks_mut::<8>();
                 for slot in chunks {
                     let chunk: [f32; 8] = *slot;
-                    *slot = {
-                        gamma_in_range_x8(t, f32x8::from_array_t(t, chunk), n).to_array()
-                    };
+                    *slot = gamma_in_range_x8(t, f32x8::from_array_t(t, chunk), n)
+                        .to_array();
                 }
                 if !remainder.is_empty() {
-                    let mut block = [0.0; 8];
-                    block[..remainder.len()].copy_from_slice(remainder);
-                    let chunk: [f32; 8] = block;
-                    let converted = {
-                        gamma_in_range_x8(t, f32x8::from_array_t(t, chunk), n).to_array()
-                    };
-                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                    crate::kernels::finish_tail_cold(
+                        remainder,
+                        (t, n),
+                        tail_in_range::<T>,
+                    );
                 }
             };
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_slice_x8<T: F32x8Convert>(t: T, values: &mut [f32], n: f32) {
+            gamma_slice_x8_cfg::<T, true>(t, values, n);
         }
         #[inline(always)]
         pub(crate) fn gamma_zero_x16<T: F32x16Convert>(t: T, v: f32x16<T>) -> f32x16<T> {
@@ -259,12 +367,16 @@ pub mod tf {
             let result = v.powf::<GAMMA>(n);
             f32x16::blend(v.simd_ne(v), v, result)
         }
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn gamma_x16<T: F32x16Convert>(
+        pub(crate) fn gamma_x16_cfg<T: F32x16Convert, const RAILS: bool>(
             t: T,
             v: f32x16<T>,
             n: f32,
         ) -> f32x16<T> {
+            if !RAILS {
+                return v.powf::<GAMMA_UNCHECKED>(n);
+            }
             if !(0.0..=4.0).contains(&n) {
                 return f32x16::from_array_t(t, gamma_outside_fit(v.to_array(), n));
             }
@@ -274,56 +386,95 @@ pub mod tf {
             gamma_in_range_x16(t, v, n)
         }
         #[inline(always)]
-        pub(crate) fn gamma_slice_x16<T: F32x16Convert>(
+        pub(crate) fn gamma_x16<T: F32x16Convert>(
+            t: T,
+            v: f32x16<T>,
+            n: f32,
+        ) -> f32x16<T> {
+            gamma_x16_cfg::<T, true>(t, v, n)
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn gamma_slice_x16_cfg<T: F32x16Convert, const RAILS: bool>(
             t: T,
             values: &mut [f32],
             n: f32,
         ) {
+            if !RAILS {
+                fn tail_unchecked<T: F32x16Convert>(
+                    (t, n): (T, f32),
+                    chunk: [f32; 16],
+                ) -> [f32; 16] {
+                    f32x16::from_array_t(t, chunk).powf::<GAMMA_UNCHECKED>(n).to_array()
+                }
+                {
+                    let (chunks, remainder) = (values).as_chunks_mut::<16>();
+                    for slot in chunks {
+                        let chunk: [f32; 16] = *slot;
+                        *slot = f32x16::from_array_t(t, chunk)
+                            .powf::<GAMMA_UNCHECKED>(n)
+                            .to_array();
+                    }
+                    if !remainder.is_empty() {
+                        crate::kernels::finish_tail_cold(
+                            remainder,
+                            (t, n),
+                            tail_unchecked::<T>,
+                        );
+                    }
+                };
+                return;
+            }
             if !(0.0..=4.0).contains(&n) {
                 gamma_outside_fit_slice(values, n);
                 return;
             }
             if n == 0.0 {
+                fn tail_zero<T: F32x16Convert>(t: T, chunk: [f32; 16]) -> [f32; 16] {
+                    gamma_zero_x16(t, f32x16::from_array_t(t, chunk)).to_array()
+                }
                 {
                     let (chunks, remainder) = (values).as_chunks_mut::<16>();
                     for slot in chunks {
                         let chunk: [f32; 16] = *slot;
-                        *slot = {
-                            gamma_zero_x16(t, f32x16::from_array_t(t, chunk)).to_array()
-                        };
+                        *slot = gamma_zero_x16(t, f32x16::from_array_t(t, chunk))
+                            .to_array();
                     }
                     if !remainder.is_empty() {
-                        let mut block = [0.0; 16];
-                        block[..remainder.len()].copy_from_slice(remainder);
-                        let chunk: [f32; 16] = block;
-                        let converted = {
-                            gamma_zero_x16(t, f32x16::from_array_t(t, chunk)).to_array()
-                        };
-                        remainder.copy_from_slice(&converted[..remainder.len()]);
+                        crate::kernels::finish_tail_cold(remainder, t, tail_zero::<T>);
                     }
                 };
                 return;
+            }
+            fn tail_in_range<T: F32x16Convert>(
+                (t, n): (T, f32),
+                chunk: [f32; 16],
+            ) -> [f32; 16] {
+                gamma_in_range_x16(t, f32x16::from_array_t(t, chunk), n).to_array()
             }
             {
                 let (chunks, remainder) = (values).as_chunks_mut::<16>();
                 for slot in chunks {
                     let chunk: [f32; 16] = *slot;
-                    *slot = {
-                        gamma_in_range_x16(t, f32x16::from_array_t(t, chunk), n)
-                            .to_array()
-                    };
+                    *slot = gamma_in_range_x16(t, f32x16::from_array_t(t, chunk), n)
+                        .to_array();
                 }
                 if !remainder.is_empty() {
-                    let mut block = [0.0; 16];
-                    block[..remainder.len()].copy_from_slice(remainder);
-                    let chunk: [f32; 16] = block;
-                    let converted = {
-                        gamma_in_range_x16(t, f32x16::from_array_t(t, chunk), n)
-                            .to_array()
-                    };
-                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                    crate::kernels::finish_tail_cold(
+                        remainder,
+                        (t, n),
+                        tail_in_range::<T>,
+                    );
                 }
             };
+        }
+        #[inline(always)]
+        pub(crate) fn gamma_slice_x16<T: F32x16Convert>(
+            t: T,
+            values: &mut [f32],
+            n: f32,
+        ) {
+            gamma_slice_x16_cfg::<T, true>(t, values, n);
         }
     }
     pub(crate) mod polynomial {
@@ -364,19 +515,15 @@ pub mod tf {
                 magetypes::scalar::mul_add_relaxed_f32(token, a, b, c)
             }
         }
-        /// IEEE-754 correctly-rounded `f32` square root: emits hardware `vsqrtss` /
-        /// `fsqrt` / `f32.sqrt` when `std` is enabled and falls back to Magetypes'
-        /// IEEE-754 software `sqrt_f32` in `#![no_std]` builds.
-        #[inline(always)]
-        pub(crate) fn fast_sqrt_f32(x: f32) -> f32 {
-            { x.sqrt() }
-        }
+        pub(crate) use crate::mlaf::hw_sqrt_f32 as fast_sqrt_f32;
         pub(crate) use floor_zero;
-        /// Multiply-add in the kernels. Fused wherever that costs nothing or the scalar tier needs it, so
-        /// every native tier gives the same bits. On WASM, `mul_add_fused` is software unless the engine
-        /// fuses, so it stays relaxed there unless the `precise-portable` feature asks for the same bits.
+        /// Multiply-add and hardware square-root in the kernels. Fused wherever that costs nothing or the
+        /// scalar tier needs it, so every native tier gives the same bits. On WASM, `mul_add_fused` is
+        /// software unless the engine fuses, so it stays relaxed there unless `precise-portable` asks for
+        /// the same bits.
         pub(crate) trait Mla: Sized {
             fn mla(self, a: Self, b: Self) -> Self;
+            fn fast_sqrt(self) -> Self;
         }
         impl<T: F32x4Backend> Mla for f32x4<T> {
             #[inline(always)]
@@ -385,6 +532,15 @@ pub mod tf {
                     self.mul_add_fused(a, b)
                 } else {
                     self.mul_add_relaxed(a, b)
+                }
+            }
+            #[inline(always)]
+            fn fast_sqrt(self) -> Self {
+                let t = self.token();
+                if t.as_scalar().is_some() {
+                    Self::from_array_t(t, self.to_array().map(crate::mlaf::hw_sqrt_f32))
+                } else {
+                    self.sqrt()
                 }
             }
         }
@@ -397,6 +553,15 @@ pub mod tf {
                     self.mul_add_relaxed(a, b)
                 }
             }
+            #[inline(always)]
+            fn fast_sqrt(self) -> Self {
+                let t = self.token();
+                if t.as_scalar().is_some() {
+                    Self::from_array_t(t, self.to_array().map(crate::mlaf::hw_sqrt_f32))
+                } else {
+                    self.sqrt()
+                }
+            }
         }
         impl<T: F32x16Backend> Mla for f32x16<T> {
             #[inline(always)]
@@ -405,6 +570,15 @@ pub mod tf {
                     self.mul_add_fused(a, b)
                 } else {
                     self.mul_add_relaxed(a, b)
+                }
+            }
+            #[inline(always)]
+            fn fast_sqrt(self) -> Self {
+                let t = self.token();
+                if t.as_scalar().is_some() {
+                    Self::from_array_t(t, self.to_array().map(crate::mlaf::hw_sqrt_f32))
+                } else {
+                    self.sqrt()
                 }
             }
         }

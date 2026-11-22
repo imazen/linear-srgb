@@ -208,6 +208,203 @@ fn bench_downstream(suite: &mut Suite) {
             }
         });
     }
+
+    #[cfg(linear_srgb_bench_internal)]
+    bench_rail_ablation(suite);
+}
+
+#[cfg(linear_srgb_bench_internal)]
+fn bench_rail_ablation(suite: &mut Suite) {
+    use linear_srgb::__bench_rails as br;
+
+    #[cfg(target_arch = "x86_64")]
+    if let Some(tok) = <archmage::X64V3Token as archmage::SimdToken>::summon() {
+        #[archmage::arcane]
+        fn chain_srgb_unclamped(t: archmage::X64V3Token, seed: [f32; 8], reps: usize) -> [f32; 8] {
+            let mut v = seed;
+            for _ in 0..reps {
+                v = br::x8::linear_to_srgb_v3_unclamped(
+                    t,
+                    br::x8::srgb_to_linear_v3_unclamped(t, v),
+                );
+            }
+            v
+        }
+        #[archmage::arcane]
+        fn chain_bt709_unclamped(t: archmage::X64V3Token, seed: [f32; 8], reps: usize) -> [f32; 8] {
+            let mut v = seed;
+            for _ in 0..reps {
+                v = br::x8::linear_to_bt709_v3_unclamped(
+                    t,
+                    br::x8::bt709_to_linear_v3_unclamped(t, v),
+                );
+            }
+            v
+        }
+        #[archmage::arcane]
+        fn chain_pq_unclamped(t: archmage::X64V3Token, seed: [f32; 8], reps: usize) -> [f32; 8] {
+            let mut v = seed;
+            for _ in 0..reps {
+                v = br::x8::linear_to_pq_v3_unclamped(t, br::x8::pq_to_linear_v3_unclamped(t, v));
+            }
+            v
+        }
+        #[archmage::arcane]
+        fn chain_hlg_unclamped(t: archmage::X64V3Token, seed: [f32; 8], reps: usize) -> [f32; 8] {
+            let mut v = seed;
+            for _ in 0..reps {
+                v = br::x8::linear_to_hlg_v3_unclamped(t, br::x8::hlg_to_linear_v3_unclamped(t, v));
+            }
+            v
+        }
+        #[archmage::arcane]
+        fn chain_gamma_unclamped(
+            t: archmage::X64V3Token,
+            seed: [f32; 8],
+            g: f32,
+            reps: usize,
+        ) -> [f32; 8] {
+            let mut v = seed;
+            for _ in 0..reps {
+                v = br::x8::linear_to_gamma_v3_unclamped(
+                    t,
+                    br::x8::gamma_to_linear_v3_unclamped(t, v, g),
+                    g,
+                );
+            }
+            v
+        }
+
+        let reps = 64usize;
+        let seed = [0.05f32, 0.15, 0.25, 0.4, 0.55, 0.7, 0.85, 0.95];
+        suite.compare("rail_ablation/latency_chain64_x8", |g| {
+            g.throughput(Throughput::Elements((reps * 8) as u64));
+            g.bench("srgb_rt_railed", move |b| {
+                b.iter(|| black_box(chain_srgb_rt_v3(tok, black_box(seed), black_box(reps))))
+            });
+            g.bench("srgb_rt_unclamped", move |b| {
+                b.iter(|| black_box(chain_srgb_unclamped(tok, black_box(seed), black_box(reps))))
+            });
+            g.bench("bt709_rt_railed", move |b| {
+                b.iter(|| black_box(chain_bt709_rt_v3(tok, black_box(seed), black_box(reps))))
+            });
+            g.bench("bt709_rt_unclamped", move |b| {
+                b.iter(|| black_box(chain_bt709_unclamped(tok, black_box(seed), black_box(reps))))
+            });
+            g.bench("pq_rt_railed", move |b| {
+                b.iter(|| black_box(chain_pq_rt_v3(tok, black_box(seed), black_box(reps))))
+            });
+            g.bench("pq_rt_unclamped", move |b| {
+                b.iter(|| black_box(chain_pq_unclamped(tok, black_box(seed), black_box(reps))))
+            });
+            g.bench("hlg_rt_railed", move |b| {
+                b.iter(|| black_box(chain_hlg_rt_v3(tok, black_box(seed), black_box(reps))))
+            });
+            g.bench("hlg_rt_unclamped", move |b| {
+                b.iter(|| black_box(chain_hlg_unclamped(tok, black_box(seed), black_box(reps))))
+            });
+            g.bench("gamma22_rt_railed", move |b| {
+                b.iter(|| {
+                    black_box(chain_gamma_rt_v3(
+                        tok,
+                        black_box(seed),
+                        black_box(2.2),
+                        black_box(reps),
+                    ))
+                })
+            });
+            g.bench("gamma22_rt_unclamped", move |b| {
+                b.iter(|| {
+                    black_box(chain_gamma_unclamped(
+                        tok,
+                        black_box(seed),
+                        black_box(2.2),
+                        black_box(reps),
+                    ))
+                })
+            });
+        });
+    }
+
+    for &(tag, n) in &[("L1_256", 256usize), ("DRAM_2M", 2_097_152usize)] {
+        let src_f32: Vec<f32> = (0..n)
+            .map(|i| 0.025 + ((i % 997) as f32) * (0.95 / 997.0))
+            .collect();
+        macro_rules! pair {
+            ($curve:literal, $railed:expr, $unclamped:expr) => {
+                suite.compare(format!("rail_ablation/{tag}/{}", $curve), |g| {
+                    g.throughput(Throughput::Bytes((n * 4) as u64));
+                    {
+                        let s = src_f32.clone();
+                        let mut buf = s.clone();
+                        g.bench("railed", move |b| {
+                            b.iter(|| {
+                                buf.copy_from_slice(&s);
+                                ($railed)(&mut buf);
+                                black_box(buf[0])
+                            })
+                        });
+                    }
+                    {
+                        let s = src_f32.clone();
+                        let mut buf = s.clone();
+                        g.bench("unclamped", move |b| {
+                            b.iter(|| {
+                                buf.copy_from_slice(&s);
+                                ($unclamped)(&mut buf);
+                                black_box(buf[0])
+                            })
+                        });
+                    }
+                });
+            };
+        }
+        pair!(
+            "srgb_to_linear",
+            ls::srgb_to_linear_slice,
+            br::srgb_to_linear_slice_unclamped
+        );
+        pair!(
+            "linear_to_srgb",
+            ls::linear_to_srgb_slice,
+            br::linear_to_srgb_slice_unclamped
+        );
+        pair!(
+            "bt709_to_linear",
+            ls::bt709_to_linear_slice,
+            br::bt709_to_linear_slice_unclamped
+        );
+        pair!(
+            "linear_to_bt709",
+            ls::linear_to_bt709_slice,
+            br::linear_to_bt709_slice_unclamped
+        );
+        pair!(
+            "pq_to_linear",
+            ls::pq_to_linear_slice,
+            br::pq_to_linear_slice_unclamped
+        );
+        pair!(
+            "linear_to_pq",
+            ls::linear_to_pq_slice,
+            br::linear_to_pq_slice_unclamped
+        );
+        pair!(
+            "hlg_to_linear",
+            ls::hlg_to_linear_slice,
+            br::hlg_to_linear_slice_unclamped
+        );
+        pair!(
+            "linear_to_hlg",
+            ls::linear_to_hlg_slice,
+            br::linear_to_hlg_slice_unclamped
+        );
+        pair!(
+            "gamma22_to_linear",
+            |buf: &mut [f32]| ls::gamma_to_linear_slice(buf, black_box(2.2)),
+            |buf: &mut [f32]| br::gamma_to_linear_slice_unclamped(buf, black_box(2.2))
+        );
+    }
 }
 
 zenbench::main!(bench_downstream);

@@ -155,23 +155,23 @@ probe-relaxed-wasm fma="true" features="std,transfer":
 
 # Inspect downstream-exercised x86-64-v3 (AVX2+FMA) assembly via cargo-show-asm (omit symbol to list all).
 asm-v3 symbol="":
-    RUSTFLAGS="-C target-cpu=x86-64-v3" cargo asm --example downstream_codegen --features transfer --target x86_64-unknown-linux-gnu {{symbol}}
+    RUSTFLAGS="-C target-cpu=x86-64-v3 --cfg linear_srgb_bench_internal" cargo asm --example downstream_codegen --features transfer --target x86_64-unknown-linux-gnu {{symbol}}
 
 # Inspect downstream-exercised x86-64-v4 (AVX-512) assembly via cargo-show-asm (omit symbol to list all).
 asm-v4 symbol="":
-    RUSTFLAGS="-C target-cpu=x86-64-v4" cargo asm --example downstream_codegen --features "transfer,avx512" --target x86_64-unknown-linux-gnu {{symbol}}
+    RUSTFLAGS="-C target-cpu=x86-64-v4 --cfg linear_srgb_bench_internal" cargo asm --example downstream_codegen --features "transfer,avx512" --target x86_64-unknown-linux-gnu {{symbol}}
 
 # Inspect downstream-exercised AArch64 NEON assembly via cargo-show-asm (omit symbol to list all).
 asm-neon symbol="":
-    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc cargo asm --example downstream_codegen --features transfer --target aarch64-unknown-linux-gnu {{symbol}}
+    RUSTFLAGS="--cfg linear_srgb_bench_internal" CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc cargo asm --example downstream_codegen --features transfer --target aarch64-unknown-linux-gnu {{symbol}}
 
 # Inspect downstream-exercised WebAssembly SIMD128 assembly via cargo-show-asm (omit symbol to list all).
 asm-wasm128 symbol="":
-    RUSTFLAGS="-C target-feature=+simd128" cargo asm --example downstream_codegen --features transfer --target wasm32-unknown-unknown --wasm {{symbol}}
+    RUSTFLAGS="-C target-feature=+simd128 --cfg linear_srgb_bench_internal" cargo asm --example downstream_codegen --features transfer --target wasm32-unknown-unknown --wasm {{symbol}}
 
 # Inspect downstream-exercised WebAssembly Relaxed-SIMD assembly via cargo-show-asm (omit symbol to list all).
 asm-wasm128-relaxed symbol="":
-    RUSTFLAGS="-C target-feature=+simd128,+relaxed-simd" cargo asm --example downstream_codegen --features transfer --target wasm32-unknown-unknown --wasm {{symbol}}
+    RUSTFLAGS="-C target-feature=+simd128,+relaxed-simd --cfg linear_srgb_bench_internal" cargo asm --example downstream_codegen --features transfer --target wasm32-unknown-unknown --wasm {{symbol}}
 
 # Dump a downstream-exercised symbol across all 5 SIMD tiers (v3, v4, neon, wasm128, wasm128-relaxed).
 asm-all symbol:
@@ -180,3 +180,7 @@ asm-all symbol:
     @echo "=== aarch64-neon ===" && just asm-neon {{symbol}}
     @echo "=== wasm128 ===" && just asm-wasm128 {{symbol}}
     @echo "=== wasm128-relaxed ===" && just asm-wasm128-relaxed {{symbol}}
+
+# Run const-generic rail-ablation latency & memory-hierarchy benchmarks (`RAILS = true` vs `RAILS = false`).
+bench-rail-ablation *args:
+    RUSTFLAGS="--cfg linear_srgb_bench_internal" cargo bench --bench downstream_exercised --features transfer -- --group=rail_ablation {{args}}

@@ -29,14 +29,19 @@ for width in [4, 8, 16]:
             if name not in existing:
                 if tier == 'scalar' and width == 4:
                     t = 'archmage::ScalarToken'
+                    relaxed_guard = (
+                        '#[cfg(all(target_arch = "wasm32", target_feature = "relaxed-simd", not(feature = "precise-portable")))]\n'
+                        f'    return {op}_wasm128(values{callarg});\n'
+                        '    #[cfg(not(all(target_arch = "wasm32", target_feature = "relaxed-simd", not(feature = "precise-portable"))))]\n    '
+                    )
                     if op in ['srgb_to_linear', 'linear_to_srgb', 'gamma_to_linear', 'linear_to_gamma', 'srgb_to_linear_extended', 'linear_to_srgb_extended']:
-                        body = f'crate::kernels::float::x4::{op}({t}, values{callarg})'
+                        body = relaxed_guard + f'crate::kernels::float::x4::{op}({t}, values{callarg})'
                     elif op.startswith('tf_'):
-                        body = f'crate::tf::srgb::{op[3:]}_x4({t}, magetypes::simd::generic::f32x4::from_array_t({t}, values)).to_array()'
+                        body = relaxed_guard + f'crate::tf::srgb::{op[3:]}_x4({t}, magetypes::simd::generic::f32x4::from_array_t({t}, values)).to_array()'
                     else:
                         module = 'bt709' if 'bt709' in op else ('pq' if 'pq' in op else 'hlg')
                         vector = f'|chunk| {{ let token = archmage::ScalarToken; crate::tf::{module}::{op}_x4(token, magetypes::simd::generic::f32x4::from_array_t(token, chunk)).to_array() }}'
-                        body = f'crate::kernels::scalar_array(values, {vector}, crate::lanes::{op})'
+                        body = relaxed_guard + f'crate::kernels::scalar_array(values, {vector}, crate::lanes::{op})'
                 elif tier != 'scalar' and op in ['srgb_to_linear', 'linear_to_srgb', 'gamma_to_linear', 'linear_to_gamma', 'srgb_to_linear_extended', 'linear_to_srgb_extended']:
                     token = {'v3': 'X64V3Token', 'v4': 'X64V4Token', 'neon': 'NeonToken', 'wasm128': 'Wasm128Token'}[tier]
                     body = f'crate::kernels::float::x{width}::{op}(archmage::{token}::from_context(), values{callarg})'
@@ -64,7 +69,28 @@ for width in [4, 8, 16]:
                     slice_body = f'crate::kernels::scalar_slice::<{width}>(values, {vector_call}, {scalar_call});'
                 elif tier == 'scalar':
                     slice_body = f'crate::kernels::map_slice::<{width}>(values, {name});'
-                elif op in ['gamma_to_linear', 'linear_to_gamma', 'srgb_to_linear_extended', 'linear_to_srgb_extended']:
+                elif width in [8, 16] and tier in ['neon', 'wasm128']:
+                    # Delegate 128-bit tiers to native 4-wide slices instead of 2x/4x unrolling.
+                    slice_body = f'super::x4::{slicename}(values{callarg});'
+                elif width == 16 and tier == 'v3':
+                    # Delegate 256-bit AVX2 tier to native 8-wide slices on SSE2+ x86_64.
+                    slice_body = (
+                        '#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]\n'
+                        f'    super::x8::{slicename}(values{callarg});\n'
+                        '    #[cfg(not(all(target_arch = "x86_64", target_feature = "sse2")))]\n'
+                        '    {\n'
+                        + (
+                            f'        crate::kernels::float::x16::{op}_slice(archmage::X64V3Token::from_context(), values{callarg});'
+                            if op in ['srgb_to_linear', 'linear_to_srgb', 'gamma_to_linear', 'linear_to_gamma', 'srgb_to_linear_extended', 'linear_to_srgb_extended']
+                            else (
+                                f'        crate::tf::{"bt709" if "bt709" in op else ("pq" if "pq" in op else "hlg")}::{op}_slice_x16(archmage::X64V3Token::from_context(), values);'
+                                if transfer and not op.startswith('tf_')
+                                else f'        crate::kernels::map_slice_inline!(values, 16, |chunk| {name}(chunk{callarg}));'
+                            )
+                        )
+                        + '\n    }'
+                    )
+                elif op in ['srgb_to_linear', 'linear_to_srgb', 'gamma_to_linear', 'linear_to_gamma', 'srgb_to_linear_extended', 'linear_to_srgb_extended']:
                     token = {'v3': 'X64V3Token', 'v4': 'X64V4Token', 'neon': 'NeonToken', 'wasm128': 'Wasm128Token'}[tier]
                     slice_body = f'crate::kernels::float::x{width}::{op}_slice(archmage::{token}::from_context(), values{callarg});'
                 elif transfer and not op.startswith('tf_'):
@@ -72,7 +98,9 @@ for width in [4, 8, 16]:
                     module = 'bt709' if 'bt709' in op else ('pq' if 'pq' in op else 'hlg')
                     slice_body = f'crate::tf::{module}::{op}_slice_x{width}(archmage::{token}::from_context(), values);'
                 else:
-                    slice_body = f'crate::kernels::map_slice_inline!(values, {width}, |chunk| {name}(chunk{callarg}));'
+                    token = {'v3': 'X64V3Token', 'v4': 'X64V4Token', 'neon': 'NeonToken', 'wasm128': 'Wasm128Token'}[tier]
+                    kernel = op.removeprefix('tf_')
+                    slice_body = f'crate::kernels::float::x{width}::{kernel}_slice(archmage::{token}::from_context(), values);'
                 slice_attrs = '#[cfg(test)]\n' if tier == 'scalar' and width == 4 else ''
                 extra += [f'/// Convert all values, including a final partial array.\n{slice_attrs}{attrs}pub(crate) fn {slicename}(values: &mut [f32]{arg}) {{\n    {slice_body}\n}}\n']
     test_only = "#[cfg(test)]\n" if width == 8 else ""

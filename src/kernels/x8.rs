@@ -236,18 +236,7 @@ pub(crate) fn linear_to_srgb_u16(token: Token, linear: [f32; 8]) -> [u16; 8] {
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[attune(inline(hint))]
 pub(crate) fn srgb_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<8>();
-
-    for chunk in chunks {
-        *chunk = srgb_to_linear_v3(token, *chunk);
-    }
-
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 8];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = srgb_to_linear_v3(token, padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x8::srgb_to_linear_slice(token, values);
 }
 
 /// Convert linear f32 values to sRGB in-place using 8-wide SIMD.
@@ -255,18 +244,7 @@ pub(crate) fn srgb_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
 /// Token parameter proves CPU support. Call from `#[arcane]` context.
 #[attune(inline(hint))]
 pub(crate) fn linear_to_srgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<8>();
-
-    for chunk in chunks {
-        *chunk = linear_to_srgb_v3(token, *chunk);
-    }
-
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 8];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = linear_to_srgb_v3(token, padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x8::linear_to_srgb_slice(token, values);
 }
 
 /// Convert sRGB f32 values to linear in-place (extended range, no clamping).
@@ -383,14 +361,14 @@ pub(crate) fn linear_to_hlg_v3(token: X64V3Token, v: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "transfer")]
 #[attune(inline(hint))]
 pub(crate) fn tf_srgb_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    crate::kernels::map_slice_inline!(values, 8, |v| tf_srgb_to_linear_v3(token, v));
+    super::float::x8::srgb_to_linear_slice(token, values);
 }
 
 /// Convert linear f32 values to sRGB in-place, 8-wide (TF module version).
 #[cfg(feature = "transfer")]
 #[attune(inline(hint))]
 pub(crate) fn tf_linear_to_srgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    crate::kernels::map_slice_inline!(values, 8, |v| tf_linear_to_srgb_v3(token, v));
+    super::float::x8::linear_to_srgb_slice(token, values);
 }
 
 /// Convert BT.709 f32 values to linear in-place, 8-wide.

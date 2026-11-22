@@ -362,6 +362,11 @@ pub mod u16_lut;
 #[allow(deprecated)]
 pub mod alt;
 
+#[cfg(linear_srgb_bench_internal)]
+#[doc(hidden)]
+#[allow(missing_docs)]
+pub mod __bench_rails;
+
 // ============================================================================
 // Tests
 // ============================================================================

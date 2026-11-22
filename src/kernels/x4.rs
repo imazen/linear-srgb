@@ -98,16 +98,7 @@ pub(crate) fn linear_to_gamma_v3(token: X64V3Token, linear: [f32; 4], gamma: f32
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune(inline(hint))]
 pub(crate) fn srgb_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = srgb_to_linear_core(token, *chunk);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = srgb_to_linear_core(token, padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x4::srgb_to_linear_slice(token, values);
 }
 
 /// Convert linear f32 values to sRGB in-place using 4-wide SSE SIMD.
@@ -116,16 +107,7 @@ pub(crate) fn srgb_to_linear_slice_v3(token: X64V3Token, values: &mut [f32]) {
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[attune(inline(hint))]
 pub(crate) fn linear_to_srgb_slice_v3(token: X64V3Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = linear_to_srgb_core(token, *chunk);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = linear_to_srgb_core(token, padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x4::linear_to_srgb_slice(token, values);
 }
 
 /// Convert gamma-encoded f32 values to linear in-place using 4-wide SSE SIMD.
@@ -193,16 +175,7 @@ pub(crate) fn linear_to_gamma_neon(token: NeonToken, linear: [f32; 4], gamma: f3
 #[cfg(target_arch = "aarch64")]
 #[attune(inline(hint))]
 pub(crate) fn srgb_to_linear_slice_neon(token: NeonToken, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = srgb_to_linear_core(token, *chunk);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = srgb_to_linear_core(token, padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x4::srgb_to_linear_slice(token, values);
 }
 
 /// Convert linear f32 values to sRGB in-place using 4-wide NEON SIMD.
@@ -211,16 +184,7 @@ pub(crate) fn srgb_to_linear_slice_neon(token: NeonToken, values: &mut [f32]) {
 #[cfg(target_arch = "aarch64")]
 #[attune(inline(hint))]
 pub(crate) fn linear_to_srgb_slice_neon(token: NeonToken, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = linear_to_srgb_core(token, *chunk);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = linear_to_srgb_core(token, padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x4::linear_to_srgb_slice(token, values);
 }
 
 /// Convert gamma-encoded f32 values to linear in-place using 4-wide NEON SIMD.
@@ -296,16 +260,7 @@ pub(crate) fn linear_to_gamma_wasm128(
 #[cfg(target_arch = "wasm32")]
 #[attune(inline(hint))]
 pub(crate) fn srgb_to_linear_slice_wasm128(token: Wasm128Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = srgb_to_linear_core(token, *chunk);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = srgb_to_linear_core(token, padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x4::srgb_to_linear_slice(token, values);
 }
 
 /// Convert linear f32 values to sRGB in-place using 4-wide WASM SIMD.
@@ -314,16 +269,7 @@ pub(crate) fn srgb_to_linear_slice_wasm128(token: Wasm128Token, values: &mut [f3
 #[cfg(target_arch = "wasm32")]
 #[attune(inline(hint))]
 pub(crate) fn linear_to_srgb_slice_wasm128(token: Wasm128Token, values: &mut [f32]) {
-    let (chunks, remainder) = values.as_chunks_mut::<4>();
-    for chunk in chunks {
-        *chunk = linear_to_srgb_core(token, *chunk);
-    }
-    if !remainder.is_empty() {
-        let mut padded = [0.0; 4];
-        padded[..remainder.len()].copy_from_slice(remainder);
-        let converted = linear_to_srgb_core(token, padded);
-        remainder.copy_from_slice(&converted[..remainder.len()]);
-    }
+    super::float::x4::linear_to_srgb_slice(token, values);
 }
 
 /// Convert gamma-encoded f32 values to linear in-place using 4-wide WASM SIMD.
@@ -408,8 +354,8 @@ macro_rules! x86_tf_slice_rite {
     };
 }
 
-x86_tf_slice_rite!(tf_srgb_to_linear_slice_v3, tf_srgb_to_linear_v3);
-x86_tf_slice_rite!(tf_linear_to_srgb_slice_v3, tf_linear_to_srgb_v3);
+x86_tf_slice_rite!(tf_srgb_to_linear_slice_v3 => super::float::x4::srgb_to_linear_slice);
+x86_tf_slice_rite!(tf_linear_to_srgb_slice_v3 => super::float::x4::linear_to_srgb_slice);
 x86_tf_slice_rite!(bt709_to_linear_slice_v3 => crate::tf::bt709::bt709_to_linear_slice_x4);
 x86_tf_slice_rite!(linear_to_bt709_slice_v3 => crate::tf::bt709::linear_to_bt709_slice_x4);
 x86_tf_slice_rite!(pq_to_linear_slice_v3 => crate::tf::pq::pq_to_linear_slice_x4);
@@ -460,8 +406,8 @@ macro_rules! neon_tf_slice_rite {
     };
 }
 
-neon_tf_slice_rite!(tf_srgb_to_linear_slice_neon, tf_srgb_to_linear_neon);
-neon_tf_slice_rite!(tf_linear_to_srgb_slice_neon, tf_linear_to_srgb_neon);
+neon_tf_slice_rite!(tf_srgb_to_linear_slice_neon => super::float::x4::srgb_to_linear_slice);
+neon_tf_slice_rite!(tf_linear_to_srgb_slice_neon => super::float::x4::linear_to_srgb_slice);
 neon_tf_slice_rite!(bt709_to_linear_slice_neon => crate::tf::bt709::bt709_to_linear_slice_x4);
 neon_tf_slice_rite!(linear_to_bt709_slice_neon => crate::tf::bt709::linear_to_bt709_slice_x4);
 neon_tf_slice_rite!(pq_to_linear_slice_neon => crate::tf::pq::pq_to_linear_slice_x4);
@@ -524,8 +470,8 @@ macro_rules! wasm_tf_slice_rite {
     };
 }
 
-wasm_tf_slice_rite!(tf_srgb_to_linear_slice_wasm128, tf_srgb_to_linear_wasm128);
-wasm_tf_slice_rite!(tf_linear_to_srgb_slice_wasm128, tf_linear_to_srgb_wasm128);
+wasm_tf_slice_rite!(tf_srgb_to_linear_slice_wasm128 => super::float::x4::srgb_to_linear_slice);
+wasm_tf_slice_rite!(tf_linear_to_srgb_slice_wasm128 => super::float::x4::linear_to_srgb_slice);
 wasm_tf_slice_rite!(bt709_to_linear_slice_wasm128 => crate::tf::bt709::bt709_to_linear_slice_x4);
 wasm_tf_slice_rite!(linear_to_bt709_slice_wasm128 => crate::tf::bt709::linear_to_bt709_slice_x4);
 wasm_tf_slice_rite!(pq_to_linear_slice_wasm128 => crate::tf::pq::pq_to_linear_slice_x4);

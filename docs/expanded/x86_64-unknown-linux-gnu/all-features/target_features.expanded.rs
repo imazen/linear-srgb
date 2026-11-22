@@ -810,20 +810,10 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn srgb_to_linear_slice_v4(values: &mut [f32]) {
-            {
-                let (chunks, remainder) = (values).as_chunks_mut::<4>();
-                for slot in chunks {
-                    let chunk: [f32; 4] = *slot;
-                    *slot = srgb_to_linear_v4(chunk);
-                }
-                if !remainder.is_empty() {
-                    let mut block = [0.0; 4];
-                    block[..remainder.len()].copy_from_slice(remainder);
-                    let chunk: [f32; 4] = block;
-                    let converted = srgb_to_linear_v4(chunk);
-                    remainder.copy_from_slice(&converted[..remainder.len()]);
-                }
-            };
+            crate::kernels::float::x4::srgb_to_linear_slice(
+                archmage::X64V4Token::from_context(),
+                values,
+            );
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe,pclmulqdq,aes,avx512f,avx512bw,avx512cd,avx512dq,avx512vl"
@@ -842,20 +832,10 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_srgb_slice_v4(values: &mut [f32]) {
-            {
-                let (chunks, remainder) = (values).as_chunks_mut::<4>();
-                for slot in chunks {
-                    let chunk: [f32; 4] = *slot;
-                    *slot = linear_to_srgb_v4(chunk);
-                }
-                if !remainder.is_empty() {
-                    let mut block = [0.0; 4];
-                    block[..remainder.len()].copy_from_slice(remainder);
-                    let chunk: [f32; 4] = block;
-                    let converted = linear_to_srgb_v4(chunk);
-                    remainder.copy_from_slice(&converted[..remainder.len()]);
-                }
-            };
+            crate::kernels::float::x4::linear_to_srgb_slice(
+                archmage::X64V4Token::from_context(),
+                values,
+            );
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe,pclmulqdq,aes,avx512f,avx512bw,avx512cd,avx512dq,avx512vl"
@@ -968,20 +948,10 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn tf_srgb_to_linear_slice_v4(values: &mut [f32]) {
-            {
-                let (chunks, remainder) = (values).as_chunks_mut::<4>();
-                for slot in chunks {
-                    let chunk: [f32; 4] = *slot;
-                    *slot = tf_srgb_to_linear_v4(chunk);
-                }
-                if !remainder.is_empty() {
-                    let mut block = [0.0; 4];
-                    block[..remainder.len()].copy_from_slice(remainder);
-                    let chunk: [f32; 4] = block;
-                    let converted = tf_srgb_to_linear_v4(chunk);
-                    remainder.copy_from_slice(&converted[..remainder.len()]);
-                }
-            };
+            crate::kernels::float::x4::srgb_to_linear_slice(
+                archmage::X64V4Token::from_context(),
+                values,
+            );
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe,pclmulqdq,aes,avx512f,avx512bw,avx512cd,avx512dq,avx512vl"
@@ -1002,20 +972,10 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn tf_linear_to_srgb_slice_v4(values: &mut [f32]) {
-            {
-                let (chunks, remainder) = (values).as_chunks_mut::<4>();
-                for slot in chunks {
-                    let chunk: [f32; 4] = *slot;
-                    *slot = tf_linear_to_srgb_v4(chunk);
-                }
-                if !remainder.is_empty() {
-                    let mut block = [0.0; 4];
-                    block[..remainder.len()].copy_from_slice(remainder);
-                    let chunk: [f32; 4] = block;
-                    let converted = tf_linear_to_srgb_v4(chunk);
-                    remainder.copy_from_slice(&converted[..remainder.len()]);
-                }
-            };
+            crate::kernels::float::x4::linear_to_srgb_slice(
+                archmage::X64V4Token::from_context(),
+                values,
+            );
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe,pclmulqdq,aes,avx512f,avx512bw,avx512cd,avx512dq,avx512vl"
@@ -2760,20 +2720,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn srgb_to_linear_slice_v3(values: &mut [f32]) {
-            {
-                let (chunks, remainder) = (values).as_chunks_mut::<16>();
-                for slot in chunks {
-                    let chunk: [f32; 16] = *slot;
-                    *slot = srgb_to_linear_v3(chunk);
-                }
-                if !remainder.is_empty() {
-                    let mut block = [0.0; 16];
-                    block[..remainder.len()].copy_from_slice(remainder);
-                    let chunk: [f32; 16] = block;
-                    let converted = srgb_to_linear_v3(chunk);
-                    remainder.copy_from_slice(&converted[..remainder.len()]);
-                }
-            };
+            super::x8::srgb_to_linear_slice_v3(values);
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe"
@@ -2792,20 +2739,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_srgb_slice_v3(values: &mut [f32]) {
-            {
-                let (chunks, remainder) = (values).as_chunks_mut::<16>();
-                for slot in chunks {
-                    let chunk: [f32; 16] = *slot;
-                    *slot = linear_to_srgb_v3(chunk);
-                }
-                if !remainder.is_empty() {
-                    let mut block = [0.0; 16];
-                    block[..remainder.len()].copy_from_slice(remainder);
-                    let chunk: [f32; 16] = block;
-                    let converted = linear_to_srgb_v3(chunk);
-                    remainder.copy_from_slice(&converted[..remainder.len()]);
-                }
-            };
+            super::x8::linear_to_srgb_slice_v3(values);
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe"
@@ -2824,10 +2758,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn srgb_to_linear_extended_slice_v3(values: &mut [f32]) {
-            crate::kernels::float::x16::srgb_to_linear_extended_slice(
-                archmage::X64V3Token::from_context(),
-                values,
-            );
+            super::x8::srgb_to_linear_extended_slice_v3(values);
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe"
@@ -2846,10 +2777,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_srgb_extended_slice_v3(values: &mut [f32]) {
-            crate::kernels::float::x16::linear_to_srgb_extended_slice(
-                archmage::X64V3Token::from_context(),
-                values,
-            );
+            super::x8::linear_to_srgb_extended_slice_v3(values);
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe"
@@ -2869,11 +2797,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn gamma_to_linear_slice_v3(values: &mut [f32], gamma: f32) {
-            crate::kernels::float::x16::gamma_to_linear_slice(
-                archmage::X64V3Token::from_context(),
-                values,
-                gamma,
-            );
+            super::x8::gamma_to_linear_slice_v3(values, gamma);
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe"
@@ -2893,11 +2817,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_gamma_slice_v3(values: &mut [f32], gamma: f32) {
-            crate::kernels::float::x16::linear_to_gamma_slice(
-                archmage::X64V3Token::from_context(),
-                values,
-                gamma,
-            );
+            super::x8::linear_to_gamma_slice_v3(values, gamma);
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe"
@@ -2923,20 +2843,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn tf_srgb_to_linear_slice_v3(values: &mut [f32]) {
-            {
-                let (chunks, remainder) = (values).as_chunks_mut::<16>();
-                for slot in chunks {
-                    let chunk: [f32; 16] = *slot;
-                    *slot = tf_srgb_to_linear_v3(chunk);
-                }
-                if !remainder.is_empty() {
-                    let mut block = [0.0; 16];
-                    block[..remainder.len()].copy_from_slice(remainder);
-                    let chunk: [f32; 16] = block;
-                    let converted = tf_srgb_to_linear_v3(chunk);
-                    remainder.copy_from_slice(&converted[..remainder.len()]);
-                }
-            };
+            super::x8::tf_srgb_to_linear_slice_v3(values);
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe"
@@ -2962,20 +2869,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn tf_linear_to_srgb_slice_v3(values: &mut [f32]) {
-            {
-                let (chunks, remainder) = (values).as_chunks_mut::<16>();
-                for slot in chunks {
-                    let chunk: [f32; 16] = *slot;
-                    *slot = tf_linear_to_srgb_v3(chunk);
-                }
-                if !remainder.is_empty() {
-                    let mut block = [0.0; 16];
-                    block[..remainder.len()].copy_from_slice(remainder);
-                    let chunk: [f32; 16] = block;
-                    let converted = tf_linear_to_srgb_v3(chunk);
-                    remainder.copy_from_slice(&converted[..remainder.len()]);
-                }
-            };
+            super::x8::tf_linear_to_srgb_slice_v3(values);
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe"
@@ -2996,10 +2890,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn bt709_to_linear_slice_v3(values: &mut [f32]) {
-            crate::tf::bt709::bt709_to_linear_slice_x16(
-                archmage::X64V3Token::from_context(),
-                values,
-            );
+            super::x8::bt709_to_linear_slice_v3(values);
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe"
@@ -3020,10 +2911,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_bt709_slice_v3(values: &mut [f32]) {
-            crate::tf::bt709::linear_to_bt709_slice_x16(
-                archmage::X64V3Token::from_context(),
-                values,
-            );
+            super::x8::linear_to_bt709_slice_v3(values);
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe"
@@ -3044,10 +2932,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn pq_to_linear_slice_v3(values: &mut [f32]) {
-            crate::tf::pq::pq_to_linear_slice_x16(
-                archmage::X64V3Token::from_context(),
-                values,
-            );
+            super::x8::pq_to_linear_slice_v3(values);
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe"
@@ -3068,10 +2953,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_pq_slice_v3(values: &mut [f32]) {
-            crate::tf::pq::linear_to_pq_slice_x16(
-                archmage::X64V3Token::from_context(),
-                values,
-            );
+            super::x8::linear_to_pq_slice_v3(values);
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe"
@@ -3092,10 +2974,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn hlg_to_linear_slice_v3(values: &mut [f32]) {
-            crate::tf::hlg::hlg_to_linear_slice_x16(
-                archmage::X64V3Token::from_context(),
-                values,
-            );
+            super::x8::hlg_to_linear_slice_v3(values);
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe"
@@ -3116,10 +2995,7 @@ pub mod target_features {
         #[inline]
         /// Convert all values, including a final partial array.
         pub(crate) fn linear_to_hlg_slice_v3(values: &mut [f32]) {
-            crate::tf::hlg::linear_to_hlg_slice_x16(
-                archmage::X64V3Token::from_context(),
-                values,
-            );
+            super::x8::linear_to_hlg_slice_v3(values);
         }
         #[target_feature(
             enable = "sse,sse2,sse3,ssse3,sse4.1,sse4.2,popcnt,cmpxchg16b,avx,avx2,fma,bmi1,bmi2,f16c,lzcnt,movbe,pclmulqdq,aes,avx512f,avx512bw,avx512cd,avx512dq,avx512vl"

@@ -257,7 +257,7 @@ pub(crate) fn srgb_to_linear_v4(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn srgb_to_linear_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice_inline!(values, 8, |chunk| srgb_to_linear_v4(chunk));
+    crate::kernels::float::x8::srgb_to_linear_slice(archmage::X64V4Token::from_context(), values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -271,7 +271,7 @@ pub(crate) fn linear_to_srgb_v4(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn linear_to_srgb_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice_inline!(values, 8, |chunk| linear_to_srgb_v4(chunk));
+    crate::kernels::float::x8::linear_to_srgb_slice(archmage::X64V4Token::from_context(), values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -362,7 +362,7 @@ pub(crate) fn tf_srgb_to_linear_v4(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn tf_srgb_to_linear_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice_inline!(values, 8, |chunk| tf_srgb_to_linear_v4(chunk));
+    crate::kernels::float::x8::srgb_to_linear_slice(archmage::X64V4Token::from_context(), values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -383,7 +383,7 @@ pub(crate) fn tf_linear_to_srgb_v4(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn tf_linear_to_srgb_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice_inline!(values, 8, |chunk| tf_linear_to_srgb_v4(chunk));
+    crate::kernels::float::x8::linear_to_srgb_slice(archmage::X64V4Token::from_context(), values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -521,7 +521,7 @@ pub(crate) fn srgb_to_linear_neon(values: [f32; 8]) -> [f32; 8] {
 /// Convert all values, including a final partial array.
 #[archmage::attune(neon, inline(hint))]
 pub(crate) fn srgb_to_linear_slice_neon(values: &mut [f32]) {
-    crate::kernels::map_slice_inline!(values, 8, |chunk| srgb_to_linear_neon(chunk));
+    super::x4::srgb_to_linear_slice_neon(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -533,7 +533,7 @@ pub(crate) fn linear_to_srgb_neon(values: [f32; 8]) -> [f32; 8] {
 /// Convert all values, including a final partial array.
 #[archmage::attune(neon, inline(hint))]
 pub(crate) fn linear_to_srgb_slice_neon(values: &mut [f32]) {
-    crate::kernels::map_slice_inline!(values, 8, |chunk| linear_to_srgb_neon(chunk));
+    super::x4::linear_to_srgb_slice_neon(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -545,10 +545,7 @@ pub(crate) fn srgb_to_linear_extended_neon(values: [f32; 8]) -> [f32; 8] {
 /// Convert all values, including a final partial array.
 #[archmage::attune(neon, inline(hint))]
 pub(crate) fn srgb_to_linear_extended_slice_neon(values: &mut [f32]) {
-    crate::kernels::float::x8::srgb_to_linear_extended_slice(
-        archmage::NeonToken::from_context(),
-        values,
-    );
+    super::x4::srgb_to_linear_extended_slice_neon(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -560,10 +557,7 @@ pub(crate) fn linear_to_srgb_extended_neon(values: [f32; 8]) -> [f32; 8] {
 /// Convert all values, including a final partial array.
 #[archmage::attune(neon, inline(hint))]
 pub(crate) fn linear_to_srgb_extended_slice_neon(values: &mut [f32]) {
-    crate::kernels::float::x8::linear_to_srgb_extended_slice(
-        archmage::NeonToken::from_context(),
-        values,
-    );
+    super::x4::linear_to_srgb_extended_slice_neon(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -575,11 +569,7 @@ pub(crate) fn gamma_to_linear_neon(values: [f32; 8], gamma: f32) -> [f32; 8] {
 /// Convert all values, including a final partial array.
 #[archmage::attune(neon, inline(hint))]
 pub(crate) fn gamma_to_linear_slice_neon(values: &mut [f32], gamma: f32) {
-    crate::kernels::float::x8::gamma_to_linear_slice(
-        archmage::NeonToken::from_context(),
-        values,
-        gamma,
-    );
+    super::x4::gamma_to_linear_slice_neon(values, gamma);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -591,11 +581,7 @@ pub(crate) fn linear_to_gamma_neon(values: [f32; 8], gamma: f32) -> [f32; 8] {
 /// Convert all values, including a final partial array.
 #[archmage::attune(neon, inline(hint))]
 pub(crate) fn linear_to_gamma_slice_neon(values: &mut [f32], gamma: f32) {
-    crate::kernels::float::x8::linear_to_gamma_slice(
-        archmage::NeonToken::from_context(),
-        values,
-        gamma,
-    );
+    super::x4::linear_to_gamma_slice_neon(values, gamma);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -614,7 +600,7 @@ pub(crate) fn tf_srgb_to_linear_neon(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "transfer")]
 #[archmage::attune(neon, inline(hint))]
 pub(crate) fn tf_srgb_to_linear_slice_neon(values: &mut [f32]) {
-    crate::kernels::map_slice_inline!(values, 8, |chunk| tf_srgb_to_linear_neon(chunk));
+    super::x4::tf_srgb_to_linear_slice_neon(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -633,7 +619,7 @@ pub(crate) fn tf_linear_to_srgb_neon(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "transfer")]
 #[archmage::attune(neon, inline(hint))]
 pub(crate) fn tf_linear_to_srgb_slice_neon(values: &mut [f32]) {
-    crate::kernels::map_slice_inline!(values, 8, |chunk| tf_linear_to_srgb_neon(chunk));
+    super::x4::tf_linear_to_srgb_slice_neon(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -652,7 +638,7 @@ pub(crate) fn bt709_to_linear_neon(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "transfer")]
 #[archmage::attune(neon, inline(hint))]
 pub(crate) fn bt709_to_linear_slice_neon(values: &mut [f32]) {
-    crate::tf::bt709::bt709_to_linear_slice_x8(archmage::NeonToken::from_context(), values);
+    super::x4::bt709_to_linear_slice_neon(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -671,7 +657,7 @@ pub(crate) fn linear_to_bt709_neon(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "transfer")]
 #[archmage::attune(neon, inline(hint))]
 pub(crate) fn linear_to_bt709_slice_neon(values: &mut [f32]) {
-    crate::tf::bt709::linear_to_bt709_slice_x8(archmage::NeonToken::from_context(), values);
+    super::x4::linear_to_bt709_slice_neon(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -690,7 +676,7 @@ pub(crate) fn pq_to_linear_neon(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "transfer")]
 #[archmage::attune(neon, inline(hint))]
 pub(crate) fn pq_to_linear_slice_neon(values: &mut [f32]) {
-    crate::tf::pq::pq_to_linear_slice_x8(archmage::NeonToken::from_context(), values);
+    super::x4::pq_to_linear_slice_neon(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -709,7 +695,7 @@ pub(crate) fn linear_to_pq_neon(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "transfer")]
 #[archmage::attune(neon, inline(hint))]
 pub(crate) fn linear_to_pq_slice_neon(values: &mut [f32]) {
-    crate::tf::pq::linear_to_pq_slice_x8(archmage::NeonToken::from_context(), values);
+    super::x4::linear_to_pq_slice_neon(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -728,7 +714,7 @@ pub(crate) fn hlg_to_linear_neon(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "transfer")]
 #[archmage::attune(neon, inline(hint))]
 pub(crate) fn hlg_to_linear_slice_neon(values: &mut [f32]) {
-    crate::tf::hlg::hlg_to_linear_slice_x8(archmage::NeonToken::from_context(), values);
+    super::x4::hlg_to_linear_slice_neon(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -747,7 +733,7 @@ pub(crate) fn linear_to_hlg_neon(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "transfer")]
 #[archmage::attune(neon, inline(hint))]
 pub(crate) fn linear_to_hlg_slice_neon(values: &mut [f32]) {
-    crate::tf::hlg::linear_to_hlg_slice_x8(archmage::NeonToken::from_context(), values);
+    super::x4::linear_to_hlg_slice_neon(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -759,7 +745,7 @@ pub(crate) fn srgb_to_linear_wasm128(values: [f32; 8]) -> [f32; 8] {
 /// Convert all values, including a final partial array.
 #[archmage::attune(wasm128, inline(hint))]
 pub(crate) fn srgb_to_linear_slice_wasm128(values: &mut [f32]) {
-    crate::kernels::map_slice_inline!(values, 8, |chunk| srgb_to_linear_wasm128(chunk));
+    super::x4::srgb_to_linear_slice_wasm128(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -771,7 +757,7 @@ pub(crate) fn linear_to_srgb_wasm128(values: [f32; 8]) -> [f32; 8] {
 /// Convert all values, including a final partial array.
 #[archmage::attune(wasm128, inline(hint))]
 pub(crate) fn linear_to_srgb_slice_wasm128(values: &mut [f32]) {
-    crate::kernels::map_slice_inline!(values, 8, |chunk| linear_to_srgb_wasm128(chunk));
+    super::x4::linear_to_srgb_slice_wasm128(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -786,10 +772,7 @@ pub(crate) fn srgb_to_linear_extended_wasm128(values: [f32; 8]) -> [f32; 8] {
 /// Convert all values, including a final partial array.
 #[archmage::attune(wasm128, inline(hint))]
 pub(crate) fn srgb_to_linear_extended_slice_wasm128(values: &mut [f32]) {
-    crate::kernels::float::x8::srgb_to_linear_extended_slice(
-        archmage::Wasm128Token::from_context(),
-        values,
-    );
+    super::x4::srgb_to_linear_extended_slice_wasm128(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -804,10 +787,7 @@ pub(crate) fn linear_to_srgb_extended_wasm128(values: [f32; 8]) -> [f32; 8] {
 /// Convert all values, including a final partial array.
 #[archmage::attune(wasm128, inline(hint))]
 pub(crate) fn linear_to_srgb_extended_slice_wasm128(values: &mut [f32]) {
-    crate::kernels::float::x8::linear_to_srgb_extended_slice(
-        archmage::Wasm128Token::from_context(),
-        values,
-    );
+    super::x4::linear_to_srgb_extended_slice_wasm128(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -823,11 +803,7 @@ pub(crate) fn gamma_to_linear_wasm128(values: [f32; 8], gamma: f32) -> [f32; 8] 
 /// Convert all values, including a final partial array.
 #[archmage::attune(wasm128, inline(hint))]
 pub(crate) fn gamma_to_linear_slice_wasm128(values: &mut [f32], gamma: f32) {
-    crate::kernels::float::x8::gamma_to_linear_slice(
-        archmage::Wasm128Token::from_context(),
-        values,
-        gamma,
-    );
+    super::x4::gamma_to_linear_slice_wasm128(values, gamma);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -843,11 +819,7 @@ pub(crate) fn linear_to_gamma_wasm128(values: [f32; 8], gamma: f32) -> [f32; 8] 
 /// Convert all values, including a final partial array.
 #[archmage::attune(wasm128, inline(hint))]
 pub(crate) fn linear_to_gamma_slice_wasm128(values: &mut [f32], gamma: f32) {
-    crate::kernels::float::x8::linear_to_gamma_slice(
-        archmage::Wasm128Token::from_context(),
-        values,
-        gamma,
-    );
+    super::x4::linear_to_gamma_slice_wasm128(values, gamma);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -866,7 +838,7 @@ pub(crate) fn tf_srgb_to_linear_wasm128(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "transfer")]
 #[archmage::attune(wasm128, inline(hint))]
 pub(crate) fn tf_srgb_to_linear_slice_wasm128(values: &mut [f32]) {
-    crate::kernels::map_slice_inline!(values, 8, |chunk| tf_srgb_to_linear_wasm128(chunk));
+    super::x4::tf_srgb_to_linear_slice_wasm128(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -885,7 +857,7 @@ pub(crate) fn tf_linear_to_srgb_wasm128(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "transfer")]
 #[archmage::attune(wasm128, inline(hint))]
 pub(crate) fn tf_linear_to_srgb_slice_wasm128(values: &mut [f32]) {
-    crate::kernels::map_slice_inline!(values, 8, |chunk| tf_linear_to_srgb_wasm128(chunk));
+    super::x4::tf_linear_to_srgb_slice_wasm128(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -904,7 +876,7 @@ pub(crate) fn bt709_to_linear_wasm128(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "transfer")]
 #[archmage::attune(wasm128, inline(hint))]
 pub(crate) fn bt709_to_linear_slice_wasm128(values: &mut [f32]) {
-    crate::tf::bt709::bt709_to_linear_slice_x8(archmage::Wasm128Token::from_context(), values);
+    super::x4::bt709_to_linear_slice_wasm128(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -923,7 +895,7 @@ pub(crate) fn linear_to_bt709_wasm128(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "transfer")]
 #[archmage::attune(wasm128, inline(hint))]
 pub(crate) fn linear_to_bt709_slice_wasm128(values: &mut [f32]) {
-    crate::tf::bt709::linear_to_bt709_slice_x8(archmage::Wasm128Token::from_context(), values);
+    super::x4::linear_to_bt709_slice_wasm128(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -942,7 +914,7 @@ pub(crate) fn pq_to_linear_wasm128(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "transfer")]
 #[archmage::attune(wasm128, inline(hint))]
 pub(crate) fn pq_to_linear_slice_wasm128(values: &mut [f32]) {
-    crate::tf::pq::pq_to_linear_slice_x8(archmage::Wasm128Token::from_context(), values);
+    super::x4::pq_to_linear_slice_wasm128(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -961,7 +933,7 @@ pub(crate) fn linear_to_pq_wasm128(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "transfer")]
 #[archmage::attune(wasm128, inline(hint))]
 pub(crate) fn linear_to_pq_slice_wasm128(values: &mut [f32]) {
-    crate::tf::pq::linear_to_pq_slice_x8(archmage::Wasm128Token::from_context(), values);
+    super::x4::linear_to_pq_slice_wasm128(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -980,7 +952,7 @@ pub(crate) fn hlg_to_linear_wasm128(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "transfer")]
 #[archmage::attune(wasm128, inline(hint))]
 pub(crate) fn hlg_to_linear_slice_wasm128(values: &mut [f32]) {
-    crate::tf::hlg::hlg_to_linear_slice_x8(archmage::Wasm128Token::from_context(), values);
+    super::x4::hlg_to_linear_slice_wasm128(values);
 }
 
 /// Convert 8 values; see the module calling-context requirements.
@@ -999,5 +971,5 @@ pub(crate) fn linear_to_hlg_wasm128(values: [f32; 8]) -> [f32; 8] {
 #[cfg(feature = "transfer")]
 #[archmage::attune(wasm128, inline(hint))]
 pub(crate) fn linear_to_hlg_slice_wasm128(values: &mut [f32]) {
-    crate::tf::hlg::linear_to_hlg_slice_x8(archmage::Wasm128Token::from_context(), values);
+    super::x4::linear_to_hlg_slice_wasm128(values);
 }

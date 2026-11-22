@@ -3,6 +3,17 @@
 /// Convert 4 values; see the module calling-context requirements.
 #[inline]
 pub(crate) fn srgb_to_linear_scalar(values: [f32; 4]) -> [f32; 4] {
+    #[cfg(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    ))]
+    return srgb_to_linear_wasm128(values);
+    #[cfg(not(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    )))]
     crate::kernels::float::x4::srgb_to_linear(archmage::ScalarToken, values)
 }
 
@@ -16,6 +27,17 @@ pub(crate) fn srgb_to_linear_slice_scalar(values: &mut [f32]) {
 /// Convert 4 values; see the module calling-context requirements.
 #[inline]
 pub(crate) fn linear_to_srgb_scalar(values: [f32; 4]) -> [f32; 4] {
+    #[cfg(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    ))]
+    return linear_to_srgb_wasm128(values);
+    #[cfg(not(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    )))]
     crate::kernels::float::x4::linear_to_srgb(archmage::ScalarToken, values)
 }
 
@@ -29,12 +51,34 @@ pub(crate) fn linear_to_srgb_slice_scalar(values: &mut [f32]) {
 /// Convert 4 values; see the module calling-context requirements.
 #[inline]
 pub(crate) fn gamma_to_linear_scalar(values: [f32; 4], gamma: f32) -> [f32; 4] {
+    #[cfg(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    ))]
+    return gamma_to_linear_wasm128(values, gamma);
+    #[cfg(not(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    )))]
     crate::kernels::float::x4::gamma_to_linear(archmage::ScalarToken, values, gamma)
 }
 
 /// Convert 4 values; see the module calling-context requirements.
 #[inline]
 pub(crate) fn linear_to_gamma_scalar(values: [f32; 4], gamma: f32) -> [f32; 4] {
+    #[cfg(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    ))]
+    return linear_to_gamma_wasm128(values, gamma);
+    #[cfg(not(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    )))]
     crate::kernels::float::x4::linear_to_gamma(archmage::ScalarToken, values, gamma)
 }
 
@@ -43,6 +87,17 @@ pub(crate) fn linear_to_gamma_scalar(values: [f32; 4], gamma: f32) -> [f32; 4] {
 #[cfg(test)]
 #[inline]
 pub(crate) fn tf_srgb_to_linear_scalar(values: [f32; 4]) -> [f32; 4] {
+    #[cfg(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    ))]
+    return tf_srgb_to_linear_wasm128(values);
+    #[cfg(not(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    )))]
     crate::tf::srgb::srgb_to_linear_x4(
         archmage::ScalarToken,
         magetypes::simd::generic::f32x4::from_array_t(archmage::ScalarToken, values),
@@ -55,6 +110,17 @@ pub(crate) fn tf_srgb_to_linear_scalar(values: [f32; 4]) -> [f32; 4] {
 #[cfg(test)]
 #[inline]
 pub(crate) fn tf_linear_to_srgb_scalar(values: [f32; 4]) -> [f32; 4] {
+    #[cfg(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    ))]
+    return tf_linear_to_srgb_wasm128(values);
+    #[cfg(not(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    )))]
     crate::tf::srgb::linear_to_srgb_x4(
         archmage::ScalarToken,
         magetypes::simd::generic::f32x4::from_array_t(archmage::ScalarToken, values),
@@ -66,6 +132,17 @@ pub(crate) fn tf_linear_to_srgb_scalar(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "transfer")]
 #[inline]
 pub(crate) fn bt709_to_linear_scalar(values: [f32; 4]) -> [f32; 4] {
+    #[cfg(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    ))]
+    return bt709_to_linear_wasm128(values);
+    #[cfg(not(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    )))]
     crate::kernels::scalar_array(
         values,
         |chunk| {
@@ -84,6 +161,17 @@ pub(crate) fn bt709_to_linear_scalar(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "transfer")]
 #[inline]
 pub(crate) fn linear_to_bt709_scalar(values: [f32; 4]) -> [f32; 4] {
+    #[cfg(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    ))]
+    return linear_to_bt709_wasm128(values);
+    #[cfg(not(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    )))]
     crate::kernels::scalar_array(
         values,
         |chunk| {
@@ -102,6 +190,17 @@ pub(crate) fn linear_to_bt709_scalar(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "transfer")]
 #[inline]
 pub(crate) fn pq_to_linear_scalar(values: [f32; 4]) -> [f32; 4] {
+    #[cfg(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    ))]
+    return pq_to_linear_wasm128(values);
+    #[cfg(not(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    )))]
     crate::kernels::scalar_array(
         values,
         |chunk| {
@@ -120,6 +219,17 @@ pub(crate) fn pq_to_linear_scalar(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "transfer")]
 #[inline]
 pub(crate) fn linear_to_pq_scalar(values: [f32; 4]) -> [f32; 4] {
+    #[cfg(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    ))]
+    return linear_to_pq_wasm128(values);
+    #[cfg(not(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    )))]
     crate::kernels::scalar_array(
         values,
         |chunk| {
@@ -138,6 +248,17 @@ pub(crate) fn linear_to_pq_scalar(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "transfer")]
 #[inline]
 pub(crate) fn hlg_to_linear_scalar(values: [f32; 4]) -> [f32; 4] {
+    #[cfg(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    ))]
+    return hlg_to_linear_wasm128(values);
+    #[cfg(not(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    )))]
     crate::kernels::scalar_array(
         values,
         |chunk| {
@@ -156,6 +277,17 @@ pub(crate) fn hlg_to_linear_scalar(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "transfer")]
 #[inline]
 pub(crate) fn linear_to_hlg_scalar(values: [f32; 4]) -> [f32; 4] {
+    #[cfg(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    ))]
+    return linear_to_hlg_wasm128(values);
+    #[cfg(not(all(
+        target_arch = "wasm32",
+        target_feature = "relaxed-simd",
+        not(feature = "precise-portable")
+    )))]
     crate::kernels::scalar_array(
         values,
         |chunk| {
@@ -199,7 +331,7 @@ pub(crate) fn srgb_to_linear_v4(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn srgb_to_linear_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice_inline!(values, 4, |chunk| srgb_to_linear_v4(chunk));
+    crate::kernels::float::x4::srgb_to_linear_slice(archmage::X64V4Token::from_context(), values);
 }
 
 /// Convert 4 values; see the module calling-context requirements.
@@ -213,7 +345,7 @@ pub(crate) fn linear_to_srgb_v4(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn linear_to_srgb_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice_inline!(values, 4, |chunk| linear_to_srgb_v4(chunk));
+    crate::kernels::float::x4::linear_to_srgb_slice(archmage::X64V4Token::from_context(), values);
 }
 
 /// Convert 4 values; see the module calling-context requirements.
@@ -304,7 +436,7 @@ pub(crate) fn tf_srgb_to_linear_v4(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn tf_srgb_to_linear_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice_inline!(values, 4, |chunk| tf_srgb_to_linear_v4(chunk));
+    crate::kernels::float::x4::srgb_to_linear_slice(archmage::X64V4Token::from_context(), values);
 }
 
 /// Convert 4 values; see the module calling-context requirements.
@@ -325,7 +457,7 @@ pub(crate) fn tf_linear_to_srgb_v4(values: [f32; 4]) -> [f32; 4] {
 #[cfg(feature = "avx512")]
 #[archmage::attune(v4, inline(hint))]
 pub(crate) fn tf_linear_to_srgb_slice_v4(values: &mut [f32]) {
-    crate::kernels::map_slice_inline!(values, 4, |chunk| tf_linear_to_srgb_v4(chunk));
+    crate::kernels::float::x4::linear_to_srgb_slice(archmage::X64V4Token::from_context(), values);
 }
 
 /// Convert 4 values; see the module calling-context requirements.

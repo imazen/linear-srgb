@@ -1,48 +1,95 @@
-//! Transfer profiles and their exceptional-lane fallbacks.
+//! Transfer profiles, const-generic rail ablation, and exceptional-lane fallbacks.
 use archmage::ScalarToken;
 use magemath::SimdMath;
 use magemath::powf::{Powf, PowfDomain, PowfOptions};
 use magetypes::simd::{backends::*, generic::*};
 
+pub(crate) const MATH_PORTABILITY: magemath::Portability = if super::polynomial::USE_FUSED_MATH {
+    magemath::Portability::BitExact
+} else {
+    magemath::Portability::BackendDependent
+};
+
 const GAMMA_OPTIONS: PowfOptions = PowfOptions::new()
     .domain(PowfDomain::Unit)
     .exponent_range(0.0, 4.0)
     .clamp_finite()
+    .portability(MATH_PORTABILITY)
     .caller();
 const GAMMA: u128 = GAMMA_OPTIONS.bits();
+
+/// Unchecked custom-gamma profile for verified finite inputs in `[1e-9, 1.0]`
+/// and exponents in `(0.0, 4.0]`. Statically proves `|n * log2(x)| <= 120 <= 125`,
+/// eliding all input clamps, NaN masks, subnormal checks, and `exp2` output saturation.
+const GAMMA_UNCHECKED: u128 = PowfOptions::new()
+    .domain(PowfDomain::PositiveUnit)
+    .base_range(1.0e-9, 1.0)
+    .exponent_range(0.0, 4.0)
+    .reject_subnormals()
+    .portability(MATH_PORTABILITY)
+    .assume_in_bounds()
+    .caller()
+    .bits();
+
 const FULL_POW: u128 = PowfOptions::new().full_domain().highp().caller().bits();
 
 #[cfg(feature = "transfer")]
 pub(crate) const BT709_DECODE_POWER: u128 = PowfOptions::new()
     .positive_gamma()
     .const_exponent(1.0 / 0.45)
+    .portability(MATH_PORTABILITY)
     .caller()
     .bits();
 #[cfg(feature = "transfer")]
 pub(crate) const BT709_ENCODE_POWER: u128 = PowfOptions::new()
     .positive_gamma()
     .const_exponent(0.45)
+    .portability(MATH_PORTABILITY)
+    .caller()
+    .bits();
+#[cfg(feature = "transfer")]
+pub(crate) const BT709_DECODE_FAST: u128 = PowfOptions::new()
+    .positive_gamma()
+    .reject_subnormals()
+    .const_exponent(1.0 / 0.45)
+    .portability(MATH_PORTABILITY)
+    .assume_in_bounds()
+    .caller()
+    .bits();
+#[cfg(feature = "transfer")]
+pub(crate) const BT709_ENCODE_FAST: u128 = PowfOptions::new()
+    .positive_gamma()
+    .reject_subnormals()
+    .const_exponent(0.45)
+    .portability(MATH_PORTABILITY)
+    .assume_in_bounds()
     .caller()
     .bits();
 
 #[cfg(feature = "transfer")]
 pub(crate) const EXP: u128 = magemath::expf::ExpfOptions::new()
     .full_domain()
+    .portability(MATH_PORTABILITY)
     .caller()
     .bits();
 #[cfg(feature = "transfer")]
-pub(crate) const HLG_EXP: u128 = magemath::expf::ExpfOptions::new()
+pub(crate) const HLG_EXP_FAST: u128 = magemath::expf::ExpfOptions::new()
     .unclamped_exp2_range()
+    .portability(MATH_PORTABILITY)
+    .assume_in_bounds()
     .caller()
     .bits();
 #[cfg(feature = "transfer")]
 pub(crate) const LOG: u128 = magemath::logf::LogfOptions::new()
     .full_domain()
+    .portability(MATH_PORTABILITY)
     .caller()
     .bits();
 #[cfg(feature = "transfer")]
-pub(crate) const HLG_LOG: u128 = magemath::logf::LogfOptions::new()
+pub(crate) const HLG_LOG_FAST: u128 = magemath::logf::LogfOptions::new()
     .reject_subnormals()
+    .portability(MATH_PORTABILITY)
+    .assume_in_bounds()
     .caller()
     .bits();
 
@@ -82,7 +129,7 @@ fn full_pow(base: f32, n: f32) -> f32 {
 #[inline(always)]
 pub(crate) fn fixed_pow<const CFG: u128, T: F32x4Convert>(token: T, x: f32, exponent: f32) -> f32 {
     Powf::<CFG>::scalar_const_with_token(token, x).unwrap_or_else(|_| {
-        Powf::<FULL_POW>::scalar_with_token(token, x, exponent).expect("full power domain")
+        Powf::<FULL_POW>::scalar_with_token(ScalarToken, x, exponent).expect("full power domain")
     })
 }
 
@@ -98,6 +145,17 @@ pub(crate) fn gamma(x: f32, n: f32) -> f32 {
         return x;
     }
     if (0.0..=4.0).contains(&n) {
+        #[cfg(all(
+            target_arch = "wasm32",
+            target_feature = "relaxed-simd",
+            not(feature = "precise-portable")
+        ))]
+        {
+            use archmage::SimdToken;
+            if let Some(w) = archmage::Wasm128Token::summon() {
+                return Powf::<GAMMA>::scalar_with_token(w, x, n).expect("infallible gamma");
+            }
+        }
         Powf::<GAMMA>::scalar_infallible(x, n)
     } else {
         full_pow(x, n)
@@ -119,7 +177,7 @@ pub(crate) fn gamma_outside_fit_slice(values: &mut [f32], exponent: f32) {
 }
 
 macro_rules! gamma_for {
-    ($name:ident, $in_range:ident, $zero_exp:ident, $slice:ident, $float:ident, $backend:ident, $width:literal) => {
+    ($name:ident, $name_cfg:ident, $in_range:ident, $zero_exp:ident, $slice:ident, $slice_cfg:ident, $float:ident, $backend:ident, $width:literal) => {
         #[inline(always)]
         pub(crate) fn $zero_exp<T: $backend>(t: T, v: $float<T>) -> $float<T> {
             let zero = $float::zero_t(t);
@@ -134,8 +192,16 @@ macro_rules! gamma_for {
             $float::blend(v.simd_ne(v), v, result)
         }
 
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn $name<T: $backend>(t: T, v: $float<T>, n: f32) -> $float<T> {
+        pub(crate) fn $name_cfg<T: $backend, const RAILS: bool>(
+            t: T,
+            v: $float<T>,
+            n: f32,
+        ) -> $float<T> {
+            if !RAILS {
+                return v.powf::<GAMMA_UNCHECKED>(n);
+            }
             if !(0.0..=4.0).contains(&n) {
                 return $float::from_array_t(t, gamma_outside_fit(v.to_array(), n));
             }
@@ -146,47 +212,98 @@ macro_rules! gamma_for {
         }
 
         #[inline(always)]
-        pub(crate) fn $slice<T: $backend>(t: T, values: &mut [f32], n: f32) {
+        pub(crate) fn $name<T: $backend>(t: T, v: $float<T>, n: f32) -> $float<T> {
+            $name_cfg::<T, true>(t, v, n)
+        }
+
+        #[allow(dead_code)]
+        #[inline(always)]
+        pub(crate) fn $slice_cfg<T: $backend, const RAILS: bool>(t: T, values: &mut [f32], n: f32) {
+            if !RAILS {
+                fn tail_unchecked<T: $backend>(
+                    (t, n): (T, f32),
+                    chunk: [f32; $width],
+                ) -> [f32; $width] {
+                    $float::from_array_t(t, chunk)
+                        .powf::<GAMMA_UNCHECKED>(n)
+                        .to_array()
+                }
+                crate::kernels::map_slice_inline!(
+                    values,
+                    $width,
+                    (t, n),
+                    |chunk| $float::from_array_t(t, chunk)
+                        .powf::<GAMMA_UNCHECKED>(n)
+                        .to_array(),
+                    tail_unchecked::<T>
+                );
+                return;
+            }
             if !(0.0..=4.0).contains(&n) {
                 gamma_outside_fit_slice(values, n);
                 return;
             }
             if n == 0.0 {
-                crate::kernels::map_slice_inline!(values, $width, |chunk| {
+                fn tail_zero<T: $backend>(t: T, chunk: [f32; $width]) -> [f32; $width] {
                     $zero_exp(t, $float::from_array_t(t, chunk)).to_array()
-                });
+                }
+                crate::kernels::map_slice_inline!(
+                    values,
+                    $width,
+                    t,
+                    |chunk| $zero_exp(t, $float::from_array_t(t, chunk)).to_array(),
+                    tail_zero::<T>
+                );
                 return;
             }
-            crate::kernels::map_slice_inline!(values, $width, |chunk| {
+            fn tail_in_range<T: $backend>((t, n): (T, f32), chunk: [f32; $width]) -> [f32; $width] {
                 $in_range(t, $float::from_array_t(t, chunk), n).to_array()
-            });
+            }
+            crate::kernels::map_slice_inline!(
+                values,
+                $width,
+                (t, n),
+                |chunk| $in_range(t, $float::from_array_t(t, chunk), n).to_array(),
+                tail_in_range::<T>
+            );
+        }
+
+        #[inline(always)]
+        pub(crate) fn $slice<T: $backend>(t: T, values: &mut [f32], n: f32) {
+            $slice_cfg::<T, true>(t, values, n);
         }
     };
 }
 
 gamma_for!(
     gamma_x4,
+    gamma_x4_cfg,
     gamma_in_range_x4,
     gamma_zero_x4,
     gamma_slice_x4,
+    gamma_slice_x4_cfg,
     f32x4,
     F32x4Convert,
     4
 );
 gamma_for!(
     gamma_x8,
+    gamma_x8_cfg,
     gamma_in_range_x8,
     gamma_zero_x8,
     gamma_slice_x8,
+    gamma_slice_x8_cfg,
     f32x8,
     F32x8Convert,
     8
 );
 gamma_for!(
     gamma_x16,
+    gamma_x16_cfg,
     gamma_in_range_x16,
     gamma_zero_x16,
     gamma_slice_x16,
+    gamma_slice_x16_cfg,
     f32x16,
     F32x16Convert,
     16
