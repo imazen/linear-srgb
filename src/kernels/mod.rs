@@ -138,44 +138,30 @@ pub(crate) use map_rgba_slice_inline;
 
 #[cold]
 #[inline(never)]
-pub(crate) fn finish_slice_cold<C: Copy, const N: usize>(
-    rest_chunks: &mut [[f32; N]],
-    remainder: &mut [f32],
+pub(crate) fn slow_chunk_cold<C: Copy, const N: usize>(
+    chunk: [f32; N],
     ctx: C,
     slow: fn(C, [f32; N]) -> [f32; N],
-) {
-    const { assert!(N.is_power_of_two()) };
-    for chunk in rest_chunks {
-        *chunk = slow(ctx, *chunk);
-    }
-    let n = remainder.len() & (N - 1);
-    if n != 0 {
-        let rem = &mut remainder[..n];
-        let mut block = [0.0; N];
-        block[..n].copy_from_slice(rem);
-        let converted = slow(ctx, block);
-        rem.copy_from_slice(&converted[..n]);
-    }
+) -> [f32; N] {
+    slow(ctx, chunk)
 }
 
 /// Closure-free call-free SIMD slice fast-path macro with cold `fn` pointer
-/// fallback when any chunk contains an exceptional (`NaN` / out-of-fit) lane
-/// or a `< N` trailing remainder.
+/// fallback when any single chunk contains an exceptional (`NaN` / out-of-fit)
+/// lane or a `< N` trailing remainder. Patches only the failing chunk and
+/// continues the fast SIMD loop for the rest of the slice.
 macro_rules! map_slice_try_inline {
     ($values:expr, $width:literal, $ctx:expr, |$chunk:ident| $fast:expr, $slow_fn:expr) => {{
         let (chunks, remainder) = ($values).as_chunks_mut::<$width>();
-        let mut idx = 0;
-        while idx < chunks.len() {
-            let $chunk: [f32; $width] = chunks[idx];
-            let Some(converted) = ($fast) else {
-                $crate::kernels::finish_slice_cold(&mut chunks[idx..], remainder, $ctx, $slow_fn);
-                return;
+        for slot in chunks {
+            let $chunk: [f32; $width] = *slot;
+            *slot = match $fast {
+                Some(converted) => converted,
+                None => $crate::kernels::slow_chunk_cold($chunk, $ctx, $slow_fn),
             };
-            chunks[idx] = converted;
-            idx += 1;
         }
         if !remainder.is_empty() {
-            $crate::kernels::finish_slice_cold(&mut [], remainder, $ctx, $slow_fn);
+            $crate::kernels::finish_tail_cold(remainder, $ctx, $slow_fn);
         }
     }};
 }
@@ -183,49 +169,31 @@ pub(crate) use map_slice_try_inline;
 
 #[cold]
 #[inline(never)]
-pub(crate) fn finish_rgba_slice_cold<C: Copy>(
-    rest_chunks: &mut [[f32; 16]],
-    remainder: &mut [f32],
+pub(crate) fn slow_rgba_chunk_cold<C: Copy>(
+    chunk: &mut [f32; 16],
     ctx: C,
     slow: fn(C, &mut [f32; 16]),
 ) {
-    for chunk in rest_chunks {
-        slow(ctx, chunk);
-    }
-    let n = remainder.len() & 12;
-    if n != 0 {
-        let rem = &mut remainder[..n];
-        let mut block = [0.0; 16];
-        block[..n].copy_from_slice(rem);
-        slow(ctx, &mut block);
-        rem.copy_from_slice(&block[..n]);
-    }
+    slow(ctx, chunk);
 }
 
 /// Closure-free RGBA slice fast-path macro with cold `fn` pointer fallback.
+/// Patches only the failing 16-float chunk and continues the fast SIMD loop.
 macro_rules! map_rgba_slice_try_inline {
     ($values:expr, $ctx:expr, |$chunk:ident| $fast:expr, $slow_fn:expr) => {{
         let (chunks, remainder) = ($values).as_chunks_mut::<16>();
         let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
-        let mut idx = 0;
-        while idx < chunks.len() {
+        for slot in chunks {
             let ok = {
-                let $chunk = &mut chunks[idx];
+                let $chunk = &mut *slot;
                 $fast
             };
             if !ok {
-                $crate::kernels::finish_rgba_slice_cold(
-                    &mut chunks[idx..],
-                    remainder,
-                    $ctx,
-                    $slow_fn,
-                );
-                return;
+                $crate::kernels::slow_rgba_chunk_cold(slot, $ctx, $slow_fn);
             }
-            idx += 1;
         }
         if !remainder.is_empty() {
-            $crate::kernels::finish_rgba_slice_cold(&mut [], remainder, $ctx, $slow_fn);
+            $crate::kernels::finish_rgba_tail_cold(remainder, $ctx, $slow_fn);
         }
     }};
 }

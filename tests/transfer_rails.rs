@@ -429,3 +429,71 @@ fn pq_oetf_uses_the_small_fit_within_one_code() {
         );
     }
 }
+
+#[cfg(feature = "transfer")]
+#[test]
+fn pq_mixed_dark_toe_and_bright_chunks_match_scalar_and_preserve_alpha() {
+    let nan = f32::from_bits(0xffc0_4321);
+    let mut base = Vec::with_capacity(131);
+    // Chunk 0 triggers the dark-toe fallback while subsequent chunks stay in the fast polynomial domain.
+    base.extend_from_slice(&[0.0, 0.005, 0.015, 0.5]);
+    for i in 4..131 {
+        base.push(0.1 + (i as f32) * 0.0065);
+    }
+    base[67] = nan;
+    base[96] = 1e-9;
+
+    for (slice_fn, rgba_fn, scalar_fn) in [
+        (
+            pq_to_linear_slice as fn(&mut [f32]),
+            pq_to_linear_rgba_slice as fn(&mut [f32]),
+            linear_srgb::default::pq_to_linear as fn(f32) -> f32,
+        ),
+        (
+            linear_to_pq_slice as fn(&mut [f32]),
+            linear_to_pq_rgba_slice as fn(&mut [f32]),
+            linear_srgb::default::linear_to_pq as fn(f32) -> f32,
+        ),
+    ] {
+        let mut flat = base.clone();
+        slice_fn(&mut flat);
+        for (i, (&inp, &got)) in base.iter().zip(flat.iter()).enumerate() {
+            let want = scalar_fn(inp);
+            assert_eq!(got.to_bits(), want.to_bits(), "flat lane {i} input {inp}");
+        }
+
+        // RGBA: length 132 (33 pixels = 8 full 16-float chunks + 1 pixel tail).
+        let mut rgba = Vec::with_capacity(132);
+        for px in 0..33 {
+            let a = (px as f32) * 0.03 + 0.01;
+            let r = base[(px * 3) % base.len()];
+            let g = base[(px * 3 + 1) % base.len()];
+            let b = base[(px * 3 + 2) % base.len()];
+            rgba.extend_from_slice(&[r, g, b, a]);
+        }
+        let orig_rgba = rgba.clone();
+        rgba_fn(&mut rgba);
+        for (px, (orig, got)) in orig_rgba
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(rgba.as_chunks::<4>().0)
+            .enumerate()
+        {
+            for c in 0..3 {
+                let want = scalar_fn(orig[c]);
+                assert_eq!(
+                    got[c].to_bits(),
+                    want.to_bits(),
+                    "rgba px {px} ch {c} input {}",
+                    orig[c]
+                );
+            }
+            assert_eq!(
+                got[3].to_bits(),
+                orig[3].to_bits(),
+                "rgba px {px} alpha altered"
+            );
+        }
+    }
+}
