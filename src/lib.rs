@@ -72,7 +72,8 @@
 //! | Single f32 value | [`default::srgb_to_linear`] |
 //! | Single u8 value | [`default::srgb_u8_to_linear`] |
 //! | f32 slice (in-place) | [`default::srgb_to_linear_slice`] |
-//! | RGBA f32 slice (alpha-preserving) | [`default::srgb_to_linear_rgba_slice`] |
+//! | f32 slice (out-of-place) | [`default::srgb_to_linear_slice_into`] |
+//! | RGBA f32 slice (alpha-preserving, in-place / out-of-place) | [`default::srgb_to_linear_rgba_slice`] / [`default::srgb_to_linear_rgba_slice_into`] |
 //! | u8 slice → f32 slice | [`default::srgb_u8_to_linear_slice`] |
 //! | RGBA u8 → f32 (alpha-preserving) | [`default::srgb_u8_to_linear_rgba_slice`] |
 //! | RGBA f32 sRGB → linear premul | [`default::srgb_to_linear_premultiply_rgba_slice`] |
@@ -190,27 +191,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]
-#![cfg_attr(
-    all(feature = "unsafe_simd", not(feature = "alt")),
-    deprecated(
-        since = "0.6.13",
-        note = "linear-srgb Cargo feature `unsafe_simd` is a no-op since 0.6.2 and will be removed in 0.7.0; remove `unsafe_simd` from Cargo features"
-    )
-)]
-#![cfg_attr(
-    all(feature = "alt", not(feature = "unsafe_simd")),
-    deprecated(
-        since = "0.6.13",
-        note = "linear-srgb Cargo feature `alt` is deprecated and will be removed in 0.7.0; remove `alt` from Cargo features"
-    )
-)]
-#![cfg_attr(
-    all(feature = "unsafe_simd", feature = "alt"),
-    deprecated(
-        since = "0.6.13",
-        note = "linear-srgb Cargo features `unsafe_simd` and `alt` are deprecated and will be removed in 0.7.0; remove them from Cargo features"
-    )
-)]
 // Rust's unit-test harness refers to constants inside the deprecated module.
 #![cfg_attr(test, allow(deprecated))]
 #![warn(missing_docs)]

@@ -18,14 +18,14 @@ stub_srgb_to_linear_slice:
 	ldr x8, [x8, :got_lo12:archmage::tokens::generated::arm::NEON_CACHE]
 	ldrb w8, [x8]
 	cmp w8, #1
-	b.eq .LBB23_8
+	b.eq .LBB22_8
 	cmp w8, #2
-	b.ne .LBB23_7
-.LBB23_2:
+	b.ne .LBB22_7
+.LBB22_2:
 	lsl x8, x1, #2
 	ands x9, x8, #0x7ffffffffffffff0
 	and x8, x1, #0x3
-	b.eq .LBB23_5
+	b.eq .LBB22_5
 	mov w10, #33681
 	mov w11, #32277
 	mov w12, #5734
@@ -61,7 +61,7 @@ stub_srgb_to_linear_slice:
 	dup v18.4s, w11
 	dup v19.4s, w12
 	mov x10, x0
-.LBB23_4:
+.LBB22_4:
 	ldr q20, [x10]
 	mov v22.16b, v3.16b
 	mov v24.16b, v4.16b
@@ -89,9 +89,9 @@ stub_srgb_to_linear_slice:
 	bsl v21.16b, v23.16b, v22.16b
 	bsl v20.16b, v0.16b, v21.16b
 	str q20, [x10], #16
-	b.ne .LBB23_4
-.LBB23_5:
-	cbnz x8, .LBB23_9
+	b.ne .LBB22_4
+.LBB22_5:
+	cbnz x8, .LBB22_9
 	.cfi_def_cfa wsp, 32
 	ldp x20, x19, [sp, #16]
 	ldp x29, x30, [sp], #32
@@ -101,7 +101,7 @@ stub_srgb_to_linear_slice:
 	.cfi_restore w30
 	.cfi_restore w29
 	ret
-.LBB23_7:
+.LBB22_7:
 	.cfi_restore_state
 	.cfi_remember_state
 	mov x20, x1
@@ -110,8 +110,8 @@ stub_srgb_to_linear_slice:
 	mov x1, x20
 	mov w8, w0
 	mov x0, x19
-	cbnz w8, .LBB23_2
-.LBB23_8:
+	cbnz w8, .LBB22_2
+.LBB22_8:
 	.cfi_def_cfa wsp, 32
 	ldp x20, x19, [sp, #16]
 	ldp x29, x30, [sp], #32
@@ -121,7 +121,7 @@ stub_srgb_to_linear_slice:
 	.cfi_restore w30
 	.cfi_restore w29
 	b linear_srgb::simd::srgb_to_linear_slice_tier_scalar_t
-.LBB23_9:
+.LBB22_9:
 	.cfi_restore_state
 	and x9, x1, #0x1ffffffffffffffc
 	adrp x2, linear_srgb::kernels::float::x4::srgb_to_linear_slice_cfg::tail::<archmage::tokens::generated::arm::NeonToken, 7>

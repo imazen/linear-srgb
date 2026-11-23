@@ -30,26 +30,26 @@ stub_linear_to_gamma_slice:
 	ldr x8, [x8, :got_lo12:archmage::tokens::generated::arm::NEON_CACHE]
 	ldrb w8, [x8]
 	cmp w8, #1
-	b.eq .LBB16_15
+	b.eq .LBB15_15
 	cmp w8, #2
-	b.ne .LBB16_14
-.LBB16_2:
+	b.ne .LBB15_14
+.LBB15_2:
 	fmov s1, #1.00000000
 	fdiv s0, s1, s0
 	fmov s1, #4.00000000
 	fcmp s0, #0.0
 	fccmp s0, s1, #2, ge
-	b.hi .LBB16_16
+	b.hi .LBB15_16
 	fcmp s0, #0.0
 	and x8, x1, #0x1ffffffffffffffc
 	lsl x9, x1, #2
 	add x8, x0, x8, lsl #2
 	and x1, x1, #0x3
 	and x9, x9, #0x7ffffffffffffff0
-	b.ne .LBB16_9
-	cbz x9, .LBB16_7
+	b.ne .LBB15_9
+	cbz x9, .LBB15_7
 	fmov v0.4s, #1.00000000
-.LBB16_6:
+.LBB15_6:
 	ldr q1, [x0]
 	subs x9, x9, #16
 	fcmgt v2.4s, v1.4s, #0.0
@@ -58,9 +58,9 @@ stub_linear_to_gamma_slice:
 	and v2.16b, v2.16b, v0.16b
 	orr v1.16b, v2.16b, v1.16b
 	str q1, [x0], #16
-	b.ne .LBB16_6
-.LBB16_7:
-	cbz x1, .LBB16_13
+	b.ne .LBB15_6
+.LBB15_7:
+	cbz x1, .LBB15_13
 	adrp x2, linear_srgb::tf::math::gamma_slice_x4_cfg::tail_zero::<archmage::tokens::generated::arm::NeonToken>
 	add x2, x2, :lo12:linear_srgb::tf::math::gamma_slice_x4_cfg::tail_zero::<archmage::tokens::generated::arm::NeonToken>
 	mov x0, x8
@@ -85,10 +85,10 @@ stub_linear_to_gamma_slice:
 	.cfi_restore b14
 	.cfi_restore b15
 	b linear_srgb::kernels::finish_tail_cold::<archmage::tokens::generated::arm::NeonToken, 4>
-.LBB16_9:
+.LBB15_9:
 	.cfi_restore_state
 	.cfi_remember_state
-	cbz x9, .LBB16_12
+	cbz x9, .LBB15_12
 	fcmp s0, s1
 	mov w10, #8388607
 	movi d24, #0000000000000000
@@ -150,7 +150,7 @@ stub_linear_to_gamma_slice:
 	movk w11, #16177, lsl #16
 	dup v30.4s, w10
 	dup v31.4s, w11
-.LBB16_11:
+.LBB15_11:
 	ldr q8, [x0]
 	mov v13.16b, v17.16b
 	mov v15.16b, v18.16b
@@ -208,10 +208,10 @@ stub_linear_to_gamma_slice:
 	fcmeq v10.4s, v8.4s, v8.4s
 	bit v8.16b, v9.16b, v10.16b
 	str q8, [x0], #16
-	b.ne .LBB16_11
-.LBB16_12:
-	cbnz x1, .LBB16_17
-.LBB16_13:
+	b.ne .LBB15_11
+.LBB15_12:
+	cbnz x1, .LBB15_17
+.LBB15_13:
 	.cfi_def_cfa wsp, 96
 	ldp x20, x19, [sp, #80]
 	ldp x29, x30, [sp, #64]
@@ -233,7 +233,7 @@ stub_linear_to_gamma_slice:
 	.cfi_restore b14
 	.cfi_restore b15
 	ret
-.LBB16_14:
+.LBB15_14:
 	.cfi_restore_state
 	.cfi_remember_state
 	mov x19, x0
@@ -244,8 +244,8 @@ stub_linear_to_gamma_slice:
 	mov x1, x20
 	mov w8, w0
 	mov x0, x19
-	cbnz w8, .LBB16_2
-.LBB16_15:
+	cbnz w8, .LBB15_2
+.LBB15_15:
 	.cfi_def_cfa wsp, 96
 	ldp x20, x19, [sp, #80]
 	ldp x29, x30, [sp, #64]
@@ -267,7 +267,7 @@ stub_linear_to_gamma_slice:
 	.cfi_restore b14
 	.cfi_restore b15
 	b linear_srgb::simd::linear_to_gamma_slice_tier_scalar_t
-.LBB16_16:
+.LBB15_16:
 	.cfi_restore_state
 	.cfi_remember_state
 	.cfi_def_cfa wsp, 96
@@ -291,7 +291,7 @@ stub_linear_to_gamma_slice:
 	.cfi_restore b14
 	.cfi_restore b15
 	b linear_srgb::tf::math::gamma_outside_fit_slice
-.LBB16_17:
+.LBB15_17:
 	.cfi_restore_state
 	mov x0, x8
 	.cfi_def_cfa wsp, 96

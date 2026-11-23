@@ -109,9 +109,12 @@ sqrt-indexed u16 fast table differs at 1,177,899 samples, max one code.
 These grid results replace the unsupported README SIMD 4/5-ULP summary.
 
 Clamping is API-specific: ordinary sRGB/gamma functions and integer outputs
-clamp, while BT.709 preserves its linear negative branch and HDR transfer
-functions do not apply a common upper-unit clamp. Their valid transfer domain
-and display-light normalization must be chosen by the caller.
+clamp to `[0, 1]`, BT.709 preserves its linear negative branch, PQ clamps both
+decode and encode to `[0, 1]` (with fast `default` decode flushing signals
+`<= 7.313e-7`, linear `< 3.5e-37`, to `+0.0`), and HLG clamps `<= 0` and `NaN`
+to `+0.0` while allowing `> 1.0` inputs unclamped. See the rail table above
+for infinities and `NaN` propagation; valid transfer domain and display-light
+normalization must be chosen by the caller.
 
 Extended sRGB fits measure 8/7 ULP maxima over the same unit-range grid.
 BT.709 decode/encode measure scalar maxima 69/30 ULP and slice maxima 69/29;

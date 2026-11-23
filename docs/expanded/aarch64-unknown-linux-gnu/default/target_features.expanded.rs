@@ -2,8 +2,8 @@
 // rustc 1.99.0 (b940084d7 2026-09-28); cargo-expand 1.0.126
 // Target: aarch64-unknown-linux-gnu; preset: default; module: target_features
 // Library features: avx512, default, std
-// Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 14673aa21189a9e47385a75230c76b50f305b6e20ec5ce875382a964e2578dbd
+// Providers: archmage 0.9.33, archmage-macros 0.9.33, magetypes 0.9.33, magemath 0.1.1
+// Resolution lock SHA-256: 34b0d7fcbb900335f549b1d2668d4d26690f157b1fed566f5c0791434a67dff7
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 #[allow(deprecated)]

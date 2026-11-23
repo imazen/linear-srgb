@@ -2,8 +2,8 @@
 // rustc 1.99.0 (b940084d7 2026-09-28); cargo-expand 1.0.126
 // Target: wasm32-wasip1; preset: all-features; module: simd
 // Library features: alt, avx512, default, iec, precise-portable, std, transfer, unsafe_simd
-// Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 6b2ca29ec7052c8f1c4129de53205c4b3a2a98408b74f3a4a8265635621851a7
+// Providers: archmage 0.9.33, archmage-macros 0.9.33, magetypes 0.9.33, magemath 0.1.1
+// Resolution lock SHA-256: fd1a88523adae42c02ee705728a908311177e2240f10aec64ce06910df334af7
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 #[allow(deprecated)]
@@ -31,7 +31,7 @@ pub(crate) mod simd {
     };
     use archmage::{attune, attuned};
     use crate::kernels::float::x16::{linear_to_srgb_vector, srgb_to_linear_vector};
-    use crate::kernels::{map_rgba_slice_inline, map_rgba_slice_try_inline};
+    use crate::kernels::{map_rgba_slice_inline, map_rgba_slice_into_inline};
     #[target_feature(enable = "simd128")]
     #[inline]
     fn __attune_srgb_to_linear_slice_tier_wasm128(
@@ -95,11 +95,13 @@ pub(crate) mod simd {
             }
             let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
             if !remainder.is_empty() {
-                crate::kernels::finish_rgba_tail_cold(
-                    remainder,
-                    _token,
-                    tail::<archmage::Wasm128Token>,
-                );
+                {
+                    crate::kernels::finish_rgba_tail_cold(
+                        remainder,
+                        _token,
+                        tail::<archmage::Wasm128Token>,
+                    );
+                }
             }
         };
     }
@@ -139,11 +141,13 @@ pub(crate) mod simd {
             }
             let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
             if !remainder.is_empty() {
-                crate::kernels::finish_rgba_tail_cold(
-                    remainder,
-                    _token,
-                    tail::<archmage::ScalarToken>,
-                );
+                {
+                    crate::kernels::finish_rgba_tail_cold(
+                        remainder,
+                        _token,
+                        tail::<archmage::ScalarToken>,
+                    );
+                }
             }
         };
     }
@@ -264,11 +268,13 @@ pub(crate) mod simd {
             }
             let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
             if !remainder.is_empty() {
-                crate::kernels::finish_rgba_tail_cold(
-                    remainder,
-                    _token,
-                    tail::<archmage::Wasm128Token>,
-                );
+                {
+                    crate::kernels::finish_rgba_tail_cold(
+                        remainder,
+                        _token,
+                        tail::<archmage::Wasm128Token>,
+                    );
+                }
             }
         };
     }
@@ -308,11 +314,13 @@ pub(crate) mod simd {
             }
             let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
             if !remainder.is_empty() {
-                crate::kernels::finish_rgba_tail_cold(
-                    remainder,
-                    _token,
-                    tail::<archmage::ScalarToken>,
-                );
+                {
+                    crate::kernels::finish_rgba_tail_cold(
+                        remainder,
+                        _token,
+                        tail::<archmage::ScalarToken>,
+                    );
+                }
             }
         };
     }
@@ -570,7 +578,7 @@ pub(crate) mod simd {
             }
             return;
         }
-        fn slow<T: magetypes::simd::backends::F32x16Convert>(
+        fn tail<T: magetypes::simd::backends::F32x16Convert>(
             token: T,
             chunk: &mut [f32; 16],
         ) {
@@ -581,43 +589,40 @@ pub(crate) mod simd {
         }
         {
             let (chunks, remainder) = (values).as_chunks_mut::<16>();
-            let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
-            let mut idx = 0;
-            while idx < chunks.len() {
-                let ok = {
-                    let chunk = &mut chunks[idx];
+            for chunk in chunks {
+                {
+                    let original = f32x16::load_t(token, chunk);
+                    let (abs_v, result) = crate::kernels::float::x16::srgb_to_linear_extended_poly(
+                        token,
+                        original,
+                    );
+                    if abs_v
+                        .simd_gt(f32x16::splat_t(token, 8.0))
+                        .bitcast_to_i32()
+                        .any_true()
                     {
-                        let original = f32x16::load_t(token, chunk);
-                        match crate::kernels::float::x16::try_srgb_to_linear_extended_vector(
-                            token,
-                            original,
-                        ) {
-                            Some(converted) => {
-                                converted.with_rgba_alpha(original).store(chunk);
-                                true
-                            }
-                            None => false,
-                        }
+                        let mut out = result.to_array();
+                        crate::kernels::float::srgb_to_linear_extended_patch(
+                            chunk,
+                            &mut out,
+                        );
+                        f32x16::from_array_t(token, out)
+                            .with_rgba_alpha(original)
+                            .store(chunk);
+                    } else {
+                        result.with_rgba_alpha(original).store(chunk);
                     }
-                };
-                if !ok {
-                    crate::kernels::finish_rgba_slice_cold(
-                        &mut chunks[idx..],
+                }
+            }
+            let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
+            if !remainder.is_empty() {
+                {
+                    crate::kernels::finish_rgba_tail_cold(
                         remainder,
                         token,
-                        slow::<archmage::Wasm128Token>,
+                        tail::<archmage::Wasm128Token>,
                     );
-                    return;
                 }
-                idx += 1;
-            }
-            if !remainder.is_empty() {
-                crate::kernels::finish_rgba_slice_cold(
-                    &mut [],
-                    remainder,
-                    token,
-                    slow::<archmage::Wasm128Token>,
-                );
             }
         };
     }
@@ -639,7 +644,7 @@ pub(crate) mod simd {
             }
             return;
         }
-        fn slow<T: magetypes::simd::backends::F32x16Convert>(
+        fn tail<T: magetypes::simd::backends::F32x16Convert>(
             token: T,
             chunk: &mut [f32; 16],
         ) {
@@ -650,43 +655,40 @@ pub(crate) mod simd {
         }
         {
             let (chunks, remainder) = (values).as_chunks_mut::<16>();
-            let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
-            let mut idx = 0;
-            while idx < chunks.len() {
-                let ok = {
-                    let chunk = &mut chunks[idx];
+            for chunk in chunks {
+                {
+                    let original = f32x16::load_t(token, chunk);
+                    let (abs_v, result) = crate::kernels::float::x16::srgb_to_linear_extended_poly(
+                        token,
+                        original,
+                    );
+                    if abs_v
+                        .simd_gt(f32x16::splat_t(token, 8.0))
+                        .bitcast_to_i32()
+                        .any_true()
                     {
-                        let original = f32x16::load_t(token, chunk);
-                        match crate::kernels::float::x16::try_srgb_to_linear_extended_vector(
-                            token,
-                            original,
-                        ) {
-                            Some(converted) => {
-                                converted.with_rgba_alpha(original).store(chunk);
-                                true
-                            }
-                            None => false,
-                        }
+                        let mut out = result.to_array();
+                        crate::kernels::float::srgb_to_linear_extended_patch(
+                            chunk,
+                            &mut out,
+                        );
+                        f32x16::from_array_t(token, out)
+                            .with_rgba_alpha(original)
+                            .store(chunk);
+                    } else {
+                        result.with_rgba_alpha(original).store(chunk);
                     }
-                };
-                if !ok {
-                    crate::kernels::finish_rgba_slice_cold(
-                        &mut chunks[idx..],
+                }
+            }
+            let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
+            if !remainder.is_empty() {
+                {
+                    crate::kernels::finish_rgba_tail_cold(
                         remainder,
                         token,
-                        slow::<archmage::ScalarToken>,
+                        tail::<archmage::ScalarToken>,
                     );
-                    return;
                 }
-                idx += 1;
-            }
-            if !remainder.is_empty() {
-                crate::kernels::finish_rgba_slice_cold(
-                    &mut [],
-                    remainder,
-                    token,
-                    slow::<archmage::ScalarToken>,
-                );
             }
         };
     }
@@ -750,7 +752,7 @@ pub(crate) mod simd {
             }
             return;
         }
-        fn slow<T: magetypes::simd::backends::F32x16Convert>(
+        fn tail<T: magetypes::simd::backends::F32x16Convert>(
             token: T,
             chunk: &mut [f32; 16],
         ) {
@@ -761,43 +763,41 @@ pub(crate) mod simd {
         }
         {
             let (chunks, remainder) = (values).as_chunks_mut::<16>();
-            let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
-            let mut idx = 0;
-            while idx < chunks.len() {
-                let ok = {
-                    let chunk = &mut chunks[idx];
+            for chunk in chunks {
+                {
+                    let original = f32x16::load_t(token, chunk);
+                    let (abs_v, result) = crate::kernels::float::x16::linear_to_srgb_extended_poly(
+                        token,
+                        original,
+                    );
+                    if abs_v
+                        .simd_gt(f32x16::splat_t(token, 64.0))
+                        .bitcast_to_i32()
+                        .any_true()
                     {
-                        let original = f32x16::load_t(token, chunk);
-                        match crate::kernels::float::x16::try_linear_to_srgb_extended_vector(
+                        let mut out = result.to_array();
+                        crate::kernels::float::linear_to_srgb_extended_patch(
                             token,
-                            original,
-                        ) {
-                            Some(converted) => {
-                                converted.with_rgba_alpha(original).store(chunk);
-                                true
-                            }
-                            None => false,
-                        }
+                            chunk,
+                            &mut out,
+                        );
+                        f32x16::from_array_t(token, out)
+                            .with_rgba_alpha(original)
+                            .store(chunk);
+                    } else {
+                        result.with_rgba_alpha(original).store(chunk);
                     }
-                };
-                if !ok {
-                    crate::kernels::finish_rgba_slice_cold(
-                        &mut chunks[idx..],
+                }
+            }
+            let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
+            if !remainder.is_empty() {
+                {
+                    crate::kernels::finish_rgba_tail_cold(
                         remainder,
                         token,
-                        slow::<archmage::Wasm128Token>,
+                        tail::<archmage::Wasm128Token>,
                     );
-                    return;
                 }
-                idx += 1;
-            }
-            if !remainder.is_empty() {
-                crate::kernels::finish_rgba_slice_cold(
-                    &mut [],
-                    remainder,
-                    token,
-                    slow::<archmage::Wasm128Token>,
-                );
             }
         };
     }
@@ -819,7 +819,7 @@ pub(crate) mod simd {
             }
             return;
         }
-        fn slow<T: magetypes::simd::backends::F32x16Convert>(
+        fn tail<T: magetypes::simd::backends::F32x16Convert>(
             token: T,
             chunk: &mut [f32; 16],
         ) {
@@ -830,43 +830,41 @@ pub(crate) mod simd {
         }
         {
             let (chunks, remainder) = (values).as_chunks_mut::<16>();
-            let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
-            let mut idx = 0;
-            while idx < chunks.len() {
-                let ok = {
-                    let chunk = &mut chunks[idx];
+            for chunk in chunks {
+                {
+                    let original = f32x16::load_t(token, chunk);
+                    let (abs_v, result) = crate::kernels::float::x16::linear_to_srgb_extended_poly(
+                        token,
+                        original,
+                    );
+                    if abs_v
+                        .simd_gt(f32x16::splat_t(token, 64.0))
+                        .bitcast_to_i32()
+                        .any_true()
                     {
-                        let original = f32x16::load_t(token, chunk);
-                        match crate::kernels::float::x16::try_linear_to_srgb_extended_vector(
+                        let mut out = result.to_array();
+                        crate::kernels::float::linear_to_srgb_extended_patch(
                             token,
-                            original,
-                        ) {
-                            Some(converted) => {
-                                converted.with_rgba_alpha(original).store(chunk);
-                                true
-                            }
-                            None => false,
-                        }
+                            chunk,
+                            &mut out,
+                        );
+                        f32x16::from_array_t(token, out)
+                            .with_rgba_alpha(original)
+                            .store(chunk);
+                    } else {
+                        result.with_rgba_alpha(original).store(chunk);
                     }
-                };
-                if !ok {
-                    crate::kernels::finish_rgba_slice_cold(
-                        &mut chunks[idx..],
+                }
+            }
+            let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
+            if !remainder.is_empty() {
+                {
+                    crate::kernels::finish_rgba_tail_cold(
                         remainder,
                         token,
-                        slow::<archmage::ScalarToken>,
+                        tail::<archmage::ScalarToken>,
                     );
-                    return;
                 }
-                idx += 1;
-            }
-            if !remainder.is_empty() {
-                crate::kernels::finish_rgba_slice_cold(
-                    &mut [],
-                    remainder,
-                    token,
-                    slow::<archmage::ScalarToken>,
-                );
             }
         };
     }
@@ -911,6 +909,1398 @@ pub(crate) mod simd {
     }
     #[target_feature(enable = "simd128")]
     #[inline]
+    fn srgb_to_linear_slice_into_tier_wasm128(
+        token: archmage::Wasm128Token,
+        input: &[f32],
+        output: &mut [f32],
+    ) {
+        #[allow(non_camel_case_types, dead_code)]
+        type f32x16 = ::magetypes::simd::generic::f32x16<archmage::Wasm128Token>;
+        if archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            if crate::tf::polynomial::USE_FUSED_MATH {
+                for (s, d) in input.iter().zip(output.iter_mut()) {
+                    *d = crate::lanes::srgb_to_linear(*s);
+                }
+            } else {
+                crate::kernels::float::x4::srgb_to_linear_slice_into(
+                    token,
+                    input,
+                    output,
+                );
+            }
+            return;
+        }
+        if true {
+            crate::kernels::float::x4::srgb_to_linear_slice_into(token, input, output);
+            return;
+        }
+        crate::kernels::float::x16::srgb_to_linear_slice_into(token, input, output);
+    }
+    fn srgb_to_linear_slice_into_tier_scalar(
+        token: archmage::ScalarToken,
+        input: &[f32],
+        output: &mut [f32],
+    ) {
+        #[allow(non_camel_case_types, dead_code)]
+        type f32x16 = ::magetypes::simd::generic::f32x16<archmage::ScalarToken>;
+        if archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            if crate::tf::polynomial::USE_FUSED_MATH {
+                for (s, d) in input.iter().zip(output.iter_mut()) {
+                    *d = crate::lanes::srgb_to_linear(*s);
+                }
+            } else {
+                crate::kernels::float::x4::srgb_to_linear_slice_into(
+                    token,
+                    input,
+                    output,
+                );
+            }
+            return;
+        }
+        if true {
+            crate::kernels::float::x4::srgb_to_linear_slice_into(token, input, output);
+            return;
+        }
+        crate::kernels::float::x16::srgb_to_linear_slice_into(token, input, output);
+    }
+    /// Convert sRGB f32 values from `input` into `output` (clamped to `[0, 1]`).
+    ///
+    /// Out-of-place counterpart to [`srgb_to_linear_slice`], producing bit-identical
+    /// results without an intermediate copy.
+    ///
+    /// # Panics
+    /// Panics if `input.len() != output.len()`.
+    ///
+    /// # Example
+    /// ```
+    /// use linear_srgb::default::srgb_to_linear_slice_into;
+    ///
+    /// let input = [0.0f32, 0.25, 0.5, 0.75, 1.0];
+    /// let mut output = [0.0f32; 5];
+    /// srgb_to_linear_slice_into(&input, &mut output);
+    /// assert_eq!(output[0], 0.0);
+    /// assert_eq!(output[4], 1.0);
+    /// ```
+    #[inline]
+    pub fn srgb_to_linear_slice_into(input: &[f32], output: &mut [f32]) {
+        {
+            match (&input.len(), &output.len()) {
+                (left_val, right_val) => {
+                    if !(*left_val == *right_val) {
+                        let kind = ::core::panicking::AssertKind::Eq;
+                        ::core::panicking::assert_failed(
+                            kind,
+                            &*left_val,
+                            &*right_val,
+                            ::core::option::Option::None,
+                        );
+                    }
+                }
+            }
+        };
+        '__incant: {
+            #[allow(unused_imports)]
+            use archmage::SimdToken;
+            {
+                if let Some(__t) = archmage::Wasm128Token::summon() {
+                    break '__incant srgb_to_linear_slice_into_tier_wasm128(
+                        __t,
+                        input,
+                        output,
+                    );
+                }
+            }
+            srgb_to_linear_slice_into_tier_scalar(archmage::ScalarToken, input, output)
+        }
+    }
+    #[target_feature(enable = "simd128")]
+    #[inline]
+    fn linear_to_srgb_slice_into_tier_wasm128(
+        token: archmage::Wasm128Token,
+        input: &[f32],
+        output: &mut [f32],
+    ) {
+        #[allow(non_camel_case_types, dead_code)]
+        type f32x16 = ::magetypes::simd::generic::f32x16<archmage::Wasm128Token>;
+        if archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            if crate::tf::polynomial::USE_FUSED_MATH {
+                for (s, d) in input.iter().zip(output.iter_mut()) {
+                    *d = crate::lanes::linear_to_srgb(*s);
+                }
+            } else {
+                crate::kernels::float::x4::linear_to_srgb_slice_into(
+                    token,
+                    input,
+                    output,
+                );
+            }
+            return;
+        }
+        if true {
+            crate::kernels::float::x4::linear_to_srgb_slice_into(token, input, output);
+            return;
+        }
+        crate::kernels::float::x16::linear_to_srgb_slice_into(token, input, output);
+    }
+    fn linear_to_srgb_slice_into_tier_scalar(
+        token: archmage::ScalarToken,
+        input: &[f32],
+        output: &mut [f32],
+    ) {
+        #[allow(non_camel_case_types, dead_code)]
+        type f32x16 = ::magetypes::simd::generic::f32x16<archmage::ScalarToken>;
+        if archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            if crate::tf::polynomial::USE_FUSED_MATH {
+                for (s, d) in input.iter().zip(output.iter_mut()) {
+                    *d = crate::lanes::linear_to_srgb(*s);
+                }
+            } else {
+                crate::kernels::float::x4::linear_to_srgb_slice_into(
+                    token,
+                    input,
+                    output,
+                );
+            }
+            return;
+        }
+        if true {
+            crate::kernels::float::x4::linear_to_srgb_slice_into(token, input, output);
+            return;
+        }
+        crate::kernels::float::x16::linear_to_srgb_slice_into(token, input, output);
+    }
+    /// Convert linear f32 values from `input` into `output` (clamped to `[0, 1]`).
+    ///
+    /// Out-of-place counterpart to [`linear_to_srgb_slice`], producing bit-identical
+    /// results without an intermediate copy.
+    ///
+    /// # Panics
+    /// Panics if `input.len() != output.len()`.
+    ///
+    /// # Example
+    /// ```
+    /// use linear_srgb::default::linear_to_srgb_slice_into;
+    ///
+    /// let input = [0.0f32, 0.1, 0.2, 0.5, 1.0];
+    /// let mut output = [0.0f32; 5];
+    /// linear_to_srgb_slice_into(&input, &mut output);
+    /// assert_eq!(output[0], 0.0);
+    /// assert_eq!(output[4], 1.0);
+    /// ```
+    #[inline]
+    pub fn linear_to_srgb_slice_into(input: &[f32], output: &mut [f32]) {
+        {
+            match (&input.len(), &output.len()) {
+                (left_val, right_val) => {
+                    if !(*left_val == *right_val) {
+                        let kind = ::core::panicking::AssertKind::Eq;
+                        ::core::panicking::assert_failed(
+                            kind,
+                            &*left_val,
+                            &*right_val,
+                            ::core::option::Option::None,
+                        );
+                    }
+                }
+            }
+        };
+        '__incant: {
+            #[allow(unused_imports)]
+            use archmage::SimdToken;
+            {
+                if let Some(__t) = archmage::Wasm128Token::summon() {
+                    break '__incant linear_to_srgb_slice_into_tier_wasm128(
+                        __t,
+                        input,
+                        output,
+                    );
+                }
+            }
+            linear_to_srgb_slice_into_tier_scalar(archmage::ScalarToken, input, output)
+        }
+    }
+    #[target_feature(enable = "simd128")]
+    #[inline]
+    fn srgb_to_linear_rgba_slice_into_tier_wasm128(
+        token: archmage::Wasm128Token,
+        input: &[f32],
+        output: &mut [f32],
+    ) {
+        #[allow(non_camel_case_types, dead_code)]
+        type f32x16 = ::magetypes::simd::generic::f32x16<archmage::Wasm128Token>;
+        if true || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            for (src, dst) in input
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(output.as_chunks_mut::<4>().0)
+            {
+                let original = magetypes::simd::generic::f32x4::load_t(token, src);
+                crate::kernels::float::x4::srgb_to_linear_vector(token, original)
+                    .with_rgba_alpha(original)
+                    .store(dst);
+            }
+            return;
+        }
+        {
+            {
+                match (&(input).len(), &(output).len()) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                }
+            };
+            let (in_chunks, in_rem) = (input).as_chunks::<16>();
+            let (out_chunks, out_rem) = (output).as_chunks_mut::<16>();
+            for (src_chunk, dst_chunk) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                {
+                    let original = f32x16::load_t(token, src_chunk);
+                    crate::kernels::float::x16::srgb_to_linear_vector(token, original)
+                        .with_rgba_alpha(original)
+                        .store(dst_chunk);
+                }
+            }
+            let in_rem = in_rem.as_chunks::<4>().0.as_flattened();
+            let out_rem = out_rem.as_chunks_mut::<4>().0.as_flattened_mut();
+            if !in_rem.is_empty() {
+                let mut src_block = [0.0; 16];
+                let mut dst_block = [0.0; 16];
+                src_block[..in_rem.len()].copy_from_slice(in_rem);
+                {
+                    let src_chunk = &src_block;
+                    let dst_chunk = &mut dst_block;
+                    {
+                        let original = f32x16::load_t(token, src_chunk);
+                        crate::kernels::float::x16::srgb_to_linear_vector(
+                                token,
+                                original,
+                            )
+                            .with_rgba_alpha(original)
+                            .store(dst_chunk);
+                    }
+                }
+                out_rem.copy_from_slice(&dst_block[..out_rem.len()]);
+            }
+        };
+    }
+    fn srgb_to_linear_rgba_slice_into_tier_scalar(
+        token: archmage::ScalarToken,
+        input: &[f32],
+        output: &mut [f32],
+    ) {
+        #[allow(non_camel_case_types, dead_code)]
+        type f32x16 = ::magetypes::simd::generic::f32x16<archmage::ScalarToken>;
+        if true || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            for (src, dst) in input
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(output.as_chunks_mut::<4>().0)
+            {
+                let original = magetypes::simd::generic::f32x4::load_t(token, src);
+                crate::kernels::float::x4::srgb_to_linear_vector(token, original)
+                    .with_rgba_alpha(original)
+                    .store(dst);
+            }
+            return;
+        }
+        {
+            {
+                match (&(input).len(), &(output).len()) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                }
+            };
+            let (in_chunks, in_rem) = (input).as_chunks::<16>();
+            let (out_chunks, out_rem) = (output).as_chunks_mut::<16>();
+            for (src_chunk, dst_chunk) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                {
+                    let original = f32x16::load_t(token, src_chunk);
+                    crate::kernels::float::x16::srgb_to_linear_vector(token, original)
+                        .with_rgba_alpha(original)
+                        .store(dst_chunk);
+                }
+            }
+            let in_rem = in_rem.as_chunks::<4>().0.as_flattened();
+            let out_rem = out_rem.as_chunks_mut::<4>().0.as_flattened_mut();
+            if !in_rem.is_empty() {
+                let mut src_block = [0.0; 16];
+                let mut dst_block = [0.0; 16];
+                src_block[..in_rem.len()].copy_from_slice(in_rem);
+                {
+                    let src_chunk = &src_block;
+                    let dst_chunk = &mut dst_block;
+                    {
+                        let original = f32x16::load_t(token, src_chunk);
+                        crate::kernels::float::x16::srgb_to_linear_vector(
+                                token,
+                                original,
+                            )
+                            .with_rgba_alpha(original)
+                            .store(dst_chunk);
+                    }
+                }
+                out_rem.copy_from_slice(&dst_block[..out_rem.len()]);
+            }
+        };
+    }
+    /// Convert sRGB RGBA f32 values from `input` into `output`, preserving alpha bit-for-bit.
+    ///
+    /// Out-of-place counterpart to [`srgb_to_linear_rgba_slice`]. Expects interleaved
+    /// RGBA data (`[R, G, B, A, ...]`). Trailing elements that don't form a complete
+    /// RGBA pixel are ignored.
+    ///
+    /// # Panics
+    /// Panics if `input.len() != output.len()`.
+    ///
+    /// # Example
+    /// ```
+    /// use linear_srgb::default::srgb_to_linear_rgba_slice_into;
+    ///
+    /// let input = [0.5f32, 0.5, 0.5, 0.75, 1.0, 1.0, 1.0, 1.0];
+    /// let mut output = [0.0f32; 8];
+    /// srgb_to_linear_rgba_slice_into(&input, &mut output);
+    /// assert_eq!(output[3], 0.75); // alpha preserved
+    /// ```
+    #[inline]
+    pub fn srgb_to_linear_rgba_slice_into(input: &[f32], output: &mut [f32]) {
+        {
+            match (&input.len(), &output.len()) {
+                (left_val, right_val) => {
+                    if !(*left_val == *right_val) {
+                        let kind = ::core::panicking::AssertKind::Eq;
+                        ::core::panicking::assert_failed(
+                            kind,
+                            &*left_val,
+                            &*right_val,
+                            ::core::option::Option::None,
+                        );
+                    }
+                }
+            }
+        };
+        '__incant: {
+            #[allow(unused_imports)]
+            use archmage::SimdToken;
+            {
+                if let Some(__t) = archmage::Wasm128Token::summon() {
+                    break '__incant srgb_to_linear_rgba_slice_into_tier_wasm128(
+                        __t,
+                        input,
+                        output,
+                    );
+                }
+            }
+            srgb_to_linear_rgba_slice_into_tier_scalar(
+                archmage::ScalarToken,
+                input,
+                output,
+            )
+        }
+    }
+    #[target_feature(enable = "simd128")]
+    #[inline]
+    fn linear_to_srgb_rgba_slice_into_tier_wasm128(
+        token: archmage::Wasm128Token,
+        input: &[f32],
+        output: &mut [f32],
+    ) {
+        #[allow(non_camel_case_types, dead_code)]
+        type f32x16 = ::magetypes::simd::generic::f32x16<archmage::Wasm128Token>;
+        if true || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            for (src, dst) in input
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(output.as_chunks_mut::<4>().0)
+            {
+                let original = magetypes::simd::generic::f32x4::load_t(token, src);
+                crate::kernels::float::x4::linear_to_srgb_vector(token, original)
+                    .with_rgba_alpha(original)
+                    .store(dst);
+            }
+            return;
+        }
+        {
+            {
+                match (&(input).len(), &(output).len()) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                }
+            };
+            let (in_chunks, in_rem) = (input).as_chunks::<16>();
+            let (out_chunks, out_rem) = (output).as_chunks_mut::<16>();
+            for (src_chunk, dst_chunk) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                {
+                    let original = f32x16::load_t(token, src_chunk);
+                    crate::kernels::float::x16::linear_to_srgb_vector(token, original)
+                        .with_rgba_alpha(original)
+                        .store(dst_chunk);
+                }
+            }
+            let in_rem = in_rem.as_chunks::<4>().0.as_flattened();
+            let out_rem = out_rem.as_chunks_mut::<4>().0.as_flattened_mut();
+            if !in_rem.is_empty() {
+                let mut src_block = [0.0; 16];
+                let mut dst_block = [0.0; 16];
+                src_block[..in_rem.len()].copy_from_slice(in_rem);
+                {
+                    let src_chunk = &src_block;
+                    let dst_chunk = &mut dst_block;
+                    {
+                        let original = f32x16::load_t(token, src_chunk);
+                        crate::kernels::float::x16::linear_to_srgb_vector(
+                                token,
+                                original,
+                            )
+                            .with_rgba_alpha(original)
+                            .store(dst_chunk);
+                    }
+                }
+                out_rem.copy_from_slice(&dst_block[..out_rem.len()]);
+            }
+        };
+    }
+    fn linear_to_srgb_rgba_slice_into_tier_scalar(
+        token: archmage::ScalarToken,
+        input: &[f32],
+        output: &mut [f32],
+    ) {
+        #[allow(non_camel_case_types, dead_code)]
+        type f32x16 = ::magetypes::simd::generic::f32x16<archmage::ScalarToken>;
+        if true || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            for (src, dst) in input
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(output.as_chunks_mut::<4>().0)
+            {
+                let original = magetypes::simd::generic::f32x4::load_t(token, src);
+                crate::kernels::float::x4::linear_to_srgb_vector(token, original)
+                    .with_rgba_alpha(original)
+                    .store(dst);
+            }
+            return;
+        }
+        {
+            {
+                match (&(input).len(), &(output).len()) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                }
+            };
+            let (in_chunks, in_rem) = (input).as_chunks::<16>();
+            let (out_chunks, out_rem) = (output).as_chunks_mut::<16>();
+            for (src_chunk, dst_chunk) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                {
+                    let original = f32x16::load_t(token, src_chunk);
+                    crate::kernels::float::x16::linear_to_srgb_vector(token, original)
+                        .with_rgba_alpha(original)
+                        .store(dst_chunk);
+                }
+            }
+            let in_rem = in_rem.as_chunks::<4>().0.as_flattened();
+            let out_rem = out_rem.as_chunks_mut::<4>().0.as_flattened_mut();
+            if !in_rem.is_empty() {
+                let mut src_block = [0.0; 16];
+                let mut dst_block = [0.0; 16];
+                src_block[..in_rem.len()].copy_from_slice(in_rem);
+                {
+                    let src_chunk = &src_block;
+                    let dst_chunk = &mut dst_block;
+                    {
+                        let original = f32x16::load_t(token, src_chunk);
+                        crate::kernels::float::x16::linear_to_srgb_vector(
+                                token,
+                                original,
+                            )
+                            .with_rgba_alpha(original)
+                            .store(dst_chunk);
+                    }
+                }
+                out_rem.copy_from_slice(&dst_block[..out_rem.len()]);
+            }
+        };
+    }
+    /// Convert linear RGBA f32 values from `input` into `output`, preserving alpha bit-for-bit.
+    ///
+    /// Out-of-place counterpart to [`linear_to_srgb_rgba_slice`]. Expects interleaved
+    /// RGBA data (`[R, G, B, A, ...]`). Trailing elements that don't form a complete
+    /// RGBA pixel are ignored.
+    ///
+    /// # Panics
+    /// Panics if `input.len() != output.len()`.
+    ///
+    /// # Example
+    /// ```
+    /// use linear_srgb::default::linear_to_srgb_rgba_slice_into;
+    ///
+    /// let input = [0.2f32, 0.2, 0.2, 0.75, 0.8, 0.8, 0.8, 1.0];
+    /// let mut output = [0.0f32; 8];
+    /// linear_to_srgb_rgba_slice_into(&input, &mut output);
+    /// assert_eq!(output[3], 0.75); // alpha preserved
+    /// ```
+    #[inline]
+    pub fn linear_to_srgb_rgba_slice_into(input: &[f32], output: &mut [f32]) {
+        {
+            match (&input.len(), &output.len()) {
+                (left_val, right_val) => {
+                    if !(*left_val == *right_val) {
+                        let kind = ::core::panicking::AssertKind::Eq;
+                        ::core::panicking::assert_failed(
+                            kind,
+                            &*left_val,
+                            &*right_val,
+                            ::core::option::Option::None,
+                        );
+                    }
+                }
+            }
+        };
+        '__incant: {
+            #[allow(unused_imports)]
+            use archmage::SimdToken;
+            {
+                if let Some(__t) = archmage::Wasm128Token::summon() {
+                    break '__incant linear_to_srgb_rgba_slice_into_tier_wasm128(
+                        __t,
+                        input,
+                        output,
+                    );
+                }
+            }
+            linear_to_srgb_rgba_slice_into_tier_scalar(
+                archmage::ScalarToken,
+                input,
+                output,
+            )
+        }
+    }
+    #[target_feature(enable = "simd128")]
+    #[inline]
+    fn srgb_to_linear_extended_slice_into_tier_wasm128(
+        token: archmage::Wasm128Token,
+        input: &[f32],
+        output: &mut [f32],
+    ) {
+        #[allow(non_camel_case_types, dead_code)]
+        type f32x16 = ::magetypes::simd::generic::f32x16<archmage::Wasm128Token>;
+        if archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            if crate::tf::polynomial::USE_FUSED_MATH {
+                for (s, d) in input.iter().zip(output.iter_mut()) {
+                    *d = crate::lanes::srgb_to_linear_extended(*s);
+                }
+            } else {
+                crate::kernels::float::x4::srgb_to_linear_extended_slice_into(
+                    token,
+                    input,
+                    output,
+                );
+            }
+            return;
+        }
+        if true {
+            crate::kernels::float::x4::srgb_to_linear_extended_slice_into(
+                token,
+                input,
+                output,
+            );
+            return;
+        }
+        crate::kernels::float::x16::srgb_to_linear_extended_slice_into(
+            token,
+            input,
+            output,
+        );
+    }
+    fn srgb_to_linear_extended_slice_into_tier_scalar(
+        token: archmage::ScalarToken,
+        input: &[f32],
+        output: &mut [f32],
+    ) {
+        #[allow(non_camel_case_types, dead_code)]
+        type f32x16 = ::magetypes::simd::generic::f32x16<archmage::ScalarToken>;
+        if archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            if crate::tf::polynomial::USE_FUSED_MATH {
+                for (s, d) in input.iter().zip(output.iter_mut()) {
+                    *d = crate::lanes::srgb_to_linear_extended(*s);
+                }
+            } else {
+                crate::kernels::float::x4::srgb_to_linear_extended_slice_into(
+                    token,
+                    input,
+                    output,
+                );
+            }
+            return;
+        }
+        if true {
+            crate::kernels::float::x4::srgb_to_linear_extended_slice_into(
+                token,
+                input,
+                output,
+            );
+            return;
+        }
+        crate::kernels::float::x16::srgb_to_linear_extended_slice_into(
+            token,
+            input,
+            output,
+        );
+    }
+    /// Convert sRGB f32 values from `input` into `output` without clamping (extended range).
+    ///
+    /// Out-of-place counterpart to [`srgb_to_linear_extended_slice`], producing
+    /// bit-identical results without an intermediate copy.
+    ///
+    /// # Panics
+    /// Panics if `input.len() != output.len()`.
+    ///
+    /// # Example
+    /// ```
+    /// use linear_srgb::default::srgb_to_linear_extended_slice_into;
+    ///
+    /// let input = [-0.1f32, 0.0, 0.5, 1.0, 1.5];
+    /// let mut output = [0.0f32; 5];
+    /// srgb_to_linear_extended_slice_into(&input, &mut output);
+    /// assert!(output[0] < 0.0);
+    /// assert!(output[4] > 1.0);
+    /// ```
+    #[inline]
+    pub fn srgb_to_linear_extended_slice_into(input: &[f32], output: &mut [f32]) {
+        {
+            match (&input.len(), &output.len()) {
+                (left_val, right_val) => {
+                    if !(*left_val == *right_val) {
+                        let kind = ::core::panicking::AssertKind::Eq;
+                        ::core::panicking::assert_failed(
+                            kind,
+                            &*left_val,
+                            &*right_val,
+                            ::core::option::Option::None,
+                        );
+                    }
+                }
+            }
+        };
+        '__incant: {
+            #[allow(unused_imports)]
+            use archmage::SimdToken;
+            {
+                if let Some(__t) = archmage::Wasm128Token::summon() {
+                    break '__incant srgb_to_linear_extended_slice_into_tier_wasm128(
+                        __t,
+                        input,
+                        output,
+                    );
+                }
+            }
+            srgb_to_linear_extended_slice_into_tier_scalar(
+                archmage::ScalarToken,
+                input,
+                output,
+            )
+        }
+    }
+    #[target_feature(enable = "simd128")]
+    #[inline]
+    fn linear_to_srgb_extended_slice_into_tier_wasm128(
+        token: archmage::Wasm128Token,
+        input: &[f32],
+        output: &mut [f32],
+    ) {
+        #[allow(non_camel_case_types, dead_code)]
+        type f32x16 = ::magetypes::simd::generic::f32x16<archmage::Wasm128Token>;
+        if archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            if crate::tf::polynomial::USE_FUSED_MATH {
+                for (s, d) in input.iter().zip(output.iter_mut()) {
+                    *d = crate::lanes::linear_to_srgb_extended(*s);
+                }
+            } else {
+                crate::kernels::float::x4::linear_to_srgb_extended_slice_into(
+                    token,
+                    input,
+                    output,
+                );
+            }
+            return;
+        }
+        if true {
+            crate::kernels::float::x4::linear_to_srgb_extended_slice_into(
+                token,
+                input,
+                output,
+            );
+            return;
+        }
+        crate::kernels::float::x16::linear_to_srgb_extended_slice_into(
+            token,
+            input,
+            output,
+        );
+    }
+    fn linear_to_srgb_extended_slice_into_tier_scalar(
+        token: archmage::ScalarToken,
+        input: &[f32],
+        output: &mut [f32],
+    ) {
+        #[allow(non_camel_case_types, dead_code)]
+        type f32x16 = ::magetypes::simd::generic::f32x16<archmage::ScalarToken>;
+        if archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            if crate::tf::polynomial::USE_FUSED_MATH {
+                for (s, d) in input.iter().zip(output.iter_mut()) {
+                    *d = crate::lanes::linear_to_srgb_extended(*s);
+                }
+            } else {
+                crate::kernels::float::x4::linear_to_srgb_extended_slice_into(
+                    token,
+                    input,
+                    output,
+                );
+            }
+            return;
+        }
+        if true {
+            crate::kernels::float::x4::linear_to_srgb_extended_slice_into(
+                token,
+                input,
+                output,
+            );
+            return;
+        }
+        crate::kernels::float::x16::linear_to_srgb_extended_slice_into(
+            token,
+            input,
+            output,
+        );
+    }
+    /// Convert linear f32 values from `input` into `output` without clamping (extended range).
+    ///
+    /// Out-of-place counterpart to [`linear_to_srgb_extended_slice`], producing
+    /// bit-identical results without an intermediate copy.
+    ///
+    /// # Panics
+    /// Panics if `input.len() != output.len()`.
+    ///
+    /// # Example
+    /// ```
+    /// use linear_srgb::default::linear_to_srgb_extended_slice_into;
+    ///
+    /// let input = [-0.1f32, 0.0, 0.5, 1.0, 1.5];
+    /// let mut output = [0.0f32; 5];
+    /// linear_to_srgb_extended_slice_into(&input, &mut output);
+    /// assert!(output[0] < 0.0);
+    /// assert!(output[4] > 1.0);
+    /// ```
+    #[inline]
+    pub fn linear_to_srgb_extended_slice_into(input: &[f32], output: &mut [f32]) {
+        {
+            match (&input.len(), &output.len()) {
+                (left_val, right_val) => {
+                    if !(*left_val == *right_val) {
+                        let kind = ::core::panicking::AssertKind::Eq;
+                        ::core::panicking::assert_failed(
+                            kind,
+                            &*left_val,
+                            &*right_val,
+                            ::core::option::Option::None,
+                        );
+                    }
+                }
+            }
+        };
+        '__incant: {
+            #[allow(unused_imports)]
+            use archmage::SimdToken;
+            {
+                if let Some(__t) = archmage::Wasm128Token::summon() {
+                    break '__incant linear_to_srgb_extended_slice_into_tier_wasm128(
+                        __t,
+                        input,
+                        output,
+                    );
+                }
+            }
+            linear_to_srgb_extended_slice_into_tier_scalar(
+                archmage::ScalarToken,
+                input,
+                output,
+            )
+        }
+    }
+    #[target_feature(enable = "simd128")]
+    #[inline]
+    fn srgb_to_linear_extended_rgba_slice_into_tier_wasm128(
+        token: archmage::Wasm128Token,
+        input: &[f32],
+        output: &mut [f32],
+    ) {
+        #[allow(non_camel_case_types, dead_code)]
+        type f32x16 = ::magetypes::simd::generic::f32x16<archmage::Wasm128Token>;
+        if true || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            for (src, dst) in input
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(output.as_chunks_mut::<4>().0)
+            {
+                let original = magetypes::simd::generic::f32x4::load_t(token, src);
+                crate::kernels::float::x4::srgb_to_linear_extended_vector(
+                        token,
+                        original,
+                    )
+                    .with_rgba_alpha(original)
+                    .store(dst);
+            }
+            return;
+        }
+        {
+            {
+                match (&(input).len(), &(output).len()) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                }
+            };
+            let (in_chunks, in_rem) = (input).as_chunks::<16>();
+            let (out_chunks, out_rem) = (output).as_chunks_mut::<16>();
+            for (src_chunk, dst_chunk) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                {
+                    let original = f32x16::load_t(token, src_chunk);
+                    let (abs_v, result) = crate::kernels::float::x16::srgb_to_linear_extended_poly(
+                        token,
+                        original,
+                    );
+                    if abs_v
+                        .simd_gt(f32x16::splat_t(token, 8.0))
+                        .bitcast_to_i32()
+                        .any_true()
+                    {
+                        let mut out = result.to_array();
+                        crate::kernels::float::srgb_to_linear_extended_patch(
+                            src_chunk,
+                            &mut out,
+                        );
+                        f32x16::from_array_t(token, out)
+                            .with_rgba_alpha(original)
+                            .store(dst_chunk);
+                    } else {
+                        result.with_rgba_alpha(original).store(dst_chunk);
+                    }
+                }
+            }
+            let in_rem = in_rem.as_chunks::<4>().0.as_flattened();
+            let out_rem = out_rem.as_chunks_mut::<4>().0.as_flattened_mut();
+            if !in_rem.is_empty() {
+                let mut src_block = [0.0; 16];
+                let mut dst_block = [0.0; 16];
+                src_block[..in_rem.len()].copy_from_slice(in_rem);
+                {
+                    let src_chunk = &src_block;
+                    let dst_chunk = &mut dst_block;
+                    {
+                        let original = f32x16::load_t(token, src_chunk);
+                        let (abs_v, result) = crate::kernels::float::x16::srgb_to_linear_extended_poly(
+                            token,
+                            original,
+                        );
+                        if abs_v
+                            .simd_gt(f32x16::splat_t(token, 8.0))
+                            .bitcast_to_i32()
+                            .any_true()
+                        {
+                            let mut out = result.to_array();
+                            crate::kernels::float::srgb_to_linear_extended_patch(
+                                src_chunk,
+                                &mut out,
+                            );
+                            f32x16::from_array_t(token, out)
+                                .with_rgba_alpha(original)
+                                .store(dst_chunk);
+                        } else {
+                            result.with_rgba_alpha(original).store(dst_chunk);
+                        }
+                    }
+                }
+                out_rem.copy_from_slice(&dst_block[..out_rem.len()]);
+            }
+        };
+    }
+    fn srgb_to_linear_extended_rgba_slice_into_tier_scalar(
+        token: archmage::ScalarToken,
+        input: &[f32],
+        output: &mut [f32],
+    ) {
+        #[allow(non_camel_case_types, dead_code)]
+        type f32x16 = ::magetypes::simd::generic::f32x16<archmage::ScalarToken>;
+        if true || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            for (src, dst) in input
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(output.as_chunks_mut::<4>().0)
+            {
+                let original = magetypes::simd::generic::f32x4::load_t(token, src);
+                crate::kernels::float::x4::srgb_to_linear_extended_vector(
+                        token,
+                        original,
+                    )
+                    .with_rgba_alpha(original)
+                    .store(dst);
+            }
+            return;
+        }
+        {
+            {
+                match (&(input).len(), &(output).len()) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                }
+            };
+            let (in_chunks, in_rem) = (input).as_chunks::<16>();
+            let (out_chunks, out_rem) = (output).as_chunks_mut::<16>();
+            for (src_chunk, dst_chunk) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                {
+                    let original = f32x16::load_t(token, src_chunk);
+                    let (abs_v, result) = crate::kernels::float::x16::srgb_to_linear_extended_poly(
+                        token,
+                        original,
+                    );
+                    if abs_v
+                        .simd_gt(f32x16::splat_t(token, 8.0))
+                        .bitcast_to_i32()
+                        .any_true()
+                    {
+                        let mut out = result.to_array();
+                        crate::kernels::float::srgb_to_linear_extended_patch(
+                            src_chunk,
+                            &mut out,
+                        );
+                        f32x16::from_array_t(token, out)
+                            .with_rgba_alpha(original)
+                            .store(dst_chunk);
+                    } else {
+                        result.with_rgba_alpha(original).store(dst_chunk);
+                    }
+                }
+            }
+            let in_rem = in_rem.as_chunks::<4>().0.as_flattened();
+            let out_rem = out_rem.as_chunks_mut::<4>().0.as_flattened_mut();
+            if !in_rem.is_empty() {
+                let mut src_block = [0.0; 16];
+                let mut dst_block = [0.0; 16];
+                src_block[..in_rem.len()].copy_from_slice(in_rem);
+                {
+                    let src_chunk = &src_block;
+                    let dst_chunk = &mut dst_block;
+                    {
+                        let original = f32x16::load_t(token, src_chunk);
+                        let (abs_v, result) = crate::kernels::float::x16::srgb_to_linear_extended_poly(
+                            token,
+                            original,
+                        );
+                        if abs_v
+                            .simd_gt(f32x16::splat_t(token, 8.0))
+                            .bitcast_to_i32()
+                            .any_true()
+                        {
+                            let mut out = result.to_array();
+                            crate::kernels::float::srgb_to_linear_extended_patch(
+                                src_chunk,
+                                &mut out,
+                            );
+                            f32x16::from_array_t(token, out)
+                                .with_rgba_alpha(original)
+                                .store(dst_chunk);
+                        } else {
+                            result.with_rgba_alpha(original).store(dst_chunk);
+                        }
+                    }
+                }
+                out_rem.copy_from_slice(&dst_block[..out_rem.len()]);
+            }
+        };
+    }
+    /// Convert sRGB RGBA f32 values from `input` into `output` without clamping
+    /// (extended range), preserving alpha bit-for-bit.
+    ///
+    /// Out-of-place counterpart to [`srgb_to_linear_extended_rgba_slice`]. Trailing
+    /// elements that don't form a complete RGBA pixel are ignored.
+    ///
+    /// # Panics
+    /// Panics if `input.len() != output.len()`.
+    ///
+    /// # Example
+    /// ```
+    /// use linear_srgb::default::srgb_to_linear_extended_rgba_slice_into;
+    ///
+    /// let input = [-0.1f32, 0.5, 1.5, 0.75, 1.0, 1.0, 1.0, 2.0];
+    /// let mut output = [0.0f32; 8];
+    /// srgb_to_linear_extended_rgba_slice_into(&input, &mut output);
+    /// assert!(output[0] < 0.0);
+    /// assert_eq!(output[3], 0.75);
+    /// assert_eq!(output[7], 2.0);
+    /// ```
+    #[inline]
+    pub fn srgb_to_linear_extended_rgba_slice_into(input: &[f32], output: &mut [f32]) {
+        {
+            match (&input.len(), &output.len()) {
+                (left_val, right_val) => {
+                    if !(*left_val == *right_val) {
+                        let kind = ::core::panicking::AssertKind::Eq;
+                        ::core::panicking::assert_failed(
+                            kind,
+                            &*left_val,
+                            &*right_val,
+                            ::core::option::Option::None,
+                        );
+                    }
+                }
+            }
+        };
+        '__incant: {
+            #[allow(unused_imports)]
+            use archmage::SimdToken;
+            {
+                if let Some(__t) = archmage::Wasm128Token::summon() {
+                    break '__incant srgb_to_linear_extended_rgba_slice_into_tier_wasm128(
+                        __t,
+                        input,
+                        output,
+                    );
+                }
+            }
+            srgb_to_linear_extended_rgba_slice_into_tier_scalar(
+                archmage::ScalarToken,
+                input,
+                output,
+            )
+        }
+    }
+    #[target_feature(enable = "simd128")]
+    #[inline]
+    fn linear_to_srgb_extended_rgba_slice_into_tier_wasm128(
+        token: archmage::Wasm128Token,
+        input: &[f32],
+        output: &mut [f32],
+    ) {
+        #[allow(non_camel_case_types, dead_code)]
+        type f32x16 = ::magetypes::simd::generic::f32x16<archmage::Wasm128Token>;
+        if true || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            for (src, dst) in input
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(output.as_chunks_mut::<4>().0)
+            {
+                let original = magetypes::simd::generic::f32x4::load_t(token, src);
+                crate::kernels::float::x4::linear_to_srgb_extended_vector(
+                        token,
+                        original,
+                    )
+                    .with_rgba_alpha(original)
+                    .store(dst);
+            }
+            return;
+        }
+        {
+            {
+                match (&(input).len(), &(output).len()) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                }
+            };
+            let (in_chunks, in_rem) = (input).as_chunks::<16>();
+            let (out_chunks, out_rem) = (output).as_chunks_mut::<16>();
+            for (src_chunk, dst_chunk) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                {
+                    let original = f32x16::load_t(token, src_chunk);
+                    let (abs_v, result) = crate::kernels::float::x16::linear_to_srgb_extended_poly(
+                        token,
+                        original,
+                    );
+                    if abs_v
+                        .simd_gt(f32x16::splat_t(token, 64.0))
+                        .bitcast_to_i32()
+                        .any_true()
+                    {
+                        let mut out = result.to_array();
+                        crate::kernels::float::linear_to_srgb_extended_patch(
+                            token,
+                            src_chunk,
+                            &mut out,
+                        );
+                        f32x16::from_array_t(token, out)
+                            .with_rgba_alpha(original)
+                            .store(dst_chunk);
+                    } else {
+                        result.with_rgba_alpha(original).store(dst_chunk);
+                    }
+                }
+            }
+            let in_rem = in_rem.as_chunks::<4>().0.as_flattened();
+            let out_rem = out_rem.as_chunks_mut::<4>().0.as_flattened_mut();
+            if !in_rem.is_empty() {
+                let mut src_block = [0.0; 16];
+                let mut dst_block = [0.0; 16];
+                src_block[..in_rem.len()].copy_from_slice(in_rem);
+                {
+                    let src_chunk = &src_block;
+                    let dst_chunk = &mut dst_block;
+                    {
+                        let original = f32x16::load_t(token, src_chunk);
+                        let (abs_v, result) = crate::kernels::float::x16::linear_to_srgb_extended_poly(
+                            token,
+                            original,
+                        );
+                        if abs_v
+                            .simd_gt(f32x16::splat_t(token, 64.0))
+                            .bitcast_to_i32()
+                            .any_true()
+                        {
+                            let mut out = result.to_array();
+                            crate::kernels::float::linear_to_srgb_extended_patch(
+                                token,
+                                src_chunk,
+                                &mut out,
+                            );
+                            f32x16::from_array_t(token, out)
+                                .with_rgba_alpha(original)
+                                .store(dst_chunk);
+                        } else {
+                            result.with_rgba_alpha(original).store(dst_chunk);
+                        }
+                    }
+                }
+                out_rem.copy_from_slice(&dst_block[..out_rem.len()]);
+            }
+        };
+    }
+    fn linear_to_srgb_extended_rgba_slice_into_tier_scalar(
+        token: archmage::ScalarToken,
+        input: &[f32],
+        output: &mut [f32],
+    ) {
+        #[allow(non_camel_case_types, dead_code)]
+        type f32x16 = ::magetypes::simd::generic::f32x16<archmage::ScalarToken>;
+        if true || archmage::IntoConcreteToken::as_scalar(token).is_some() {
+            for (src, dst) in input
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(output.as_chunks_mut::<4>().0)
+            {
+                let original = magetypes::simd::generic::f32x4::load_t(token, src);
+                crate::kernels::float::x4::linear_to_srgb_extended_vector(
+                        token,
+                        original,
+                    )
+                    .with_rgba_alpha(original)
+                    .store(dst);
+            }
+            return;
+        }
+        {
+            {
+                match (&(input).len(), &(output).len()) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                }
+            };
+            let (in_chunks, in_rem) = (input).as_chunks::<16>();
+            let (out_chunks, out_rem) = (output).as_chunks_mut::<16>();
+            for (src_chunk, dst_chunk) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+                {
+                    let original = f32x16::load_t(token, src_chunk);
+                    let (abs_v, result) = crate::kernels::float::x16::linear_to_srgb_extended_poly(
+                        token,
+                        original,
+                    );
+                    if abs_v
+                        .simd_gt(f32x16::splat_t(token, 64.0))
+                        .bitcast_to_i32()
+                        .any_true()
+                    {
+                        let mut out = result.to_array();
+                        crate::kernels::float::linear_to_srgb_extended_patch(
+                            token,
+                            src_chunk,
+                            &mut out,
+                        );
+                        f32x16::from_array_t(token, out)
+                            .with_rgba_alpha(original)
+                            .store(dst_chunk);
+                    } else {
+                        result.with_rgba_alpha(original).store(dst_chunk);
+                    }
+                }
+            }
+            let in_rem = in_rem.as_chunks::<4>().0.as_flattened();
+            let out_rem = out_rem.as_chunks_mut::<4>().0.as_flattened_mut();
+            if !in_rem.is_empty() {
+                let mut src_block = [0.0; 16];
+                let mut dst_block = [0.0; 16];
+                src_block[..in_rem.len()].copy_from_slice(in_rem);
+                {
+                    let src_chunk = &src_block;
+                    let dst_chunk = &mut dst_block;
+                    {
+                        let original = f32x16::load_t(token, src_chunk);
+                        let (abs_v, result) = crate::kernels::float::x16::linear_to_srgb_extended_poly(
+                            token,
+                            original,
+                        );
+                        if abs_v
+                            .simd_gt(f32x16::splat_t(token, 64.0))
+                            .bitcast_to_i32()
+                            .any_true()
+                        {
+                            let mut out = result.to_array();
+                            crate::kernels::float::linear_to_srgb_extended_patch(
+                                token,
+                                src_chunk,
+                                &mut out,
+                            );
+                            f32x16::from_array_t(token, out)
+                                .with_rgba_alpha(original)
+                                .store(dst_chunk);
+                        } else {
+                            result.with_rgba_alpha(original).store(dst_chunk);
+                        }
+                    }
+                }
+                out_rem.copy_from_slice(&dst_block[..out_rem.len()]);
+            }
+        };
+    }
+    /// Convert linear RGBA f32 values from `input` into `output` without clamping
+    /// (extended range), preserving alpha bit-for-bit.
+    ///
+    /// Out-of-place counterpart to [`linear_to_srgb_extended_rgba_slice`]. Trailing
+    /// elements that don't form a complete RGBA pixel are ignored.
+    ///
+    /// # Panics
+    /// Panics if `input.len() != output.len()`.
+    ///
+    /// # Example
+    /// ```
+    /// use linear_srgb::default::linear_to_srgb_extended_rgba_slice_into;
+    ///
+    /// let input = [-0.1f32, 0.5, 1.5, 0.75, 1.0, 1.0, 1.0, 2.0];
+    /// let mut output = [0.0f32; 8];
+    /// linear_to_srgb_extended_rgba_slice_into(&input, &mut output);
+    /// assert!(output[0] < 0.0);
+    /// assert_eq!(output[3], 0.75);
+    /// assert_eq!(output[7], 2.0);
+    /// ```
+    #[inline]
+    pub fn linear_to_srgb_extended_rgba_slice_into(input: &[f32], output: &mut [f32]) {
+        {
+            match (&input.len(), &output.len()) {
+                (left_val, right_val) => {
+                    if !(*left_val == *right_val) {
+                        let kind = ::core::panicking::AssertKind::Eq;
+                        ::core::panicking::assert_failed(
+                            kind,
+                            &*left_val,
+                            &*right_val,
+                            ::core::option::Option::None,
+                        );
+                    }
+                }
+            }
+        };
+        '__incant: {
+            #[allow(unused_imports)]
+            use archmage::SimdToken;
+            {
+                if let Some(__t) = archmage::Wasm128Token::summon() {
+                    break '__incant linear_to_srgb_extended_rgba_slice_into_tier_wasm128(
+                        __t,
+                        input,
+                        output,
+                    );
+                }
+            }
+            linear_to_srgb_extended_rgba_slice_into_tier_scalar(
+                archmage::ScalarToken,
+                input,
+                output,
+            )
+        }
+    }
+    #[target_feature(enable = "simd128")]
+    #[inline]
     fn srgb_to_linear_premultiply_rgba_slice_tier_wasm128(
         token: archmage::Wasm128Token,
         values: &mut [f32],
@@ -949,11 +2339,13 @@ pub(crate) mod simd {
             }
             let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
             if !remainder.is_empty() {
-                crate::kernels::finish_rgba_tail_cold(
-                    remainder,
-                    token,
-                    tail::<archmage::Wasm128Token>,
-                );
+                {
+                    crate::kernels::finish_rgba_tail_cold(
+                        remainder,
+                        token,
+                        tail::<archmage::Wasm128Token>,
+                    );
+                }
             }
         };
     }
@@ -995,11 +2387,13 @@ pub(crate) mod simd {
             }
             let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
             if !remainder.is_empty() {
-                crate::kernels::finish_rgba_tail_cold(
-                    remainder,
-                    token,
-                    tail::<archmage::ScalarToken>,
-                );
+                {
+                    crate::kernels::finish_rgba_tail_cold(
+                        remainder,
+                        token,
+                        tail::<archmage::ScalarToken>,
+                    );
+                }
             }
         };
     }
@@ -1102,11 +2496,13 @@ pub(crate) mod simd {
             }
             let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
             if !remainder.is_empty() {
-                crate::kernels::finish_rgba_tail_cold(
-                    remainder,
-                    token,
-                    tail::<archmage::Wasm128Token>,
-                );
+                {
+                    crate::kernels::finish_rgba_tail_cold(
+                        remainder,
+                        token,
+                        tail::<archmage::Wasm128Token>,
+                    );
+                }
             }
         };
     }
@@ -1167,11 +2563,13 @@ pub(crate) mod simd {
             }
             let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
             if !remainder.is_empty() {
-                crate::kernels::finish_rgba_tail_cold(
-                    remainder,
-                    token,
-                    tail::<archmage::ScalarToken>,
-                );
+                {
+                    crate::kernels::finish_rgba_tail_cold(
+                        remainder,
+                        token,
+                        tail::<archmage::ScalarToken>,
+                    );
+                }
             }
         };
     }
@@ -1549,7 +2947,9 @@ pub(crate) mod simd {
                 .to_array();
         }
         if !in_rem.is_empty() {
-            tail_x16(token, in_rem, out_rem);
+            {
+                tail_x16(token, in_rem, out_rem);
+            }
         }
     }
     fn srgb_u16_to_linear_slice_tier_scalar(
@@ -1630,7 +3030,9 @@ pub(crate) mod simd {
                 .to_array();
         }
         if !in_rem.is_empty() {
-            tail_x16(token, in_rem, out_rem);
+            {
+                tail_x16(token, in_rem, out_rem);
+            }
         }
     }
     /// Convert sRGB u16 values to linear f32 via rational polynomial (SIMD).
@@ -1771,7 +3173,9 @@ pub(crate) mod simd {
             *out = srgb.mla(scale, bias).to_u16_with::<TRUNC>();
         }
         if !in_rem.is_empty() {
-            tail_x16(token, in_rem, out_rem);
+            {
+                tail_x16(token, in_rem, out_rem);
+            }
         }
     }
     #[inline(always)]
@@ -2563,7 +3967,9 @@ pub(crate) mod simd {
             unpremultiply_u8_rgba_chunk_x16(token, inp, out);
         }
         if in_rem.len() >= 4 {
-            unpremultiply_u8_rgba_tail_cold(token, in_rem, out_rem);
+            {
+                unpremultiply_u8_rgba_tail_cold(token, in_rem, out_rem);
+            }
         }
     }
     fn unpremultiply_linear_to_srgb_u8_rgba_slice_tier_scalar(
@@ -2635,7 +4041,9 @@ pub(crate) mod simd {
             unpremultiply_u8_rgba_chunk_x16(token, inp, out);
         }
         if in_rem.len() >= 4 {
-            unpremultiply_u8_rgba_tail_cold(token, in_rem, out_rem);
+            {
+                unpremultiply_u8_rgba_tail_cold(token, in_rem, out_rem);
+            }
         }
     }
     /// Convert linear premultiplied RGBA f32 to sRGB straight-alpha RGBA u8.
@@ -3210,11 +4618,13 @@ pub(crate) mod simd {
                 }
                 let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
                 if !remainder.is_empty() {
-                    crate::kernels::finish_rgba_tail_cold(
-                        remainder,
-                        (token, gamma),
-                        tail_out::<archmage::Wasm128Token>,
-                    );
+                    {
+                        crate::kernels::finish_rgba_tail_cold(
+                            remainder,
+                            (token, gamma),
+                            tail_out::<archmage::Wasm128Token>,
+                        );
+                    }
                 }
             };
             return;
@@ -3241,11 +4651,13 @@ pub(crate) mod simd {
                 }
                 let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
                 if !remainder.is_empty() {
-                    crate::kernels::finish_rgba_tail_cold(
-                        remainder,
-                        token,
-                        tail_zero::<archmage::Wasm128Token>,
-                    );
+                    {
+                        crate::kernels::finish_rgba_tail_cold(
+                            remainder,
+                            token,
+                            tail_zero::<archmage::Wasm128Token>,
+                        );
+                    }
                 }
             };
             return;
@@ -3271,11 +4683,13 @@ pub(crate) mod simd {
             }
             let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
             if !remainder.is_empty() {
-                crate::kernels::finish_rgba_tail_cold(
-                    remainder,
-                    (token, gamma),
-                    tail_in::<archmage::Wasm128Token>,
-                );
+                {
+                    crate::kernels::finish_rgba_tail_cold(
+                        remainder,
+                        (token, gamma),
+                        tail_in::<archmage::Wasm128Token>,
+                    );
+                }
             }
         };
     }
@@ -3344,11 +4758,13 @@ pub(crate) mod simd {
                 }
                 let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
                 if !remainder.is_empty() {
-                    crate::kernels::finish_rgba_tail_cold(
-                        remainder,
-                        (token, gamma),
-                        tail_out::<archmage::ScalarToken>,
-                    );
+                    {
+                        crate::kernels::finish_rgba_tail_cold(
+                            remainder,
+                            (token, gamma),
+                            tail_out::<archmage::ScalarToken>,
+                        );
+                    }
                 }
             };
             return;
@@ -3375,11 +4791,13 @@ pub(crate) mod simd {
                 }
                 let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
                 if !remainder.is_empty() {
-                    crate::kernels::finish_rgba_tail_cold(
-                        remainder,
-                        token,
-                        tail_zero::<archmage::ScalarToken>,
-                    );
+                    {
+                        crate::kernels::finish_rgba_tail_cold(
+                            remainder,
+                            token,
+                            tail_zero::<archmage::ScalarToken>,
+                        );
+                    }
                 }
             };
             return;
@@ -3405,11 +4823,13 @@ pub(crate) mod simd {
             }
             let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
             if !remainder.is_empty() {
-                crate::kernels::finish_rgba_tail_cold(
-                    remainder,
-                    (token, gamma),
-                    tail_in::<archmage::ScalarToken>,
-                );
+                {
+                    crate::kernels::finish_rgba_tail_cold(
+                        remainder,
+                        (token, gamma),
+                        tail_in::<archmage::ScalarToken>,
+                    );
+                }
             }
         };
     }
@@ -3524,11 +4944,13 @@ pub(crate) mod simd {
                 }
                 let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
                 if !remainder.is_empty() {
-                    crate::kernels::finish_rgba_tail_cold(
-                        remainder,
-                        (token, exponent),
-                        tail_out::<archmage::Wasm128Token>,
-                    );
+                    {
+                        crate::kernels::finish_rgba_tail_cold(
+                            remainder,
+                            (token, exponent),
+                            tail_out::<archmage::Wasm128Token>,
+                        );
+                    }
                 }
             };
             return;
@@ -3555,11 +4977,13 @@ pub(crate) mod simd {
                 }
                 let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
                 if !remainder.is_empty() {
-                    crate::kernels::finish_rgba_tail_cold(
-                        remainder,
-                        token,
-                        tail_zero::<archmage::Wasm128Token>,
-                    );
+                    {
+                        crate::kernels::finish_rgba_tail_cold(
+                            remainder,
+                            token,
+                            tail_zero::<archmage::Wasm128Token>,
+                        );
+                    }
                 }
             };
             return;
@@ -3585,11 +5009,13 @@ pub(crate) mod simd {
             }
             let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
             if !remainder.is_empty() {
-                crate::kernels::finish_rgba_tail_cold(
-                    remainder,
-                    (token, exponent),
-                    tail_in::<archmage::Wasm128Token>,
-                );
+                {
+                    crate::kernels::finish_rgba_tail_cold(
+                        remainder,
+                        (token, exponent),
+                        tail_in::<archmage::Wasm128Token>,
+                    );
+                }
             }
         };
     }
@@ -3662,11 +5088,13 @@ pub(crate) mod simd {
                 }
                 let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
                 if !remainder.is_empty() {
-                    crate::kernels::finish_rgba_tail_cold(
-                        remainder,
-                        (token, exponent),
-                        tail_out::<archmage::ScalarToken>,
-                    );
+                    {
+                        crate::kernels::finish_rgba_tail_cold(
+                            remainder,
+                            (token, exponent),
+                            tail_out::<archmage::ScalarToken>,
+                        );
+                    }
                 }
             };
             return;
@@ -3693,11 +5121,13 @@ pub(crate) mod simd {
                 }
                 let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
                 if !remainder.is_empty() {
-                    crate::kernels::finish_rgba_tail_cold(
-                        remainder,
-                        token,
-                        tail_zero::<archmage::ScalarToken>,
-                    );
+                    {
+                        crate::kernels::finish_rgba_tail_cold(
+                            remainder,
+                            token,
+                            tail_zero::<archmage::ScalarToken>,
+                        );
+                    }
                 }
             };
             return;
@@ -3723,11 +5153,13 @@ pub(crate) mod simd {
             }
             let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
             if !remainder.is_empty() {
-                crate::kernels::finish_rgba_tail_cold(
-                    remainder,
-                    (token, exponent),
-                    tail_in::<archmage::ScalarToken>,
-                );
+                {
+                    crate::kernels::finish_rgba_tail_cold(
+                        remainder,
+                        (token, exponent),
+                        tail_in::<archmage::ScalarToken>,
+                    );
+                }
             }
         };
     }
@@ -3843,11 +5275,13 @@ pub(crate) mod simd {
                 }
                 let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
                 if !remainder.is_empty() {
-                    crate::kernels::finish_rgba_tail_cold(
-                        remainder,
-                        (token, gamma),
-                        tail_out::<archmage::Wasm128Token>,
-                    );
+                    {
+                        crate::kernels::finish_rgba_tail_cold(
+                            remainder,
+                            (token, gamma),
+                            tail_out::<archmage::Wasm128Token>,
+                        );
+                    }
                 }
             };
             return;
@@ -3876,11 +5310,13 @@ pub(crate) mod simd {
                 }
                 let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
                 if !remainder.is_empty() {
-                    crate::kernels::finish_rgba_tail_cold(
-                        remainder,
-                        token,
-                        tail_zero::<archmage::Wasm128Token>,
-                    );
+                    {
+                        crate::kernels::finish_rgba_tail_cold(
+                            remainder,
+                            token,
+                            tail_zero::<archmage::Wasm128Token>,
+                        );
+                    }
                 }
             };
             return;
@@ -3912,11 +5348,13 @@ pub(crate) mod simd {
             }
             let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
             if !remainder.is_empty() {
-                crate::kernels::finish_rgba_tail_cold(
-                    remainder,
-                    (token, gamma),
-                    tail_in::<archmage::Wasm128Token>,
-                );
+                {
+                    crate::kernels::finish_rgba_tail_cold(
+                        remainder,
+                        (token, gamma),
+                        tail_in::<archmage::Wasm128Token>,
+                    );
+                }
             }
         };
     }
@@ -3990,11 +5428,13 @@ pub(crate) mod simd {
                 }
                 let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
                 if !remainder.is_empty() {
-                    crate::kernels::finish_rgba_tail_cold(
-                        remainder,
-                        (token, gamma),
-                        tail_out::<archmage::ScalarToken>,
-                    );
+                    {
+                        crate::kernels::finish_rgba_tail_cold(
+                            remainder,
+                            (token, gamma),
+                            tail_out::<archmage::ScalarToken>,
+                        );
+                    }
                 }
             };
             return;
@@ -4023,11 +5463,13 @@ pub(crate) mod simd {
                 }
                 let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
                 if !remainder.is_empty() {
-                    crate::kernels::finish_rgba_tail_cold(
-                        remainder,
-                        token,
-                        tail_zero::<archmage::ScalarToken>,
-                    );
+                    {
+                        crate::kernels::finish_rgba_tail_cold(
+                            remainder,
+                            token,
+                            tail_zero::<archmage::ScalarToken>,
+                        );
+                    }
                 }
             };
             return;
@@ -4059,11 +5501,13 @@ pub(crate) mod simd {
             }
             let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
             if !remainder.is_empty() {
-                crate::kernels::finish_rgba_tail_cold(
-                    remainder,
-                    (token, gamma),
-                    tail_in::<archmage::ScalarToken>,
-                );
+                {
+                    crate::kernels::finish_rgba_tail_cold(
+                        remainder,
+                        (token, gamma),
+                        tail_in::<archmage::ScalarToken>,
+                    );
+                }
             }
         };
     }
@@ -4208,11 +5652,13 @@ pub(crate) mod simd {
                 }
                 let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
                 if !remainder.is_empty() {
-                    crate::kernels::finish_rgba_tail_cold(
-                        remainder,
-                        (token, exponent),
-                        tail_out::<archmage::Wasm128Token>,
-                    );
+                    {
+                        crate::kernels::finish_rgba_tail_cold(
+                            remainder,
+                            (token, exponent),
+                            tail_out::<archmage::Wasm128Token>,
+                        );
+                    }
                 }
             };
             return;
@@ -4248,11 +5694,13 @@ pub(crate) mod simd {
                 }
                 let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
                 if !remainder.is_empty() {
-                    crate::kernels::finish_rgba_tail_cold(
-                        remainder,
-                        token,
-                        tail_zero::<archmage::Wasm128Token>,
-                    );
+                    {
+                        crate::kernels::finish_rgba_tail_cold(
+                            remainder,
+                            token,
+                            tail_zero::<archmage::Wasm128Token>,
+                        );
+                    }
                 }
             };
             return;
@@ -4291,11 +5739,13 @@ pub(crate) mod simd {
             }
             let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
             if !remainder.is_empty() {
-                crate::kernels::finish_rgba_tail_cold(
-                    remainder,
-                    (token, exponent),
-                    tail_in::<archmage::Wasm128Token>,
-                );
+                {
+                    crate::kernels::finish_rgba_tail_cold(
+                        remainder,
+                        (token, exponent),
+                        tail_in::<archmage::Wasm128Token>,
+                    );
+                }
             }
         };
     }
@@ -4390,11 +5840,13 @@ pub(crate) mod simd {
                 }
                 let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
                 if !remainder.is_empty() {
-                    crate::kernels::finish_rgba_tail_cold(
-                        remainder,
-                        (token, exponent),
-                        tail_out::<archmage::ScalarToken>,
-                    );
+                    {
+                        crate::kernels::finish_rgba_tail_cold(
+                            remainder,
+                            (token, exponent),
+                            tail_out::<archmage::ScalarToken>,
+                        );
+                    }
                 }
             };
             return;
@@ -4430,11 +5882,13 @@ pub(crate) mod simd {
                 }
                 let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
                 if !remainder.is_empty() {
-                    crate::kernels::finish_rgba_tail_cold(
-                        remainder,
-                        token,
-                        tail_zero::<archmage::ScalarToken>,
-                    );
+                    {
+                        crate::kernels::finish_rgba_tail_cold(
+                            remainder,
+                            token,
+                            tail_zero::<archmage::ScalarToken>,
+                        );
+                    }
                 }
             };
             return;
@@ -4473,11 +5927,13 @@ pub(crate) mod simd {
             }
             let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
             if !remainder.is_empty() {
-                crate::kernels::finish_rgba_tail_cold(
-                    remainder,
-                    (token, exponent),
-                    tail_in::<archmage::ScalarToken>,
-                );
+                {
+                    crate::kernels::finish_rgba_tail_cold(
+                        remainder,
+                        (token, exponent),
+                        tail_in::<archmage::ScalarToken>,
+                    );
+                }
             }
         };
     }

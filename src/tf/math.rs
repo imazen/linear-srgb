@@ -93,6 +93,51 @@ pub(crate) const HLG_LOG_FAST: u128 = magemath::logf::LogfOptions::new()
     .caller()
     .bits();
 
+/// PQ EOTF dark-toe `ln(1 + dm1)` for `dm1 = fma(v, 1/C1^M2, -1) in [2.5e-4, 32768]`.
+#[cfg(feature = "transfer")]
+pub(crate) const PQ_EOTF_LOG1P: u128 = magemath::log1pf::Log1pfOptions::new()
+    .input_range(2.5e-4, 32_768.0)
+    .reject_subnormals()
+    .portability(MATH_PORTABILITY)
+    .assume_in_bounds()
+    .caller()
+    .bits();
+
+/// PQ EOTF dark-toe `base^(1/M1)` for `base = num / den in [1.25e-6, 0.125]`.
+/// `|(1/M1) * log2(1.25e-6)| = 123.1 <= 125`, eliding all output range checks.
+#[cfg(feature = "transfer")]
+pub(crate) const PQ_EOTF_POW: u128 = PowfOptions::new()
+    .domain(PowfDomain::PositiveUnit)
+    .base_range(1.25e-6, 0.125)
+    .const_exponent(16384.0 / 2610.0)
+    .reject_subnormals()
+    .portability(MATH_PORTABILITY)
+    .assume_in_bounds()
+    .caller()
+    .bits();
+
+/// PQ OETF dark-toe `v^M1` for `v in (0, 1e-7)` (including positive subnormals).
+#[cfg(feature = "transfer")]
+pub(crate) const PQ_OETF_POW1: u128 = PowfOptions::new()
+    .domain(PowfDomain::PositiveUnit)
+    .const_exponent(2610.0 / 16384.0)
+    .admit_subnormals()
+    .portability(MATH_PORTABILITY)
+    .assume_in_bounds()
+    .caller()
+    .bits();
+
+/// PQ OETF dark-toe `ratio^M2` over `PowfDomain::PqRatio` (`[107/128, 1.0]`).
+#[cfg(feature = "transfer")]
+pub(crate) const PQ_OETF_POW2: u128 = PowfOptions::new()
+    .domain(PowfDomain::PqRatio)
+    .const_exponent(2523.0 / 32.0)
+    .reject_subnormals()
+    .portability(MATH_PORTABILITY)
+    .assume_in_bounds()
+    .caller()
+    .bits();
+
 #[cfg(all(test, feature = "transfer"))]
 pub(crate) fn exp2(x: f32) -> f32 {
     exp2_with_token(ScalarToken, x)
@@ -176,6 +221,17 @@ pub(crate) fn gamma_outside_fit_slice(values: &mut [f32], exponent: f32) {
     }
 }
 
+#[cfg(target_arch = "x86_64")]
+#[cold]
+#[inline(never)]
+fn preserve_nans_patch<const N: usize>(src: &[f32; N], out: &mut [f32; N]) {
+    for (&s, o) in src.iter().zip(out.iter_mut()) {
+        if s.is_nan() {
+            *o = s;
+        }
+    }
+}
+
 macro_rules! gamma_for {
     ($name:ident, $name_cfg:ident, $in_range:ident, $zero_exp:ident, $slice:ident, $slice_cfg:ident, $float:ident, $backend:ident, $width:literal) => {
         #[inline(always)]
@@ -220,6 +276,7 @@ macro_rules! gamma_for {
         #[inline(always)]
         pub(crate) fn $slice_cfg<T: $backend, const RAILS: bool>(t: T, values: &mut [f32], n: f32) {
             if !RAILS {
+                #[cfg(not(target_arch = "x86_64"))]
                 fn tail_unchecked<T: $backend>(
                     (t, n): (T, f32),
                     chunk: [f32; $width],
@@ -244,6 +301,36 @@ macro_rules! gamma_for {
                 return;
             }
             if n == 0.0 {
+                // On x86-64 AVX2 ($width == 8), in-place `blend(isnan(v), v, result)` lowers
+                // to microcoded `vmaskmovps`. Branching on NaN with a cold pointer patch keeps
+                // an unconditional `vmovups` store on the hot path. AVX-512 ($width == 16) uses
+                // fast hardware opmask `vmovups {k1}` and needs no branch.
+                #[cfg(target_arch = "x86_64")]
+                if $width == 8 {
+                    let (chunks, remainder) = values.as_chunks_mut::<$width>();
+                    let zero = $float::zero_t(t);
+                    let one = $float::splat_t(t, 1.0);
+                    for slot in chunks {
+                        let v = $float::load_t(t, slot);
+                        let result = v.simd_gt(zero) & one;
+                        if v.simd_ne(v).bitcast_to_i32().any_true() {
+                            let mut out = result.to_array();
+                            preserve_nans_patch(slot, &mut out);
+                            *slot = out;
+                        } else {
+                            result.store(slot);
+                        }
+                    }
+                    if !remainder.is_empty() {
+                        let mut block = [0.0; $width];
+                        block[..remainder.len()].copy_from_slice(remainder);
+                        let v = $float::load_t(t, &block);
+                        let converted = $zero_exp(t, v).to_array();
+                        remainder.copy_from_slice(&converted[..remainder.len()]);
+                    }
+                    return;
+                }
+                #[cfg(not(target_arch = "x86_64"))]
                 fn tail_zero<T: $backend>(t: T, chunk: [f32; $width]) -> [f32; $width] {
                     $zero_exp(t, $float::from_array_t(t, chunk)).to_array()
                 }
@@ -256,6 +343,30 @@ macro_rules! gamma_for {
                 );
                 return;
             }
+            #[cfg(target_arch = "x86_64")]
+            if $width == 8 {
+                let (chunks, remainder) = values.as_chunks_mut::<$width>();
+                for slot in chunks {
+                    let v = $float::load_t(t, slot);
+                    let result = v.powf::<GAMMA>(n);
+                    if v.simd_ne(v).bitcast_to_i32().any_true() {
+                        let mut out = result.to_array();
+                        preserve_nans_patch(slot, &mut out);
+                        *slot = out;
+                    } else {
+                        result.store(slot);
+                    }
+                }
+                if !remainder.is_empty() {
+                    let mut block = [0.0; $width];
+                    block[..remainder.len()].copy_from_slice(remainder);
+                    let v = $float::load_t(t, &block);
+                    let converted = $in_range(t, v, n).to_array();
+                    remainder.copy_from_slice(&converted[..remainder.len()]);
+                }
+                return;
+            }
+            #[cfg(not(target_arch = "x86_64"))]
             fn tail_in_range<T: $backend>((t, n): (T, f32), chunk: [f32; $width]) -> [f32; $width] {
                 $in_range(t, $float::from_array_t(t, chunk), n).to_array()
             }

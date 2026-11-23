@@ -2,9 +2,11 @@
 
 Fast, SIMD-accelerated sRGB↔linear conversion for image processing pipelines.
 Pure Rust, `#![forbid(unsafe_code)]`, `no_std`-compatible.
+New to the crate? See the [plain-English ELI5 guide](https://github.com/imazen/linear-srgb/blob/main/docs/eli5.md).
 
-Handles `f32`, `f64`, `u8`, and `u16` data. Supports in-place RGBA with alpha
-preservation, fused premultiply/unpremultiply, custom gamma, and extended range.
+Handles `f32`, `f64`, `u8`, and `u16` data. Supports in-place and out-of-place (`*_into`)
+slices, RGBA with alpha preservation, fused premultiply/unpremultiply, custom gamma,
+extended range, and optional BT.709/PQ/HLG (`transfer`).
 
 ## Quick start
 
@@ -259,14 +261,18 @@ they share a SIMD-generated `OnceLock` LUT.
 | Data | Function |
 |------|----------|
 | `&mut [f32]` | `srgb_to_linear_slice` / `linear_to_srgb_slice` |
+| `&[f32]` → `&mut [f32]` | `srgb_to_linear_slice_into` / `linear_to_srgb_slice_into` |
 | RGBA `&mut [f32]` | `srgb_to_linear_rgba_slice` / `linear_to_srgb_rgba_slice` |
+| RGBA `&[f32]` → `&mut [f32]` | `srgb_to_linear_rgba_slice_into` / `linear_to_srgb_rgba_slice_into` |
 | RGBA f32 premultiply | `srgb_to_linear_premultiply_rgba_slice` / `unpremultiply_linear_to_srgb_rgba_slice` |
 | `&[u8]` ↔ `&mut [f32]` | `srgb_u8_to_linear_slice` / `linear_to_srgb_u8_slice` |
 | RGBA `&[u8]` ↔ `&mut [f32]` | `srgb_u8_to_linear_rgba_slice` / `linear_to_srgb_u8_rgba_slice` |
 | RGBA u8↔f32 premultiply | `srgb_u8_to_linear_premultiply_rgba_slice` / `unpremultiply_linear_to_srgb_u8_rgba_slice` |
 | `&[u16]` ↔ `&mut [f32]` | `srgb_u16_to_linear_slice` / `linear_to_srgb_u16_slice` |
 | Extended range `&mut [f32]` | `srgb_to_linear_extended_slice` / `linear_to_srgb_extended_slice` |
+| Extended `&[f32]` → `&mut [f32]` | `srgb_to_linear_extended_slice_into` / `linear_to_srgb_extended_slice_into` |
 | Extended range RGBA `&mut [f32]` | `srgb_to_linear_extended_rgba_slice` / `linear_to_srgb_extended_rgba_slice` |
+| Extended RGBA `&[f32]` → `&mut [f32]` | `srgb_to_linear_extended_rgba_slice_into` / `linear_to_srgb_extended_rgba_slice_into` |
 | Custom gamma `&mut [f32]` | `gamma_to_linear_slice` / `linear_to_gamma_slice` |
 | Custom gamma RGBA `&mut [f32]` | `gamma_to_linear_rgba_slice` / `linear_to_gamma_rgba_slice` |
 | Custom gamma RGBA premul | `gamma_to_linear_premultiply_rgba_slice` / `unpremultiply_linear_to_gamma_rgba_slice` |
@@ -325,8 +331,8 @@ Clamped sRGB maps NaN and nonpositive inputs to positive zero and maps
 inputs at or above one to one. Signed extended sRGB preserves signed
 zero and propagates NaNs. See the precision contracts for HDR curve rails.
 
-See [precision contracts](docs/precision.md) and
-[measured alternatives](benchmarks/u8_encode_2026-11-05.md) for LUT errors,
+See [precision contracts](https://github.com/imazen/linear-srgb/blob/main/docs/precision.md) and
+[measured alternatives](https://github.com/imazen/linear-srgb/blob/main/benchmarks/u8_encode_2026-11-05.md) for LUT errors,
 curve policy, row/tier portability and exact-rounding prototype costs.
 
 ## Feature Flags

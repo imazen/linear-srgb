@@ -114,6 +114,8 @@ stub_gamma_to_linear_premultiply_rgba_slice:
 	v128.const 0, 0, 128, 127, 0, 0, 128, 127, 0, 0, 128, 127, 0, 0, 128, 127
 	v128.const 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 	local.tee 8
+	v128.const 0x1p7, 0x1p7, 0x1p7, 0x1p7
+	local.tee 9
 	local.get 6
 	v128.const 0, 0, 128, 63, 0, 0, 128, 63, 0, 0, 128, 63, 0, 0, 128, 63
 	local.get 4
@@ -121,41 +123,41 @@ stub_gamma_to_linear_premultiply_rgba_slice:
 	v128.const 0x1p-126, 0x1p-126, 0x1p-126, 0x1p-126
 	f32x4.ge
 	v128.and
-	local.tee 9
-	v128.const 1065353216, 1065353216, 1065353216, 1065353216
 	local.tee 10
-	local.get 9
-	v128.const 0x1p0, 0x1p0, 0x1p0, 0x1p0
+	v128.const 1065353216, 1065353216, 1065353216, 1065353216
 	local.tee 11
+	local.get 10
+	v128.const 0x1p0, 0x1p0, 0x1p0, 0x1p0
+	local.tee 12
 	f32x4.lt
 	v128.bitselect
-	local.tee 9
-	local.get 9
+	local.tee 10
+	local.get 10
 	v128.const 0, 0, 0, 0
 	i32x4.eq
-	local.tee 12
+	local.tee 13
 	v128.bitselect
 	v128.const 4913933, 4913933, 4913933, 4913933
 	i32x4.add
-	local.tee 13
+	local.tee 14
 	v128.const 8388607, 8388607, 8388607, 8388607
 	v128.and
 	v128.const 1060439283, 1060439283, 1060439283, 1060439283
 	i32x4.add
-	local.tee 9
+	local.tee 10
 	v128.const -0x1p0, -0x1p0, -0x1p0, -0x1p0
 	f32x4.add
-	local.get 9
-	local.get 11
+	local.get 10
+	local.get 12
 	f32x4.add
 	f32x4.div
-	local.tee 9
-	local.get 9
-	local.get 9
+	local.tee 10
+	local.get 10
+	local.get 10
 	f32x4.mul
-	local.tee 9
-	local.get 9
-	local.get 9
+	local.tee 10
+	local.get 10
+	local.get 10
 	v128.const 0x1.bcd67ep-2, 0x1.bcd67ep-2, 0x1.bcd67ep-2, 0x1.bcd67ep-2
 	f32x4.mul
 	v128.const 0x1.276932p-1, 0x1.276932p-1, 0x1.276932p-1, 0x1.276932p-1
@@ -167,7 +169,7 @@ stub_gamma_to_linear_premultiply_rgba_slice:
 	v128.const 0x1.715476p1, 0x1.715476p1, 0x1.715476p1, 0x1.715476p1
 	f32x4.add
 	f32x4.mul
-	local.get 13
+	local.get 14
 	i32.const 23
 	i32x4.shr_s
 	v128.const -127, -127, -127, -127
@@ -175,46 +177,30 @@ stub_gamma_to_linear_premultiply_rgba_slice:
 	f32x4.convert_i32x4_s
 	f32x4.add
 	f32x4.mul
-	local.tee 9
-	local.get 9
-	v128.const -1023672320, -1023672320, -1023672320, -1023672320
-	local.get 9
-	v128.const -0x1.f8p6, -0x1.f8p6, -0x1.f8p6, -0x1.f8p6
 	local.tee 14
+	local.get 14
+	v128.const -1023672320, -1023672320, -1023672320, -1023672320
+	local.get 14
+	v128.const -0x1.f8p6, -0x1.f8p6, -0x1.f8p6, -0x1.f8p6
+	local.tee 15
 	f32x4.gt
 	v128.bitselect
 	local.get 8
 	v128.bitselect
-	local.tee 13
-	local.get 13
-	v128.const 1124073472, 1124073472, 1124073472, 1124073472
-	local.get 13
-	v128.const 0x1p7, 0x1p7, 0x1p7, 0x1p7
-	local.tee 15
-	f32x4.lt
-	v128.bitselect
-	local.get 8
-	v128.bitselect
-	local.tee 13
-	local.get 13
-	f32x4.nearest
-	local.tee 13
-	local.get 13
-	v128.const 1123942400, 1123942400, 1123942400, 1123942400
-	local.get 13
+	f32x4.pmin
+	local.tee 10
 	v128.const 0x1.fcp6, 0x1.fcp6, 0x1.fcp6, 0x1.fcp6
-	f32x4.lt
-	v128.bitselect
-	local.get 8
-	v128.bitselect
-	local.tee 13
-	f32x4.sub
+	local.get 10
+	f32x4.nearest
+	f32x4.pmin
 	local.tee 8
-	local.get 8
-	local.get 8
-	local.get 8
-	local.get 8
-	local.get 8
+	f32x4.sub
+	local.tee 10
+	local.get 10
+	local.get 10
+	local.get 10
+	local.get 10
+	local.get 10
 	v128.const 0x1.43f274p-13, 0x1.43f274p-13, 0x1.43f274p-13, 0x1.43f274p-13
 	f32x4.mul
 	v128.const 0x1.5d88f2p-10, 0x1.5d88f2p-10, 0x1.5d88f2p-10, 0x1.5d88f2p-10
@@ -232,25 +218,25 @@ stub_gamma_to_linear_premultiply_rgba_slice:
 	v128.const 0x1.62e43p-1, 0x1.62e43p-1, 0x1.62e43p-1, 0x1.62e43p-1
 	f32x4.add
 	f32x4.mul
-	local.get 11
+	local.get 12
 	f32x4.add
-	local.get 13
+	local.get 8
 	f32x4.nearest
 	i32x4.trunc_sat_f32x4_s
 	i32.const 23
 	i32x4.shl
-	local.get 10
+	local.get 11
 	i32x4.add
 	f32x4.mul
-	local.get 9
 	local.get 14
+	local.get 15
 	f32x4.lt
 	v128.bitselect
+	local.get 14
 	local.get 9
-	local.get 15
 	f32x4.ge
 	v128.bitselect
-	local.get 12
+	local.get 13
 	v128.bitselect
 	local.get 4
 	local.get 4

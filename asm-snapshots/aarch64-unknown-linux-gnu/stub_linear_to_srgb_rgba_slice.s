@@ -18,13 +18,13 @@ stub_linear_to_srgb_rgba_slice:
 	ldr x8, [x8, :got_lo12:archmage::tokens::generated::arm::NEON_CACHE]
 	ldrb w8, [x8]
 	cmp w8, #1
-	b.eq .LBB18_7
+	b.eq .LBB17_7
 	cmp w8, #2
-	b.ne .LBB18_6
-.LBB18_2:
+	b.ne .LBB17_6
+.LBB17_2:
 	lsl x8, x1, #2
 	ands x8, x8, #0x7ffffffffffffff0
-	b.eq .LBB18_5
+	b.eq .LBB17_5
 	mov w9, #47186
 	mov w10, #25800
 	mov w11, #5570
@@ -59,7 +59,7 @@ stub_linear_to_srgb_rgba_slice:
 	dup v17.4s, w9
 	dup v18.4s, w10
 	dup v19.4s, w11
-.LBB18_4:
+.LBB17_4:
 	ldr q20, [x0]
 	mov v23.16b, v3.16b
 	mov v25.16b, v4.16b
@@ -89,8 +89,8 @@ stub_linear_to_srgb_rgba_slice:
 	bit v21.16b, v0.16b, v22.16b
 	mov v21.s[3], v20.s[3]
 	str q21, [x0], #16
-	b.ne .LBB18_4
-.LBB18_5:
+	b.ne .LBB17_4
+.LBB17_5:
 	.cfi_def_cfa wsp, 32
 	ldp x20, x19, [sp, #16]
 	ldp x29, x30, [sp], #32
@@ -100,7 +100,7 @@ stub_linear_to_srgb_rgba_slice:
 	.cfi_restore w30
 	.cfi_restore w29
 	ret
-.LBB18_6:
+.LBB17_6:
 	.cfi_restore_state
 	mov x19, x0
 	mov x20, x1
@@ -108,8 +108,8 @@ stub_linear_to_srgb_rgba_slice:
 	mov x1, x20
 	mov w8, w0
 	mov x0, x19
-	cbnz w8, .LBB18_2
-.LBB18_7:
+	cbnz w8, .LBB17_2
+.LBB17_7:
 	.cfi_def_cfa wsp, 32
 	ldp x20, x19, [sp, #16]
 	ldp x29, x30, [sp], #32

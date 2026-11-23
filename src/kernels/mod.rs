@@ -39,6 +39,7 @@ pub(crate) fn map_slice<const N: usize>(
     }
 }
 
+#[cfg(not(target_arch = "x86_64"))]
 #[cold]
 #[inline(never)]
 pub(crate) fn finish_tail_cold<C: Copy, const N: usize>(
@@ -57,11 +58,14 @@ pub(crate) fn finish_tail_cold<C: Copy, const N: usize>(
 
 /// Closure-free slice loop macro so the loop body stays directly inside the
 /// enclosing `#[target_feature]` / `#[arcane]` / `#[attune]` function (Rust
-/// closures do not inherit caller `#[target_feature]`, e.g. `evex512` on V4).
+/// closures and nested `fn` items do not inherit caller `#[target_feature]`,
+/// e.g. `avx2,fma` / `evex512` on x86-64).
 ///
-/// When given `($values, $width, $ctx, |$chunk| $body, $tail_fn)`, the `< N`
-/// remainder block is outlined into `finish_tail_cold` so the hot function
-/// contains only a single copy of the SIMD loop body and no stack tail buffer.
+/// On non-x86_64 targets (`aarch64`, `wasm32`, where SIMD target features are
+/// compile-time global), the `< N` remainder is outlined into `finish_tail_cold`
+/// to keep binary size small. On `x86_64`, the single padded remainder block
+/// stays inside the caller's `#[target_feature]` context so it executes native
+/// AVX2/AVX-512 without SSE2 `__simd_inner_*` shims.
 macro_rules! map_slice_inline {
     ($values:expr, $width:literal, $ctx:expr, |$chunk:ident| $body:expr, $tail_fn:expr) => {{
         let (chunks, remainder) = ($values).as_chunks_mut::<$width>();
@@ -70,7 +74,19 @@ macro_rules! map_slice_inline {
             *slot = $body;
         }
         if !remainder.is_empty() {
-            $crate::kernels::finish_tail_cold(remainder, $ctx, $tail_fn);
+            #[cfg(target_arch = "x86_64")]
+            {
+                let _ = &$ctx;
+                let mut block = [0.0; $width];
+                block[..remainder.len()].copy_from_slice(remainder);
+                let $chunk: [f32; $width] = block;
+                let converted = $body;
+                remainder.copy_from_slice(&converted[..remainder.len()]);
+            }
+            #[cfg(not(target_arch = "x86_64"))]
+            {
+                $crate::kernels::finish_tail_cold(remainder, $ctx, $tail_fn);
+            }
         }
     }};
     ($values:expr, $width:literal, |$chunk:ident| $body:expr) => {{
@@ -90,6 +106,30 @@ macro_rules! map_slice_inline {
 }
 pub(crate) use map_slice_inline;
 
+/// Closure-free out-of-place (`input -> output`) slice loop macro preserving
+/// caller `#[target_feature]`, with a padded tail block for position-independent
+/// rounding.
+macro_rules! map_slice_into_inline {
+    ($input:expr, $output:expr, $width:literal, |$chunk:ident| $body:expr) => {{
+        assert_eq!(($input).len(), ($output).len());
+        let (in_chunks, in_rem) = ($input).as_chunks::<$width>();
+        let (out_chunks, out_rem) = ($output).as_chunks_mut::<$width>();
+        for (src_slot, dst_slot) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+            let $chunk: [f32; $width] = *src_slot;
+            *dst_slot = $body;
+        }
+        if !in_rem.is_empty() {
+            let mut block = [0.0; $width];
+            block[..in_rem.len()].copy_from_slice(in_rem);
+            let $chunk: [f32; $width] = block;
+            let converted = $body;
+            out_rem.copy_from_slice(&converted[..out_rem.len()]);
+        }
+    }};
+}
+pub(crate) use map_slice_into_inline;
+
+#[cfg(not(target_arch = "x86_64"))]
 #[cold]
 #[inline(never)]
 pub(crate) fn finish_rgba_tail_cold<C: Copy>(
@@ -114,7 +154,21 @@ macro_rules! map_rgba_slice_inline {
         }
         let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
         if !remainder.is_empty() {
-            $crate::kernels::finish_rgba_tail_cold(remainder, $ctx, $tail_fn);
+            #[cfg(target_arch = "x86_64")]
+            {
+                let _ = &$ctx;
+                let mut block = [0.0; 16];
+                block[..remainder.len()].copy_from_slice(remainder);
+                {
+                    let $chunk = &mut block;
+                    $body
+                }
+                remainder.copy_from_slice(&block[..remainder.len()]);
+            }
+            #[cfg(not(target_arch = "x86_64"))]
+            {
+                $crate::kernels::finish_rgba_tail_cold(remainder, $ctx, $tail_fn);
+            }
         }
     }};
     ($values:expr, |$chunk:ident| $body:block) => {{
@@ -136,68 +190,33 @@ macro_rules! map_rgba_slice_inline {
 }
 pub(crate) use map_rgba_slice_inline;
 
-#[cold]
-#[inline(never)]
-pub(crate) fn slow_chunk_cold<C: Copy, const N: usize>(
-    chunk: [f32; N],
-    ctx: C,
-    slow: fn(C, [f32; N]) -> [f32; N],
-) -> [f32; N] {
-    slow(ctx, chunk)
-}
-
-/// Closure-free call-free SIMD slice fast-path macro with cold `fn` pointer
-/// fallback when any single chunk contains an exceptional (`NaN` / out-of-fit)
-/// lane or a `< N` trailing remainder. Patches only the failing chunk and
-/// continues the fast SIMD loop for the rest of the slice.
-macro_rules! map_slice_try_inline {
-    ($values:expr, $width:literal, $ctx:expr, |$chunk:ident| $fast:expr, $slow_fn:expr) => {{
-        let (chunks, remainder) = ($values).as_chunks_mut::<$width>();
-        for slot in chunks {
-            let $chunk: [f32; $width] = *slot;
-            *slot = match $fast {
-                Some(converted) => converted,
-                None => $crate::kernels::slow_chunk_cold($chunk, $ctx, $slow_fn),
-            };
+/// Closure-free out-of-place 16-lane RGBA slice loop macro preserving caller
+/// `#[target_feature]`. Trailing elements that don't form a complete RGBA pixel
+/// are ignored (matching in-place `*_rgba_slice` and `*_u8_rgba_slice`).
+macro_rules! map_rgba_slice_into_inline {
+    ($input:expr, $output:expr, |$src_chunk:ident, $dst_chunk:ident| $body:block) => {{
+        assert_eq!(($input).len(), ($output).len());
+        let (in_chunks, in_rem) = ($input).as_chunks::<16>();
+        let (out_chunks, out_rem) = ($output).as_chunks_mut::<16>();
+        for ($src_chunk, $dst_chunk) in in_chunks.iter().zip(out_chunks.iter_mut()) {
+            $body
         }
-        if !remainder.is_empty() {
-            $crate::kernels::finish_tail_cold(remainder, $ctx, $slow_fn);
-        }
-    }};
-}
-pub(crate) use map_slice_try_inline;
-
-#[cold]
-#[inline(never)]
-pub(crate) fn slow_rgba_chunk_cold<C: Copy>(
-    chunk: &mut [f32; 16],
-    ctx: C,
-    slow: fn(C, &mut [f32; 16]),
-) {
-    slow(ctx, chunk);
-}
-
-/// Closure-free RGBA slice fast-path macro with cold `fn` pointer fallback.
-/// Patches only the failing 16-float chunk and continues the fast SIMD loop.
-macro_rules! map_rgba_slice_try_inline {
-    ($values:expr, $ctx:expr, |$chunk:ident| $fast:expr, $slow_fn:expr) => {{
-        let (chunks, remainder) = ($values).as_chunks_mut::<16>();
-        let remainder = remainder.as_chunks_mut::<4>().0.as_flattened_mut();
-        for slot in chunks {
-            let ok = {
-                let $chunk = &mut *slot;
-                $fast
-            };
-            if !ok {
-                $crate::kernels::slow_rgba_chunk_cold(slot, $ctx, $slow_fn);
+        let in_rem = in_rem.as_chunks::<4>().0.as_flattened();
+        let out_rem = out_rem.as_chunks_mut::<4>().0.as_flattened_mut();
+        if !in_rem.is_empty() {
+            let mut src_block = [0.0; 16];
+            let mut dst_block = [0.0; 16];
+            src_block[..in_rem.len()].copy_from_slice(in_rem);
+            {
+                let $src_chunk = &src_block;
+                let $dst_chunk = &mut dst_block;
+                $body
             }
-        }
-        if !remainder.is_empty() {
-            $crate::kernels::finish_rgba_tail_cold(remainder, $ctx, $slow_fn);
+            out_rem.copy_from_slice(&dst_block[..out_rem.len()]);
         }
     }};
 }
-pub(crate) use map_rgba_slice_try_inline;
+pub(crate) use map_rgba_slice_into_inline;
 
 /// Keep scalar HDR arrays on the same arithmetic policy as their SIMD peers.
 #[cfg(feature = "transfer")]

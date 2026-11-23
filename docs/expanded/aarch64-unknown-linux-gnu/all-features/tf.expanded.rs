@@ -2,8 +2,8 @@
 // rustc 1.99.0 (b940084d7 2026-09-28); cargo-expand 1.0.126
 // Target: aarch64-unknown-linux-gnu; preset: all-features; module: tf
 // Library features: alt, avx512, default, iec, precise-portable, std, transfer, unsafe_simd
-// Providers: archmage 0.9.32, archmage-macros 0.9.32, magetypes 0.9.32, magemath 0.1.0
-// Resolution lock SHA-256: 6b2ca29ec7052c8f1c4129de53205c4b3a2a98408b74f3a4a8265635621851a7
+// Providers: archmage 0.9.33, archmage-macros 0.9.33, magetypes 0.9.33, magemath 0.1.1
+// Resolution lock SHA-256: fd1a88523adae42c02ee705728a908311177e2240f10aec64ce06910df334af7
 // Baseline target features; RUSTFLAGS overrides cleared.
 
 /// Deprecated transfer-function compatibility module: sRGB, BT.709, PQ (ST 2084), HLG (ARIB STD-B67).
@@ -283,37 +283,32 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        }
                     }
                 };
                 return;
             }
-            fn slow<T: F32x4Convert>(t: T, chunk: [f32; 4]) -> [f32; 4] {
+            fn tail<T: F32x4Convert>(t: T, chunk: [f32; 4]) -> [f32; 4] {
                 bt709_to_linear_x4(t, f32x4::from_array_t(t, chunk)).to_array()
             }
             {
                 let (chunks, remainder) = (values).as_chunks_mut::<4>();
-                let mut idx = 0;
-                while idx < chunks.len() {
-                    let chunk: [f32; 4] = chunks[idx];
-                    let Some(converted) = (try_bt709_to_linear_x4(
-                            t,
-                            f32x4::from_array_t(t, chunk),
-                        )
-                        .map(|r| r.to_array())) else {
-                        crate::kernels::finish_slice_cold(
-                            &mut chunks[idx..],
-                            remainder,
-                            t,
-                            slow::<T>,
-                        );
-                        return;
+                for slot in chunks {
+                    let chunk: [f32; 4] = *slot;
+                    *slot = match try_bt709_to_linear_x4(
+                        t,
+                        f32x4::from_array_t(t, chunk),
+                    ) {
+                        Some(out) => out.to_array(),
+                        None => bt709_to_linear_fallback(t, chunk),
                     };
-                    chunks[idx] = converted;
-                    idx += 1;
                 }
                 if !remainder.is_empty() {
-                    crate::kernels::finish_slice_cold(&mut [], remainder, t, slow::<T>);
+                    {
+                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                    }
                 }
             };
         }
@@ -397,37 +392,32 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        }
                     }
                 };
                 return;
             }
-            fn slow<T: F32x4Convert>(t: T, chunk: [f32; 4]) -> [f32; 4] {
+            fn tail<T: F32x4Convert>(t: T, chunk: [f32; 4]) -> [f32; 4] {
                 linear_to_bt709_x4(t, f32x4::from_array_t(t, chunk)).to_array()
             }
             {
                 let (chunks, remainder) = (values).as_chunks_mut::<4>();
-                let mut idx = 0;
-                while idx < chunks.len() {
-                    let chunk: [f32; 4] = chunks[idx];
-                    let Some(converted) = (try_linear_to_bt709_x4(
-                            t,
-                            f32x4::from_array_t(t, chunk),
-                        )
-                        .map(|r| r.to_array())) else {
-                        crate::kernels::finish_slice_cold(
-                            &mut chunks[idx..],
-                            remainder,
-                            t,
-                            slow::<T>,
-                        );
-                        return;
+                for slot in chunks {
+                    let chunk: [f32; 4] = *slot;
+                    *slot = match try_linear_to_bt709_x4(
+                        t,
+                        f32x4::from_array_t(t, chunk),
+                    ) {
+                        Some(out) => out.to_array(),
+                        None => linear_to_bt709_fallback(t, chunk),
                     };
-                    chunks[idx] = converted;
-                    idx += 1;
                 }
                 if !remainder.is_empty() {
-                    crate::kernels::finish_slice_cold(&mut [], remainder, t, slow::<T>);
+                    {
+                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                    }
                 }
             };
         }
@@ -518,37 +508,32 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        }
                     }
                 };
                 return;
             }
-            fn slow<T: F32x8Convert + F32x4Convert>(t: T, chunk: [f32; 8]) -> [f32; 8] {
+            fn tail<T: F32x8Convert + F32x4Convert>(t: T, chunk: [f32; 8]) -> [f32; 8] {
                 bt709_to_linear_x8(t, f32x8::from_array_t(t, chunk)).to_array()
             }
             {
                 let (chunks, remainder) = (values).as_chunks_mut::<8>();
-                let mut idx = 0;
-                while idx < chunks.len() {
-                    let chunk: [f32; 8] = chunks[idx];
-                    let Some(converted) = (try_bt709_to_linear_x8(
-                            t,
-                            f32x8::from_array_t(t, chunk),
-                        )
-                        .map(|r| r.to_array())) else {
-                        crate::kernels::finish_slice_cold(
-                            &mut chunks[idx..],
-                            remainder,
-                            t,
-                            slow::<T>,
-                        );
-                        return;
+                for slot in chunks {
+                    let chunk: [f32; 8] = *slot;
+                    *slot = match try_bt709_to_linear_x8(
+                        t,
+                        f32x8::from_array_t(t, chunk),
+                    ) {
+                        Some(out) => out.to_array(),
+                        None => bt709_to_linear_fallback(t, chunk),
                     };
-                    chunks[idx] = converted;
-                    idx += 1;
                 }
                 if !remainder.is_empty() {
-                    crate::kernels::finish_slice_cold(&mut [], remainder, t, slow::<T>);
+                    {
+                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                    }
                 }
             };
         }
@@ -635,37 +620,32 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        }
                     }
                 };
                 return;
             }
-            fn slow<T: F32x8Convert + F32x4Convert>(t: T, chunk: [f32; 8]) -> [f32; 8] {
+            fn tail<T: F32x8Convert + F32x4Convert>(t: T, chunk: [f32; 8]) -> [f32; 8] {
                 linear_to_bt709_x8(t, f32x8::from_array_t(t, chunk)).to_array()
             }
             {
                 let (chunks, remainder) = (values).as_chunks_mut::<8>();
-                let mut idx = 0;
-                while idx < chunks.len() {
-                    let chunk: [f32; 8] = chunks[idx];
-                    let Some(converted) = (try_linear_to_bt709_x8(
-                            t,
-                            f32x8::from_array_t(t, chunk),
-                        )
-                        .map(|r| r.to_array())) else {
-                        crate::kernels::finish_slice_cold(
-                            &mut chunks[idx..],
-                            remainder,
-                            t,
-                            slow::<T>,
-                        );
-                        return;
+                for slot in chunks {
+                    let chunk: [f32; 8] = *slot;
+                    *slot = match try_linear_to_bt709_x8(
+                        t,
+                        f32x8::from_array_t(t, chunk),
+                    ) {
+                        Some(out) => out.to_array(),
+                        None => linear_to_bt709_fallback(t, chunk),
                     };
-                    chunks[idx] = converted;
-                    idx += 1;
                 }
                 if !remainder.is_empty() {
-                    crate::kernels::finish_slice_cold(&mut [], remainder, t, slow::<T>);
+                    {
+                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                    }
                 }
             };
         }
@@ -761,12 +741,14 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        }
                     }
                 };
                 return;
             }
-            fn slow<T: F32x16Convert + F32x4Convert>(
+            fn tail<T: F32x16Convert + F32x4Convert>(
                 t: T,
                 chunk: [f32; 16],
             ) -> [f32; 16] {
@@ -774,27 +756,20 @@ pub mod tf {
             }
             {
                 let (chunks, remainder) = (values).as_chunks_mut::<16>();
-                let mut idx = 0;
-                while idx < chunks.len() {
-                    let chunk: [f32; 16] = chunks[idx];
-                    let Some(converted) = (try_bt709_to_linear_x16(
-                            t,
-                            f32x16::from_array_t(t, chunk),
-                        )
-                        .map(|r| r.to_array())) else {
-                        crate::kernels::finish_slice_cold(
-                            &mut chunks[idx..],
-                            remainder,
-                            t,
-                            slow::<T>,
-                        );
-                        return;
+                for slot in chunks {
+                    let chunk: [f32; 16] = *slot;
+                    *slot = match try_bt709_to_linear_x16(
+                        t,
+                        f32x16::from_array_t(t, chunk),
+                    ) {
+                        Some(out) => out.to_array(),
+                        None => bt709_to_linear_fallback(t, chunk),
                     };
-                    chunks[idx] = converted;
-                    idx += 1;
                 }
                 if !remainder.is_empty() {
-                    crate::kernels::finish_slice_cold(&mut [], remainder, t, slow::<T>);
+                    {
+                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                    }
                 }
             };
         }
@@ -886,12 +861,14 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        }
                     }
                 };
                 return;
             }
-            fn slow<T: F32x16Convert + F32x4Convert>(
+            fn tail<T: F32x16Convert + F32x4Convert>(
                 t: T,
                 chunk: [f32; 16],
             ) -> [f32; 16] {
@@ -899,27 +876,20 @@ pub mod tf {
             }
             {
                 let (chunks, remainder) = (values).as_chunks_mut::<16>();
-                let mut idx = 0;
-                while idx < chunks.len() {
-                    let chunk: [f32; 16] = chunks[idx];
-                    let Some(converted) = (try_linear_to_bt709_x16(
-                            t,
-                            f32x16::from_array_t(t, chunk),
-                        )
-                        .map(|r| r.to_array())) else {
-                        crate::kernels::finish_slice_cold(
-                            &mut chunks[idx..],
-                            remainder,
-                            t,
-                            slow::<T>,
-                        );
-                        return;
+                for slot in chunks {
+                    let chunk: [f32; 16] = *slot;
+                    *slot = match try_linear_to_bt709_x16(
+                        t,
+                        f32x16::from_array_t(t, chunk),
+                    ) {
+                        Some(out) => out.to_array(),
+                        None => linear_to_bt709_fallback(t, chunk),
                     };
-                    chunks[idx] = converted;
-                    idx += 1;
                 }
                 if !remainder.is_empty() {
-                    crate::kernels::finish_slice_cold(&mut [], remainder, t, slow::<T>);
+                    {
+                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                    }
                 }
             };
         }
@@ -1159,37 +1129,32 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        }
                     }
                 };
                 return;
             }
-            fn slow<T: F32x4Convert>(t: T, chunk: [f32; 4]) -> [f32; 4] {
+            fn tail<T: F32x4Convert>(t: T, chunk: [f32; 4]) -> [f32; 4] {
                 hlg_to_linear_x4(t, f32x4::from_array_t(t, chunk)).to_array()
             }
             {
                 let (chunks, remainder) = (values).as_chunks_mut::<4>();
-                let mut idx = 0;
-                while idx < chunks.len() {
-                    let chunk: [f32; 4] = chunks[idx];
-                    let Some(converted) = (try_hlg_to_linear_x4(
-                            t,
-                            f32x4::from_array_t(t, chunk),
-                        )
-                        .map(|r| r.to_array())) else {
-                        crate::kernels::finish_slice_cold(
-                            &mut chunks[idx..],
-                            remainder,
-                            t,
-                            slow::<T>,
-                        );
-                        return;
+                for slot in chunks {
+                    let chunk: [f32; 4] = *slot;
+                    *slot = match try_hlg_to_linear_x4(
+                        t,
+                        f32x4::from_array_t(t, chunk),
+                    ) {
+                        Some(out) => out.to_array(),
+                        None => hlg_to_linear_fallback(t, chunk),
                     };
-                    chunks[idx] = converted;
-                    idx += 1;
                 }
                 if !remainder.is_empty() {
-                    crate::kernels::finish_slice_cold(&mut [], remainder, t, slow::<T>);
+                    {
+                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                    }
                 }
             };
         }
@@ -1272,7 +1237,9 @@ pub mod tf {
                         .to_array();
                 }
                 if !remainder.is_empty() {
-                    crate::kernels::finish_tail_cold(remainder, t, tail::<T, RAILS>);
+                    {
+                        crate::kernels::finish_tail_cold(remainder, t, tail::<T, RAILS>);
+                    }
                 }
             };
         }
@@ -1370,37 +1337,32 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        }
                     }
                 };
                 return;
             }
-            fn slow<T: F32x8Convert + F32x4Convert>(t: T, chunk: [f32; 8]) -> [f32; 8] {
+            fn tail<T: F32x8Convert + F32x4Convert>(t: T, chunk: [f32; 8]) -> [f32; 8] {
                 hlg_to_linear_x8(t, f32x8::from_array_t(t, chunk)).to_array()
             }
             {
                 let (chunks, remainder) = (values).as_chunks_mut::<8>();
-                let mut idx = 0;
-                while idx < chunks.len() {
-                    let chunk: [f32; 8] = chunks[idx];
-                    let Some(converted) = (try_hlg_to_linear_x8(
-                            t,
-                            f32x8::from_array_t(t, chunk),
-                        )
-                        .map(|r| r.to_array())) else {
-                        crate::kernels::finish_slice_cold(
-                            &mut chunks[idx..],
-                            remainder,
-                            t,
-                            slow::<T>,
-                        );
-                        return;
+                for slot in chunks {
+                    let chunk: [f32; 8] = *slot;
+                    *slot = match try_hlg_to_linear_x8(
+                        t,
+                        f32x8::from_array_t(t, chunk),
+                    ) {
+                        Some(out) => out.to_array(),
+                        None => hlg_to_linear_fallback(t, chunk),
                     };
-                    chunks[idx] = converted;
-                    idx += 1;
                 }
                 if !remainder.is_empty() {
-                    crate::kernels::finish_slice_cold(&mut [], remainder, t, slow::<T>);
+                    {
+                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                    }
                 }
             };
         }
@@ -1489,7 +1451,9 @@ pub mod tf {
                         .to_array();
                 }
                 if !remainder.is_empty() {
-                    crate::kernels::finish_tail_cold(remainder, t, tail::<T, RAILS>);
+                    {
+                        crate::kernels::finish_tail_cold(remainder, t, tail::<T, RAILS>);
+                    }
                 }
             };
         }
@@ -1590,12 +1554,14 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        }
                     }
                 };
                 return;
             }
-            fn slow<T: F32x16Convert + F32x4Convert>(
+            fn tail<T: F32x16Convert + F32x4Convert>(
                 t: T,
                 chunk: [f32; 16],
             ) -> [f32; 16] {
@@ -1603,27 +1569,20 @@ pub mod tf {
             }
             {
                 let (chunks, remainder) = (values).as_chunks_mut::<16>();
-                let mut idx = 0;
-                while idx < chunks.len() {
-                    let chunk: [f32; 16] = chunks[idx];
-                    let Some(converted) = (try_hlg_to_linear_x16(
-                            t,
-                            f32x16::from_array_t(t, chunk),
-                        )
-                        .map(|r| r.to_array())) else {
-                        crate::kernels::finish_slice_cold(
-                            &mut chunks[idx..],
-                            remainder,
-                            t,
-                            slow::<T>,
-                        );
-                        return;
+                for slot in chunks {
+                    let chunk: [f32; 16] = *slot;
+                    *slot = match try_hlg_to_linear_x16(
+                        t,
+                        f32x16::from_array_t(t, chunk),
+                    ) {
+                        Some(out) => out.to_array(),
+                        None => hlg_to_linear_fallback(t, chunk),
                     };
-                    chunks[idx] = converted;
-                    idx += 1;
                 }
                 if !remainder.is_empty() {
-                    crate::kernels::finish_slice_cold(&mut [], remainder, t, slow::<T>);
+                    {
+                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                    }
                 }
             };
         }
@@ -1712,7 +1671,9 @@ pub mod tf {
                         .to_array();
                 }
                 if !remainder.is_empty() {
-                    crate::kernels::finish_tail_cold(remainder, t, tail::<T, RAILS>);
+                    {
+                        crate::kernels::finish_tail_cold(remainder, t, tail::<T, RAILS>);
+                    }
                 }
             };
         }
@@ -1801,6 +1762,43 @@ pub mod tf {
             .caller()
             .bits();
         pub(crate) const HLG_LOG_FAST: u128 = magemath::logf::LogfOptions::new()
+            .reject_subnormals()
+            .portability(MATH_PORTABILITY)
+            .assume_in_bounds()
+            .caller()
+            .bits();
+        /// PQ EOTF dark-toe `ln(1 + dm1)` for `dm1 = fma(v, 1/C1^M2, -1) in [2.5e-4, 32768]`.
+        pub(crate) const PQ_EOTF_LOG1P: u128 = magemath::log1pf::Log1pfOptions::new()
+            .input_range(2.5e-4, 32_768.0)
+            .reject_subnormals()
+            .portability(MATH_PORTABILITY)
+            .assume_in_bounds()
+            .caller()
+            .bits();
+        /// PQ EOTF dark-toe `base^(1/M1)` for `base = num / den in [1.25e-6, 0.125]`.
+        /// `|(1/M1) * log2(1.25e-6)| = 123.1 <= 125`, eliding all output range checks.
+        pub(crate) const PQ_EOTF_POW: u128 = PowfOptions::new()
+            .domain(PowfDomain::PositiveUnit)
+            .base_range(1.25e-6, 0.125)
+            .const_exponent(16384.0 / 2610.0)
+            .reject_subnormals()
+            .portability(MATH_PORTABILITY)
+            .assume_in_bounds()
+            .caller()
+            .bits();
+        /// PQ OETF dark-toe `v^M1` for `v in (0, 1e-7)` (including positive subnormals).
+        pub(crate) const PQ_OETF_POW1: u128 = PowfOptions::new()
+            .domain(PowfDomain::PositiveUnit)
+            .const_exponent(2610.0 / 16384.0)
+            .admit_subnormals()
+            .portability(MATH_PORTABILITY)
+            .assume_in_bounds()
+            .caller()
+            .bits();
+        /// PQ OETF dark-toe `ratio^M2` over `PowfDomain::PqRatio` (`[107/128, 1.0]`).
+        pub(crate) const PQ_OETF_POW2: u128 = PowfOptions::new()
+            .domain(PowfDomain::PqRatio)
+            .const_exponent(2523.0 / 32.0)
             .reject_subnormals()
             .portability(MATH_PORTABILITY)
             .assume_in_bounds()
@@ -1929,11 +1927,13 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(
-                            remainder,
-                            (t, n),
-                            tail_unchecked::<T>,
-                        );
+                        {
+                            crate::kernels::finish_tail_cold(
+                                remainder,
+                                (t, n),
+                                tail_unchecked::<T>,
+                            );
+                        }
                     }
                 };
                 return;
@@ -1954,7 +1954,13 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail_zero::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(
+                                remainder,
+                                t,
+                                tail_zero::<T>,
+                            );
+                        }
                     }
                 };
                 return;
@@ -1973,11 +1979,13 @@ pub mod tf {
                         .to_array();
                 }
                 if !remainder.is_empty() {
-                    crate::kernels::finish_tail_cold(
-                        remainder,
-                        (t, n),
-                        tail_in_range::<T>,
-                    );
+                    {
+                        crate::kernels::finish_tail_cold(
+                            remainder,
+                            (t, n),
+                            tail_in_range::<T>,
+                        );
+                    }
                 }
             };
         }
@@ -2046,11 +2054,13 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(
-                            remainder,
-                            (t, n),
-                            tail_unchecked::<T>,
-                        );
+                        {
+                            crate::kernels::finish_tail_cold(
+                                remainder,
+                                (t, n),
+                                tail_unchecked::<T>,
+                            );
+                        }
                     }
                 };
                 return;
@@ -2071,7 +2081,13 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail_zero::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(
+                                remainder,
+                                t,
+                                tail_zero::<T>,
+                            );
+                        }
                     }
                 };
                 return;
@@ -2090,11 +2106,13 @@ pub mod tf {
                         .to_array();
                 }
                 if !remainder.is_empty() {
-                    crate::kernels::finish_tail_cold(
-                        remainder,
-                        (t, n),
-                        tail_in_range::<T>,
-                    );
+                    {
+                        crate::kernels::finish_tail_cold(
+                            remainder,
+                            (t, n),
+                            tail_in_range::<T>,
+                        );
+                    }
                 }
             };
         }
@@ -2167,11 +2185,13 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(
-                            remainder,
-                            (t, n),
-                            tail_unchecked::<T>,
-                        );
+                        {
+                            crate::kernels::finish_tail_cold(
+                                remainder,
+                                (t, n),
+                                tail_unchecked::<T>,
+                            );
+                        }
                     }
                 };
                 return;
@@ -2192,7 +2212,13 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail_zero::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(
+                                remainder,
+                                t,
+                                tail_zero::<T>,
+                            );
+                        }
                     }
                 };
                 return;
@@ -2211,11 +2237,13 @@ pub mod tf {
                         .to_array();
                 }
                 if !remainder.is_empty() {
-                    crate::kernels::finish_tail_cold(
-                        remainder,
-                        (t, n),
-                        tail_in_range::<T>,
-                    );
+                    {
+                        crate::kernels::finish_tail_cold(
+                            remainder,
+                            (t, n),
+                            tail_in_range::<T>,
+                        );
+                    }
                 }
             };
         }
@@ -2472,12 +2500,17 @@ pub mod tf {
     }
     pub(crate) mod pq {
         //! PQ (SMPTE ST 2084) transfer function (scalar + generic SIMD).
+        use super::math;
         use super::polynomial;
         use super::polynomial::{Mla, fast_sqrt_f32, mla_scalar};
+        use magemath::SimdMath;
+        use magemath::log1pf::Log1pf;
+        use magemath::powf::Powf;
         #[allow(unused_imports)]
         use num_traits::Float;
-        /// PQ EOTF for normalized signal values. Uses the ST 2084 formula in the dark
-        /// toe and a two-segment rational approximation over the remainder of the range.
+        /// PQ EOTF for normalized signal values. Uses a cancellation-free `f32`
+        /// `magemath` formula in the dark toe (`v < 0.02`) and a two-segment rational
+        /// approximation over the remainder of the range.
         #[inline]
         pub fn pq_to_linear(v: f32) -> f32 {
             {
@@ -2524,12 +2557,18 @@ pub mod tf {
             __attune_pq_to_linear_scalar_scalar(token, v)
         }
         #[inline(always)]
-        pub(crate) fn pq_to_linear_with_token<T: magetypes::scalar::F32ScalarBackend>(
-            token: T,
-            v: f32,
-        ) -> f32 {
-            if v.is_nan() || v <= 0.0 || v >= 1.0 || v < EOTF_POLY_FLOOR {
-                return pq_to_linear_precise(v);
+        pub(crate) fn pq_to_linear_with_token<T: F32x4Convert>(token: T, v: f32) -> f32 {
+            if v.is_nan() {
+                return v;
+            }
+            if v <= EOTF_DARK_FLOOR {
+                return 0.0;
+            }
+            if v >= 1.0 {
+                return 1.0;
+            }
+            if v < EOTF_POLY_FLOOR {
+                return pq_to_linear_dark_toe_scalar(token, v);
             }
             let x = mla_scalar(token, v, v, v);
             if v < 0.25 {
@@ -2548,8 +2587,8 @@ pub mod tf {
                 )
             }
         }
-        /// PQ inverse EOTF for normalized linear light. Uses the ST 2084 formula for
-        /// values below 1e-7 and a rational approximation above that threshold.
+        /// PQ inverse EOTF for normalized linear light. Uses `magemath` `f32` powers
+        /// below `1e-7` and a two-segment rational approximation above that threshold.
         #[inline]
         pub fn linear_to_pq(v: f32) -> f32 {
             {
@@ -2596,12 +2635,18 @@ pub mod tf {
             __attune_linear_to_pq_scalar_scalar(token, v)
         }
         #[inline(always)]
-        pub(crate) fn linear_to_pq_with_token<T: magetypes::scalar::F32ScalarBackend>(
-            token: T,
-            v: f32,
-        ) -> f32 {
-            if v.is_nan() || v <= 0.0 || v >= 1.0 || v < OETF_POLY_FLOOR {
-                return linear_to_pq_precise(v);
+        pub(crate) fn linear_to_pq_with_token<T: F32x4Convert>(token: T, v: f32) -> f32 {
+            if v.is_nan() {
+                return v;
+            }
+            if v <= 0.0 {
+                return 0.0;
+            }
+            if v >= 1.0 {
+                return 1.0;
+            }
+            if v < OETF_POLY_FLOOR {
+                return linear_to_pq_dark_toe_scalar(token, v);
             }
             let a = fast_sqrt_f32(fast_sqrt_f32(v));
             if a < 0.1 {
@@ -2615,8 +2660,55 @@ pub mod tf {
         const C1: f64 = 3424.0 / 4096.0;
         const C2: f64 = 2413.0 / 128.0;
         const C3: f64 = 2392.0 / 128.0;
+        const INV_M2_F32: f32 = 32.0 / 2523.0;
+        const C1_F32: f32 = 3424.0 / 4096.0;
+        const C2_F32: f32 = 2413.0 / 128.0;
+        const C3_F32: f32 = 2392.0 / 128.0;
+        /// Double-word `V0 = C1^M2 ≈ 7.309559025812299e-7` for Sterbenz-exact `(v - V0) / V0`:
+        /// `dm1 = fma(v - V0_HI_F32, INV_V0_F32, DM1_CORR_F32)` preserves full `f32` precision
+        /// down to `EOTF_DARK_FLOOR`.
+        const V0_HI_F32: f32 = f32::from_bits(0x3544_36e8);
+        const INV_V0_F32: f32 = 1_368_071.625;
+        const DM1_CORR_F32: f32 = f32::from_bits(0xb298_9668);
         const EOTF_POLY_FLOOR: f32 = 0.02;
         const OETF_POLY_FLOOR: f32 = 1e-7;
+        /// Signal threshold below which ST 2084 linear light is `< 3.5e-37` (`< 3.5e-33` nits),
+        /// flushing cleanly to `0.0` so active dark-toe lanes keep `dm1 >= 4.7e-4` and
+        /// `base >= 1.5e-6` inside `PQ_EOTF_LOG1P` and `PQ_EOTF_POW`.
+        const EOTF_DARK_FLOOR: f32 = 7.313e-7;
+        /// Cancellation-free `f32` ST 2084 EOTF dark toe for `v in (EOTF_DARK_FLOOR, 0.02)`:
+        /// `dm1 = fma(v - V0_HI, 1/V0, -V0_LO/V0)`, `w = log1p(dm1) / M2 in (0, 0.1296)`,
+        /// `num = C1 * expm1(w)`, `base = num / (C2 - C3 * (C1 + num))`, `base^(1/M1)`.
+        #[inline(always)]
+        fn pq_to_linear_dark_toe_scalar<T: F32x4Convert>(token: T, v: f32) -> f32 {
+            let dm1 = mla_scalar(token, v - V0_HI_F32, INV_V0_F32, DM1_CORR_F32);
+            let w = Log1pf::<{ math::PQ_EOTF_LOG1P }>::scalar_with_token(token, dm1)
+                .expect("infallible PQ EOTF log1p") * INV_M2_F32;
+            let mut p = 1.0_f32 / 720.0;
+            p = mla_scalar(token, p, w, 1.0 / 120.0);
+            p = mla_scalar(token, p, w, 1.0 / 24.0);
+            p = mla_scalar(token, p, w, 1.0 / 6.0);
+            p = mla_scalar(token, p, w, 0.5);
+            p = mla_scalar(token, p, w, 1.0);
+            let em1 = p * w;
+            let num = C1_F32 * em1;
+            let vp = C1_F32 + num;
+            let den = mla_scalar(token, -C3_F32, vp, C2_F32);
+            let base = num / den;
+            Powf::<{ math::PQ_EOTF_POW }>::scalar_const_with_token(token, base)
+                .expect("infallible PQ EOTF pow")
+        }
+        /// Pure `f32` ST 2084 OETF dark toe for `v in (0, 1e-7)`.
+        #[inline(always)]
+        fn linear_to_pq_dark_toe_scalar<T: F32x4Convert>(token: T, v: f32) -> f32 {
+            let vp = Powf::<{ math::PQ_OETF_POW1 }>::scalar_const_with_token(token, v)
+                .expect("infallible PQ OETF pow1");
+            let num = mla_scalar(token, vp, C2_F32, C1_F32);
+            let den = mla_scalar(token, vp, C3_F32, 1.0);
+            let ratio = num / den;
+            Powf::<{ math::PQ_OETF_POW2 }>::scalar_const_with_token(token, ratio)
+                .expect("infallible PQ OETF pow2")
+        }
         #[inline]
         fn pq_to_linear_precise(v: f32) -> f32 {
             if v.is_nan() {
@@ -2718,34 +2810,338 @@ pub mod tf {
             -2.072546e5,
         ];
         use magetypes::simd::{backends::*, generic::*};
-        #[cold]
-        #[inline(never)]
-        fn pq_to_linear_fallback<const N: usize>(
-            source: [f32; N],
-            mut result: [f32; N],
-        ) -> [f32; N] {
-            for (s, o) in source.into_iter().zip(&mut result) {
-                if s.is_nan() || (0.0 < s && s < EOTF_POLY_FLOOR) {
-                    *o = pq_to_linear_precise(s);
-                }
-            }
-            result
+        #[allow(dead_code)]
+        #[inline(always)]
+        fn pq_to_linear_patch_x4_body<T: F32x4Convert>(
+            t: T,
+            source: &[f32; 4],
+            result: &mut [f32; 4],
+        ) {
+            let v = f32x4::load_t(t, source);
+            let zero = f32x4::zero_t(t);
+            let dark_floor = f32x4::splat_t(t, EOTF_DARK_FLOOR);
+            let poly_floor = f32x4::splat_t(t, EOTF_POLY_FLOOR);
+            let is_dark = v.simd_gt(dark_floor) & v.simd_lt(poly_floor);
+            let v_safe = f32x4::blend(is_dark, v, f32x4::splat_t(t, 0.01));
+            let dm1 = (v_safe - f32x4::splat_t(t, V0_HI_F32))
+                .mla(f32x4::splat_t(t, INV_V0_F32), f32x4::splat_t(t, DM1_CORR_F32));
+            let w = dm1.log1p::<{ math::PQ_EOTF_LOG1P }>()
+                * f32x4::splat_t(t, INV_M2_F32);
+            let mut p = f32x4::splat_t(t, 1.0 / 720.0);
+            p = p.mla(w, f32x4::splat_t(t, 1.0 / 120.0));
+            p = p.mla(w, f32x4::splat_t(t, 1.0 / 24.0));
+            p = p.mla(w, f32x4::splat_t(t, 1.0 / 6.0));
+            p = p.mla(w, f32x4::splat_t(t, 0.5));
+            p = p.mla(w, f32x4::splat_t(t, 1.0));
+            let em1 = p * w;
+            let c1 = f32x4::splat_t(t, C1_F32);
+            let num = c1 * em1;
+            let vp = c1 + num;
+            let den = f32x4::splat_t(t, -C3_F32).mla(vp, f32x4::splat_t(t, C2_F32));
+            let base = num / den;
+            let dark_y = base.powf_const::<{ math::PQ_EOTF_POW }>();
+            let out_v = f32x4::load_t(t, result);
+            let patched = f32x4::blend(is_dark, dark_y, out_v);
+            let patched = f32x4::blend(
+                v.simd_gt(zero) & v.simd_le(dark_floor),
+                zero,
+                patched,
+            );
+            let patched = f32x4::blend(v.simd_ne(v), v, patched);
+            patched.store(result);
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        fn linear_to_pq_patch_x4_body<T: F32x4Convert>(
+            t: T,
+            source: &[f32; 4],
+            result: &mut [f32; 4],
+        ) {
+            let v = f32x4::load_t(t, source);
+            let zero = f32x4::zero_t(t);
+            let one = f32x4::splat_t(t, 1.0);
+            let is_dark = v.simd_gt(zero)
+                & v.simd_lt(f32x4::splat_t(t, OETF_POLY_FLOOR));
+            let v_safe = f32x4::blend(is_dark, v, f32x4::splat_t(t, 1e-8));
+            let vp = v_safe.powf_const::<{ math::PQ_OETF_POW1 }>();
+            let num = vp.mla(f32x4::splat_t(t, C2_F32), f32x4::splat_t(t, C1_F32));
+            let den = vp.mla(f32x4::splat_t(t, C3_F32), one);
+            let ratio = num / den;
+            let dark_y = ratio.powf_const::<{ math::PQ_OETF_POW2 }>();
+            let out_v = f32x4::load_t(t, result);
+            let patched = f32x4::blend(is_dark, dark_y, out_v);
+            let patched = f32x4::blend(v.simd_ne(v), v, patched);
+            patched.store(result);
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        fn pq_to_linear_patch_x8_body<T: F32x8Convert + F32x4Convert>(
+            t: T,
+            source: &[f32; 8],
+            result: &mut [f32; 8],
+        ) {
+            let v = f32x8::load_t(t, source);
+            let zero = f32x8::zero_t(t);
+            let dark_floor = f32x8::splat_t(t, EOTF_DARK_FLOOR);
+            let poly_floor = f32x8::splat_t(t, EOTF_POLY_FLOOR);
+            let is_dark = v.simd_gt(dark_floor) & v.simd_lt(poly_floor);
+            let v_safe = f32x8::blend(is_dark, v, f32x8::splat_t(t, 0.01));
+            let dm1 = (v_safe - f32x8::splat_t(t, V0_HI_F32))
+                .mla(f32x8::splat_t(t, INV_V0_F32), f32x8::splat_t(t, DM1_CORR_F32));
+            let w = dm1.log1p::<{ math::PQ_EOTF_LOG1P }>()
+                * f32x8::splat_t(t, INV_M2_F32);
+            let mut p = f32x8::splat_t(t, 1.0 / 720.0);
+            p = p.mla(w, f32x8::splat_t(t, 1.0 / 120.0));
+            p = p.mla(w, f32x8::splat_t(t, 1.0 / 24.0));
+            p = p.mla(w, f32x8::splat_t(t, 1.0 / 6.0));
+            p = p.mla(w, f32x8::splat_t(t, 0.5));
+            p = p.mla(w, f32x8::splat_t(t, 1.0));
+            let em1 = p * w;
+            let c1 = f32x8::splat_t(t, C1_F32);
+            let num = c1 * em1;
+            let vp = c1 + num;
+            let den = f32x8::splat_t(t, -C3_F32).mla(vp, f32x8::splat_t(t, C2_F32));
+            let base = num / den;
+            let dark_y = base.powf_const::<{ math::PQ_EOTF_POW }>();
+            let out_v = f32x8::load_t(t, result);
+            let patched = f32x8::blend(is_dark, dark_y, out_v);
+            let patched = f32x8::blend(
+                v.simd_gt(zero) & v.simd_le(dark_floor),
+                zero,
+                patched,
+            );
+            let patched = f32x8::blend(v.simd_ne(v), v, patched);
+            patched.store(result);
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        fn linear_to_pq_patch_x8_body<T: F32x8Convert + F32x4Convert>(
+            t: T,
+            source: &[f32; 8],
+            result: &mut [f32; 8],
+        ) {
+            let v = f32x8::load_t(t, source);
+            let zero = f32x8::zero_t(t);
+            let one = f32x8::splat_t(t, 1.0);
+            let is_dark = v.simd_gt(zero)
+                & v.simd_lt(f32x8::splat_t(t, OETF_POLY_FLOOR));
+            let v_safe = f32x8::blend(is_dark, v, f32x8::splat_t(t, 1e-8));
+            let vp = v_safe.powf_const::<{ math::PQ_OETF_POW1 }>();
+            let num = vp.mla(f32x8::splat_t(t, C2_F32), f32x8::splat_t(t, C1_F32));
+            let den = vp.mla(f32x8::splat_t(t, C3_F32), one);
+            let ratio = num / den;
+            let dark_y = ratio.powf_const::<{ math::PQ_OETF_POW2 }>();
+            let out_v = f32x8::load_t(t, result);
+            let patched = f32x8::blend(is_dark, dark_y, out_v);
+            let patched = f32x8::blend(v.simd_ne(v), v, patched);
+            patched.store(result);
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        fn pq_to_linear_patch_x16_body<T: F32x16Convert + F32x4Convert>(
+            t: T,
+            source: &[f32; 16],
+            result: &mut [f32; 16],
+        ) {
+            let v = f32x16::load_t(t, source);
+            let zero = f32x16::zero_t(t);
+            let dark_floor = f32x16::splat_t(t, EOTF_DARK_FLOOR);
+            let poly_floor = f32x16::splat_t(t, EOTF_POLY_FLOOR);
+            let is_dark = v.simd_gt(dark_floor) & v.simd_lt(poly_floor);
+            let v_safe = f32x16::blend(is_dark, v, f32x16::splat_t(t, 0.01));
+            let dm1 = (v_safe - f32x16::splat_t(t, V0_HI_F32))
+                .mla(f32x16::splat_t(t, INV_V0_F32), f32x16::splat_t(t, DM1_CORR_F32));
+            let w = dm1.log1p::<{ math::PQ_EOTF_LOG1P }>()
+                * f32x16::splat_t(t, INV_M2_F32);
+            let mut p = f32x16::splat_t(t, 1.0 / 720.0);
+            p = p.mla(w, f32x16::splat_t(t, 1.0 / 120.0));
+            p = p.mla(w, f32x16::splat_t(t, 1.0 / 24.0));
+            p = p.mla(w, f32x16::splat_t(t, 1.0 / 6.0));
+            p = p.mla(w, f32x16::splat_t(t, 0.5));
+            p = p.mla(w, f32x16::splat_t(t, 1.0));
+            let em1 = p * w;
+            let c1 = f32x16::splat_t(t, C1_F32);
+            let num = c1 * em1;
+            let vp = c1 + num;
+            let den = f32x16::splat_t(t, -C3_F32).mla(vp, f32x16::splat_t(t, C2_F32));
+            let base = num / den;
+            let dark_y = base.powf_const::<{ math::PQ_EOTF_POW }>();
+            let out_v = f32x16::load_t(t, result);
+            let patched = f32x16::blend(is_dark, dark_y, out_v);
+            let patched = f32x16::blend(
+                v.simd_gt(zero) & v.simd_le(dark_floor),
+                zero,
+                patched,
+            );
+            let patched = f32x16::blend(v.simd_ne(v), v, patched);
+            patched.store(result);
+        }
+        #[allow(dead_code)]
+        #[inline(always)]
+        fn linear_to_pq_patch_x16_body<T: F32x16Convert + F32x4Convert>(
+            t: T,
+            source: &[f32; 16],
+            result: &mut [f32; 16],
+        ) {
+            let v = f32x16::load_t(t, source);
+            let zero = f32x16::zero_t(t);
+            let one = f32x16::splat_t(t, 1.0);
+            let is_dark = v.simd_gt(zero)
+                & v.simd_lt(f32x16::splat_t(t, OETF_POLY_FLOOR));
+            let v_safe = f32x16::blend(is_dark, v, f32x16::splat_t(t, 1e-8));
+            let vp = v_safe.powf_const::<{ math::PQ_OETF_POW1 }>();
+            let num = vp.mla(f32x16::splat_t(t, C2_F32), f32x16::splat_t(t, C1_F32));
+            let den = vp.mla(f32x16::splat_t(t, C3_F32), one);
+            let ratio = num / den;
+            let dark_y = ratio.powf_const::<{ math::PQ_OETF_POW2 }>();
+            let out_v = f32x16::load_t(t, result);
+            let patched = f32x16::blend(is_dark, dark_y, out_v);
+            let patched = f32x16::blend(v.simd_ne(v), v, patched);
+            patched.store(result);
         }
         #[cold]
         #[inline(never)]
-        fn linear_to_pq_fallback<const N: usize>(
-            source: [f32; N],
-            mut result: [f32; N],
-        ) -> [f32; N] {
-            for (s, o) in source.into_iter().zip(&mut result) {
-                if s.is_nan() || (0.0 < s && s < OETF_POLY_FLOOR) {
-                    *o = linear_to_pq_precise(s);
-                }
-            }
-            result
+        fn pq_to_linear_patch_x4_scalar(source: &[f32; 4], result: &mut [f32; 4]) {
+            pq_to_linear_patch_x4_body(archmage::ScalarToken, source, result);
+        }
+        #[cold]
+        #[inline(never)]
+        fn linear_to_pq_patch_x4_scalar(source: &[f32; 4], result: &mut [f32; 4]) {
+            linear_to_pq_patch_x4_body(archmage::ScalarToken, source, result);
+        }
+        #[doc(hidden)]
+        #[target_feature(enable = "neon")]
+        #[inline]
+        fn __arcane_pq_to_linear_patch_x4_neon(
+            token: archmage::NeonToken,
+            source: &[f32; 4],
+            result: &mut [f32; 4],
+        ) {
+            pq_to_linear_patch_x4_body(token, source, result);
+        }
+        #[cold]
+        #[inline(always)]
+        fn pq_to_linear_patch_x4_neon(
+            token: archmage::NeonToken,
+            source: &[f32; 4],
+            result: &mut [f32; 4],
+        ) {
+            let _: () = <archmage::NeonToken>::__ARCHMAGE_ASSERT_TIER_72CB52B2;
+            unsafe { __arcane_pq_to_linear_patch_x4_neon(token, source, result) }
+        }
+        #[doc(hidden)]
+        #[target_feature(enable = "neon")]
+        #[inline]
+        fn __arcane_linear_to_pq_patch_x4_neon(
+            token: archmage::NeonToken,
+            source: &[f32; 4],
+            result: &mut [f32; 4],
+        ) {
+            linear_to_pq_patch_x4_body(token, source, result);
+        }
+        #[cold]
+        #[inline(always)]
+        fn linear_to_pq_patch_x4_neon(
+            token: archmage::NeonToken,
+            source: &[f32; 4],
+            result: &mut [f32; 4],
+        ) {
+            let _: () = <archmage::NeonToken>::__ARCHMAGE_ASSERT_TIER_72CB52B2;
+            unsafe { __arcane_linear_to_pq_patch_x4_neon(token, source, result) }
         }
         #[inline(always)]
-        fn pq_to_linear_poly_x4<T: F32x4Convert>(
+        fn patch_by_4<const N: usize>(
+            source: &[f32; N],
+            result: &mut [f32; N],
+            mut f: impl FnMut(&[f32; 4], &mut [f32; 4]),
+        ) {
+            for (s, r) in source
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(result.as_chunks_mut::<4>().0.iter_mut())
+            {
+                f(s, r);
+            }
+        }
+        pub(crate) trait PqDarkToeToken: F32x4Convert {
+            fn patch_decode_x4(self, source: &[f32; 4], result: &mut [f32; 4]);
+            fn patch_encode_x4(self, source: &[f32; 4], result: &mut [f32; 4]);
+            fn patch_decode_x8(self, source: &[f32; 8], result: &mut [f32; 8]);
+            fn patch_encode_x8(self, source: &[f32; 8], result: &mut [f32; 8]);
+            fn patch_decode_x16(self, source: &[f32; 16], result: &mut [f32; 16]);
+            fn patch_encode_x16(self, source: &[f32; 16], result: &mut [f32; 16]);
+        }
+        impl PqDarkToeToken for archmage::ScalarToken {
+            #[inline(always)]
+            fn patch_decode_x4(self, source: &[f32; 4], result: &mut [f32; 4]) {
+                pq_to_linear_patch_x4_scalar(source, result);
+            }
+            #[inline(always)]
+            fn patch_encode_x4(self, source: &[f32; 4], result: &mut [f32; 4]) {
+                linear_to_pq_patch_x4_scalar(source, result);
+            }
+            #[inline(always)]
+            fn patch_decode_x8(self, source: &[f32; 8], result: &mut [f32; 8]) {
+                patch_by_4(source, result, pq_to_linear_patch_x4_scalar);
+            }
+            #[inline(always)]
+            fn patch_encode_x8(self, source: &[f32; 8], result: &mut [f32; 8]) {
+                patch_by_4(source, result, linear_to_pq_patch_x4_scalar);
+            }
+            #[inline(always)]
+            fn patch_decode_x16(self, source: &[f32; 16], result: &mut [f32; 16]) {
+                patch_by_4(source, result, pq_to_linear_patch_x4_scalar);
+            }
+            #[inline(always)]
+            fn patch_encode_x16(self, source: &[f32; 16], result: &mut [f32; 16]) {
+                patch_by_4(source, result, linear_to_pq_patch_x4_scalar);
+            }
+        }
+        impl PqDarkToeToken for archmage::NeonToken {
+            #[inline(always)]
+            fn patch_decode_x4(self, source: &[f32; 4], result: &mut [f32; 4]) {
+                pq_to_linear_patch_x4_neon(self, source, result);
+            }
+            #[inline(always)]
+            fn patch_encode_x4(self, source: &[f32; 4], result: &mut [f32; 4]) {
+                linear_to_pq_patch_x4_neon(self, source, result);
+            }
+            #[inline(always)]
+            fn patch_decode_x8(self, source: &[f32; 8], result: &mut [f32; 8]) {
+                patch_by_4(
+                    source,
+                    result,
+                    |s, r| { pq_to_linear_patch_x4_neon(self, s, r) },
+                );
+            }
+            #[inline(always)]
+            fn patch_encode_x8(self, source: &[f32; 8], result: &mut [f32; 8]) {
+                patch_by_4(
+                    source,
+                    result,
+                    |s, r| { linear_to_pq_patch_x4_neon(self, s, r) },
+                );
+            }
+            #[inline(always)]
+            fn patch_decode_x16(self, source: &[f32; 16], result: &mut [f32; 16]) {
+                patch_by_4(
+                    source,
+                    result,
+                    |s, r| { pq_to_linear_patch_x4_neon(self, s, r) },
+                );
+            }
+            #[inline(always)]
+            fn patch_encode_x16(self, source: &[f32; 16], result: &mut [f32; 16]) {
+                patch_by_4(
+                    source,
+                    result,
+                    |s, r| { linear_to_pq_patch_x4_neon(self, s, r) },
+                );
+            }
+        }
+        #[inline(always)]
+        fn pq_to_linear_poly_x4<T: F32x4Convert + PqDarkToeToken>(
             t: T,
             v: f32x4<T>,
         ) -> (f32x4<T>, f32x4<T>) {
@@ -2781,8 +3177,9 @@ pub mod tf {
             let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
             (fallback, result)
         }
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn try_pq_to_linear_x4<T: F32x4Convert>(
+        pub(crate) fn try_pq_to_linear_x4<T: F32x4Convert + PqDarkToeToken>(
             t: T,
             v: f32x4<T>,
         ) -> Option<f32x4<T>> {
@@ -2791,10 +3188,10 @@ pub mod tf {
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn pq_to_linear_x4_cfg<T: F32x4Convert, const RAILS: bool>(
-            t: T,
-            v: f32x4<T>,
-        ) -> f32x4<T> {
+        pub(crate) fn pq_to_linear_x4_cfg<
+            T: F32x4Convert + PqDarkToeToken,
+            const RAILS: bool,
+        >(t: T, v: f32x4<T>) -> f32x4<T> {
             if !RAILS {
                 let x = v.mla(v, v);
                 let small = v.simd_lt(f32x4::splat_t(t, 0.25));
@@ -2816,27 +3213,33 @@ pub mod tf {
             }
             let (fallback, result) = pq_to_linear_poly_x4(t, v);
             if fallback.bitcast_to_i32().any_true() {
-                f32x4::from_array_t(
-                    t,
-                    pq_to_linear_fallback(v.to_array(), result.to_array()),
-                )
+                let src = v.to_array();
+                let mut out = result.to_array();
+                t.patch_decode_x4(&src, &mut out);
+                f32x4::from_array_t(t, out)
             } else {
                 result
             }
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn pq_to_linear_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
+        pub(crate) fn pq_to_linear_x4<T: F32x4Convert + PqDarkToeToken>(
+            t: T,
+            v: f32x4<T>,
+        ) -> f32x4<T> {
             pq_to_linear_x4_cfg::<T, true>(t, v)
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn pq_to_linear_slice_x4_cfg<T: F32x4Convert, const RAILS: bool>(
-            t: T,
-            values: &mut [f32],
-        ) {
+        pub(crate) fn pq_to_linear_slice_x4_cfg<
+            T: F32x4Convert + PqDarkToeToken,
+            const RAILS: bool,
+        >(t: T, values: &mut [f32]) {
             if !RAILS {
-                fn tail<T: F32x4Convert>(t: T, chunk: [f32; 4]) -> [f32; 4] {
+                fn tail<T: F32x4Convert + PqDarkToeToken>(
+                    t: T,
+                    chunk: [f32; 4],
+                ) -> [f32; 4] {
                     pq_to_linear_x4_cfg::<T, false>(t, f32x4::from_array_t(t, chunk))
                         .to_array()
                 }
@@ -2851,47 +3254,46 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        }
                     }
                 };
                 return;
             }
-            fn slow<T: F32x4Convert>(t: T, chunk: [f32; 4]) -> [f32; 4] {
-                pq_to_linear_x4(t, f32x4::from_array_t(t, chunk)).to_array()
+            let (chunks, remainder) = values.as_chunks_mut::<4>();
+            for slot in chunks {
+                let (fallback, result) = pq_to_linear_poly_x4(t, f32x4::load_t(t, slot));
+                if fallback.bitcast_to_i32().any_true() {
+                    let mut out = result.to_array();
+                    t.patch_decode_x4(slot, &mut out);
+                    *slot = out;
+                } else {
+                    result.store(slot);
+                }
             }
-            {
-                let (chunks, remainder) = (values).as_chunks_mut::<4>();
-                let mut idx = 0;
-                while idx < chunks.len() {
-                    let chunk: [f32; 4] = chunks[idx];
-                    let Some(converted) = (try_pq_to_linear_x4(
-                            t,
-                            f32x4::from_array_t(t, chunk),
-                        )
-                        .map(|r| r.to_array())) else {
-                        crate::kernels::finish_slice_cold(
-                            &mut chunks[idx..],
-                            remainder,
-                            t,
-                            slow::<T>,
-                        );
-                        return;
-                    };
-                    chunks[idx] = converted;
-                    idx += 1;
+            if !remainder.is_empty() {
+                {
+                    fn tail<T: F32x4Convert + PqDarkToeToken>(
+                        t: T,
+                        chunk: [f32; 4],
+                    ) -> [f32; 4] {
+                        pq_to_linear_x4(t, f32x4::from_array_t(t, chunk)).to_array()
+                    }
+                    crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
                 }
-                if !remainder.is_empty() {
-                    crate::kernels::finish_slice_cold(&mut [], remainder, t, slow::<T>);
-                }
-            };
+            }
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn pq_to_linear_slice_x4<T: F32x4Convert>(t: T, values: &mut [f32]) {
+        pub(crate) fn pq_to_linear_slice_x4<T: F32x4Convert + PqDarkToeToken>(
+            t: T,
+            values: &mut [f32],
+        ) {
             pq_to_linear_slice_x4_cfg::<T, true>(t, values);
         }
         #[inline(always)]
-        fn linear_to_pq_poly_x4<T: F32x4Convert>(
+        fn linear_to_pq_poly_x4<T: F32x4Convert + PqDarkToeToken>(
             t: T,
             v: f32x4<T>,
         ) -> (f32x4<T>, f32x4<T>) {
@@ -2927,8 +3329,9 @@ pub mod tf {
             let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
             (fallback, result)
         }
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn try_linear_to_pq_x4<T: F32x4Convert>(
+        pub(crate) fn try_linear_to_pq_x4<T: F32x4Convert + PqDarkToeToken>(
             t: T,
             v: f32x4<T>,
         ) -> Option<f32x4<T>> {
@@ -2937,10 +3340,10 @@ pub mod tf {
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_pq_x4_cfg<T: F32x4Convert, const RAILS: bool>(
-            t: T,
-            v: f32x4<T>,
-        ) -> f32x4<T> {
+        pub(crate) fn linear_to_pq_x4_cfg<
+            T: F32x4Convert + PqDarkToeToken,
+            const RAILS: bool,
+        >(t: T, v: f32x4<T>) -> f32x4<T> {
             if !RAILS {
                 let a4 = v.fast_sqrt().fast_sqrt();
                 let small = a4.simd_lt(f32x4::splat_t(t, 0.1));
@@ -2962,27 +3365,33 @@ pub mod tf {
             }
             let (fallback, result) = linear_to_pq_poly_x4(t, v);
             if fallback.bitcast_to_i32().any_true() {
-                f32x4::from_array_t(
-                    t,
-                    linear_to_pq_fallback(v.to_array(), result.to_array()),
-                )
+                let src = v.to_array();
+                let mut out = result.to_array();
+                t.patch_encode_x4(&src, &mut out);
+                f32x4::from_array_t(t, out)
             } else {
                 result
             }
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_pq_x4<T: F32x4Convert>(t: T, v: f32x4<T>) -> f32x4<T> {
+        pub(crate) fn linear_to_pq_x4<T: F32x4Convert + PqDarkToeToken>(
+            t: T,
+            v: f32x4<T>,
+        ) -> f32x4<T> {
             linear_to_pq_x4_cfg::<T, true>(t, v)
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_pq_slice_x4_cfg<T: F32x4Convert, const RAILS: bool>(
-            t: T,
-            values: &mut [f32],
-        ) {
+        pub(crate) fn linear_to_pq_slice_x4_cfg<
+            T: F32x4Convert + PqDarkToeToken,
+            const RAILS: bool,
+        >(t: T, values: &mut [f32]) {
             if !RAILS {
-                fn tail<T: F32x4Convert>(t: T, chunk: [f32; 4]) -> [f32; 4] {
+                fn tail<T: F32x4Convert + PqDarkToeToken>(
+                    t: T,
+                    chunk: [f32; 4],
+                ) -> [f32; 4] {
                     linear_to_pq_x4_cfg::<T, false>(t, f32x4::from_array_t(t, chunk))
                         .to_array()
                 }
@@ -2997,47 +3406,46 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        }
                     }
                 };
                 return;
             }
-            fn slow<T: F32x4Convert>(t: T, chunk: [f32; 4]) -> [f32; 4] {
-                linear_to_pq_x4(t, f32x4::from_array_t(t, chunk)).to_array()
+            let (chunks, remainder) = values.as_chunks_mut::<4>();
+            for slot in chunks {
+                let (fallback, result) = linear_to_pq_poly_x4(t, f32x4::load_t(t, slot));
+                if fallback.bitcast_to_i32().any_true() {
+                    let mut out = result.to_array();
+                    t.patch_encode_x4(slot, &mut out);
+                    *slot = out;
+                } else {
+                    result.store(slot);
+                }
             }
-            {
-                let (chunks, remainder) = (values).as_chunks_mut::<4>();
-                let mut idx = 0;
-                while idx < chunks.len() {
-                    let chunk: [f32; 4] = chunks[idx];
-                    let Some(converted) = (try_linear_to_pq_x4(
-                            t,
-                            f32x4::from_array_t(t, chunk),
-                        )
-                        .map(|r| r.to_array())) else {
-                        crate::kernels::finish_slice_cold(
-                            &mut chunks[idx..],
-                            remainder,
-                            t,
-                            slow::<T>,
-                        );
-                        return;
-                    };
-                    chunks[idx] = converted;
-                    idx += 1;
+            if !remainder.is_empty() {
+                {
+                    fn tail<T: F32x4Convert + PqDarkToeToken>(
+                        t: T,
+                        chunk: [f32; 4],
+                    ) -> [f32; 4] {
+                        linear_to_pq_x4(t, f32x4::from_array_t(t, chunk)).to_array()
+                    }
+                    crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
                 }
-                if !remainder.is_empty() {
-                    crate::kernels::finish_slice_cold(&mut [], remainder, t, slow::<T>);
-                }
-            };
+            }
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_pq_slice_x4<T: F32x4Convert>(t: T, values: &mut [f32]) {
+        pub(crate) fn linear_to_pq_slice_x4<T: F32x4Convert + PqDarkToeToken>(
+            t: T,
+            values: &mut [f32],
+        ) {
             linear_to_pq_slice_x4_cfg::<T, true>(t, values);
         }
         #[inline(always)]
-        fn pq_to_linear_poly_x8<T: F32x8Convert>(
+        fn pq_to_linear_poly_x8<T: F32x8Convert + F32x4Convert + PqDarkToeToken>(
             t: T,
             v: f32x8<T>,
         ) -> (f32x8<T>, f32x8<T>) {
@@ -3073,20 +3481,20 @@ pub mod tf {
             let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
             (fallback, result)
         }
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn try_pq_to_linear_x8<T: F32x8Convert>(
-            t: T,
-            v: f32x8<T>,
-        ) -> Option<f32x8<T>> {
+        pub(crate) fn try_pq_to_linear_x8<
+            T: F32x8Convert + F32x4Convert + PqDarkToeToken,
+        >(t: T, v: f32x8<T>) -> Option<f32x8<T>> {
             let (fallback, result) = pq_to_linear_poly_x8(t, v);
             if fallback.bitcast_to_i32().any_true() { None } else { Some(result) }
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn pq_to_linear_x8_cfg<T: F32x8Convert, const RAILS: bool>(
-            t: T,
-            v: f32x8<T>,
-        ) -> f32x8<T> {
+        pub(crate) fn pq_to_linear_x8_cfg<
+            T: F32x8Convert + F32x4Convert + PqDarkToeToken,
+            const RAILS: bool,
+        >(t: T, v: f32x8<T>) -> f32x8<T> {
             if !RAILS {
                 let x = v.mla(v, v);
                 let small = v.simd_lt(f32x8::splat_t(t, 0.25));
@@ -3108,27 +3516,33 @@ pub mod tf {
             }
             let (fallback, result) = pq_to_linear_poly_x8(t, v);
             if fallback.bitcast_to_i32().any_true() {
-                f32x8::from_array_t(
-                    t,
-                    pq_to_linear_fallback(v.to_array(), result.to_array()),
-                )
+                let src = v.to_array();
+                let mut out = result.to_array();
+                t.patch_decode_x8(&src, &mut out);
+                f32x8::from_array_t(t, out)
             } else {
                 result
             }
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn pq_to_linear_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
+        pub(crate) fn pq_to_linear_x8<T: F32x8Convert + F32x4Convert + PqDarkToeToken>(
+            t: T,
+            v: f32x8<T>,
+        ) -> f32x8<T> {
             pq_to_linear_x8_cfg::<T, true>(t, v)
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn pq_to_linear_slice_x8_cfg<T: F32x8Convert, const RAILS: bool>(
-            t: T,
-            values: &mut [f32],
-        ) {
+        pub(crate) fn pq_to_linear_slice_x8_cfg<
+            T: F32x8Convert + F32x4Convert + PqDarkToeToken,
+            const RAILS: bool,
+        >(t: T, values: &mut [f32]) {
             if !RAILS {
-                fn tail<T: F32x8Convert>(t: T, chunk: [f32; 8]) -> [f32; 8] {
+                fn tail<T: F32x8Convert + F32x4Convert + PqDarkToeToken>(
+                    t: T,
+                    chunk: [f32; 8],
+                ) -> [f32; 8] {
                     pq_to_linear_x8_cfg::<T, false>(t, f32x8::from_array_t(t, chunk))
                         .to_array()
                 }
@@ -3143,47 +3557,45 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        }
                     }
                 };
                 return;
             }
-            fn slow<T: F32x8Convert>(t: T, chunk: [f32; 8]) -> [f32; 8] {
-                pq_to_linear_x8(t, f32x8::from_array_t(t, chunk)).to_array()
+            let (chunks, remainder) = values.as_chunks_mut::<8>();
+            for slot in chunks {
+                let (fallback, result) = pq_to_linear_poly_x8(t, f32x8::load_t(t, slot));
+                if fallback.bitcast_to_i32().any_true() {
+                    let mut out = result.to_array();
+                    t.patch_decode_x8(slot, &mut out);
+                    *slot = out;
+                } else {
+                    result.store(slot);
+                }
             }
-            {
-                let (chunks, remainder) = (values).as_chunks_mut::<8>();
-                let mut idx = 0;
-                while idx < chunks.len() {
-                    let chunk: [f32; 8] = chunks[idx];
-                    let Some(converted) = (try_pq_to_linear_x8(
-                            t,
-                            f32x8::from_array_t(t, chunk),
-                        )
-                        .map(|r| r.to_array())) else {
-                        crate::kernels::finish_slice_cold(
-                            &mut chunks[idx..],
-                            remainder,
-                            t,
-                            slow::<T>,
-                        );
-                        return;
-                    };
-                    chunks[idx] = converted;
-                    idx += 1;
+            if !remainder.is_empty() {
+                {
+                    fn tail<T: F32x8Convert + F32x4Convert + PqDarkToeToken>(
+                        t: T,
+                        chunk: [f32; 8],
+                    ) -> [f32; 8] {
+                        pq_to_linear_x8(t, f32x8::from_array_t(t, chunk)).to_array()
+                    }
+                    crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
                 }
-                if !remainder.is_empty() {
-                    crate::kernels::finish_slice_cold(&mut [], remainder, t, slow::<T>);
-                }
-            };
+            }
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn pq_to_linear_slice_x8<T: F32x8Convert>(t: T, values: &mut [f32]) {
+        pub(crate) fn pq_to_linear_slice_x8<
+            T: F32x8Convert + F32x4Convert + PqDarkToeToken,
+        >(t: T, values: &mut [f32]) {
             pq_to_linear_slice_x8_cfg::<T, true>(t, values);
         }
         #[inline(always)]
-        fn linear_to_pq_poly_x8<T: F32x8Convert>(
+        fn linear_to_pq_poly_x8<T: F32x8Convert + F32x4Convert + PqDarkToeToken>(
             t: T,
             v: f32x8<T>,
         ) -> (f32x8<T>, f32x8<T>) {
@@ -3219,20 +3631,20 @@ pub mod tf {
             let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
             (fallback, result)
         }
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn try_linear_to_pq_x8<T: F32x8Convert>(
-            t: T,
-            v: f32x8<T>,
-        ) -> Option<f32x8<T>> {
+        pub(crate) fn try_linear_to_pq_x8<
+            T: F32x8Convert + F32x4Convert + PqDarkToeToken,
+        >(t: T, v: f32x8<T>) -> Option<f32x8<T>> {
             let (fallback, result) = linear_to_pq_poly_x8(t, v);
             if fallback.bitcast_to_i32().any_true() { None } else { Some(result) }
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_pq_x8_cfg<T: F32x8Convert, const RAILS: bool>(
-            t: T,
-            v: f32x8<T>,
-        ) -> f32x8<T> {
+        pub(crate) fn linear_to_pq_x8_cfg<
+            T: F32x8Convert + F32x4Convert + PqDarkToeToken,
+            const RAILS: bool,
+        >(t: T, v: f32x8<T>) -> f32x8<T> {
             if !RAILS {
                 let a4 = v.fast_sqrt().fast_sqrt();
                 let small = a4.simd_lt(f32x8::splat_t(t, 0.1));
@@ -3254,27 +3666,33 @@ pub mod tf {
             }
             let (fallback, result) = linear_to_pq_poly_x8(t, v);
             if fallback.bitcast_to_i32().any_true() {
-                f32x8::from_array_t(
-                    t,
-                    linear_to_pq_fallback(v.to_array(), result.to_array()),
-                )
+                let src = v.to_array();
+                let mut out = result.to_array();
+                t.patch_encode_x8(&src, &mut out);
+                f32x8::from_array_t(t, out)
             } else {
                 result
             }
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_pq_x8<T: F32x8Convert>(t: T, v: f32x8<T>) -> f32x8<T> {
+        pub(crate) fn linear_to_pq_x8<T: F32x8Convert + F32x4Convert + PqDarkToeToken>(
+            t: T,
+            v: f32x8<T>,
+        ) -> f32x8<T> {
             linear_to_pq_x8_cfg::<T, true>(t, v)
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_pq_slice_x8_cfg<T: F32x8Convert, const RAILS: bool>(
-            t: T,
-            values: &mut [f32],
-        ) {
+        pub(crate) fn linear_to_pq_slice_x8_cfg<
+            T: F32x8Convert + F32x4Convert + PqDarkToeToken,
+            const RAILS: bool,
+        >(t: T, values: &mut [f32]) {
             if !RAILS {
-                fn tail<T: F32x8Convert>(t: T, chunk: [f32; 8]) -> [f32; 8] {
+                fn tail<T: F32x8Convert + F32x4Convert + PqDarkToeToken>(
+                    t: T,
+                    chunk: [f32; 8],
+                ) -> [f32; 8] {
                     linear_to_pq_x8_cfg::<T, false>(t, f32x8::from_array_t(t, chunk))
                         .to_array()
                 }
@@ -3289,47 +3707,45 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        }
                     }
                 };
                 return;
             }
-            fn slow<T: F32x8Convert>(t: T, chunk: [f32; 8]) -> [f32; 8] {
-                linear_to_pq_x8(t, f32x8::from_array_t(t, chunk)).to_array()
+            let (chunks, remainder) = values.as_chunks_mut::<8>();
+            for slot in chunks {
+                let (fallback, result) = linear_to_pq_poly_x8(t, f32x8::load_t(t, slot));
+                if fallback.bitcast_to_i32().any_true() {
+                    let mut out = result.to_array();
+                    t.patch_encode_x8(slot, &mut out);
+                    *slot = out;
+                } else {
+                    result.store(slot);
+                }
             }
-            {
-                let (chunks, remainder) = (values).as_chunks_mut::<8>();
-                let mut idx = 0;
-                while idx < chunks.len() {
-                    let chunk: [f32; 8] = chunks[idx];
-                    let Some(converted) = (try_linear_to_pq_x8(
-                            t,
-                            f32x8::from_array_t(t, chunk),
-                        )
-                        .map(|r| r.to_array())) else {
-                        crate::kernels::finish_slice_cold(
-                            &mut chunks[idx..],
-                            remainder,
-                            t,
-                            slow::<T>,
-                        );
-                        return;
-                    };
-                    chunks[idx] = converted;
-                    idx += 1;
+            if !remainder.is_empty() {
+                {
+                    fn tail<T: F32x8Convert + F32x4Convert + PqDarkToeToken>(
+                        t: T,
+                        chunk: [f32; 8],
+                    ) -> [f32; 8] {
+                        linear_to_pq_x8(t, f32x8::from_array_t(t, chunk)).to_array()
+                    }
+                    crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
                 }
-                if !remainder.is_empty() {
-                    crate::kernels::finish_slice_cold(&mut [], remainder, t, slow::<T>);
-                }
-            };
+            }
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_pq_slice_x8<T: F32x8Convert>(t: T, values: &mut [f32]) {
+        pub(crate) fn linear_to_pq_slice_x8<
+            T: F32x8Convert + F32x4Convert + PqDarkToeToken,
+        >(t: T, values: &mut [f32]) {
             linear_to_pq_slice_x8_cfg::<T, true>(t, values);
         }
         #[inline(always)]
-        fn pq_to_linear_poly_x16<T: F32x16Convert>(
+        fn pq_to_linear_poly_x16<T: F32x16Convert + F32x4Convert + PqDarkToeToken>(
             t: T,
             v: f32x16<T>,
         ) -> (f32x16<T>, f32x16<T>) {
@@ -3365,20 +3781,20 @@ pub mod tf {
             let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
             (fallback, result)
         }
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn try_pq_to_linear_x16<T: F32x16Convert>(
-            t: T,
-            v: f32x16<T>,
-        ) -> Option<f32x16<T>> {
+        pub(crate) fn try_pq_to_linear_x16<
+            T: F32x16Convert + F32x4Convert + PqDarkToeToken,
+        >(t: T, v: f32x16<T>) -> Option<f32x16<T>> {
             let (fallback, result) = pq_to_linear_poly_x16(t, v);
             if fallback.bitcast_to_i32().any_true() { None } else { Some(result) }
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn pq_to_linear_x16_cfg<T: F32x16Convert, const RAILS: bool>(
-            t: T,
-            v: f32x16<T>,
-        ) -> f32x16<T> {
+        pub(crate) fn pq_to_linear_x16_cfg<
+            T: F32x16Convert + F32x4Convert + PqDarkToeToken,
+            const RAILS: bool,
+        >(t: T, v: f32x16<T>) -> f32x16<T> {
             if !RAILS {
                 let x = v.mla(v, v);
                 let small = v.simd_lt(f32x16::splat_t(t, 0.25));
@@ -3400,17 +3816,17 @@ pub mod tf {
             }
             let (fallback, result) = pq_to_linear_poly_x16(t, v);
             if fallback.bitcast_to_i32().any_true() {
-                f32x16::from_array_t(
-                    t,
-                    pq_to_linear_fallback(v.to_array(), result.to_array()),
-                )
+                let src = v.to_array();
+                let mut out = result.to_array();
+                t.patch_decode_x16(&src, &mut out);
+                f32x16::from_array_t(t, out)
             } else {
                 result
             }
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn pq_to_linear_x16<T: F32x16Convert>(
+        pub(crate) fn pq_to_linear_x16<T: F32x16Convert + F32x4Convert + PqDarkToeToken>(
             t: T,
             v: f32x16<T>,
         ) -> f32x16<T> {
@@ -3418,12 +3834,15 @@ pub mod tf {
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn pq_to_linear_slice_x16_cfg<T: F32x16Convert, const RAILS: bool>(
-            t: T,
-            values: &mut [f32],
-        ) {
+        pub(crate) fn pq_to_linear_slice_x16_cfg<
+            T: F32x16Convert + F32x4Convert + PqDarkToeToken,
+            const RAILS: bool,
+        >(t: T, values: &mut [f32]) {
             if !RAILS {
-                fn tail<T: F32x16Convert>(t: T, chunk: [f32; 16]) -> [f32; 16] {
+                fn tail<T: F32x16Convert + F32x4Convert + PqDarkToeToken>(
+                    t: T,
+                    chunk: [f32; 16],
+                ) -> [f32; 16] {
                     pq_to_linear_x16_cfg::<T, false>(t, f32x16::from_array_t(t, chunk))
                         .to_array()
                 }
@@ -3438,50 +3857,48 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        }
                     }
                 };
                 return;
             }
-            fn slow<T: F32x16Convert>(t: T, chunk: [f32; 16]) -> [f32; 16] {
-                pq_to_linear_x16(t, f32x16::from_array_t(t, chunk)).to_array()
+            let (chunks, remainder) = values.as_chunks_mut::<16>();
+            for slot in chunks {
+                let (fallback, result) = pq_to_linear_poly_x16(
+                    t,
+                    f32x16::load_t(t, slot),
+                );
+                if fallback.bitcast_to_i32().any_true() {
+                    let mut out = result.to_array();
+                    t.patch_decode_x16(slot, &mut out);
+                    *slot = out;
+                } else {
+                    result.store(slot);
+                }
             }
-            {
-                let (chunks, remainder) = (values).as_chunks_mut::<16>();
-                let mut idx = 0;
-                while idx < chunks.len() {
-                    let chunk: [f32; 16] = chunks[idx];
-                    let Some(converted) = (try_pq_to_linear_x16(
-                            t,
-                            f32x16::from_array_t(t, chunk),
-                        )
-                        .map(|r| r.to_array())) else {
-                        crate::kernels::finish_slice_cold(
-                            &mut chunks[idx..],
-                            remainder,
-                            t,
-                            slow::<T>,
-                        );
-                        return;
-                    };
-                    chunks[idx] = converted;
-                    idx += 1;
+            if !remainder.is_empty() {
+                {
+                    fn tail<T: F32x16Convert + F32x4Convert + PqDarkToeToken>(
+                        t: T,
+                        chunk: [f32; 16],
+                    ) -> [f32; 16] {
+                        pq_to_linear_x16(t, f32x16::from_array_t(t, chunk)).to_array()
+                    }
+                    crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
                 }
-                if !remainder.is_empty() {
-                    crate::kernels::finish_slice_cold(&mut [], remainder, t, slow::<T>);
-                }
-            };
+            }
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn pq_to_linear_slice_x16<T: F32x16Convert>(
-            t: T,
-            values: &mut [f32],
-        ) {
+        pub(crate) fn pq_to_linear_slice_x16<
+            T: F32x16Convert + F32x4Convert + PqDarkToeToken,
+        >(t: T, values: &mut [f32]) {
             pq_to_linear_slice_x16_cfg::<T, true>(t, values);
         }
         #[inline(always)]
-        fn linear_to_pq_poly_x16<T: F32x16Convert>(
+        fn linear_to_pq_poly_x16<T: F32x16Convert + F32x4Convert + PqDarkToeToken>(
             t: T,
             v: f32x16<T>,
         ) -> (f32x16<T>, f32x16<T>) {
@@ -3517,20 +3934,20 @@ pub mod tf {
             let fallback = (positive & v.simd_lt(floor)) | v.simd_ne(v);
             (fallback, result)
         }
+        #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn try_linear_to_pq_x16<T: F32x16Convert>(
-            t: T,
-            v: f32x16<T>,
-        ) -> Option<f32x16<T>> {
+        pub(crate) fn try_linear_to_pq_x16<
+            T: F32x16Convert + F32x4Convert + PqDarkToeToken,
+        >(t: T, v: f32x16<T>) -> Option<f32x16<T>> {
             let (fallback, result) = linear_to_pq_poly_x16(t, v);
             if fallback.bitcast_to_i32().any_true() { None } else { Some(result) }
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_pq_x16_cfg<T: F32x16Convert, const RAILS: bool>(
-            t: T,
-            v: f32x16<T>,
-        ) -> f32x16<T> {
+        pub(crate) fn linear_to_pq_x16_cfg<
+            T: F32x16Convert + F32x4Convert + PqDarkToeToken,
+            const RAILS: bool,
+        >(t: T, v: f32x16<T>) -> f32x16<T> {
             if !RAILS {
                 let a4 = v.fast_sqrt().fast_sqrt();
                 let small = a4.simd_lt(f32x16::splat_t(t, 0.1));
@@ -3552,17 +3969,17 @@ pub mod tf {
             }
             let (fallback, result) = linear_to_pq_poly_x16(t, v);
             if fallback.bitcast_to_i32().any_true() {
-                f32x16::from_array_t(
-                    t,
-                    linear_to_pq_fallback(v.to_array(), result.to_array()),
-                )
+                let src = v.to_array();
+                let mut out = result.to_array();
+                t.patch_encode_x16(&src, &mut out);
+                f32x16::from_array_t(t, out)
             } else {
                 result
             }
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_pq_x16<T: F32x16Convert>(
+        pub(crate) fn linear_to_pq_x16<T: F32x16Convert + F32x4Convert + PqDarkToeToken>(
             t: T,
             v: f32x16<T>,
         ) -> f32x16<T> {
@@ -3570,12 +3987,15 @@ pub mod tf {
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_pq_slice_x16_cfg<T: F32x16Convert, const RAILS: bool>(
-            t: T,
-            values: &mut [f32],
-        ) {
+        pub(crate) fn linear_to_pq_slice_x16_cfg<
+            T: F32x16Convert + F32x4Convert + PqDarkToeToken,
+            const RAILS: bool,
+        >(t: T, values: &mut [f32]) {
             if !RAILS {
-                fn tail<T: F32x16Convert>(t: T, chunk: [f32; 16]) -> [f32; 16] {
+                fn tail<T: F32x16Convert + F32x4Convert + PqDarkToeToken>(
+                    t: T,
+                    chunk: [f32; 16],
+                ) -> [f32; 16] {
                     linear_to_pq_x16_cfg::<T, false>(t, f32x16::from_array_t(t, chunk))
                         .to_array()
                 }
@@ -3590,46 +4010,44 @@ pub mod tf {
                             .to_array();
                     }
                     if !remainder.is_empty() {
-                        crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        {
+                            crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
+                        }
                     }
                 };
                 return;
             }
-            fn slow<T: F32x16Convert>(t: T, chunk: [f32; 16]) -> [f32; 16] {
-                linear_to_pq_x16(t, f32x16::from_array_t(t, chunk)).to_array()
+            let (chunks, remainder) = values.as_chunks_mut::<16>();
+            for slot in chunks {
+                let (fallback, result) = linear_to_pq_poly_x16(
+                    t,
+                    f32x16::load_t(t, slot),
+                );
+                if fallback.bitcast_to_i32().any_true() {
+                    let mut out = result.to_array();
+                    t.patch_encode_x16(slot, &mut out);
+                    *slot = out;
+                } else {
+                    result.store(slot);
+                }
             }
-            {
-                let (chunks, remainder) = (values).as_chunks_mut::<16>();
-                let mut idx = 0;
-                while idx < chunks.len() {
-                    let chunk: [f32; 16] = chunks[idx];
-                    let Some(converted) = (try_linear_to_pq_x16(
-                            t,
-                            f32x16::from_array_t(t, chunk),
-                        )
-                        .map(|r| r.to_array())) else {
-                        crate::kernels::finish_slice_cold(
-                            &mut chunks[idx..],
-                            remainder,
-                            t,
-                            slow::<T>,
-                        );
-                        return;
-                    };
-                    chunks[idx] = converted;
-                    idx += 1;
+            if !remainder.is_empty() {
+                {
+                    fn tail<T: F32x16Convert + F32x4Convert + PqDarkToeToken>(
+                        t: T,
+                        chunk: [f32; 16],
+                    ) -> [f32; 16] {
+                        linear_to_pq_x16(t, f32x16::from_array_t(t, chunk)).to_array()
+                    }
+                    crate::kernels::finish_tail_cold(remainder, t, tail::<T>);
                 }
-                if !remainder.is_empty() {
-                    crate::kernels::finish_slice_cold(&mut [], remainder, t, slow::<T>);
-                }
-            };
+            }
         }
         #[allow(dead_code)]
         #[inline(always)]
-        pub(crate) fn linear_to_pq_slice_x16<T: F32x16Convert>(
-            t: T,
-            values: &mut [f32],
-        ) {
+        pub(crate) fn linear_to_pq_slice_x16<
+            T: F32x16Convert + F32x4Convert + PqDarkToeToken,
+        >(t: T, values: &mut [f32]) {
             linear_to_pq_slice_x16_cfg::<T, true>(t, values);
         }
     }

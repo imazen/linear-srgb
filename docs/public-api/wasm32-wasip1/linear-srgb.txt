@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: linear-srgb.txt 84 lines (supported surface) | linear-srgb.features.txt 25 added (features: alt,avx512,iec,precise-portable,std,transfer,unsafe_simd) | linear-srgb.internal.txt 40 lines (57 hidden + 0 excluded-feature)
+# files: linear-srgb.txt 92 lines (supported surface) | linear-srgb.features.txt 25 added (features: alt,avx512,iec,precise-portable,std,transfer,unsafe_simd) | linear-srgb.internal.txt 40 lines (57 hidden + 0 excluded-feature)
 # arch-unique surface: wasm32 28
 
 ## summary
@@ -14,19 +14,19 @@
 #   pub modules                                 7
 #   pub types (struct/enum/trait/alias)        11
 #   pub consts/statics                          3
-#   free functions                             49
+#   free functions                             57
 #   inherent methods                           16
 #   trait roster entries (type × trait)         3
 #   auto-trait-complete types                   3
 #
 # per-module pub lines:
 #   (root)                           10
-#   default                          38
+#   default                          46
 #   lut                              28
 #   precise                           8
 #   tf                                2
 
-## items (80 lines)
+## items (88 lines)
 
 pub mod linear_srgb
 pub mod default
@@ -44,9 +44,13 @@ pub fn default::linear_to_gamma(f32, f32) -> f32
 pub fn default::linear_to_gamma_rgba_slice(&mut [f32], f32)
 pub fn default::linear_to_gamma_slice(&mut [f32], f32)
 pub fn default::linear_to_srgb_extended_rgba_slice(&mut [f32])
+pub fn default::linear_to_srgb_extended_rgba_slice_into(&[f32], &mut [f32])
 pub fn default::linear_to_srgb_extended_slice(&mut [f32])
+pub fn default::linear_to_srgb_extended_slice_into(&[f32], &mut [f32])
 pub fn default::linear_to_srgb_rgba_slice(&mut [f32])
+pub fn default::linear_to_srgb_rgba_slice_into(&[f32], &mut [f32])
 pub fn default::linear_to_srgb_slice(&mut [f32])
+pub fn default::linear_to_srgb_slice_into(&[f32], &mut [f32])
 pub fn default::linear_to_srgb_u16(f32) -> u16
 pub fn default::linear_to_srgb_u16_fast(f32) -> u16
 pub fn default::linear_to_srgb_u16_rgba_slice(&[f32], &mut [u16])
@@ -57,10 +61,14 @@ pub fn default::linear_to_srgb_u8(f32) -> u8
 pub fn default::linear_to_srgb_u8_rgba_slice(&[f32], &mut [u8])
 pub fn default::linear_to_srgb_u8_slice(&[f32], &mut [u8])
 pub fn default::srgb_to_linear_extended_rgba_slice(&mut [f32])
+pub fn default::srgb_to_linear_extended_rgba_slice_into(&[f32], &mut [f32])
 pub fn default::srgb_to_linear_extended_slice(&mut [f32])
+pub fn default::srgb_to_linear_extended_slice_into(&[f32], &mut [f32])
 pub fn default::srgb_to_linear_premultiply_rgba_slice(&mut [f32])
 pub fn default::srgb_to_linear_rgba_slice(&mut [f32])
+pub fn default::srgb_to_linear_rgba_slice_into(&[f32], &mut [f32])
 pub fn default::srgb_to_linear_slice(&mut [f32])
+pub fn default::srgb_to_linear_slice_into(&[f32], &mut [f32])
 pub fn default::srgb_u16_to_linear(u16) -> f32
 pub fn default::srgb_u16_to_linear_rgba_slice(&[u16], &mut [f32])
 pub fn default::srgb_u16_to_linear_slice(&[u16], &mut [f32])
