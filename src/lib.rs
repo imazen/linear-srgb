@@ -191,27 +191,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]
-#![cfg_attr(
-    all(feature = "unsafe_simd", not(feature = "alt")),
-    deprecated(
-        since = "0.6.13",
-        note = "linear-srgb Cargo feature `unsafe_simd` is a no-op since 0.6.2 and will be removed in 0.7.0; remove `unsafe_simd` from Cargo features"
-    )
-)]
-#![cfg_attr(
-    all(feature = "alt", not(feature = "unsafe_simd")),
-    deprecated(
-        since = "0.6.13",
-        note = "linear-srgb Cargo feature `alt` is deprecated and will be removed in 0.7.0; remove `alt` from Cargo features"
-    )
-)]
-#![cfg_attr(
-    all(feature = "unsafe_simd", feature = "alt"),
-    deprecated(
-        since = "0.6.13",
-        note = "linear-srgb Cargo features `unsafe_simd` and `alt` are deprecated and will be removed in 0.7.0; remove them from Cargo features"
-    )
-)]
 // Rust's unit-test harness refers to constants inside the deprecated module.
 #![cfg_attr(test, allow(deprecated))]
 #![warn(missing_docs)]

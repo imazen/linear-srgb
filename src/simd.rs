@@ -620,8 +620,8 @@ fn srgb_to_linear_rgba_slice_into_tier(token: Token, input: &[f32], output: &mut
 /// Convert sRGB RGBA f32 values from `input` into `output`, preserving alpha bit-for-bit.
 ///
 /// Out-of-place counterpart to [`srgb_to_linear_rgba_slice`]. Expects interleaved
-/// RGBA data (`[R, G, B, A, ...]`). Trailing elements that don't form a complete
-/// RGBA pixel are ignored.
+/// RGBA data (`[R, G, B, A, ...]`). Trailing elements beyond the last complete
+/// 4-float RGBA pixel (including inputs shorter than 4 floats) are left unchanged in `output`.
 ///
 /// # Panics
 /// Panics if `input.len() != output.len()`.
@@ -673,8 +673,8 @@ fn linear_to_srgb_rgba_slice_into_tier(token: Token, input: &[f32], output: &mut
 /// Convert linear RGBA f32 values from `input` into `output`, preserving alpha bit-for-bit.
 ///
 /// Out-of-place counterpart to [`linear_to_srgb_rgba_slice`]. Expects interleaved
-/// RGBA data (`[R, G, B, A, ...]`). Trailing elements that don't form a complete
-/// RGBA pixel are ignored.
+/// RGBA data (`[R, G, B, A, ...]`). Trailing elements beyond the last complete
+/// 4-float RGBA pixel (including inputs shorter than 4 floats) are left unchanged in `output`.
 ///
 /// # Panics
 /// Panics if `input.len() != output.len()`.
@@ -831,7 +831,8 @@ fn srgb_to_linear_extended_rgba_slice_into_tier(token: Token, input: &[f32], out
 /// (extended range), preserving alpha bit-for-bit.
 ///
 /// Out-of-place counterpart to [`srgb_to_linear_extended_rgba_slice`]. Trailing
-/// elements that don't form a complete RGBA pixel are ignored.
+/// elements beyond the last complete 4-float RGBA pixel (including inputs shorter than 4 floats)
+/// are left unchanged in `output`.
 ///
 /// # Panics
 /// Panics if `input.len() != output.len()`.
@@ -898,7 +899,8 @@ fn linear_to_srgb_extended_rgba_slice_into_tier(token: Token, input: &[f32], out
 /// (extended range), preserving alpha bit-for-bit.
 ///
 /// Out-of-place counterpart to [`linear_to_srgb_extended_rgba_slice`]. Trailing
-/// elements that don't form a complete RGBA pixel are ignored.
+/// elements beyond the last complete 4-float RGBA pixel (including inputs shorter than 4 floats)
+/// are left unchanged in `output`.
 ///
 /// # Panics
 /// Panics if `input.len() != output.len()`.
